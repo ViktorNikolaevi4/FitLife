@@ -10,13 +10,15 @@ struct User: Identifiable {
 }
 
 struct UserStatsView: View {
+    var selectedGender: Gender // Добавляем выбранный пол
+
     var body: some View {
         VStack(spacing: 10) {
             HStack {
-                Image(systemName: "person.circle")
+                Image(selectedGender.imageName)
                     .resizable()
                     .frame(width: 80, height: 80)
-
+                    .clipShape(Circle())
 
                 HStack(spacing: 20) {
                     VStack {
@@ -58,5 +60,8 @@ struct ActivitySelectorView: View {
 
 
 #Preview {
-    UserStatsView()
+    Group {
+        UserStatsView(selectedGender: .male)
+        UserStatsView(selectedGender: .female)
+    }
 }

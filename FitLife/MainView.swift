@@ -8,16 +8,20 @@
 import SwiftUI
 
 struct MainView: View {
+    var selectedGender: Gender // Получаем выбранный пол
+
     var body: some View {
         VStack {
-            
-                       HeaderView()
+
+            HeaderView()
                 .padding(.top, safeAreaTopInset()) // Учет безопасной зоны сверху
-                        UserStatsView()
-            //            MacrosView()
-            //            Spacer()
-            //            BottomNavigationView()
-        }
+            UserStatsView(selectedGender: selectedGender)
+
+
+        //            MacrosView()
+        //            Spacer()
+        //            BottomNavigationView()
+    }
         .background(GradientView())
         .ignoresSafeArea()
     }
@@ -33,5 +37,8 @@ struct MainView: View {
 }
 
 #Preview {
-    MainView()
+    Group {
+        MainView(selectedGender: .male)
+        MainView(selectedGender: .female)
+    }
 }
