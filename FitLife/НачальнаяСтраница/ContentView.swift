@@ -191,6 +191,7 @@ struct ContentView: View {
             print("Некорректная ссылка на приложение")
             return
         }
+
         let shareText = "Попробуй это приложение: \(appURL)"
         let activityViewController = UIActivityViewController(activityItems: [shareText], applicationActivities: nil)
         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,

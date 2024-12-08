@@ -12,7 +12,7 @@ import SwiftUI
         var selectedGender: Gender // Получаем выбранный пол
 
         var body: some View {
-            VStack(spacing: 15) { // Управляем отступами между элементами
+            VStack() { // Управляем отступами между элементами
                 // Заголовок с датой
                 HeaderView()
                     .padding(.top, safeAreaTopInset()) // Учет безопасной зоны сверху
@@ -20,7 +20,8 @@ import SwiftUI
                 // Статистика пользователя
                 UserStatsView(selectedGender: selectedGender)
 
-                Spacer() // Выталкиваем оставшиеся элементы вниз
+                MacrosView()
+             //   Spacer() // Выталкиваем оставшиеся элементы вниз
             }
             .background(GradientView())
             .ignoresSafeArea()
