@@ -1,6 +1,13 @@
 
 import SwiftUI
 
+// Модель пользователя
+struct User: Identifiable {
+    var id = UUID()
+    var weight: Double
+    var height: Double
+    var age: Int
+}
 
 struct UserStatsView: View {
     var body: some View {

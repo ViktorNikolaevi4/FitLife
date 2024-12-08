@@ -13,7 +13,7 @@ struct MainView: View {
             
                        HeaderView()
                 .padding(.top, safeAreaTopInset()) // Учет безопасной зоны сверху
-            //            UserStatsView()
+                        UserStatsView()
             //            MacrosView()
             //            Spacer()
             //            BottomNavigationView()
