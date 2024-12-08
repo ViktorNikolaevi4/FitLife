@@ -7,28 +7,37 @@
 
 import Foundation
 
-struct MacrosCalculator {
-    // Создаём структуру `MacrosCalculator`, которая содержит методы для расчёта калорий и БЖУ.
+// Макрос-калькулятор для расчёта калорий и распределения БЖУ (белки, жиры, углеводы)
 
-    static func calculateCaloriesMifflin(gender: Gender, weight: Double, height: Double, age: Int, activityLevel: ActivityLevel) -> Int {
-        // Метод для расчёта суточной нормы калорий по формуле Миффлина-Сан Жеора.
+struct MacrosCalculator {
+    // Метод для расчёта калорий по формуле Миффлина-Сан Жеора
+    static func calculateCaloriesMifflin(
+        gender: Gender,
+        weight: Double,
+        height: Double,
+        age: Int,
+        activityLevel: ActivityLevel,
+        goal: WeightGoal
+    ) -> Int {
+        // Метод принимает параметры:
         // - `gender`: Пол пользователя (мужчина или женщина).
         // - `weight`: Вес в килограммах.
         // - `height`: Рост в сантиметрах.
         // - `age`: Возраст в годах.
         // - `activityLevel`: Уровень физической активности.
-        // Возвращает суточную норму калорий (целое число).
+        // - `goal`: Цель — снижение веса, сохранение текущего веса или набор массы.
+        // Возвращает суточную норму калорий как целое число.
 
         let bmr: Double
-        // Переменная для базового метаболизма (BMR — базовый уровень калорий, которые тратятся в состоянии покоя).
+        // Переменная для базового метаболизма (BMR).
 
         if gender == .male {
-            // Проверяем, является ли пользователь мужчиной.
+            // Если пол пользователя — мужской.
             bmr = 10 * weight + 6.25 * height - 5 * Double(age) + 5
             // Формула для расчёта BMR для мужчин:
             // 10 × вес (кг) + 6.25 × рост (см) − 5 × возраст (лет) + 5.
         } else {
-            // Если пользователь — женщина.
+            // Если пол пользователя — женский.
             bmr = 10 * weight + 6.25 * height - 5 * Double(age) - 161
             // Формула для расчёта BMR для женщин:
             // 10 × вес (кг) + 6.25 × рост (см) − 5 × возраст (лет) − 161.
@@ -38,7 +47,7 @@ struct MacrosCalculator {
         // Переменная для коэффициента физической активности.
 
         switch activityLevel {
-        // Определяем коэффициент активности в зависимости от выбранного уровня:
+        // Устанавливаем коэффициент в зависимости от уровня активности.
         case .none:
             activityMultiplier = 1.2
             // Минимальная активность (сидячий образ жизни).
@@ -53,35 +62,65 @@ struct MacrosCalculator {
             // Высокая активность (интенсивные тренировки 6–7 раз в неделю).
         }
 
-        return Int(bmr * activityMultiplier)
-        // Возвращаем итоговое значение калорий, умножив BMR на коэффициент активности.
-        // Результат приводим к целому числу (`Int`).
+        let maintenanceCalories = bmr * activityMultiplier
+        // Поддержание веса — это уровень калорий при данном BMR и активности.
+
+        switch goal {
+        case .loseWeight:
+            return Int(maintenanceCalories * 0.8)
+            // Снижение веса: уменьшаем калории на 20%.
+        case .currentWeight:
+            return Int(maintenanceCalories)
+            // Сохранение веса: без изменений.
+        case .gainWeight:
+            return Int(maintenanceCalories * 1.2)
+            // Набор веса: увеличиваем калории на 20%.
+        }
     }
 
-    static func calculateMacros(calories: Int) -> (proteins: Int, fats: Int, carbs: Int) {
-        // Метод для расчёта распределения калорий на белки, жиры и углеводы.
-        // Принимает:
+    // Метод для расчёта БЖУ
+    static func calculateMacros(
+        calories: Int,
+        goal: WeightGoal
+    ) -> (proteins: Int, fats: Int, carbs: Int) {
+        // Метод принимает:
         // - `calories`: Общее количество калорий.
+        // - `goal`: Цель — снижение веса, сохранение текущего веса или набор массы.
         // Возвращает кортеж с количеством граммов белков, жиров и углеводов.
 
-        let proteinCalories = Int(Double(calories) * 0.25)
-        // Вычисляем калории, выделенные на белки (25% от общего числа калорий).
+        let proteinCalories: Int
+        let fatCalories: Int
+        let carbCalories: Int
+        // Переменные для хранения калорий, выделенных на белки, жиры и углеводы.
 
-        let fatCalories = Int(Double(calories) * 0.30)
-        // Вычисляем калории, выделенные на жиры (30% от общего числа калорий).
+        switch goal {
+        case .loseWeight:
+            proteinCalories = Int(Double(calories) * 0.35)
+            // Для снижения веса: 35% калорий выделяется на белки.
+            fatCalories = Int(Double(calories) * 0.25)
+            // 25% калорий выделяется на жиры.
+        case .currentWeight:
+            proteinCalories = Int(Double(calories) * 0.25)
+            // Для сохранения веса: 25% калорий выделяется на белки.
+            fatCalories = Int(Double(calories) * 0.30)
+            // 30% калорий выделяется на жиры.
+        case .gainWeight:
+            proteinCalories = Int(Double(calories) * 0.20)
+            // Для набора веса: 20% калорий выделяется на белки.
+            fatCalories = Int(Double(calories) * 0.35)
+            // 35% калорий выделяется на жиры.
+        }
 
-        let carbCalories = calories - proteinCalories - fatCalories
-        // Остаток калорий выделяем на углеводы.
+        carbCalories = calories - proteinCalories - fatCalories
+        // Оставшиеся калории выделяются на углеводы.
 
         return (
             proteins: proteinCalories / 4,
-            // Преобразуем калории, выделенные на белки, в граммы (1 г белка = 4 калории).
-
+            // Переводим калории белков в граммы (1 г белка = 4 калории).
             fats: fatCalories / 9,
-            // Преобразуем калории, выделенные на жиры, в граммы (1 г жира = 9 калорий).
-
+            // Переводим калории жиров в граммы (1 г жира = 9 калорий).
             carbs: carbCalories / 4
-            // Преобразуем калории, выделенные на углеводы, в граммы (1 г углеводов = 4 калории).
+            // Переводим калории углеводов в граммы (1 г углеводов = 4 калории).
         )
     }
 }
