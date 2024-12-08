@@ -7,34 +7,33 @@
 
 import SwiftUI
 
-struct MainView: View {
-    var selectedGender: Gender // Получаем выбранный пол
 
-    var body: some View {
-        VStack {
+    struct MainView: View {
+        var selectedGender: Gender // Получаем выбранный пол
 
-            HeaderView()
-                .padding(.top, safeAreaTopInset()) // Учет безопасной зоны сверху
-            UserStatsView(selectedGender: selectedGender)
+        var body: some View {
+            VStack(spacing: 15) { // Управляем отступами между элементами
+                // Заголовок с датой
+                HeaderView()
+                    .padding(.top, safeAreaTopInset()) // Учет безопасной зоны сверху
 
+                // Статистика пользователя
+                UserStatsView(selectedGender: selectedGender)
 
-        //            MacrosView()
-        //            Spacer()
-        //            BottomNavigationView()
-    }
-        .background(GradientView())
-        .ignoresSafeArea()
-    }
-
-    // Функция для получения верхней безопасной зоны
-    private func safeAreaTopInset() -> CGFloat {
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let window = windowScene.windows.first else {
-            return 0
+                Spacer() // Выталкиваем оставшиеся элементы вниз
+            }
+            .background(GradientView())
+            .ignoresSafeArea()
         }
-        return window.safeAreaInsets.top
+        // Функция для получения верхней безопасной зоны
+        private func safeAreaTopInset() -> CGFloat {
+            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let window = windowScene.windows.first else {
+                return 0
+            }
+            return window.safeAreaInsets.top
+        }
     }
-}
 
 #Preview {
     Group {
@@ -42,3 +41,5 @@ struct MainView: View {
         MainView(selectedGender: .female)
     }
 }
+//
+//            BottomNavigationView()

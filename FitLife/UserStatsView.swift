@@ -10,51 +10,169 @@ struct User: Identifiable {
 }
 
 struct UserStatsView: View {
-    var selectedGender: Gender // Добавляем выбранный пол
+    var selectedGender: Gender // Пол пользователя
+
+    // Состояния для выбранных значений
+    @State private var weight: Int = 0
+    @State private var height: Int = 0
+    @State private var age: Int = 0
+
+    // Состояния для управления отображением барабанов
+    @State private var isWeightPickerVisible = false
+    @State private var isHeightPickerVisible = false
+    @State private var isAgePickerVisible = false
 
     var body: some View {
-        VStack(spacing: 10) {
-            HStack {
-                Image(selectedGender.imageName)
-                    .resizable()
-                    .frame(width: 80, height: 80)
-                    .clipShape(Circle())
+        ZStack {
+            // Основной интерфейс
+            VStack(spacing: 10) {
+                HStack {
+                    Image(selectedGender.imageName)
+                        .resizable()
+                        .frame(width: 80, height: 80)
+                        .clipShape(Circle())
 
-                HStack(spacing: 20) {
-                    VStack {
-                        Text("ВЕС, КГ")
-                        Text("0")
+                    HStack(spacing: 20) {
+                        VStack {
+                            Text("ВЕС, КГ")
+                            Text("\(weight)")
+                                .foregroundColor(.blue)
+                                .onTapGesture {
+                                    togglePicker(&isWeightPickerVisible)
+                                }
+                        }
+                        VStack {
+                            Text("РОСТ, СМ")
+                            Text("\(height)")
+                                .foregroundColor(.blue)
+                                .onTapGesture {
+                                    togglePicker(&isHeightPickerVisible)
+                                }
+                        }
+                        VStack {
+                            Text("ВОЗРАСТ")
+                            Text("\(age)")
+                                .foregroundColor(.blue)
+                                .onTapGesture {
+                                    togglePicker(&isAgePickerVisible)
+                                }
+                        }
                     }
-                    VStack {
-                        Text("РОСТ, СМ")
-                        Text("0")
-                    }
-                    VStack {
-                        Text("ВОЗРАСТ")
-                        Text("0")
+                    .font(.headline)
+                }
+                .padding()
+
+                ActivitySelectorView()
+            }
+            .zIndex(0) // Основной интерфейс на заднем плане
+
+            // Отображение PickerView
+            if isWeightPickerVisible {
+                PickerView(title: "Выберите вес", range: 30...200, selectedValue: $weight, isVisible: $isWeightPickerVisible)
+                    .zIndex(1) // PickerView отображается над
+            }
+
+            if isHeightPickerVisible {
+                PickerView(title: "Выберите рост", range: 100...250, selectedValue: $height, isVisible: $isHeightPickerVisible)
+                    .zIndex(1)
+            }
+
+            if isAgePickerVisible {
+                PickerView(title: "Выберите возраст", range: 1...120, selectedValue: $age, isVisible: $isAgePickerVisible)
+                    .zIndex(1)
+            }
+        }
+    }
+
+    private func togglePicker(_ visibility: inout Bool) {
+        isWeightPickerVisible = false
+        isHeightPickerVisible = false
+        isAgePickerVisible = false
+        visibility = true // Включаем только нужный барабан
+    }
+}
+
+struct PickerView: View {
+    let title: String
+    let range: ClosedRange<Int>
+    @Binding var selectedValue: Int
+    @Binding var isVisible: Bool
+
+    var body: some View {
+        ZStack {
+            // Основной контент Picker
+            VStack(spacing: 10) {
+                // Заголовок барабана
+                Text(title)
+                    .font(.headline)
+                    .padding(.top, 10)
+
+                // Сам барабан
+                Picker("", selection: $selectedValue) {
+                    ForEach(range, id: \.self) { value in
+                        Text("\(value)").tag(value)
                     }
                 }
-                .font(.headline)
+                .pickerStyle(.wheel)
+                .frame(width: 150, height: 150) // Размер Picker
+                .clipped() // Обрезка лишнего
+
+                // Кнопка "Готово"
+                Button("Готово") {
+                    isVisible = false // Закрываем Picker
+                }
+                .padding()
+                .background(Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(10)
             }
             .padding()
+            .background(Color.white) // Непрозрачный фон для Picker
+            .cornerRadius(15)
+            .shadow(radius: 10) // Тень для эффекта объема
+        }
+    }
+}
 
-            ActivitySelectorView()
+
+enum ActivityLevel: String, CaseIterable {
+    case none = "Нет"
+    case light = "1-2 раза"
+    case moderate = "3-5 раза"
+    case pro = "PRO"
+
+    var message: String {
+        switch self {
+        case .none:
+            return "Ваша суточная потребность при сидячем образе жизни"
+        case .light:
+            return "Ваша суточная потребность при тренировках 1-2 раза в неделю"
+        case .moderate:
+            return "Ваша суточная потребность при тренировках 3-5 раза в неделю"
+        case .pro:
+            return "Ваша суточная потребность при PRO тренировках"
         }
     }
 }
 
 struct ActivitySelectorView: View {
-    @State private var selectedActivity = 0
-    let activityLevels = ["Нет", "1-2 раза", "3-5 раза", "PRO"]
+    @State private var selectedActivity: ActivityLevel = .none // Уровень активности по умолчанию
 
     var body: some View {
-        Picker("Физическая активность", selection: $selectedActivity) {
-            ForEach(activityLevels.indices, id: \.self) { index in
-                Text(activityLevels[index])
+        VStack {
+            Picker("Физическая активность", selection: $selectedActivity) {
+                ForEach(ActivityLevel.allCases, id: \.self) { activity in
+                    Text(activity.rawValue)
+                }
             }
+            .pickerStyle(SegmentedPickerStyle())
+            .padding()
+
+            Text(selectedActivity.message) // Сообщение для текущего уровня активности
+                .font(.body)
+                .multilineTextAlignment(.center)
+                .padding(.top, 20)
         }
-        .pickerStyle(SegmentedPickerStyle())
-        .padding()
     }
 }
 
