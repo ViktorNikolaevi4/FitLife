@@ -14,8 +14,13 @@ enum WeightGoal: String, CaseIterable {
 }
 
 struct MacrosView: View {
-    @State private var callories: Int = 0
-    @State private var selectedGoal: WeightGoal = .currentWeight
+    @Binding var callories: Int
+    @Binding var proteins: Int
+    @Binding var fats: Int
+    @Binding var carbs: Int
+    
+    @Binding var goal: WeightGoal
+
 
     var body: some View {
         VStack(spacing: 10) {
@@ -25,20 +30,20 @@ struct MacrosView: View {
                     .fontWeight(.bold)
 
                 // Круговая диаграмма
-                PieChartView()
+                PieChartView(proteins: proteins, fats: fats, carbs: carbs)
             }  .padding()
             HStack(spacing: 60) {
                 VStack {
                     Text("Белки")
-                    Text("291 г")
+                    Text("\(proteins) г")
                 }
                 VStack {
                     Text("Жиры")
-                    Text("146 г")
+                    Text("\(fats) г")
                 }
                 VStack {
                     Text("Углеводы")
-                    Text("679 г")
+                    Text("\(carbs) г")
                 }
             }
             .font(.headline)
@@ -48,15 +53,15 @@ struct MacrosView: View {
                 HStack(spacing: 60) {
                     VStack {
                         Text("Белки")
-                        Text("291 г")
+                        Text("\(proteins) г")
                     }
                     VStack {
                         Text("Жиры")
-                        Text("146 г")
+                        Text("\(fats) г")
                     }
                     VStack {
                         Text("Углеводы")
-                        Text("679 г")
+                        Text("\(carbs) г")
                     }
                 }
             }
@@ -65,19 +70,51 @@ struct MacrosView: View {
                 Text("Цель")
                     .font(.headline)
 
-                Picker("Цель", selection: $selectedGoal) {
+                Picker("Цель", selection: $goal) {
                     ForEach(WeightGoal.allCases, id: \.self) { goal in
                         Text(goal.rawValue)
                     }
                 }
                 .pickerStyle(SegmentedPickerStyle()) // Используем стиль сегментированного пикера
                 .padding()
+                .onChange(of: goal) {
+                    recalculateMacros()
+                }
             }
         }
+    }
+    private func recalculateMacros() {
+        // Здесь вы должны использовать привязанные данные (передайте их из родительского представления)
+        let activityLevel: ActivityLevel = .moderate // Пример уровня активности
+        let gender: Gender = .male // Пример пола
+        let weight: Double = 70 // Пример веса
+        let height: Double = 170 // Пример роста
+        let age: Int = 25 // Пример возраста
+
+        // Вызываем метод для расчёта калорий
+        let calories = MacrosCalculator.calculateCaloriesMifflin(
+            gender: gender,
+            weight: weight,
+            height: height,
+            age: age,
+            activityLevel: activityLevel,
+            goal: goal
+        )
+
+        // Обновляем калории
+        callories = calories
+
+        // Пересчитываем макросы
+        let macros = MacrosCalculator.calculateMacros(calories: calories, goal: goal)
+
+        // Обновляем значения макронутриентов
+        proteins = macros.proteins
+        fats = macros.fats
+        carbs = macros.carbs
     }
 }
 
 
-#Preview {
-    MacrosView()
-}
+//#Preview {
+//    MacrosView()
+//}

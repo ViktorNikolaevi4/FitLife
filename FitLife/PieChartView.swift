@@ -3,14 +3,19 @@ import SwiftUI
 import Charts
 
 struct PieChartView: View {
-    let data: [(category: String, value: Double)] = [
-        ("Белки", 20),
-        ("Жиры", 30),
-        ("Углеводы", 50)
-    ]
+    var proteins: Int
+    var fats: Int
+    var carbs: Int
 
     var body: some View {
-        Chart(data, id: \.category) { item in
+        let total = Double(proteins + fats + carbs)
+        let data: [(category: String, value: Double)] = [
+            ("Белки", Double(proteins) / total * 100),
+            ("Жиры", Double(fats) / total * 100),
+            ("Углеводы", Double(carbs) / total * 100)
+        ]
+
+        return Chart(data, id: \.category) { item in
             SectorMark(
                 angle: .value("Value", item.value),
                 innerRadius: .ratio(0.5),
@@ -22,7 +27,6 @@ struct PieChartView: View {
     }
 }
 
-
 #Preview {
-    PieChartView()
+    PieChartView(proteins: 30, fats: 20, carbs: 50)
 }

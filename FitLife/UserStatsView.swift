@@ -11,6 +11,14 @@ struct User: Identifiable {
 
 struct UserStatsView: View {
     var selectedGender: Gender // Пол пользователя
+    
+    @Binding var callories: Int
+    @Binding var proteins: Int
+    @Binding var fats: Int
+    @Binding var carbs: Int
+    @Binding var activityLevel: ActivityLevel
+    @Binding var goal: WeightGoal
+
 
     // Состояния для выбранных значений
     @State private var weight: Int = 0
@@ -40,6 +48,9 @@ struct UserStatsView: View {
                                 .onTapGesture {
                                     togglePicker(&isWeightPickerVisible)
                                 }
+                                .onChange(of: weight) {
+                                    recalculateMacros()
+                                } // Обновляем макросы при изменении веса
                         }
                         VStack {
                             Text("РОСТ, СМ")
@@ -47,6 +58,12 @@ struct UserStatsView: View {
                                 .foregroundColor(.blue)
                                 .onTapGesture {
                                     togglePicker(&isHeightPickerVisible)
+                                }
+                                .onChange(of: height) {
+                                    recalculateMacros()
+                                }
+                                .onChange(of: age) {
+                                    recalculateMacros()
                                 }
                         }
                         VStack {
@@ -56,14 +73,20 @@ struct UserStatsView: View {
                                 .onTapGesture {
                                     togglePicker(&isAgePickerVisible)
                                 }
+                                .onChange(of: age) {
+                                    recalculateMacros()
+                                }
                         }
                     }
                     .font(.headline)
                 }
                 .padding()
 
-                ActivitySelectorView()
-            }
+                // Передаём привязку уровня активности
+                ActivitySelectorView(selectedActivity: $activityLevel)
+                    .onChange(of: activityLevel) {
+                        recalculateMacros()
+                    }            }
             .zIndex(0) // Основной интерфейс на заднем плане
 
             // Отображение PickerView
@@ -90,6 +113,33 @@ struct UserStatsView: View {
         isAgePickerVisible = false
         visibility = true // Включаем только нужный барабан
     }
+    private func recalculateMacros() {
+        // Пример значений для активности и цели (можете связать их с UI)
+//        let activityLevel: ActivityLevel = .moderate
+//        let goal: WeightGoal = .currentWeight
+
+        // Вызываем метод для расчёта калорий
+        let calories = MacrosCalculator.calculateCaloriesMifflin(
+            gender: selectedGender,
+            weight: Double(weight),
+            height: Double(height),
+            age: age,
+            activityLevel: activityLevel,
+            goal: goal
+        )
+
+        // Обновляем калории в интерфейсе
+        callories = calories
+
+        // Пересчитываем макросы
+        let macros = MacrosCalculator.calculateMacros(calories: calories, goal: goal)
+
+        // Обновляем значения макросов
+        proteins = macros.proteins
+        fats = macros.fats
+        carbs = macros.carbs
+    }
+
 }
 
 struct PickerView: View {
@@ -156,7 +206,7 @@ enum ActivityLevel: String, CaseIterable {
 }
 
 struct ActivitySelectorView: View {
-    @State private var selectedActivity: ActivityLevel = .none // Уровень активности по умолчанию
+    @Binding var selectedActivity: ActivityLevel// Уровень активности по умолчанию
 
     var body: some View {
         VStack {
@@ -177,9 +227,9 @@ struct ActivitySelectorView: View {
 }
 
 
-#Preview {
-    Group {
-        UserStatsView(selectedGender: .male)
-        UserStatsView(selectedGender: .female)
-    }
-}
+//#Preview {
+//    Group {
+//        UserStatsView(selectedGender: .male)
+//        UserStatsView(selectedGender: .female)
+//    }
+//}
