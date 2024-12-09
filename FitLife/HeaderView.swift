@@ -1,11 +1,7 @@
-//
-//  HeaderView.swift
-//  FitLife
-//
-//  Created by Виктор Корольков on 07.12.2024.
-//
+
 
 import SwiftUI
+import SwiftData
 
 struct HeaderView: View {
     @State private var selectedDate = Date() // Текущая дата по умолчанию
