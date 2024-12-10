@@ -12,7 +12,8 @@ struct GradientView: View {
         LinearGradient(colors: [.blue ,
                                 .blue .opacity(0.8),
                                 .cyan ,
-                                .cyan .opacity(0.5)
+                                .cyan .opacity(0.5),
+                                .cyan
                                ],
                        startPoint: .top,
                        endPoint: .bottom)
