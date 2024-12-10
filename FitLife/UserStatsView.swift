@@ -10,12 +10,15 @@ struct User: Identifiable {
 }
 
 struct UserStatsView: View {
-    var selectedGender: Gender // Пол пользователя
+    @ObservedObject var userData: UserData
 
-    // Состояния для выбранных значений
-    @State private var weight: Int = 0
-    @State private var height: Int = 0
-    @State private var age: Int = 0
+//    var selectedGender: Gender // Пол пользователя
+//
+//    // Состояния для выбранных значений
+//    @State private var weight: Int = 0
+//    @State private var height: Int = 0
+//    @State private var age: Int = 0
+    
 
     // Состояния для управления отображением барабанов
     @State private var isWeightPickerVisible = false
@@ -27,7 +30,7 @@ struct UserStatsView: View {
             // Основной интерфейс
             VStack(spacing: 10) {
                 HStack {
-                    Image(selectedGender.imageName)
+                    Image(userData.selectedGender.imageName)
                         .resizable()
                         .frame(width: 80, height: 80)
                         .clipShape(Circle())
@@ -35,7 +38,7 @@ struct UserStatsView: View {
                     HStack(spacing: 20) {
                         VStack {
                             Text("ВЕС, КГ")
-                            Text("\(weight)")
+                            Text("\(Int(userData.weight))")
                                 .foregroundColor(.blue)
                                 .onTapGesture {
                                     togglePicker(&isWeightPickerVisible)
@@ -43,7 +46,7 @@ struct UserStatsView: View {
                         }
                         VStack {
                             Text("РОСТ, СМ")
-                            Text("\(height)")
+                            Text("\(Int(userData.height))")
                                 .foregroundColor(.blue)
                                 .onTapGesture {
                                     togglePicker(&isHeightPickerVisible)
@@ -51,7 +54,7 @@ struct UserStatsView: View {
                         }
                         VStack {
                             Text("ВОЗРАСТ")
-                            Text("\(age)")
+                            Text("\(userData.age)")
                                 .foregroundColor(.blue)
                                 .onTapGesture {
                                     togglePicker(&isAgePickerVisible)
@@ -62,23 +65,37 @@ struct UserStatsView: View {
                 }
                 .padding()
 
-                ActivitySelectorView()
+                ActivitySelectorView(userData: userData)
             }
             .zIndex(0) // Основной интерфейс на заднем плане
 
             // Отображение PickerView
             if isWeightPickerVisible {
-                PickerView(title: "Выберите вес", range: 30...200, selectedValue: $weight, isVisible: $isWeightPickerVisible)
+                PickerView(title: "Выберите вес",
+                           range: 30...200,
+                           selectedValue: Binding(
+                               get: { Int(userData.weight) },
+                               set: { userData.weight = Double($0) } ),
+                           isVisible: $isWeightPickerVisible)
                     .zIndex(1) // PickerView отображается над
             }
 
             if isHeightPickerVisible {
-                PickerView(title: "Выберите рост", range: 100...250, selectedValue: $height, isVisible: $isHeightPickerVisible)
+                PickerView(title: "Выберите рост",
+                           range: 100...250,
+                           selectedValue: Binding(
+                               get: { Int(userData.height) },
+                               set: { userData.height = Double($0) } ),
+                           isVisible: $isHeightPickerVisible)
                     .zIndex(1)
+
             }
 
             if isAgePickerVisible {
-                PickerView(title: "Выберите возраст", range: 1...120, selectedValue: $age, isVisible: $isAgePickerVisible)
+                PickerView(title: "Выберите возраст",
+                           range: 1...120,
+                           selectedValue: $userData.age,
+                           isVisible: $isAgePickerVisible)
                     .zIndex(1)
             }
         }
@@ -156,11 +173,12 @@ enum ActivityLevel: String, CaseIterable {
 }
 
 struct ActivitySelectorView: View {
-    @State private var selectedActivity: ActivityLevel = .none // Уровень активности по умолчанию
+    @ObservedObject var userData: UserData
+   // @State private var selectedActivity: ActivityLevel // Уровень активности по умолчанию
 
     var body: some View {
         VStack {
-            Picker("Физическая активность", selection: $selectedActivity) {
+            Picker("Физическая активность", selection: $userData.activityLevel) {
                 ForEach(ActivityLevel.allCases, id: \.self) { activity in
                     Text(activity.rawValue)
                 }
@@ -168,7 +186,7 @@ struct ActivitySelectorView: View {
             .pickerStyle(SegmentedPickerStyle())
             .padding()
 
-            Text(selectedActivity.message) // Сообщение для текущего уровня активности
+            Text(userData.activityLevel.message) // Сообщение для текущего уровня активности
                 .font(.body)
                 .multilineTextAlignment(.center)
                 .padding(.top, 20)
@@ -176,10 +194,10 @@ struct ActivitySelectorView: View {
     }
 }
 
-
-#Preview {
-    Group {
-        UserStatsView(selectedGender: .male)
-        UserStatsView(selectedGender: .female)
-    }
-}
+//
+//#Preview {
+//    Group {
+//        UserStatsView(selectedGender: .male)
+//        UserStatsView(selectedGender: .female)
+//    }
+//}

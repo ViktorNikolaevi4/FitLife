@@ -14,13 +14,15 @@ enum WeightGoal: String, CaseIterable {
 }
 
 struct MacrosView: View {
+    @ObservedObject var userData: UserData
+
     @State private var callories: Int = 0
     @State private var selectedGoal: WeightGoal = .currentWeight
 
     var body: some View {
         VStack(spacing: 10) {
             HStack(spacing: 20) {
-                Text("Энергия: \(callories)")
+                Text("Энергия: \(userData.calories)")
                     .font(.title2)
                     .fontWeight(.bold)
 
@@ -30,33 +32,33 @@ struct MacrosView: View {
             HStack(spacing: 60) {
                 VStack {
                     Text("Белки")
-                    Text("291 г")
+                    Text("\(userData.macros.proteins) г")
                 }
                 VStack {
                     Text("Жиры")
-                    Text("146 г")
+                    Text("\(userData.macros.fats) г")
                 }
                 VStack {
                     Text("Углеводы")
-                    Text("679 г")
+                    Text("\(userData.macros.carbs) г")
                 }
             }
             .font(.headline)
             VStack {
                 Text("Осталось съесть за день")
-                Text("калорий: \(callories)")
+                Text("калорий: \(userData.calories)")
                 HStack(spacing: 60) {
                     VStack {
                         Text("Белки")
-                        Text("291 г")
+                        Text("\(userData.macros.proteins) г")
                     }
                     VStack {
                         Text("Жиры")
-                        Text("146 г")
+                        Text("\(userData.macros.fats) г")
                     }
                     VStack {
                         Text("Углеводы")
-                        Text("679 г")
+                        Text("\(userData.macros.carbs) г")
                     }
                 }
             }
@@ -65,7 +67,7 @@ struct MacrosView: View {
                 Text("Цель")
                     .font(.headline)
 
-                Picker("Цель", selection: $selectedGoal) {
+                Picker("Цель", selection: $userData.goal) {
                     ForEach(WeightGoal.allCases, id: \.self) { goal in
                         Text(goal.rawValue)
                     }
@@ -77,7 +79,7 @@ struct MacrosView: View {
     }
 }
 
-
-#Preview {
-    MacrosView()
-}
+//
+//#Preview {
+//    MacrosView()
+//}

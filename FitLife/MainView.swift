@@ -9,6 +9,8 @@ import SwiftUI
 
 
     struct MainView: View {
+        @StateObject private var userData = UserData()
+
         var selectedGender: Gender // Получаем выбранный пол
 
         var body: some View {
@@ -18,9 +20,9 @@ import SwiftUI
                     .padding(.top, safeAreaTopInset()) // Учет безопасной зоны сверху
 
                 // Статистика пользователя
-                UserStatsView(selectedGender: selectedGender)
+                UserStatsView(userData: userData)
 
-                MacrosView()
+                MacrosView(userData: userData)
              //   Spacer() // Выталкиваем оставшиеся элементы вниз
             }
             .background(GradientView())
