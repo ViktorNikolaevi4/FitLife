@@ -16,6 +16,7 @@ class UserData: ObservableObject {
     @Published var age: Int = 0
     @Published var activityLevel: ActivityLevel = .none
     @Published var goal: WeightGoal = .currentWeight
+    @Published var selectedGender: Gender = .male // По умолчанию мужчина
 
     var calories: Int {
         guard weight > 0, height > 0, age > 0 else { return 0 }
@@ -32,7 +33,5 @@ class UserData: ObservableObject {
     var macros: (proteins: Int, fats: Int, carbs: Int) {
         return MacrosCalculator.calculateMacros(calories: calories, goal: goal)
     }
-
-    var selectedGender: Gender = .male // НУЖЕН ВЫБОР!!!
 }
 

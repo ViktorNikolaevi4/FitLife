@@ -18,12 +18,14 @@ import SwiftUI
                 // Заголовок с датой
                 HeaderView()
                     .padding(.top, safeAreaTopInset()) // Учет безопасной зоны сверху
-
                 // Статистика пользователя
                 UserStatsView(userData: userData)
-
                 MacrosView(userData: userData)
              //   Spacer() // Выталкиваем оставшиеся элементы вниз
+            }
+            .onAppear {
+                print("Selected Gender: \(selectedGender.rawValue)")
+                userData.selectedGender = selectedGender
             }
             .background(GradientView())
             .ignoresSafeArea()
