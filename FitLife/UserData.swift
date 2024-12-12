@@ -7,16 +7,16 @@
 
 import Foundation
 import SwiftUI
+import Observation
 
-import SwiftUI
-
-class UserData: ObservableObject {
-    @Published var weight: Double = 0
-    @Published var height: Double = 0
-    @Published var age: Int = 0
-    @Published var activityLevel: ActivityLevel = .none
-    @Published var goal: WeightGoal = .currentWeight
-    @Published var selectedGender: Gender = .male // По умолчанию мужчина
+@Observable
+class UserData {
+     var weight: Double = 0
+     var height: Double = 0
+     var age: Int = 0
+     var activityLevel: ActivityLevel = .none
+     var goal: WeightGoal = .currentWeight
+     var selectedGender: Gender = .male // По умолчанию мужчина
 
     var calories: Int {
         guard weight > 0, height > 0, age > 0 else { return 0 }

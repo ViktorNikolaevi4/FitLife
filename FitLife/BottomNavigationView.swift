@@ -8,6 +8,9 @@
 import SwiftUI
 
 struct BottomNavigationView: View {
+    var userData: UserData
+    @State private var showWaterTracker = false
+
     var body: some View {
         HStack {
             Spacer()
@@ -18,11 +21,16 @@ struct BottomNavigationView: View {
                 }.foregroundStyle(.white)
             }
             Spacer()
-            Button(action: {}) {
+            Button(action: {
+                showWaterTracker = true
+            }) {
                 VStack {
                     Image(systemName: "drop")
                     Text("Вода")
                 }.foregroundStyle(.white)
+            }
+            .sheet(isPresented: $showWaterTracker) {
+                WaterTrackerView(userData: userData)
             }
             Spacer()
             Button(action: {}) {
@@ -53,7 +61,7 @@ struct BottomNavigationView: View {
     }
 }
 
-
-#Preview {
-    BottomNavigationView()
-}
+//
+//#Preview {
+//    BottomNavigationView()
+//}

@@ -10,7 +10,7 @@ struct User: Identifiable {
 }
 
 struct UserStatsView: View {
-    @ObservedObject var userData: UserData
+    @State var userData: UserData
 
 //    var selectedGender: Gender // Пол пользователя
 //
@@ -173,7 +173,7 @@ enum ActivityLevel: String, CaseIterable {
 }
 
 struct ActivitySelectorView: View {
-    @ObservedObject var userData: UserData
+    @State var userData: UserData
    // @State private var selectedActivity: ActivityLevel // Уровень активности по умолчанию
 
     var body: some View {

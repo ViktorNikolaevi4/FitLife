@@ -9,7 +9,7 @@ import SwiftUI
 
 
     struct MainView: View {
-        @StateObject private var userData = UserData()
+        @State private var userData = UserData()
 
         var selectedGender: Gender // Получаем выбранный пол
 
@@ -22,7 +22,7 @@ import SwiftUI
                 UserStatsView(userData: userData)
                 MacrosView(userData: userData)
              //   Spacer() // Выталкиваем оставшиеся элементы вниз
-                BottomNavigationView()
+                BottomNavigationView(userData: userData)
             }
             .onAppear {
                 print("Selected Gender: \(selectedGender.rawValue)")
