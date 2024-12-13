@@ -5,6 +5,8 @@ import SwiftUI
 
 // Представление для трекера воды
 struct WaterTrackerView: View {
+    @State private var showNotificationSettings = false
+    @Environment(\.dismiss) private var dismiss
     @Bindable var userData: UserData // Данные пользователя, с привязкой
 
     @State private var selectedTemperature: WaterTemperature = .warm // Выбранная температура воды
@@ -19,7 +21,7 @@ struct WaterTrackerView: View {
 
             // Пикер температуры воды
             temperaturePicker
-
+     //       Spacer()
             // Отображение прогресса по воде
             waterProgressView
 
@@ -33,7 +35,7 @@ struct WaterTrackerView: View {
         .onAppear {
             recalculateDailyGoal() // Пересчёт цели при загрузке экрана
         }
-        .onChange(of: userData.weight) { 
+        .onChange(of: userData.weight) {
             recalculateDailyGoal() // Пересчёт цели при изменении веса пользователя
         }
     }
@@ -51,28 +53,20 @@ struct WaterTrackerView: View {
             recalculateDailyGoal() // Пересчёт цели при изменении температуры
         }
     }
-
     // Отображение прогресса по воде
     private var waterProgressView: some View {
-        VStack {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(lineWidth: 2)
-                    .frame(width: 100, height: 150)
-                    .foregroundColor(.blue) // Контур стакана
+        VStack() { // Добавлен spacing для увеличения отступа
+            // Процент воды
+            Text("\(Int(waterPercentage))%")
+                .font(.system(size: 30, weight: .medium)) // Увеличен размер шрифта и добавлен жирный стиль
+                .foregroundColor(.blue)
+                .padding(.bottom, 30) // Отступ снизу для текста
 
-                VStack {
-                    Spacer()
-                    Text("\(Int(waterPercentage))%")
-                        .font(.title2)
-                        .foregroundColor(.blue)
-                        .padding(.bottom, 20) // Процент воды
-                }
-            }
+        //    Spacer() // Добавлен дополнительный Spacer для увеличения разрыва
 
             // Количество выпитой воды
             Text("\(waterIntake, specifier: "%.2f") л из \(dailyGoal, specifier: "%.2f") л")
-                .font(.subheadline)
+                .font(.title3)
                 .foregroundColor(.gray)
         }
     }
@@ -83,17 +77,20 @@ struct WaterTrackerView: View {
             Button(action: { addWater(amount: 0.25) }) {
                 VStack {
                     Image(systemName: "plus")
-                    Text("+ добавить воду").font(.footnote)
-                }
+                    Text("Добавить воду")
+                }.font(.title3)
             }
 
             Spacer()
 
-            Button(action: { print("Добавлено напоминание") }) {
+            Button(action: { showNotificationSettings = true }) {
                 VStack {
                     Image(systemName: "bell")
-                    Text("Напомнить").font(.footnote)
-                }
+                    Text("Напомнить")
+                }.font(.title3)
+            }
+            .fullScreenCover(isPresented: $showNotificationSettings) {
+                NotificationSettingsView()
             }
         }
         .padding()
@@ -101,10 +98,11 @@ struct WaterTrackerView: View {
 
     // Кнопка подтверждения
     private var confirmButton: some View {
-        Button(action: { print("Подтвердить") }) {
+        Button(action: {
+            dismiss() // Закрыть представление
+        }) {
             Text("Ок")
-                .font(.headline)
-                .frame(maxWidth: .infinity)
+                .font(.title3)
                 .padding()
                 .background(Color.blue)
                 .foregroundColor(.white)

@@ -10,15 +10,27 @@ import SwiftUI
 struct BottomNavigationView: View {
     var userData: UserData
     @State private var showWaterTracker = false
+    @State private var showBMIPopup = false
+    @State private var rationPopupView = false
 
     var body: some View {
         HStack {
             Spacer()
-            Button(action: {}) {
+            Button(action: {
+                rationPopupView = true
+            }) {
                 VStack {
                     Image(systemName: "fork.knife")
                     Text("Рацион")
                 }.foregroundStyle(.white)
+            }
+            .sheet(isPresented: $rationPopupView) {
+                RationPopupView(breakfastCalories: 0,
+                                lunchCalories: 0,
+                                dinnerCalories: 0,
+                                snacksCalories: 0)
+                    .presentationDetents([.medium])
+                    .presentationDragIndicator(.visible)
             }
             Spacer()
             Button(action: {
@@ -31,13 +43,23 @@ struct BottomNavigationView: View {
             }
             .sheet(isPresented: $showWaterTracker) {
                 WaterTrackerView(userData: userData)
+                    .presentationDetents([.medium])
+                    .presentationDragIndicator(.visible)
             }
             Spacer()
-            Button(action: {}) {
+            Button(action: {
+                showBMIPopup = true
+            }) {
                 VStack {
                     Image(systemName: "scalemass")
                     Text("ИМТ")
-                }.foregroundStyle(.white)
+                }
+                .foregroundStyle(.white)
+            }
+            .sheet(isPresented: $showBMIPopup) {
+                BMIPopupView(userData: userData)
+                    .presentationDetents([.medium])
+                    .presentationDragIndicator(.visible)
             }
             Spacer()
             Button(action: {}) {
