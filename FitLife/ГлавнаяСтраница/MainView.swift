@@ -23,6 +23,7 @@ import SwiftUI
                 MacrosView(userData: userData)
              //   Spacer() // Выталкиваем оставшиеся элементы вниз
                 BottomNavigationView(userData: userData)
+
             }
             .onAppear {
                 print("Selected Gender: \(selectedGender.rawValue)")

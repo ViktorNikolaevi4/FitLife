@@ -20,15 +20,21 @@ struct MacrosView: View {
     @State private var selectedGoal: WeightGoal = .currentWeight
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 5) {
             HStack(spacing: 20) {
-                Text("Энергия: \(userData.calories)")
-                    .font(.title2)
-                    .fontWeight(.bold)
+                VStack {
+                    Text("Энергия:")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    Text("\(userData.calories)")
+                        .font(.title)
+                        .fontWeight(.bold)
 
+                }.foregroundStyle(.white)
                 // Круговая диаграмма
-                PieChartView()
-            }  .padding()
+                PieChartView(userData: userData)
+            }
+            .padding()
             HStack(spacing: 60) {
                 VStack {
                     Text("Белки")
@@ -74,6 +80,10 @@ struct MacrosView: View {
                 }
                 .pickerStyle(SegmentedPickerStyle()) // Используем стиль сегментированного пикера
                 .padding()
+                .onChange(of: userData.goal) {
+                      // Перерисовка при изменении цели
+                      userData.goal = userData.goal
+                  }
             }
         }
     }

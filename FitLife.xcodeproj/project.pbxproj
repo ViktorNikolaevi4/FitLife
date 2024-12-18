@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		B6CFE9802D08CAAF004E3FA3 /* OpenFoodFactsSDK in Frameworks */ = {isa = PBXBuildFile; productRef = B6CFE97F2D08CAAF004E3FA3 /* OpenFoodFactsSDK */; };
+		B61FAE172D12FAD60034C54D /* SwiftCSV in Frameworks */ = {isa = PBXBuildFile; productRef = B61FAE162D12FAD60034C54D /* SwiftCSV */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -27,7 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B6CFE9802D08CAAF004E3FA3 /* OpenFoodFactsSDK in Frameworks */,
+				B61FAE172D12FAD60034C54D /* SwiftCSV in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -70,7 +70,7 @@
 			);
 			name = FitLife;
 			packageProductDependencies = (
-				B6CFE97F2D08CAAF004E3FA3 /* OpenFoodFactsSDK */,
+				B61FAE162D12FAD60034C54D /* SwiftCSV */,
 			);
 			productName = FitLife;
 			productReference = B6B3C67F2D0480B900D0226C /* FitLife.app */;
@@ -101,7 +101,7 @@
 			mainGroup = B6B3C6762D0480B900D0226C;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				B6CFE97E2D08CAAF004E3FA3 /* XCRemoteSwiftPackageReference "openfoodfacts-swift" */,
+				B61FAE152D12FAD60034C54D /* XCRemoteSwiftPackageReference "SwiftCSV" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B6B3C6802D0480B900D0226C /* Products */;
@@ -269,7 +269,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -302,7 +302,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -343,21 +343,21 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		B6CFE97E2D08CAAF004E3FA3 /* XCRemoteSwiftPackageReference "openfoodfacts-swift" */ = {
+		B61FAE152D12FAD60034C54D /* XCRemoteSwiftPackageReference "SwiftCSV" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/openfoodfacts/openfoodfacts-swift.git";
+			repositoryURL = "https://github.com/swiftcsv/SwiftCSV.git";
 			requirement = {
-				branch = main;
-				kind = branch;
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.10.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		B6CFE97F2D08CAAF004E3FA3 /* OpenFoodFactsSDK */ = {
+		B61FAE162D12FAD60034C54D /* SwiftCSV */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = B6CFE97E2D08CAAF004E3FA3 /* XCRemoteSwiftPackageReference "openfoodfacts-swift" */;
-			productName = OpenFoodFactsSDK;
+			package = B61FAE152D12FAD60034C54D /* XCRemoteSwiftPackageReference "SwiftCSV" */;
+			productName = SwiftCSV;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

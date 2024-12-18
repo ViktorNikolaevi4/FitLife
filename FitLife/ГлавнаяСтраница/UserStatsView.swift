@@ -39,27 +39,24 @@ struct UserStatsView: View {
                         VStack {
                             Text("ВЕС, КГ")
                             Text("\(Int(userData.weight))")
-                                .foregroundColor(.blue)
                                 .onTapGesture {
                                     togglePicker(&isWeightPickerVisible)
                                 }
-                        }
+                        }.foregroundStyle(.white)
                         VStack {
                             Text("РОСТ, СМ")
                             Text("\(Int(userData.height))")
-                                .foregroundColor(.blue)
                                 .onTapGesture {
                                     togglePicker(&isHeightPickerVisible)
                                 }
-                        }
+                        }.foregroundStyle(.white)
                         VStack {
                             Text("ВОЗРАСТ")
                             Text("\(userData.age)")
-                                .foregroundColor(.blue)
                                 .onTapGesture {
                                     togglePicker(&isAgePickerVisible)
                                 }
-                        }
+                        }.foregroundStyle(.white)
                     }
                     .font(.headline)
                 }
@@ -173,7 +170,7 @@ enum ActivityLevel: String, CaseIterable {
 }
 
 struct ActivitySelectorView: View {
-    @State var userData: UserData
+    @Bindable var userData: UserData
    // @State private var selectedActivity: ActivityLevel // Уровень активности по умолчанию
 
     var body: some View {
@@ -189,7 +186,9 @@ struct ActivitySelectorView: View {
             Text(userData.activityLevel.message) // Сообщение для текущего уровня активности
                 .font(.body)
                 .multilineTextAlignment(.center)
-                .padding(.top, 20)
+                .padding(.top, 5)
+                .fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(.white)
         }
     }
 }

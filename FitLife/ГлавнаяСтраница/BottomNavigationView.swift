@@ -81,7 +81,9 @@ struct BottomNavigationView: View {
         .cornerRadius(20)
         .shadow(radius: 5)
     }
+
 }
+
 
 //
 //#Preview {

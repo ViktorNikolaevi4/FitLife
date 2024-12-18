@@ -1,21 +1,20 @@
-//
-//
-//import Foundation
-//import OpenFoodFactsSDK
-//
-//struct Product: Identifiable {
-//    let id: String // Уникальный идентификатор продукта
-//    let name: String? // Название продукта
-//    let brands: String? // Название бренда
-//    let calories: Double? // Калорийность продукта
-//    let imageURL: URL? // URL изображения продукта
-//
-////    // Инициализация модели с помощью данных из API
-////    init(from apiProduct: OpenFoodFactsSDK.Product) {
-////        self.id = apiProduct.code
-////        self.name = apiProduct.productName
-////        self.brands = apiProduct.brands
-////        self.calories = apiProduct.nutriments?
-////        self.imageURL = URL(string: apiProduct.imageURL ?? "")
-////    }
-//}
+
+import Foundation
+import SwiftCSV
+
+struct Product: Identifiable, Decodable {
+    let id = UUID()
+    let name: String
+    let protein: Double
+    let fat: Double
+    let carbs: Double
+    let calories: Int // Добавляем калории
+
+    enum CodingKeys: String, CodingKey {
+        case name = "Продукт"
+        case protein = "Белки"
+        case fat = "Жиры"
+        case carbs = "Углеводы"
+        case calories = "Калл" // Новый ключ для калорий
+    }
+}

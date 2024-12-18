@@ -24,6 +24,7 @@ enum Gender: String, CaseIterable {
 
 struct ContentView: View {
     @State private var showPopup: Bool = false
+    @State private var showInfoCard: Bool = false
     @State private var showMailView: Bool = false
     @State private var mailComposeResult: MFMailComposeResult? = nil
     @State private var showMailErrorAlert: Bool = false
@@ -36,7 +37,7 @@ struct ContentView: View {
                     .ignoresSafeArea()
 
                 VStack(spacing: 100) {
-                    Text("Моё Меню !")
+                    Text("Моё Питание !")
                         .font(.title)
                         .foregroundStyle(.white)
                         .padding()
@@ -89,7 +90,7 @@ struct ContentView: View {
                             }
 
                         VStack(spacing: 40) {
-                             HStack {
+                            HStack(spacing: 40) {
                                  Button(action: {
                                      openAppStoreRating()
                                      print("Оценить приложение")
@@ -116,7 +117,7 @@ struct ContentView: View {
                                      }
                                  }
                              }
-                             HStack {
+                            HStack(spacing: 40) {
                                  Button(action: {
                                      if MFMailComposeViewController.canSendMail() {
                                          showMailView = true
@@ -141,7 +142,7 @@ struct ContentView: View {
                                  }
 
                                  Button(action: {
-                                     print("О приложении")
+                                     showInfoCard = true
                                  }) {
                                      VStack {
                                          Image(systemName: "info.circle")
@@ -171,8 +172,51 @@ struct ContentView: View {
                          .shadow(radius: 10)
                      }
                  }
-             }
+                if showInfoCard {
+                    ZStack {
+                        Color.black.opacity(0.4)
+                            .ignoresSafeArea()
+                            .onTapGesture {
+                                showInfoCard = false
+                            }
+
+                        VStack(spacing: 20) {
+                            Text("Моё Питание!")
+                                .font(.title)
+                                .bold()
+                                .foregroundColor(.blue)
+
+                            Text("""
+Моё Питание! — это приложение, предлагающее советы и рекомендации, которые помогают пользователям вести здоровый образ жизни. Приложение предоставляет информацию о пользе правильного питания, физических нагрузок и соответствующих привычек, однако при этом оно не может и не должно использоваться для постановки диагноза или лечения заболеваний. Для лечения проконсультируйтесь с врачом.
+""")
+                                .multilineTextAlignment(.center)
+                                .font(.body)
+                                .foregroundColor(.black)
+                                .padding()
+
+                            Button(action: {
+                                showInfoCard = false
+                            }) {
+                                Text("OK")
+                                    .font(.title)
+                                    .bold()
+                                    .padding()
+                                   // .frame(maxWidth: .infinity)
+                                    .background(Color.blue)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(10)
+                            }
+                        }
+                        .padding()
+                        .frame(width: 350)
+                        .background(Color.white)
+                        .cornerRadius(20)
+                        .shadow(radius: 10)
+                    }
+                }
+            }
         }
+        .tint(.white)
         .sheet(isPresented: $showMailView) {
             MailComposeView(showMailView: $showMailView, result: $mailComposeResult)
         }
@@ -200,6 +244,7 @@ struct ContentView: View {
         }
     }
 }
+
 
 #Preview {
     ContentView()
