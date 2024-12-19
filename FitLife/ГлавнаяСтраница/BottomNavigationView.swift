@@ -25,10 +25,7 @@ struct BottomNavigationView: View {
                 }.foregroundStyle(.white)
             }
             .sheet(isPresented: $rationPopupView) {
-                RationPopupView(breakfastCalories: 0,
-                                lunchCalories: 0,
-                                dinnerCalories: 0,
-                                snacksCalories: 0)
+                RationPopupView()
                     .presentationDetents([.medium])
                     .presentationDragIndicator(.visible)
             }
@@ -81,7 +78,6 @@ struct BottomNavigationView: View {
         .cornerRadius(20)
         .shadow(radius: 5)
     }
-
 }
 
 

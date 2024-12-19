@@ -20,14 +20,24 @@ enum MealType: String, CaseIterable {
 
 
 struct RationPopupView: View {
-    @State var breakfastCalories: Int
-    @State var lunchCalories: Int
-    @State var dinnerCalories: Int
-    @State var snacksCalories: Int
+    @State private var breakfastProducts: [Product]
+    @State private var lunchProducts: [Product]
+    @State private var dinnerProducts: [Product]
+    @State private var snacksProducts: [Product]
 
     @State private var showProductSelection = false
     @State private var selectedMeal: MealType? = nil
-    @Environment(\.dismiss) private var dismiss // Для закрытия окна
+    @Environment(\.dismiss) private var dismiss
+
+    init(breakfastProducts: [Product] = [],
+         lunchProducts: [Product] = [],
+         dinnerProducts: [Product] = [],
+         snacksProducts: [Product] = []) {
+        _breakfastProducts = State(initialValue: breakfastProducts)
+        _lunchProducts = State(initialValue: lunchProducts)
+        _dinnerProducts = State(initialValue: dinnerProducts)
+        _snacksProducts = State(initialValue: snacksProducts)
+    }
 
     var body: some View {
         VStack(spacing: 16) {
@@ -37,17 +47,18 @@ struct RationPopupView: View {
 
             Divider()
 
-            VStack(spacing: 8) {
-                mealRow(for: .breakfast, calories: breakfastCalories)
-                Divider()
-                mealRow(for: .lunch, calories: lunchCalories)
-                Divider()
-                mealRow(for: .dinner, calories: dinnerCalories)
-                Divider()
-                mealRow(for: .snacks, calories: snacksCalories)
+            ScrollView {
+                VStack(spacing: 8) {
+                    mealRow(for: .breakfast, products: breakfastProducts)
+                    Divider()
+                    mealRow(for: .lunch, products: lunchProducts)
+                    Divider()
+                    mealRow(for: .dinner, products: dinnerProducts)
+                    Divider()
+                    mealRow(for: .snacks, products: snacksProducts)
+                }
+                .padding(.horizontal)
             }
-            .padding(.horizontal)
-
             Spacer()
 
             Button("OK") {
@@ -79,32 +90,46 @@ struct RationPopupView: View {
     }
 
     // Вспомогательный метод для создания строки приёма пищи
-    private func mealRow(for mealType: MealType, calories: Int) -> some View {
-        HStack {
-            Text(mealType.displayName) // Используем displayName из enum
-            Spacer()
-            Text("\(calories) ккал")
-                .foregroundColor(.blue)
-            Button("+ добавить еду") {
-                selectedMeal = mealType
-                showProductSelection = true
+    private func mealRow(for mealType: MealType, products: [Product]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(mealType.displayName)
+                Spacer()
+                Text("\(products.reduce(0) { $0 + $1.calories }) ккал")
+                    .foregroundColor(.blue)
+                Button("+ добавить еду") {
+                    selectedMeal = mealType
+                    showProductSelection = true
+                }
+                .font(.caption)
+                .foregroundStyle(.blue)
             }
-            .font(.caption)
-            .foregroundStyle(.blue)
+
+            if !products.isEmpty {
+                ForEach(products) { product in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(product.name)
+                            .font(.headline)
+                        Text("Калории: \(product.calories) ккал, Б: \(String(format: "%.1f", product.protein)) г., Ж: \(String(format: "%.1f", product.fat)) г., У: \(String(format: "%.1f", product.carbs)) г.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
         }
     }
 
-    // Обновляем калории в зависимости от выбранного приёма пищи
+    // Обновляем продукты для выбранного приема пищи
     private func addProductToMeal(_ product: Product) {
         switch selectedMeal {
         case .breakfast:
-            breakfastCalories += product.calories
+            breakfastProducts.append(product)
         case .lunch:
-            lunchCalories += product.calories
+            lunchProducts.append(product)
         case .dinner:
-            dinnerCalories += product.calories
+            dinnerProducts.append(product)
         case .snacks:
-            snacksCalories += product.calories
+            snacksProducts.append(product)
         default:
             break
         }
