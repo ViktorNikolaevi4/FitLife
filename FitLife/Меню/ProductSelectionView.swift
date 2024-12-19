@@ -14,6 +14,12 @@ struct ProductSelectionView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var searchText: String = ""
     @State private var selectedFilter: FilterType = .all // Управление текущим фильтром
+    @State private var isCreatingProduct: Bool = false // Управление формой создания продукта
+    @State private var customProductName: String = ""
+    @State private var customProductCalories: String = ""
+    @State private var customProductProtein: String = ""
+    @State private var customProductFat: String = ""
+    @State private var customProductCarbs: String = ""
     var onProductSelected: (Product) -> Void
 
     enum FilterType: String, CaseIterable {
@@ -30,7 +36,7 @@ struct ProductSelectionView: View {
         case .favorites:
             baseList = productLoader.products.filter { $0.isFavorite }
         case .custom:
-            baseList = [] // Пока логики для "Свои" нет
+            baseList = productLoader.products.filter { $0.isCustom }
         }
 
         if searchText.isEmpty {
@@ -42,7 +48,7 @@ struct ProductSelectionView: View {
 
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack {
                 VStack {
                     Text("Таблица калорийности продуктов питания")
@@ -92,6 +98,66 @@ struct ProductSelectionView: View {
                         }
                     }
                 }
+
+                if isCreatingProduct {
+                    ZStack {
+                        Color.black.opacity(0.4).edgesIgnoringSafeArea(.all)
+
+                        VStack(spacing: 16) {
+                            Text("Новый продукт")
+                                .font(.headline)
+                            Text("(БЖУ указывайте на 100 г продукта)")
+                                .font(.caption)
+
+                            TextField("Наименование", text: $customProductName)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .padding(.horizontal)
+
+                            TextField("Энергия, ккал", text: $customProductCalories)
+                                .keyboardType(.decimalPad)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .padding(.horizontal)
+
+                            HStack(spacing: 16) {
+                                TextField("Белки, г.", text: $customProductProtein)
+                                    .keyboardType(.decimalPad)
+                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                                TextField("Жиры, г.", text: $customProductFat)
+                                    .keyboardType(.decimalPad)
+                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                                TextField("Углеводы, г.", text: $customProductCarbs)
+                                    .keyboardType(.decimalPad)
+                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                            }
+                            .padding(.horizontal)
+
+                            HStack {
+                                Button("Создать") {
+                                    createCustomProduct()
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.blue)
+                                .foregroundColor(.white)
+                                .cornerRadius(10)
+
+                                Button("Отмена") {
+                                    isCreatingProduct = false
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.gray)
+                                .foregroundColor(.white)
+                                .cornerRadius(10)
+                            }
+                            .padding(.horizontal)
+                        }
+                        .padding()
+                        .background(Color.white)
+                        .cornerRadius(10)
+                        .shadow(radius: 10)
+                    }
+                }
             }
             // Навигационный заголовок с приемом пищи и датой
             .navigationBarTitleDisplayMode(.inline)
@@ -100,7 +166,7 @@ struct ProductSelectionView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Создать") {
                         // Логика для кнопки "Создать"
-                        print("Создать нажато")
+                        isCreatingProduct = true
                     }
                     .foregroundColor(.blue)
                 }
@@ -131,6 +197,39 @@ struct ProductSelectionView: View {
         let formatter = DateFormatter()
         formatter.dateStyle = .long
         return formatter.string(from: date)
+    }
+    private func createCustomProduct() {
+        guard
+            let calories = Double(customProductCalories),
+            let protein = Double(customProductProtein),
+            let fat = Double(customProductFat),
+            let carbs = Double(customProductCarbs),
+            !customProductName.isEmpty
+        else {
+            return
+        }
+
+        let newProduct = Product(
+            name: customProductName,
+            protein: protein,
+            fat: fat,
+            carbs: carbs,
+            calories: Int(calories),
+            isFavorite: false,
+            isCustom: true
+        )
+
+        productLoader.products.append(newProduct)
+        isCreatingProduct = false
+        clearCustomProductFields()
+    }
+
+    private func clearCustomProductFields() {
+        customProductName = ""
+        customProductCalories = ""
+        customProductProtein = ""
+        customProductFat = ""
+        customProductCarbs = ""
     }
 }
 

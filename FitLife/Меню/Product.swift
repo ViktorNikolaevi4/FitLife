@@ -10,6 +10,7 @@ struct Product: Identifiable, Decodable {
     let carbs: Double
     let calories: Int
     var isFavorite: Bool = false
+    var isCustom: Bool = false
 
     enum CodingKeys: String, CodingKey {
         case name = "Продукт"
