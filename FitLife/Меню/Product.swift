@@ -8,7 +8,8 @@ struct Product: Identifiable, Decodable {
     let protein: Double
     let fat: Double
     let carbs: Double
-    let calories: Int // Добавляем калории
+    let calories: Int
+    var isFavorite: Bool = false
 
     enum CodingKeys: String, CodingKey {
         case name = "Продукт"

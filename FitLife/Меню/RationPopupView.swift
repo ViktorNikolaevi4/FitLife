@@ -7,11 +7,26 @@
 
 import SwiftUI
 
+enum MealType: String, CaseIterable {
+    case breakfast = "Завтрак"
+    case lunch = "Обед"
+    case dinner = "Ужин"
+    case snacks = "Перекусы"
+
+    var displayName: String {
+        self.rawValue
+    }
+}
+
+
 struct RationPopupView: View {
-    var breakfastCalories: Int
-    var lunchCalories: Int
-    var dinnerCalories: Int
-    var snacksCalories: Int
+    @State var breakfastCalories: Int
+    @State var lunchCalories: Int
+    @State var dinnerCalories: Int
+    @State var snacksCalories: Int
+
+    @State private var showProductSelection = false
+    @State private var selectedMeal: MealType? = nil
     @Environment(\.dismiss) private var dismiss // Для закрытия окна
 
     var body: some View {
@@ -23,59 +38,20 @@ struct RationPopupView: View {
             Divider()
 
             VStack(spacing: 8) {
-                HStack {
-                    Text("Завтрак:")
-                    Spacer()
-                    Text("\(breakfastCalories) ккал")
-                        .foregroundColor(.blue)
-                    Button("+ добавить еду") {
-                        // Логика добавления еды для завтрака
-                    }
-                    .font(.caption)
-                }
+                mealRow(for: .breakfast, calories: breakfastCalories)
                 Divider()
-
-                HStack {
-                    Text("Обед:")
-                    Spacer()
-                    Text("\(lunchCalories) ккал")
-                        .foregroundColor(.blue)
-                    Button("+ добавить еду") {
-                        // Логика добавления еды для обеда
-                    }
-                    .font(.caption)
-                }
+                mealRow(for: .lunch, calories: lunchCalories)
                 Divider()
-
-                HStack {
-                    Text("Ужин:")
-                    Spacer()
-                    Text("\(dinnerCalories) ккал")
-                        .foregroundColor(.blue)
-                    Button("+ добавить еду") {
-                        // Логика добавления еды для ужина
-                    }
-                    .font(.caption)
-                }
+                mealRow(for: .dinner, calories: dinnerCalories)
                 Divider()
-
-                HStack {
-                    Text("Перекусы:")
-                    Spacer()
-                    Text("\(snacksCalories) ккал")
-                        .foregroundColor(.blue)
-                    Button("+ добавить еду") {
-                        // Логика добавления еды для перекусов
-                    }
-                    .font(.caption)
-                }
+                mealRow(for: .snacks, calories: snacksCalories)
             }
             .padding(.horizontal)
 
             Spacer()
 
             Button("OK") {
-                dismiss() // Закрыть окно
+                dismiss()
             }
             .font(.headline)
             .padding()
@@ -86,6 +62,51 @@ struct RationPopupView: View {
         }
         .padding()
         .presentationDetents([.medium])
+        .sheet(isPresented: Binding(
+            get: { showProductSelection && selectedMeal != nil },
+            set: { showProductSelection = $0 }
+        )) {
+            if let selectedMeal = selectedMeal {
+                ProductSelectionView(
+                    mealType: selectedMeal,
+                    date: Date(),
+                    onProductSelected: { selectedProduct in
+                        addProductToMeal(selectedProduct)
+                    }
+                )
+            }
+        }
+    }
+
+    // Вспомогательный метод для создания строки приёма пищи
+    private func mealRow(for mealType: MealType, calories: Int) -> some View {
+        HStack {
+            Text(mealType.displayName) // Используем displayName из enum
+            Spacer()
+            Text("\(calories) ккал")
+                .foregroundColor(.blue)
+            Button("+ добавить еду") {
+                selectedMeal = mealType
+                showProductSelection = true
+            }
+            .font(.caption)
+            .foregroundStyle(.blue)
+        }
+    }
+
+    // Обновляем калории в зависимости от выбранного приёма пищи
+    private func addProductToMeal(_ product: Product) {
+        switch selectedMeal {
+        case .breakfast:
+            breakfastCalories += product.calories
+        case .lunch:
+            lunchCalories += product.calories
+        case .dinner:
+            dinnerCalories += product.calories
+        case .snacks:
+            snacksCalories += product.calories
+        default:
+            break
+        }
     }
 }
-

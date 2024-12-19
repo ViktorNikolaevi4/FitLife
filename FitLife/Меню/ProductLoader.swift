@@ -3,8 +3,9 @@ import SwiftUI
 import Foundation
 import SwiftCSV
 
-class ProductLoader: ObservableObject {
-    @Published var products: [Product] = []
+@Observable
+class ProductLoader {
+     var products: [Product] = []
 
     init() {
         loadCSV()
