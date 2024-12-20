@@ -69,6 +69,9 @@ struct ProductSelectionView: View {
 
                 List(filteredProducts, id: \.id) { product in
                     Button(action: {
+                   //     self.selectedProduct = product
+                   //     self.portionSize = "100" // Установить начальное значение порции при выборе продукта
+                    //    self.showProductDetails = true
                         onProductSelected(product) // Передаём выбранный продукт
                         dismiss()
                     }) {

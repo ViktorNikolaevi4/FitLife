@@ -86,8 +86,10 @@ struct RationPopupView: View {
                     mealType: selectedMeal,
                     date: Date(),
                     onProductSelected: { selectedProduct in
-                        self.selectedProduct = selectedProduct
-                        self.showProductDetails = true
+                        self.selectedProduct = selectedProduct // Сохраняем выбранный продукт
+                        self.portionSize = "100"               // Устанавливаем порцию на значение 100
+                        self.showProductDetails = true         // Переходим на экран деталей продукта
+                        self.showProductSelection = false      // Закрываем окно выбора продукта
                     }
                 )
             }
