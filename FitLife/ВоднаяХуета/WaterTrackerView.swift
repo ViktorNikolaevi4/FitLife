@@ -79,7 +79,7 @@ struct WaterTrackerView: View {
                     Image(systemName: "plus")
                     Text("Добавить воду")
                 }.font(.title3)
-            }
+            }.foregroundStyle(.black)
 
             Spacer()
 
@@ -88,7 +88,7 @@ struct WaterTrackerView: View {
                     Image(systemName: "bell")
                     Text("Напомнить")
                 }.font(.title3)
-            }
+            }.foregroundStyle(.black)
             .fullScreenCover(isPresented: $showNotificationSettings) {
                 NotificationSettingsView()
             }

@@ -46,7 +46,6 @@ struct ProductSelectionView: View {
         }
     }
 
-
     var body: some View {
         NavigationStack {
             VStack {
