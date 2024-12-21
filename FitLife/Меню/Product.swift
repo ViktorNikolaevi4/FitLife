@@ -4,11 +4,12 @@ import SwiftCSV
 
 struct Product: Identifiable, Decodable {
     let id = UUID()
-    let name: String
-    let protein: Double
-    let fat: Double
-    let carbs: Double
-    let calories: Int
+    var name: String
+    var protein: Double
+    var fat: Double
+    var carbs: Double
+    var calories: Int
+//    var portion: Double = 100 
     var isFavorite: Bool = false
     var isCustom: Bool = false
 

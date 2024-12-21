@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct ProductSelectionView: View {
     let mealType: MealType // Тип приема пищи (Завтрак, Обед и т.д.)
@@ -21,6 +22,8 @@ struct ProductSelectionView: View {
     @State private var customProductFat: String = ""
     @State private var customProductCarbs: String = ""
     var onProductSelected: (Product) -> Void
+
+    @Environment(\.modelContext) private var modelContext
 
     enum FilterType: String, CaseIterable {
         case all = "Общие"
@@ -89,6 +92,7 @@ struct ProductSelectionView: View {
                             Button(action: {
                                 if let index = productLoader.products.firstIndex(where: { $0.id == product.id }) {
                                     productLoader.products[index].isFavorite.toggle() // Переключение избранного
+                                    saveFavoriteStatus(for: productLoader.products[index])
                                 }
                             }) {
                                 Image(systemName: product.isFavorite ? "star.fill" : "star")
@@ -192,6 +196,9 @@ struct ProductSelectionView: View {
                     .foregroundColor(.blue)
                 }
             }
+            .onAppear {
+                loadFavorites()
+            }
         }
     }
     // Форматирование даты
@@ -232,6 +239,42 @@ struct ProductSelectionView: View {
         customProductProtein = ""
         customProductFat = ""
         customProductCarbs = ""
+    }
+    private func saveFavoriteStatus(for product: Product) {
+        let fetchDescriptor = FetchDescriptor<FoodEntry>()
+        do {
+            let foodEntries = try modelContext.fetch(fetchDescriptor)
+            if let entry = foodEntries.first(where: { $0.productName == product.name }) {
+                entry.isFavorite = product.isFavorite
+            } else {
+                let newEntry = FoodEntry(
+                    date: Date(),
+                    mealType: mealType,
+                    product: product,
+                    portion: 100,
+                    gender: .male, // Здесь укажите текущий пол пользователя
+                    isFavorite: product.isFavorite
+                )
+                modelContext.insert(newEntry)
+            }
+            try modelContext.save()
+            print("Статус избранного сохранен для продукта: \(product.name)")
+        } catch {
+            print("Ошибка сохранения избранного статуса: \(error)")
+        }
+    }
+    private func loadFavorites() {
+        let fetchDescriptor = FetchDescriptor<FoodEntry>()
+        do {
+            let foodEntries = try modelContext.fetch(fetchDescriptor)
+            for productIndex in productLoader.products.indices {
+                if let entry = foodEntries.first(where: { $0.productName == productLoader.products[productIndex].name }) {
+                    productLoader.products[productIndex].isFavorite = entry.isFavorite
+                }
+            }
+        } catch {
+            print("Ошибка загрузки избранных продуктов: \(error)")
+        }
     }
 }
 

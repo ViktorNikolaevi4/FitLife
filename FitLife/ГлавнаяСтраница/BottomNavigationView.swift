@@ -25,7 +25,7 @@ struct BottomNavigationView: View {
                 }.foregroundStyle(.white)
             }
             .sheet(isPresented: $rationPopupView) {
-                RationPopupView()
+                RationPopupView(gender: userData.gender)
                     .presentationDetents([.medium])
                     .presentationDragIndicator(.visible)
             }
