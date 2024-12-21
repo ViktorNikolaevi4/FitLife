@@ -33,7 +33,7 @@ struct UserStatsView: View {
             // Основной интерфейс
             VStack(spacing: 10) {
                 HStack {
-                    Image(userData.selectedGender.imageName)
+                    Image(userData.gender.imageName)
                         .resizable()
                         .frame(width: 80, height: 80)
                         .clipShape(Circle())
@@ -121,7 +121,7 @@ struct UserStatsView: View {
                 age: userData.age,
                 activityLevel: userData.activityLevel,
                 goal: userData.goal,
-                selectedGender: userData.selectedGender
+                gender: userData.gender
             )
             modelContext.insert(newUser)
         }

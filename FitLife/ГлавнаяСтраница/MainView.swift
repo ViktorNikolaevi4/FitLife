@@ -14,9 +14,14 @@ import SwiftData
 
         var selectedGender: Gender // Получаем выбранный пол
 
+        // Фильтрованные данные для выбранного пола
+        var filteredUserData: UserData? {
+            userData.first(where: { $0.gender == selectedGender }) // Ищем данные для текущего пола
+        }
+
         var body: some View {
             VStack() {
-                if let userData = userData.first { // Проверяем, есть ли пользователь
+                if let userData = filteredUserData { // Проверяем, есть ли пользователь
                     // Заголовок с датой
                     HeaderView()
                         .padding(.top, safeAreaTopInset()) // Учет безопасной зоны сверху
@@ -27,17 +32,18 @@ import SwiftData
                     BottomNavigationView(userData: userData)
 
                 } else {
-                    Text("Данные пользователя не найдены")
+                    Text("Данные не найдены")
                         .font(.headline)
+                        .onAppear {
+                            createNewUser(for: selectedGender) // Создаем нового пользователя, если данных нет
+                        }
                 }
             }
             .onAppear {
-                // Если данных нет, создаём нового пользователя
                 if userData.isEmpty {
-                    createNewUser()
-                } else {
-                    print("Selected Gender: \(selectedGender.rawValue)")
-                    userData.first?.selectedGender = selectedGender
+                    createNewUser(for: selectedGender)
+                } else if filteredUserData == nil { // Если данных для выбранного пола нет
+                    createNewUser(for: selectedGender)
                 }
             }
             .background(GradientView())
@@ -51,14 +57,15 @@ import SwiftData
             }
             return window.safeAreaInsets.top
         }
-        private func createNewUser() {
+        private func createNewUser(for gender: Gender) {
             let newUser = UserData(
                 weight: 0,
                 height: 0,
                 age: 0,
                 activityLevel: .none,
                 goal: .currentWeight,
-                selectedGender: selectedGender
+          //      selectedGender: selectedGender,
+                gender: gender // Указываем пол
             )
             modelContext.insert(newUser) // Вставляем нового пользователя в контекст
             try? modelContext.save() // Сохраняем изменения

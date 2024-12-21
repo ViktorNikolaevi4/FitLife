@@ -11,12 +11,13 @@ class UserData {
     var age: Int
     var activityLevel: ActivityLevel
     var goal: WeightGoal
-    var selectedGender: Gender
+  //  var selectedGender: Gender
+    var gender: Gender // Пол пользователя для фильтрации
 
     var calories: Int {
         guard weight > 0, height > 0, age > 0 else { return 0 }
         return MacrosCalculator.calculateCaloriesMifflin(
-            gender: selectedGender,
+            gender: gender,
             weight: weight,
             height: height,
             age: age,
@@ -35,14 +36,16 @@ class UserData {
         age: Int = 0,
         activityLevel: ActivityLevel = ActivityLevel.none, // Полностью квалифицированное имя
         goal: WeightGoal = WeightGoal.currentWeight,      // Полностью квалифицированное имя
-        selectedGender: Gender = Gender.male             // Полностью квалифицированное имя
+    //    selectedGender: Gender = Gender.male,
+        gender: Gender = .male
     ) {
         self.weight = weight
         self.height = height
         self.age = age
         self.activityLevel = activityLevel
         self.goal = goal
-        self.selectedGender = selectedGender
+     //   self.selectedGender = selectedGender
+        self.gender = gender
     }
 }
 

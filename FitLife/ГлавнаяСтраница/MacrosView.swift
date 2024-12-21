@@ -14,7 +14,7 @@ enum WeightGoal: String, CaseIterable, Codable {
 }
 
 struct MacrosView: View {
-    @State var userData: UserData
+    @Bindable var userData: UserData
 
     @State private var callories: Int = 0
     @State private var selectedGoal: WeightGoal = .currentWeight
