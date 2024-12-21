@@ -29,7 +29,7 @@ class FoodEntry {
         self.protein = product.protein * (portion / 100)
         self.fat = product.fat * (portion / 100)
         self.carbs = product.carbs * (portion / 100)
-        self.calories = Int(Double(product.calories) * (portion / 100))
+        self.calories = Int(Double(product.calories))
         self.portion = portion
         self.gender = gender
         self.isFavorite = isFavorite

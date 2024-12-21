@@ -103,7 +103,6 @@ struct RationPopupView: View {
                         self.showProductSelection = false      // Закрываем окно выбора продукта
 
                         // Передача выбранного продукта вместе с гендером
-                         addProductToMeal(selectedProduct, portion: Double(portionSize) ?? 100, gender: selectedGender)
                     }
                 )
             }
@@ -238,6 +237,12 @@ struct RationPopupView: View {
 
     // Обновляем продукты для выбранного приема пищи
     private func addProductToMeal(_ product: Product, portion: Double, gender: Gender) {
+        // Проверяем, что выбран прием пищи
+        guard let selectedMeal = selectedMeal else {
+            print("Ошибка: Не выбран тип приема пищи!")
+            return
+        }
+
         let factor = portion / 100
         let adjustedProduct = Product(
             name: product.name,
@@ -289,14 +294,12 @@ struct RationPopupView: View {
             } else {
                 snacksProducts.append(adjustedProduct)
             }
-        default:
-            break
         }
 
         // Сохраняем данные в базу
         let foodEntry = FoodEntry(
             date: Date(),
-            mealType: selectedMeal ?? .breakfast,
+            mealType: selectedMeal,
             product: adjustedProduct,
             portion: portion,
             gender: gender,
@@ -310,9 +313,6 @@ struct RationPopupView: View {
             print("Ошибка при сохранении продукта: \(error)")
         }
     }
-
-
-
 
 private func calculateCalories(for product: Product) -> Int {
     let portion = Double(portionSize) ?? 100
