@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 @main
 struct FitLifeApp: App {
@@ -13,5 +14,7 @@ struct FitLifeApp: App {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(for: UserData.self) // Используем модификатор
     }
 }
+

@@ -7,8 +7,9 @@
 
 import SwiftUI
 import MessageUI
+import SwiftData
 
-enum Gender: String, CaseIterable {
+enum Gender: String, CaseIterable, Codable {
     case male = "Мужчина"
     case female = "Женщина"
 

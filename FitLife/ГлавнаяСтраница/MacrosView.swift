@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-enum WeightGoal: String, CaseIterable {
+enum WeightGoal: String, CaseIterable, Codable {
     case loseWeight = "Снизить вес"
     case currentWeight = "Текущий вес"
     case gainWeight = "Набрать вес"

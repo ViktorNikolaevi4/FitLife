@@ -1,22 +1,17 @@
-//
-//  UserData.swift
-//  FitLife
-//
-//  Created by Виктор Корольков on 10.12.2024.
-//
 
+import SwiftData
 import Foundation
 import SwiftUI
 import Observation
 
-@Observable
+@Model
 class UserData {
-     var weight: Double = 0
-     var height: Double = 0
-     var age: Int = 0
-    var activityLevel: ActivityLevel = .none
-    var goal: WeightGoal = .currentWeight
-    var selectedGender: Gender = .male
+    var weight: Double
+    var height: Double
+    var age: Int
+    var activityLevel: ActivityLevel
+    var goal: WeightGoal
+    var selectedGender: Gender
 
     var calories: Int {
         guard weight > 0, height > 0, age > 0 else { return 0 }
@@ -32,6 +27,22 @@ class UserData {
 
     var macros: (proteins: Int, fats: Int, carbs: Int) {
         return MacrosCalculator.calculateMacros(calories: calories, goal: goal)
+    }
+
+    init(
+        weight: Double = 0,
+        height: Double = 0,
+        age: Int = 0,
+        activityLevel: ActivityLevel = ActivityLevel.none, // Полностью квалифицированное имя
+        goal: WeightGoal = WeightGoal.currentWeight,      // Полностью квалифицированное имя
+        selectedGender: Gender = Gender.male             // Полностью квалифицированное имя
+    ) {
+        self.weight = weight
+        self.height = height
+        self.age = age
+        self.activityLevel = activityLevel
+        self.goal = goal
+        self.selectedGender = selectedGender
     }
 }
 

@@ -1,16 +1,19 @@
 
 import SwiftUI
+import SwiftData
 
-// Модель пользователя
-struct User: Identifiable {
-    var id = UUID()
-    var weight: Double
-    var height: Double
-    var age: Int
-}
+//// Модель пользователя
+//struct User: Identifiable {
+//    var id = UUID()
+//    var weight: Double
+//    var height: Double
+//    var age: Int
+//}
 
 struct UserStatsView: View {
-    @State var userData: UserData
+    @Bindable var userData: UserData
+    @Environment(\.modelContext) private var modelContext
+
 
 //    var selectedGender: Gender // Пол пользователя
 //
@@ -41,6 +44,7 @@ struct UserStatsView: View {
                             Text("\(Int(userData.weight))")
                                 .onTapGesture {
                                     togglePicker(&isWeightPickerVisible)
+                                    updateUserData()
                                 }
                         }.foregroundStyle(.white)
                         VStack {
@@ -48,6 +52,7 @@ struct UserStatsView: View {
                             Text("\(Int(userData.height))")
                                 .onTapGesture {
                                     togglePicker(&isHeightPickerVisible)
+                                    updateUserData()
                                 }
                         }.foregroundStyle(.white)
                         VStack {
@@ -55,6 +60,7 @@ struct UserStatsView: View {
                             Text("\(userData.age)")
                                 .onTapGesture {
                                     togglePicker(&isAgePickerVisible)
+                                    updateUserData()
                                 }
                         }.foregroundStyle(.white)
                     }
@@ -96,6 +102,31 @@ struct UserStatsView: View {
                     .zIndex(1)
             }
         }
+    }
+
+    private func updateUserData() {
+        let fetchDescriptor = FetchDescriptor<UserData>() // Создаем FetchDescriptor
+        // Пытаемся найти первого пользователя
+        if let user = try? modelContext.fetch(fetchDescriptor).first {
+            user.weight = userData.weight
+            user.height = userData.height
+            user.age = userData.age
+            user.activityLevel = userData.activityLevel
+            user.goal = userData.goal
+        } else {
+            // Если пользователь не найден, создаем нового
+            let newUser = UserData(
+                weight: userData.weight,
+                height: userData.height,
+                age: userData.age,
+                activityLevel: userData.activityLevel,
+                goal: userData.goal,
+                selectedGender: userData.selectedGender
+            )
+            modelContext.insert(newUser)
+        }
+        // Сохранение изменений в модельном контексте
+        try? modelContext.save()
     }
 
     private func togglePicker(_ visibility: inout Bool) {
@@ -149,7 +180,7 @@ struct PickerView: View {
 }
 
 
-enum ActivityLevel: String, CaseIterable {
+enum ActivityLevel: String, CaseIterable, Codable {
     case none = "Нет"
     case light = "1-2 раза"
     case moderate = "3-5 раза"
