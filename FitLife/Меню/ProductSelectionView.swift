@@ -244,12 +244,12 @@ struct ProductSelectionView: View {
         let fetchDescriptor = FetchDescriptor<FoodEntry>()
         do {
             let foodEntries = try modelContext.fetch(fetchDescriptor)
-            if let entry = foodEntries.first(where: { $0.productName == product.name }) {
+            if let entry = foodEntries.first(where: { $0.product.name == product.name }) {
                 entry.isFavorite = product.isFavorite
             } else {
                 let newEntry = FoodEntry(
                     date: Date(),
-                    mealType: mealType,
+                    mealType: mealType.rawValue,
                     product: product,
                     portion: 100,
                     gender: .male, // Здесь укажите текущий пол пользователя
@@ -268,7 +268,7 @@ struct ProductSelectionView: View {
         do {
             let foodEntries = try modelContext.fetch(fetchDescriptor)
             for productIndex in productLoader.products.indices {
-                if let entry = foodEntries.first(where: { $0.productName == productLoader.products[productIndex].name }) {
+                if let entry = foodEntries.first(where: { $0.product.name == productLoader.products[productIndex].name }) {
                     productLoader.products[productIndex].isFavorite = entry.isFavorite
                 }
             }

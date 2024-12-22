@@ -159,7 +159,6 @@ struct RationPopupView: View {
     }
 
     private func loadData(for date: Date, gender: Gender) {
-        // Фильтруем записи по дате и гендеру
         let fetchDescriptor = FetchDescriptor<FoodEntry>()
         do {
             let foodEntries = try modelContext.fetch(fetchDescriptor)
@@ -170,32 +169,19 @@ struct RationPopupView: View {
             // Обновляем локальные списки продуктов
             breakfastProducts = filteredEntries
                 .filter { $0.mealType == MealType.breakfast.rawValue }
-                .map { productFromEntry($0) }
+                .compactMap { $0.product } // Получаем продукты через связь
             lunchProducts = filteredEntries
                 .filter { $0.mealType == MealType.lunch.rawValue }
-                .map { productFromEntry($0) }
+                .compactMap { $0.product }
             dinnerProducts = filteredEntries
                 .filter { $0.mealType == MealType.dinner.rawValue }
-                .map { productFromEntry($0) }
+                .compactMap { $0.product }
             snacksProducts = filteredEntries
                 .filter { $0.mealType == MealType.snacks.rawValue }
-                .map { productFromEntry($0) }
+                .compactMap { $0.product }
         } catch {
             print("Ошибка загрузки данных: \(error)")
         }
-    }
-
-    // Преобразуем FoodEntry в Product
-    private func productFromEntry(_ entry: FoodEntry) -> Product {
-        return Product(
-            name: entry.productName,
-            protein: entry.protein,
-            fat: entry.fat,
-            carbs: entry.carbs,
-            calories: entry.calories,
-            isFavorite: false, // По умолчанию
-            isCustom: false // Или true, если это пользовательский продукт
-        )
     }
 
     // Когда пользователь выбирает продукт для добавления
@@ -299,7 +285,7 @@ struct RationPopupView: View {
         // Сохраняем данные в базу
         let foodEntry = FoodEntry(
             date: Date(),
-            mealType: selectedMeal,
+            mealType: selectedMeal.rawValue,
             product: adjustedProduct,
             portion: portion,
             gender: gender,
@@ -313,6 +299,7 @@ struct RationPopupView: View {
             print("Ошибка при сохранении продукта: \(error)")
         }
     }
+
 
 private func calculateCalories(for product: Product) -> Int {
     let portion = Double(portionSize) ?? 100
