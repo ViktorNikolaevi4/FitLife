@@ -16,7 +16,7 @@ struct ProductSelectionView: View {
     @State private var customProductProtein: String = ""
     @State private var customProductFat: String = ""
     @State private var customProductCarbs: String = ""
-    var onProductSelected: (Any) -> Void
+    var onProductSelected: (Product) -> Void
 
     @Environment(\.modelContext) private var modelContext
 
