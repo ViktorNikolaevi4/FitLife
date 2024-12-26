@@ -14,7 +14,11 @@ struct FitLifeApp: App {
         WindowGroup {
             ContentView()
         }
-        .modelContainer(for: [UserData.self, FoodEntry.self, Product.self]) // Используем модификатор
+        .modelContainer(for: [UserData.self,
+                              FoodEntry.self,
+                              Product.self,
+                              CustomProduct.self
+                             ]) // Используем модификатор
     }
 }
 

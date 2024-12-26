@@ -1,14 +1,9 @@
-//
-//  ProductSelectionView.swift
-//  FitLife
-//
-//  Created by Виктор Корольков on 18.12.2024.
-//
 
 import SwiftUI
 import SwiftData
 
 struct ProductSelectionView: View {
+    @State private var customProducts: [CustomProduct] = []
     let mealType: MealType // Тип приема пищи (Завтрак, Обед и т.д.)
     let date: Date           // Текущая дата
     @State var productLoader = ProductLoader()
@@ -21,7 +16,7 @@ struct ProductSelectionView: View {
     @State private var customProductProtein: String = ""
     @State private var customProductFat: String = ""
     @State private var customProductCarbs: String = ""
-    var onProductSelected: (Product) -> Void
+    var onProductSelected: (Any) -> Void
 
     @Environment(\.modelContext) private var modelContext
 
@@ -32,21 +27,20 @@ struct ProductSelectionView: View {
     }
 
     var filteredProducts: [Product] {
-        let baseList: [Product]
         switch selectedFilter {
         case .all:
-            baseList = productLoader.products
+            return productLoader.products
         case .favorites:
-            baseList = productLoader.products.filter { $0.isFavorite }
+            return productLoader.products.filter { $0.isFavorite }
         case .custom:
-            baseList = productLoader.products.filter { $0.isCustom }
+            return []
         }
-
-        if searchText.isEmpty {
-            return baseList
-        } else {
-            return baseList.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+    }
+    var filteredCustomProducts: [CustomProduct] {
+        if selectedFilter == .custom {
+            return customProducts
         }
+        return []
     }
 
     var body: some View {
@@ -70,37 +64,20 @@ struct ProductSelectionView: View {
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding()
 
-                List(filteredProducts, id: \.id) { product in
-                    Button(action: {
-                   //     self.selectedProduct = product
-                   //     self.portionSize = "100" // Установить начальное значение порции при выборе продукта
-                    //    self.showProductDetails = true
-                        onProductSelected(product) // Передаём выбранный продукт
-                        dismiss()
-                    }) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                // Название продукта
-                                Text(product.name)
-                                    .font(.headline)
-                                // Дополнительная информация
-                                Text("На 100 г: \(product.calories) ккал, Б \(String(format: "%.1f", product.protein)) г., Ж \(String(format: "%.1f", product.fat)) г., У \(String(format: "%.1f", product.carbs)) г.")
-                                    .font(.caption)
-                            }.foregroundColor(.black)
-                            Spacer()
-                            // Кнопка "звезда" для добавления в избранное
-                            Button(action: {
-                                if let index = productLoader.products.firstIndex(where: { $0.id == product.id }) {
-                                    productLoader.products[index].isFavorite.toggle() // Переключение избранного
-                                    saveFavoriteStatus(for: productLoader.products[index])
-                                }
-                            }) {
-                                Image(systemName: product.isFavorite ? "star.fill" : "star")
-                                    .foregroundColor(product.isFavorite ? .yellow : .gray)
+                List {
+                    if selectedFilter != .custom {
+                        Section(header: Text("Общие продукты")) {
+                            ForEach(filteredProducts, id: \.id) { product in
+                                productRow(product: product)
                             }
-                            .buttonStyle(BorderlessButtonStyle())
+                        }
+                    }
 
-                            .padding(.vertical, 4)  // Отступы сверху и снизу для читаемости
+                    if selectedFilter == .custom {
+                        Section(header: Text("Свои продукты")) {
+                            ForEach(filteredCustomProducts, id: \.id) { customProduct in
+                                customProductRow(customProduct: customProduct)
+                            }
                         }
                     }
                 }
@@ -198,6 +175,61 @@ struct ProductSelectionView: View {
             }
             .onAppear {
                 loadFavorites()
+                loadCustomProducts()
+            }
+        }
+    }
+    private  func productRow(product: Product) -> some View {
+        Button(action: {
+            onProductSelected(product) // Передаем выбранный продукт
+            dismiss()
+        }) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    // Название продукта
+                    Text(product.name)
+                        .font(.headline)
+                    // Дополнительная информация
+                    Text("На 100 г: \(product.calories) ккал, Б \(String(format: "%.1f", product.protein)) г., Ж \(String(format: "%.1f", product.fat)) г., У \(String(format: "%.1f", product.carbs)) г.")
+                        .font(.caption)
+                }
+                .foregroundColor(.black)
+                Spacer()
+                // Кнопка "звезда" для добавления в избранное
+                Button(action: {
+                    if let index = productLoader.products.firstIndex(where: { $0.id == product.id }) {
+                        productLoader.products[index].isFavorite.toggle() // Переключение избранного
+                        saveFavoriteStatus(for: productLoader.products[index])
+                    }
+                }) {
+                    Image(systemName: product.isFavorite ? "star.fill" : "star")
+                        .foregroundColor(product.isFavorite ? .yellow : .gray)
+                }
+                .buttonStyle(BorderlessButtonStyle())
+                .padding(.vertical, 4) // Отступы сверху и снизу для читаемости
+            }
+        }
+    }
+    private func customProductRow(customProduct: CustomProduct) -> some View {
+        Button(action: {
+            dismiss()
+        }) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(customProduct.name)
+                        .font(.headline)
+                    Text("На 100 г: \(customProduct.calories) ккал, Б \(String(format: "%.1f", customProduct.protein)) г., Ж \(String(format: "%.1f", customProduct.fat)) г., У \(String(format: "%.1f", customProduct.carbs)) г.")
+                        .font(.caption)
+                }.foregroundStyle(.black)
+                Spacer()
+                Button(action: {
+                    if let index = customProducts.firstIndex(where: { $0.id == customProduct.id }) {
+                        customProducts[index].isFavorite.toggle()
+                    }
+                }) {
+                    Image(systemName: customProduct.isFavorite ? "star.fill" : "star")
+                        .foregroundColor(customProduct.isFavorite ? .yellow : .gray)
+                }
             }
         }
     }
@@ -215,23 +247,29 @@ struct ProductSelectionView: View {
             let carbs = Double(customProductCarbs),
             !customProductName.isEmpty
         else {
+            print("Ошибка: Пожалуйста, заполните все поля корректно.")
             return
         }
 
-        let newProduct = Product(
+        let newCustomProduct = CustomProduct(
             name: customProductName,
             protein: protein,
             fat: fat,
             carbs: carbs,
-            calories: Int(calories),
-            isFavorite: false,
-            isCustom: true
+            calories: Int(calories)
         )
 
-        productLoader.products.append(newProduct)
-        isCreatingProduct = false
-        clearCustomProductFields()
+        do {
+            modelContext.insert(newCustomProduct) // Добавляем объект в базу данных
+            try modelContext.save() // Сохраняем изменения
+            print("Пользовательский продукт сохранен!")
+            isCreatingProduct = false // Закрываем форму создания
+            clearCustomProductFields() // Очищаем поля формы
+        } catch {
+            print("Ошибка при сохранении пользовательского продукта: \(error)")
+        }
     }
+
 
     private func clearCustomProductFields() {
         customProductName = ""
@@ -263,6 +301,17 @@ struct ProductSelectionView: View {
             print("Ошибка сохранения избранного статуса: \(error)")
         }
     }
+
+    private func loadCustomProducts() {
+        let fetchDescriptor = FetchDescriptor<CustomProduct>()
+        do {
+            customProducts = try modelContext.fetch(fetchDescriptor)
+            print("Загружены пользовательские продукты: \(customProducts.map { $0.name })")
+        } catch {
+            print("Ошибка загрузки пользовательских продуктов: \(error)")
+        }
+    }
+
     private func loadFavorites() {
         let fetchDescriptor = FetchDescriptor<FoodEntry>()
         do {
@@ -277,8 +326,3 @@ struct ProductSelectionView: View {
         }
     }
 }
-
-//
-//#Preview {
-//    ProductSelectionView()
-//}
