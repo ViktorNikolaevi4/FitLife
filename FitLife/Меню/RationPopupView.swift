@@ -57,6 +57,19 @@ struct RationPopupView: View {
                 .font(.title2)
                 .fontWeight(.bold)
 
+            VStack {
+                Text("Итого за день:")
+                    .font(.headline)
+                Text("Калорий: \(totalCalories) ккал")
+                HStack(spacing: 20) {
+                    Text("Белки: \(totalProteins) г")
+                    Text("Жиры: \(totalFats) г")
+                    Text("Углеводы: \(totalCarbs) г")
+                }
+                .font(.subheadline)
+                .foregroundColor(.gray)
+            }
+
             Divider()
 
             ScrollView {
@@ -170,7 +183,26 @@ struct RationPopupView: View {
             }
         }
     }
+    // Вычисление общей калорийности и БЖУ
+    private var totalCalories: Int {
+        (breakfastProducts + lunchProducts + dinnerProducts + snacksProducts)
+            .reduce(0) { $0 + $1.calories }
+    }
 
+    private var totalProteins: Int {
+        (breakfastProducts + lunchProducts + dinnerProducts + snacksProducts)
+            .reduce(0) { $0 + Int($1.protein) }
+    }
+
+    private var totalFats: Int {
+        (breakfastProducts + lunchProducts + dinnerProducts + snacksProducts)
+            .reduce(0) { $0 + Int($1.fat) }
+    }
+
+    private var totalCarbs: Int {
+        (breakfastProducts + lunchProducts + dinnerProducts + snacksProducts)
+            .reduce(0) { $0 + Int($1.carbs) }
+    }
     private func loadData(for date: Date, gender: Gender) {
         let fetchDescriptor = FetchDescriptor<FoodEntry>()
         do {

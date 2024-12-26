@@ -26,7 +26,10 @@ struct BottomNavigationView: View {
             }
             .sheet(isPresented: $rationPopupView) {
                 RationPopupView(gender: userData.gender)
-                    .presentationDetents([.medium])
+                    .presentationDetents([
+                        .fraction(0.66), // 2/3 экрана
+                        .large
+                    ])
                     .presentationDragIndicator(.visible)
             }
             Spacer()
