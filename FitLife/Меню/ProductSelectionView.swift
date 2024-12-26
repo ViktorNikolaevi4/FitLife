@@ -17,6 +17,7 @@ struct ProductSelectionView: View {
     @State private var customProductFat: String = ""
     @State private var customProductCarbs: String = ""
     var onProductSelected: (Product) -> Void
+    var onCustomProductSelected: (CustomProduct) -> Void
 
     @Environment(\.modelContext) private var modelContext
 
@@ -27,21 +28,25 @@ struct ProductSelectionView: View {
     }
 
     var filteredProducts: [Product] {
-        switch selectedFilter {
-        case .all:
-            return productLoader.products
-        case .favorites:
-            return productLoader.products.filter { $0.isFavorite }
-        case .custom:
-            return []
+        let baseList = selectedFilter == .favorites ?
+            productLoader.products.filter { $0.isFavorite } :
+            productLoader.products
+
+        if searchText.isEmpty {
+            return baseList
+        } else {
+            return baseList.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
         }
     }
+
     var filteredCustomProducts: [CustomProduct] {
-        if selectedFilter == .custom {
+        if searchText.isEmpty {
             return customProducts
+        } else {
+            return customProducts.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
         }
-        return []
     }
+
 
     var body: some View {
         NavigationStack {
@@ -212,6 +217,7 @@ struct ProductSelectionView: View {
     }
     private func customProductRow(customProduct: CustomProduct) -> some View {
         Button(action: {
+            onCustomProductSelected(customProduct)
             dismiss()
         }) {
             HStack {

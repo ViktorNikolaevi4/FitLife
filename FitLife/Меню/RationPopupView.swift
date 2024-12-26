@@ -96,13 +96,24 @@ struct RationPopupView: View {
                 ProductSelectionView(
                     mealType: selectedMeal,
                     date: Date(),
-                    onProductSelected: { selectedProduct in
-                        self.selectedProduct = selectedProduct // Сохраняем выбранный продукт
-                        self.portionSize = "100"               // Устанавливаем порцию на значение 100
-                        self.showProductDetails = true         // Переходим на экран деталей продукта
-                        self.showProductSelection = false      // Закрываем окно выбора продукта
-
-                        // Передача выбранного продукта вместе с гендером
+                    onProductSelected: { product in
+                        self.selectedProduct = product
+                        self.showProductDetails = true // Показываем экран ввода порции
+                        self.showProductSelection = false
+                    },
+                    onCustomProductSelected: { customProduct in
+                        let genericProduct = Product(
+                            name: customProduct.name,
+                            protein: customProduct.protein,
+                            fat: customProduct.fat,
+                            carbs: customProduct.carbs,
+                            calories: customProduct.calories,
+                            isFavorite: customProduct.isFavorite,
+                            isCustom: true
+                        )
+                        self.selectedProduct = genericProduct
+                        self.showProductDetails = true // Показываем экран ввода порции
+                        self.showProductSelection = false
                     }
                 )
             }
@@ -221,9 +232,26 @@ struct RationPopupView: View {
         }
     }
 
+
     // Обновляем продукты для выбранного приема пищи
     private func addProductToMeal(_ product: Product, portion: Double, gender: Gender) {
-        // Проверяем, что выбран прием пищи
+        addGenericProductToMeal(product, portion: portion, gender: gender)
+    }
+
+    private func addCustomProductToMeal(_ customProduct: CustomProduct, portion: Double, gender: Gender) {
+        let genericProduct = Product(
+            name: customProduct.name,
+            protein: customProduct.protein,
+            fat: customProduct.fat,
+            carbs: customProduct.carbs,
+            calories: customProduct.calories,
+            isFavorite: customProduct.isFavorite,
+            isCustom: true
+        )
+        addGenericProductToMeal(genericProduct, portion: portion, gender: gender)
+    }
+
+    private func addGenericProductToMeal(_ product: Product, portion: Double, gender: Gender) {
         guard let selectedMeal = selectedMeal else {
             print("Ошибка: Не выбран тип приема пищи!")
             return
@@ -240,49 +268,19 @@ struct RationPopupView: View {
             isCustom: product.isCustom
         )
 
-        // Проверяем, есть ли уже такой продукт в текущем списке, и обновляем его порцию
+        // Добавляем продукт в соответствующий список
         switch selectedMeal {
         case .breakfast:
-            if let index = breakfastProducts.firstIndex(where: { $0.name == product.name }) {
-                // Увеличиваем порцию, если продукт уже существует
-                breakfastProducts[index].protein += adjustedProduct.protein
-                breakfastProducts[index].fat += adjustedProduct.fat
-                breakfastProducts[index].carbs += adjustedProduct.carbs
-                breakfastProducts[index].calories += adjustedProduct.calories
-            } else {
-                // Если продукта нет, добавляем его
-                breakfastProducts.append(adjustedProduct)
-            }
+            appendOrUpdateProduct(&breakfastProducts, with: adjustedProduct)
         case .lunch:
-            if let index = lunchProducts.firstIndex(where: { $0.name == product.name }) {
-                lunchProducts[index].protein += adjustedProduct.protein
-                lunchProducts[index].fat += adjustedProduct.fat
-                lunchProducts[index].carbs += adjustedProduct.carbs
-                lunchProducts[index].calories += adjustedProduct.calories
-            } else {
-                lunchProducts.append(adjustedProduct)
-            }
+            appendOrUpdateProduct(&lunchProducts, with: adjustedProduct)
         case .dinner:
-            if let index = dinnerProducts.firstIndex(where: { $0.name == product.name }) {
-                dinnerProducts[index].protein += adjustedProduct.protein
-                dinnerProducts[index].fat += adjustedProduct.fat
-                dinnerProducts[index].carbs += adjustedProduct.carbs
-                dinnerProducts[index].calories += adjustedProduct.calories
-            } else {
-                dinnerProducts.append(adjustedProduct)
-            }
+            appendOrUpdateProduct(&dinnerProducts, with: adjustedProduct)
         case .snacks:
-            if let index = snacksProducts.firstIndex(where: { $0.name == product.name }) {
-                snacksProducts[index].protein += adjustedProduct.protein
-                snacksProducts[index].fat += adjustedProduct.fat
-                snacksProducts[index].carbs += adjustedProduct.carbs
-                snacksProducts[index].calories += adjustedProduct.calories
-            } else {
-                snacksProducts.append(adjustedProduct)
-            }
+            appendOrUpdateProduct(&snacksProducts, with: adjustedProduct)
         }
 
-        // Сохраняем данные в базу
+        // Сохраняем в базу
         let foodEntry = FoodEntry(
             date: Date(),
             mealType: selectedMeal.rawValue,
@@ -299,6 +297,18 @@ struct RationPopupView: View {
             print("Ошибка при сохранении продукта: \(error)")
         }
     }
+
+    private func appendOrUpdateProduct(_ products: inout [Product], with newProduct: Product) {
+        if let index = products.firstIndex(where: { $0.name == newProduct.name }) {
+            products[index].protein += newProduct.protein
+            products[index].fat += newProduct.fat
+            products[index].carbs += newProduct.carbs
+            products[index].calories += newProduct.calories
+        } else {
+            products.append(newProduct)
+        }
+    }
+
 
 
 private func calculateCalories(for product: Product) -> Int {
