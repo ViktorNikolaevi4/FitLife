@@ -100,6 +100,7 @@ struct RationPopupView: View {
                         self.selectedProduct = product
                         self.showProductDetails = true // Показываем экран ввода порции
                         self.showProductSelection = false
+                        self.portionSize = "100" // Сброс порции
                     },
                     onCustomProductSelected: { customProduct in
                         let genericProduct = Product(
@@ -114,6 +115,7 @@ struct RationPopupView: View {
                         self.selectedProduct = genericProduct
                         self.showProductDetails = true // Показываем экран ввода порции
                         self.showProductSelection = false
+                        self.portionSize = "100" // Сброс порции
                     }
                 )
             }
