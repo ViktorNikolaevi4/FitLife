@@ -138,18 +138,9 @@ struct WaterTrackerView: View {
         waterIntake += amount
     }
 }
-
 // Перечисление для температуры воды
 enum WaterTemperature: String, CaseIterable {
     case cold = "Холодно"
     case warm = "Тепло"
     case hot = "Жарко"
 }
-
-// Превью для отладки
-struct WaterTrackerView_Previews: PreviewProvider {
-    static var previews: some View {
-        WaterTrackerView(userData: UserData())
-    }
-}
-

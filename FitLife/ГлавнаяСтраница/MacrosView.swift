@@ -50,24 +50,24 @@ struct MacrosView: View {
                 }
             }
             .font(.headline)
-            VStack {
-                Text("Осталось съесть за день")
-                Text("калорий: \(userData.calories)")
-                HStack(spacing: 60) {
-                    VStack {
-                        Text("Белки")
-                        Text("\(userData.macros.proteins) г")
-                    }
-                    VStack {
-                        Text("Жиры")
-                        Text("\(userData.macros.fats) г")
-                    }
-                    VStack {
-                        Text("Углеводы")
-                        Text("\(userData.macros.carbs) г")
-                    }
-                }
-            }
+//            VStack {
+//                Text("Осталось съесть за день")
+//                Text("калорий: \(userData.calories)")
+//                HStack(spacing: 60) {
+//                    VStack {
+//                        Text("Белки")
+//                        Text("\(userData.macros.proteins) г")
+//                    }
+//                    VStack {
+//                        Text("Жиры")
+//                        Text("\(userData.macros.fats) г")
+//                    }
+//                    VStack {
+//                        Text("Углеводы")
+//                        Text("\(userData.macros.carbs) г")
+//                    }
+//                }
+//            }
             // Пикер для выбора цели
             VStack(spacing: 10) {
                 Text("Цель")
@@ -88,8 +88,3 @@ struct MacrosView: View {
         }
     }
 }
-
-//
-//#Preview {
-//    MacrosView()
-//}

@@ -91,7 +91,7 @@ struct RationPopupView: View {
             }
             .font(.headline)
             .padding()
-            .frame(maxWidth: .infinity)
+   //         .frame(maxWidth: .infinity)
             .background(Color.blue)
             .foregroundColor(.white)
             .cornerRadius(10)

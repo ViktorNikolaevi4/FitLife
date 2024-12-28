@@ -11,7 +11,6 @@ class UserData {
     var age: Int
     var activityLevel: ActivityLevel
     var goal: WeightGoal
-  //  var selectedGender: Gender
     var gender: Gender // Пол пользователя для фильтрации
 
     var calories: Int {
