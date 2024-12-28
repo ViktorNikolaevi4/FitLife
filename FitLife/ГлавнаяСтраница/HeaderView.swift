@@ -1,10 +1,3 @@
-//
-//  HeaderView.swift
-//  FitLife
-//
-//  Created by Виктор Корольков on 07.12.2024.
-//
-
 import SwiftUI
 
 struct HeaderView: View {
@@ -14,13 +7,13 @@ struct HeaderView: View {
     var body: some View {
         ZStack {
             // Основной интерфейс
-            VStack {
+            VStack(alignment: .center) {
                 HStack {
                     Text(selectedDate, style: .date) // Отображение выбранной даты
                         .font(.title3)
                         .fontWeight(.semibold)
                         .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity, alignment: .center) // Выровнять по правому краю
+                        .frame(maxWidth: .infinity, alignment: .center) // Выровнять по центру
 
                     Spacer()
 
@@ -36,10 +29,9 @@ struct HeaderView: View {
 
                 Spacer() // Остальная часть интерфейса
             }
-
-            // Календарь
-            if isDatePickerVisible {
-                ZStack {
+            .overlay(
+                // Календарь как наложение
+                isDatePickerVisible ? ZStack {
                     Color.black.opacity(0.4) // Полупрозрачный фон
                         .ignoresSafeArea()
                         .onTapGesture {
@@ -52,7 +44,7 @@ struct HeaderView: View {
                             selection: $selectedDate,
                             displayedComponents: .date
                         )
-                        .datePickerStyle(.graphical)
+                        .datePickerStyle(.wheel)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
                                 .fill(Color.white)
@@ -71,12 +63,16 @@ struct HeaderView: View {
                         )
                         .foregroundColor(.white)
                     }
+                    .frame(maxWidth: 300) // Фиксированная ширина для DatePicker
                     .padding()
+                    .offset(y: 80)
                 }
+                .zIndex(1) // Устанавливаем zIndex, чтобы календарь был поверх
                 .transition(.opacity) // Анимация появления
                 .animation(.easeInOut, value: isDatePickerVisible) // Анимация
-            }
-        }
+                : nil
+            )
+        }.zIndex(1)
     }
 }
 

@@ -20,34 +20,39 @@ import SwiftData
         }
 
         var body: some View {
-            VStack() {
-                if let userData = filteredUserData { // Проверяем, есть ли пользователь
-                    // Заголовок с датой
-                    HeaderView()
-                        .padding(.top, safeAreaTopInset()) // Учет безопасной зоны сверху
-                    // Статистика пользователя
-                    UserStatsView(userData: userData)
-                    MacrosView(userData: userData)
-                    //   Spacer() // Выталкиваем оставшиеся элементы вниз
-                    BottomNavigationView(userData: userData)
-
-                } else {
-                    Text("Данные не найдены")
-                        .font(.headline)
-                        .onAppear {
-                            createNewUser(for: selectedGender) // Создаем нового пользователя, если данных нет
-                        }
+            ZStack {
+                GradientView()
+                    .ignoresSafeArea()
+                VStack() {
+                    if let userData = filteredUserData { // Проверяем, есть ли пользователь
+                        // Заголовок с датой
+                        HeaderView()
+                            .padding(.top, safeAreaTopInset()) // Учет безопасной зоны сверху
+                     //   Spacer()
+                        // Статистика пользователя
+                        UserStatsView(userData: userData)
+                        MacrosView(userData: userData)
+                      //  Spacer() // Выталкиваем оставшиеся элементы вниз
+                        BottomNavigationView(userData: userData)
+                    } else {
+                        Text("Данные не найдены")
+                            .font(.headline)
+                            .onAppear {
+                                createNewUser(for: selectedGender) // Создаем нового пользователя, если данных нет
+                            }
+                    }
                 }
-            }
-            .onAppear {
-                if userData.isEmpty {
-                    createNewUser(for: selectedGender)
-                } else if filteredUserData == nil { // Если данных для выбранного пола нет
-                    createNewUser(for: selectedGender)
+                .onAppear {
+                    if userData.isEmpty {
+                        createNewUser(for: selectedGender)
+                    } else if filteredUserData == nil { // Если данных для выбранного пола нет
+                        createNewUser(for: selectedGender)
+                    }
                 }
+//
+//                .ignoresSafeArea(edges: [.top, .bottom])
+//                .background(GradientView())
             }
-            .background(GradientView())
-            .ignoresSafeArea()
         }
         // Функция для получения верхней безопасной зоны
         private func safeAreaTopInset() -> CGFloat {

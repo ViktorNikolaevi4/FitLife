@@ -14,72 +14,75 @@ struct BottomNavigationView: View {
     @State private var rationPopupView = false
 
     var body: some View {
-        HStack {
-            Spacer()
-            Button(action: {
-                rationPopupView = true
-            }) {
-                VStack {
-                    Image(systemName: "fork.knife")
-                    Text("Рацион")
-                }.foregroundStyle(.white)
-            }
-            .sheet(isPresented: $rationPopupView) {
-                RationPopupView(gender: userData.gender)
-                    .presentationDetents([
-                        .fraction(0.66), // 2/3 экрана
-                        .large
-                    ])
-                    .presentationDragIndicator(.visible)
-            }
-            Spacer()
-            Button(action: {
-                showWaterTracker = true
-            }) {
-                VStack {
-                    Image(systemName: "drop")
-                    Text("Вода")
-                }.foregroundStyle(.white)
-            }
-            .sheet(isPresented: $showWaterTracker) {
-                WaterTrackerView(userData: userData)
-                    .presentationDetents([.medium])
-                    .presentationDragIndicator(.visible)
-            }
-            Spacer()
-            Button(action: {
-                showBMIPopup = true
-            }) {
-                VStack {
-                    Image(systemName: "scalemass")
-                    Text("ИМТ")
+        VStack {
+            HStack {
+                Spacer()
+                Button(action: {
+                    rationPopupView = true
+                }) {
+                    VStack {
+                        Image(systemName: "fork.knife")
+                        Text("Рацион")
+                    }.foregroundStyle(.white)
                 }
-                .foregroundStyle(.white)
+                .sheet(isPresented: $rationPopupView) {
+                    RationPopupView(gender: userData.gender)
+                        .presentationDetents([
+                            .fraction(0.66), // 2/3 экрана
+                            .large
+                        ])
+                        .presentationDragIndicator(.visible)
+                }
+                Spacer()
+                Button(action: {
+                    showWaterTracker = true
+                }) {
+                    VStack {
+                        Image(systemName: "drop")
+                        Text("Вода")
+                    }.foregroundStyle(.white)
+                }
+                .sheet(isPresented: $showWaterTracker) {
+                    WaterTrackerView(userData: userData)
+                        .presentationDetents([.medium])
+                        .presentationDragIndicator(.visible)
+                }
+                Spacer()
+                Button(action: {
+                    showBMIPopup = true
+                }) {
+                    VStack {
+                        Image(systemName: "scalemass")
+                        Text("ИМТ")
+                    }
+                    .foregroundStyle(.white)
+                }
+                .sheet(isPresented: $showBMIPopup) {
+                    BMIPopupView(userData: userData)
+                        .presentationDetents([.medium])
+                        .presentationDragIndicator(.visible)
+                }
+                Spacer()
+                Button(action: {}) {
+                    VStack {
+                        Image(systemName: "book")
+                        Text("Меню")
+                    }.foregroundStyle(.white)
+                }
+                Spacer()
+                Button(action: {}) {
+                    VStack {
+                        Image(systemName: "arrow.up.forward")
+                        Text("Стат.")
+                    }.foregroundStyle(.white)
+                }
+                Spacer()
             }
-            .sheet(isPresented: $showBMIPopup) {
-                BMIPopupView(userData: userData)
-                    .presentationDetents([.medium])
-                    .presentationDragIndicator(.visible)
-            }
-            Spacer()
-            Button(action: {}) {
-                VStack {
-                    Image(systemName: "book")
-                    Text("Меню")
-                }.foregroundStyle(.white)
-            }
-            Spacer()
-            Button(action: {}) {
-                VStack {
-                    Image(systemName: "arrow.up.forward")
-                    Text("Стат.")
-                }.foregroundStyle(.white)
-            }
-            Spacer()
+            .padding()
+            .cornerRadius(20)
+            .shadow(radius: 5)
         }
-        .padding()
-        .cornerRadius(20)
-        .shadow(radius: 5)
+        .ignoresSafeArea(edges: .bottom)
     }
 }
 
