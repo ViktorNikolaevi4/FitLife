@@ -17,7 +17,8 @@ struct FitLifeApp: App {
         .modelContainer(for: [UserData.self,
                               FoodEntry.self,
                               Product.self,
-                              CustomProduct.self
+                              CustomProduct.self,
+                              WaterIntake.self
                              ]) // Используем модификатор
     }
 }

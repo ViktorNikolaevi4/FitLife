@@ -2,9 +2,11 @@
 //  WaterTrackerView.swift
 //  FitLife
 import SwiftUI
+import SwiftData
 
 // Представление для трекера воды
 struct WaterTrackerView: View {
+    @Environment(\.modelContext) private var modelContext
     @State private var showNotificationSettings = false
     @Environment(\.dismiss) private var dismiss
     @Bindable var userData: UserData // Данные пользователя, с привязкой
@@ -34,6 +36,7 @@ struct WaterTrackerView: View {
         .padding()
         .onAppear {
             recalculateDailyGoal() // Пересчёт цели при загрузке экрана
+            loadWaterIntake()
         }
         .onChange(of: userData.weight) {
             recalculateDailyGoal() // Пересчёт цели при изменении веса пользователя
@@ -136,8 +139,30 @@ struct WaterTrackerView: View {
     // Добавление воды
     private func addWater(amount: Double) {
         waterIntake += amount
+        saveWaterIntake()
+    }
+    // Сохранение данных в модель
+    private func saveWaterIntake() {
+        let today = Calendar.current.startOfDay(for: Date()) // Начало текущего дня
+        if let existingEntry = try? modelContext.fetch(FetchDescriptor<WaterIntake>()).first(where: { Calendar.current.isDate($0.date, inSameDayAs: today) }) {
+            existingEntry.intake = waterIntake // Обновление записи
+        } else {
+            let newEntry = WaterIntake(date: today, intake: waterIntake)
+            modelContext.insert(newEntry)
+        }
+        try? modelContext.save()
+    }
+    // Загрузка данных
+    private func loadWaterIntake() {
+        let today = Calendar.current.startOfDay(for: Date())
+        if let existingEntry = try? modelContext.fetch(FetchDescriptor<WaterIntake>()).first(where: { Calendar.current.isDate($0.date, inSameDayAs: today) }) {
+            waterIntake = existingEntry.intake
+        } else {
+            waterIntake = 0.0 // Начальное значение
+        }
     }
 }
+
 // Перечисление для температуры воды
 enum WaterTemperature: String, CaseIterable {
     case cold = "Холодно"
