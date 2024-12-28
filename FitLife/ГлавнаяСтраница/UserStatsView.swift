@@ -81,6 +81,7 @@ struct UserStatsView: View {
                                set: { userData.weight = Double($0) } ),
                            isVisible: $isWeightPickerVisible)
                     .zIndex(1) // PickerView отображается над
+                    .frame(maxWidth: .infinity, maxHeight: 150)
             }
 
             if isHeightPickerVisible {
@@ -91,6 +92,7 @@ struct UserStatsView: View {
                                set: { userData.height = Double($0) } ),
                            isVisible: $isHeightPickerVisible)
                     .zIndex(1)
+                    .frame(maxWidth: .infinity, maxHeight: 150)
 
             }
 
@@ -100,6 +102,7 @@ struct UserStatsView: View {
                            selectedValue: $userData.age,
                            isVisible: $isAgePickerVisible)
                     .zIndex(1)
+                    .frame(maxWidth: .infinity, maxHeight: 150)
             }
         }
     }
@@ -151,7 +154,6 @@ struct PickerView: View {
                 Text(title)
                     .font(.headline)
                     .padding(.top, 10)
-
                 // Сам барабан
                 Picker("", selection: $selectedValue) {
                     ForEach(range, id: \.self) { value in
@@ -161,7 +163,6 @@ struct PickerView: View {
                 .pickerStyle(.wheel)
                 .frame(width: 150, height: 150) // Размер Picker
                 .clipped() // Обрезка лишнего
-
                 // Кнопка "Готово"
                 Button("Готово") {
                     isVisible = false // Закрываем Picker
