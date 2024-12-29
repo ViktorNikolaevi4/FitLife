@@ -8,7 +8,7 @@ import Charts
 import SwiftData
 
 struct StatsView: View {
-    @State private var selectedTimeFrame: TimeFrame = .year
+    @State private var selectedTimeFrame: TimeFrame = .week
     @State private var selectedDataType: DataType = .calories
     @Environment(\.modelContext) private var modelContext
 
@@ -37,17 +37,13 @@ struct StatsView: View {
                 .pickerStyle(.segmented)
                 .padding()
 
-                // Линейный график
-                Chart(getData(for: selectedTimeFrame)) { item in
-                    LineMark(
-                        x: .value("Date", item.date, unit: .day),
-                        y: .value("Value", item.value)
-                    )
-                    .symbol(Circle())
-                    .foregroundStyle(item.color)
-                }
-                .frame(height: 200)
-                .padding(.horizontal)
+                // Используем StatsChartView для отображения графика
+                StatsChartView(
+                    data: getData(for: selectedTimeFrame),
+                  //  title: "График построен исходя из средних значений за выбранный период",
+                    unit: .day,
+                    chartHeight: 200
+                )
 
                 // Подпись к графику
                 Text("График построен исходя из средних значений за выбранный период")
@@ -86,10 +82,7 @@ struct StatsView: View {
                             .foregroundStyle(.gray)
                     }
                 }
-
-
                 Spacer()
-
                 // Пикер типа данных (Ккал, БЖУ, Вес, Вода)
                 Picker("Выберите тип данных", selection: $selectedDataType) {
                     ForEach(DataType.allCases, id: \.self) { dataType in
@@ -101,45 +94,6 @@ struct StatsView: View {
             }
             .padding()
         }
-    }
-
-    // Получение данных для графика
-    func getData(for timeFrame: TimeFrame) -> [ChartData] {
-        let calendar = Calendar.current
-        let today = Date()
-        var data: [ChartData] = []
-
-        switch timeFrame {
-        case .week:
-            if let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: today)) {
-                for dayOffset in 0..<7 {
-                    if let date = calendar.date(byAdding: .day, value: dayOffset, to: startOfWeek) {
-                        data.append(ChartData(date: date, value: Double.random(in: 100...500), color: .blue))
-                    }
-                }
-            }
-        case .month:
-            if let range = calendar.range(of: .day, in: .month, for: today) {
-                for day in range {
-                    if let date = calendar.date(bySetting: .day, value: day, of: today) {
-                        data.append(ChartData(date: date, value: Double.random(in: 100...500), color: .blue))
-                    }
-                }
-            }
-        case .halfYear:
-            for monthOffset in -5...0 {
-                if let date = calendar.date(byAdding: .month, value: monthOffset, to: today) {
-                    data.append(ChartData(date: date, value: Double.random(in: 100...500), color: .blue))
-                }
-            }
-        case .year:
-            for monthOffset in -11...0 {
-                if let date = calendar.date(byAdding: .month, value: monthOffset, to: today) {
-                    data.append(ChartData(date: date, value: Double.random(in: 100...500), color: .blue))
-                }
-            }
-        }
-        return data
     }
     // Расчёт среднего значения калорий
     func calculateAverageCalories(for timeFrame: TimeFrame) -> Int {
