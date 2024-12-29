@@ -1,7 +1,8 @@
 import SwiftUI
+import Observation
 
 struct HeaderView: View {
-    @State private var selectedDate = Date() // Текущая дата по умолчанию
+    @Binding var selectedDate: Date // Текущая дата по умолчанию
     @State private var isDatePickerVisible = false // Флаг для отображения календаря
 
     var body: some View {
@@ -65,7 +66,7 @@ struct HeaderView: View {
                     }
                     .frame(maxWidth: 300) // Фиксированная ширина для DatePicker
                     .padding()
-                    .offset(y: 80)
+                    .offset(y: 40)
                 }
                 .zIndex(1) // Устанавливаем zIndex, чтобы календарь был поверх
                 .transition(.opacity) // Анимация появления
@@ -75,7 +76,7 @@ struct HeaderView: View {
         }.zIndex(1)
     }
 }
-
-#Preview {
-    HeaderView()
-}
+//
+//#Preview {
+//    HeaderView()
+//}

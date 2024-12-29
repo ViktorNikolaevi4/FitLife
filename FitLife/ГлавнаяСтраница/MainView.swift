@@ -9,6 +9,7 @@ import SwiftUI
 import SwiftData
 
     struct MainView: View {
+        @State private var selectedDate = Date()
         @Query private var userData: [UserData]
         @Environment(\.modelContext) private var modelContext
 
@@ -26,14 +27,15 @@ import SwiftData
                 VStack() {
                     if let userData = filteredUserData { // Проверяем, есть ли пользователь
                         // Заголовок с датой
-                        HeaderView()
-                            .padding(.top, safeAreaTopInset()) // Учет безопасной зоны сверху
+                        HeaderView(selectedDate: $selectedDate)
+                            .padding(.top, 5) // Учет безопасной зоны сверху
                      //   Spacer()
                         // Статистика пользователя
                         UserStatsView(userData: userData)
                         MacrosView(userData: userData)
-                      //  Spacer() // Выталкиваем оставшиеся элементы вниз
-                        BottomNavigationView(userData: userData)
+                        Spacer() // Выталкиваем оставшиеся элементы вниз
+                        BottomNavigationView(selectedDate: $selectedDate, userData: userData)
+
                     } else {
                         Text("Данные не найдены")
                             .font(.headline)
@@ -54,6 +56,7 @@ import SwiftData
 //                .background(GradientView())
             }
         }
+        
         // Функция для получения верхней безопасной зоны
         private func safeAreaTopInset() -> CGFloat {
             guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
@@ -62,6 +65,7 @@ import SwiftData
             }
             return window.safeAreaInsets.top
         }
+        
         private func createNewUser(for gender: Gender) {
             let newUser = UserData(
                 weight: 0,
@@ -75,6 +79,10 @@ import SwiftData
             modelContext.insert(newUser) // Вставляем нового пользователя в контекст
             try? modelContext.save() // Сохраняем изменения
         }
+//        private func showRationPopup() {
+//            let popup = RationPopupView(selectedDate: $selectedDate, selectedGender: selectedGender)
+//            // Логика для показа popup (например, через .sheet)
+//        }
     }
 
 #Preview {

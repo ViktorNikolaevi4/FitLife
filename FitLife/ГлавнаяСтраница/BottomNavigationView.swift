@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct BottomNavigationView: View {
+    @Binding var selectedDate: Date
     var userData: UserData
     @State private var showWaterTracker = false
     @State private var showBMIPopup = false
@@ -26,7 +27,7 @@ struct BottomNavigationView: View {
                     }.foregroundStyle(.white)
                 }
                 .sheet(isPresented: $rationPopupView) {
-                    RationPopupView(gender: userData.gender)
+                    RationPopupView(gender: userData.gender, selectedDate: $selectedDate)
                         .presentationDetents([
                             .fraction(0.66), // 2/3 экрана
                             .large

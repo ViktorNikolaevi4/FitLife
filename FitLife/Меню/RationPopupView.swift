@@ -32,27 +32,33 @@ struct RationPopupView: View {
     @State private var selectedProduct: Product? = nil
     @State private var portionSize: String = "100" // Размер порции в граммах
 
-
+    @Binding var selectedDate: Date
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
     let selectedGender: Gender
 
-    init(breakfastProducts: [Product] = [],
-         lunchProducts: [Product] = [],
-         dinnerProducts: [Product] = [],
-         snacksProducts: [Product] = [],
-         gender: Gender) {
+    init(
+        breakfastProducts: [Product] = [],
+        lunchProducts: [Product] = [],
+        dinnerProducts: [Product] = [],
+        snacksProducts: [Product] = [],
+        gender: Gender,
+        selectedDate: Binding<Date> // Binding<Date> вместо Date
+    ) {
         _breakfastProducts = State(initialValue: breakfastProducts)
         _lunchProducts = State(initialValue: lunchProducts)
         _dinnerProducts = State(initialValue: dinnerProducts)
         _snacksProducts = State(initialValue: snacksProducts)
         self.selectedGender = gender
+        self._selectedDate = selectedDate // Привязка инициализируется через `_`
     }
 
     var body: some View {
         VStack(spacing: 16) {
+         //   HeaderView(selectedDate: $selectedDate)
+
             Text("Рацион на день")
                 .font(.title2)
                 .fontWeight(.bold)
@@ -99,7 +105,10 @@ struct RationPopupView: View {
         .padding()
         .presentationDetents([.medium, .large])
         .onAppear {
-            loadData(for: Date(), gender: selectedGender) // Загружаем данные для текущей даты и выбранного гендера
+            loadData(for: selectedDate, gender: selectedGender) // Загружаем данные для текущей даты и выбранного гендера
+        }
+        .onChange(of: selectedDate) { newDate in
+            loadData(for: newDate, gender: selectedGender)
         }
         .sheet(isPresented: Binding(
             get: { showProductSelection && selectedMeal != nil },
