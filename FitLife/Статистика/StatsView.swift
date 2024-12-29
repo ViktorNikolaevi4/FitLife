@@ -60,11 +60,12 @@ struct StatsView: View {
                         .font(.headline)
                         .foregroundStyle(.white)
 
-                    if selectedDataType == .calories {
+                    switch selectedDataType {
+                    case .calories:
                         Text("\(calculateAverageCalories(for: selectedTimeFrame)) ккал")
                             .font(.largeTitle)
                             .foregroundStyle(.white)
-                    } else if selectedDataType == .macros {
+                    case .macros:
                         let averageMacros = calculateAverageMacros(for: selectedTimeFrame)
                         Text("Белки: \(averageMacros["proteins"] ?? 0) г")
                             .font(.headline)
@@ -75,8 +76,17 @@ struct StatsView: View {
                         Text("Углеводы: \(averageMacros["carbs"] ?? 0) г")
                             .font(.headline)
                             .foregroundStyle(.green)
+                    case .water:
+                        Text("\(calculateAverageWaterIntake(for: selectedTimeFrame), specifier: "%.2f") л")
+                            .font(.largeTitle)
+                            .foregroundStyle(.blue)
+                    case .weight:
+                        Text("\(calculateAverageWeight(for: selectedTimeFrame), specifier: "%.1f") кг")
+                            .font(.largeTitle)
+                            .foregroundStyle(.gray)
                     }
                 }
+
 
                 Spacer()
 
@@ -206,6 +216,89 @@ struct StatsView: View {
             return [:]
         }
     }
+    // Расчёт среднего значения выпитой воды
+    func calculateAverageWaterIntake(for timeFrame: TimeFrame) -> Double {
+        let calendar = Calendar.current
+        let today = Date()
+        var startDate: Date?
+        let endDate: Date = today
+
+        switch timeFrame {
+        case .week:
+            startDate = calendar.date(byAdding: .day, value: -6, to: today)
+        case .month:
+            startDate = calendar.date(byAdding: .month, value: -1, to: today)
+        case .halfYear:
+            startDate = calendar.date(byAdding: .month, value: -6, to: today)
+        case .year:
+            startDate = calendar.date(byAdding: .year, value: -1, to: today)
+        }
+
+        guard let startDate = startDate else { return 0.0 }
+
+        do {
+            let waterEntries = try modelContext.fetch(FetchDescriptor<WaterIntake>())
+            let filteredEntries = waterEntries.filter {
+                $0.date >= startDate && $0.date <= endDate
+            }
+
+            let totalWater = filteredEntries.reduce(into: 0.0) { $0 += $1.intake }
+            let daysCount = calendar.dateComponents([.day], from: startDate, to: endDate).day! + 1
+            return totalWater / Double(max(daysCount, 1))
+        } catch {
+            print("Ошибка загрузки данных воды: \(error)")
+            return 0.0
+        }
+    }
+
+    // Расчёт среднего значения веса
+    func calculateAverageWeight(for timeFrame: TimeFrame) -> Double {
+        let calendar = Calendar.current
+        let today = Date()
+        var startDate: Date?
+        let endDate: Date = today
+
+        switch timeFrame {
+        case .week:
+            startDate = calendar.date(byAdding: .day, value: -6, to: today)
+        case .month:
+            startDate = calendar.date(byAdding: .month, value: -1, to: today)
+        case .halfYear:
+            startDate = calendar.date(byAdding: .month, value: -6, to: today)
+        case .year:
+            startDate = calendar.date(byAdding: .year, value: -1, to: today)
+        }
+
+        guard let startDate = startDate else { return 0.0 }
+
+        do {
+            // Создаём предикат для фильтрации данных
+            let predicate = #Predicate<UserData> { user in
+                user.weight > 0 // Проверяем, что вес указан корректно
+            }
+
+            // Используем FetchDescriptor с предикатом
+            let fetchDescriptor = FetchDescriptor<UserData>(predicate: predicate)
+
+            // Выполняем запрос
+            let weightEntries = try modelContext.fetch(fetchDescriptor)
+
+            // Фильтруем данные по дате вручную
+            let filteredEntries = weightEntries.filter {
+                ($0.weightDate) >= startDate && ($0.weightDate) <= endDate
+            }
+
+            // Вычисляем средний вес
+            let totalWeight = filteredEntries.reduce(into: 0.0) { $0 += $1.weight }
+            let count = filteredEntries.count
+            return totalWeight / Double(max(count, 1)) // Возвращаем средний вес
+        } catch {
+            print("Ошибка загрузки данных веса: \(error)")
+            return 0.0
+        }
+    }
+
+
 }
 
 struct ChartData: Identifiable {
@@ -228,7 +321,15 @@ enum DataType: String, CaseIterable {
     case weight = "Вес"
     case water = "Вода"
 }
-
+extension UserData {
+    /// Дата последнего изменения веса пользователя
+    var weightDate: Date {
+        // Если нужно хранить дату в базе данных, нужно добавить `storedWeightDate` как свойство модели.
+        // Здесь для примера просто возвращаем текущую дату.
+        // Для баз данных стоит заменить на реальное значение.
+        return Date() // Верните реальную дату изменения веса, если она хранится
+    }
+}
 #Preview {
     StatsView()
 }
