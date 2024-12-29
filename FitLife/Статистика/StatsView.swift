@@ -3,14 +3,14 @@
 //  FitLife
 //
 //  Created by Виктор Корольков on 29.12.2024.
-//
-
 import SwiftUI
 import Charts
+import SwiftData
 
 struct StatsView: View {
     @State private var selectedTimeFrame: TimeFrame = .year
-    @State private var selectedDataType: DataType = .macros
+    @State private var selectedDataType: DataType = .calories
+    @Environment(\.modelContext) private var modelContext
 
     var body: some View {
         ZStack {
@@ -27,7 +27,7 @@ struct StatsView: View {
                         .foregroundStyle(.white)
                     Spacer()
                 }
-                Spacer()
+
                 // Пикер интервалов времени
                 Picker("Выберите интервал", selection: $selectedTimeFrame) {
                     ForEach(TimeFrame.allCases, id: \.self) { timeFrame in
@@ -36,7 +36,7 @@ struct StatsView: View {
                 }
                 .pickerStyle(.segmented)
                 .padding()
-                Spacer()
+
                 // Линейный график
                 Chart(getData(for: selectedTimeFrame)) { item in
                     LineMark(
@@ -53,42 +53,34 @@ struct StatsView: View {
                 Text("График построен исходя из средних значений за выбранный период")
                     .font(.caption)
                     .foregroundStyle(.white)
-                Spacer()
+
                 // Средние значения за день
-                Text("Среднее значение за день")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                HStack {
-                    VStack {
-                        Text("Белки, г")
-                            .font(.subheadline)
+                VStack {
+                    Text("Среднее значение за день")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+
+                    if selectedDataType == .calories {
+                        Text("\(calculateAverageCalories(for: selectedTimeFrame)) ккал")
+                            .font(.largeTitle)
+                            .foregroundStyle(.white)
+                    } else if selectedDataType == .macros {
+                        let averageMacros = calculateAverageMacros(for: selectedTimeFrame)
+                        Text("Белки: \(averageMacros["proteins"] ?? 0) г")
+                            .font(.headline)
                             .foregroundStyle(.purple)
-                        Text("17.8")
+                        Text("Жиры: \(averageMacros["fats"] ?? 0) г")
                             .font(.headline)
-                            .foregroundStyle(.white)
-                    }
-                    Spacer()
-                    VStack {
-                        Text("Жиры, г")
-                            .font(.subheadline)
                             .foregroundStyle(.red)
-                        Text("7.8")
+                        Text("Углеводы: \(averageMacros["carbs"] ?? 0) г")
                             .font(.headline)
-                            .foregroundStyle(.white)
-                    }
-                    Spacer()
-                    VStack {
-                        Text("Углеводы, г")
-                            .font(.subheadline)
                             .foregroundStyle(.green)
-                        Text("69.4")
-                            .font(.headline)
-                            .foregroundStyle(.white)
                     }
                 }
-                .padding(.horizontal)
 
-                // Пикер типа данных
+                Spacer()
+
+                // Пикер типа данных (Ккал, БЖУ, Вес, Вода)
                 Picker("Выберите тип данных", selection: $selectedDataType) {
                     ForEach(DataType.allCases, id: \.self) { dataType in
                         Text(dataType.rawValue).tag(dataType)
@@ -123,12 +115,6 @@ struct StatsView: View {
                         data.append(ChartData(date: date, value: Double.random(in: 100...500), color: .blue))
                     }
                 }
-            } else {
-                for day in 1..<31 { // Здесь используется Range вместо ClosedRange
-                    if let date = calendar.date(bySetting: .day, value: day, of: today) {
-                        data.append(ChartData(date: date, value: Double.random(in: 100...500), color: .blue))
-                    }
-                }
             }
         case .halfYear:
             for monthOffset in -5...0 {
@@ -145,9 +131,90 @@ struct StatsView: View {
         }
         return data
     }
+    // Расчёт среднего значения калорий
+    func calculateAverageCalories(for timeFrame: TimeFrame) -> Int {
+        let calendar = Calendar.current
+        let today = Date()
+        var startDate: Date?
+        let endDate: Date = today
+
+        switch timeFrame {
+        case .week:
+            startDate = calendar.date(byAdding: .day, value: -6, to: today)
+        case .month:
+            startDate = calendar.date(byAdding: .month, value: -1, to: today)
+        case .halfYear:
+            startDate = calendar.date(byAdding: .month, value: -6, to: today)
+        case .year:
+            startDate = calendar.date(byAdding: .year, value: -1, to: today)
+        }
+
+        guard let startDate = startDate else { return 0 }
+
+        do {
+            let foodEntries = try modelContext.fetch(FetchDescriptor<FoodEntry>())
+            let filteredEntries = foodEntries.filter {
+                $0.date >= startDate && $0.date <= endDate
+            }
+
+            let totalCalories = filteredEntries.reduce(into: 0) { $0 += $1.product.calories }
+            let daysCount = calendar.dateComponents([.day], from: startDate, to: endDate).day! + 1
+            return totalCalories / max(daysCount, 1)
+        } catch {
+            print("Ошибка загрузки данных: \(error)")
+            return 0
+        }
+    }
+    // Расчёт среднего значения БЖУ
+    func calculateAverageMacros(for timeFrame: TimeFrame) -> [String: Int] {
+        let calendar = Calendar.current
+        let today = Date()
+        var startDate: Date?
+        let endDate: Date = today
+
+        switch timeFrame {
+        case .week:
+            startDate = calendar.date(byAdding: .day, value: -6, to: today)
+        case .month:
+            startDate = calendar.date(byAdding: .month, value: -1, to: today)
+        case .halfYear:
+            startDate = calendar.date(byAdding: .month, value: -6, to: today)
+        case .year:
+            startDate = calendar.date(byAdding: .year, value: -1, to: today)
+        }
+
+        guard let startDate = startDate else { return [:] }
+
+        do {
+            let foodEntries = try modelContext.fetch(FetchDescriptor<FoodEntry>())
+            let filteredEntries = foodEntries.filter {
+                $0.date >= startDate && $0.date <= endDate
+            }
+
+            let totalProteins = filteredEntries.reduce(into: 0) { $0 += $1.product.protein }
+            let totalFats = filteredEntries.reduce(into: 0) { $0 += $1.product.fat }
+            let totalCarbs = filteredEntries.reduce(into: 0) { $0 += $1.product.carbs }
+            let daysCount = calendar.dateComponents([.day], from: startDate, to: endDate).day! + 1
+
+            return [
+                "proteins": Int(totalProteins) / max(daysCount, 1),
+                "fats": Int(totalFats) / max(daysCount, 1),
+                "carbs": Int(totalCarbs) / max(daysCount, 1)
+            ]
+        } catch {
+            print("Ошибка загрузки данных: \(error)")
+            return [:]
+        }
+    }
 }
 
-// Вспомогательные модели данных
+struct ChartData: Identifiable {
+    let id = UUID()
+    let date: Date
+    let value: Double
+    let color: Color
+}
+
 enum TimeFrame: String, CaseIterable {
     case week = "Неделя"
     case month = "Месяц"
@@ -160,13 +227,6 @@ enum DataType: String, CaseIterable {
     case macros = "БЖУ"
     case weight = "Вес"
     case water = "Вода"
-}
-
-struct ChartData: Identifiable {
-    let id = UUID()
-    let date: Date
-    let value: Double
-    let color: Color
 }
 
 #Preview {
