@@ -144,21 +144,34 @@ struct WaterTrackerView: View {
     // Сохранение данных в модель
     private func saveWaterIntake() {
         let today = Calendar.current.startOfDay(for: Date()) // Начало текущего дня
-        if let existingEntry = try? modelContext.fetch(FetchDescriptor<WaterIntake>()).first(where: { Calendar.current.isDate($0.date, inSameDayAs: today) }) {
+
+        // Убедитесь, что userData извлечён из текущего контекста
+        guard let userInContext = try? modelContext.fetch(FetchDescriptor<UserData>()).first(where: { $0.id == userData.id }) else {
+            print("UserData не найден в текущем контексте")
+            return
+        }
+
+        // Проверяем, есть ли уже запись о воде за сегодняшний день
+        if let existingEntry = try? modelContext.fetch(FetchDescriptor<WaterIntake>()).first(where: { Calendar.current.isDate($0.date, inSameDayAs: today) && $0.user?.id == userInContext.id }) {
             existingEntry.intake = waterIntake // Обновление записи
         } else {
+            // Создаём новую запись о воде
             let newEntry = WaterIntake(date: today, intake: waterIntake)
+            newEntry.user = userInContext // Устанавливаем связь с пользователем
             modelContext.insert(newEntry)
         }
         try? modelContext.save()
     }
+
     // Загрузка данных
     private func loadWaterIntake() {
         let today = Calendar.current.startOfDay(for: Date())
-        if let existingEntry = try? modelContext.fetch(FetchDescriptor<WaterIntake>()).first(where: { Calendar.current.isDate($0.date, inSameDayAs: today) }) {
-            waterIntake = existingEntry.intake
+
+        // Загружаем запись из контекста
+        if let existingEntry = try? modelContext.fetch(FetchDescriptor<WaterIntake>()).first(where: { Calendar.current.isDate($0.date, inSameDayAs: today) && $0.user?.id == userData.id }) {
+            waterIntake = existingEntry.intake // Если запись найдена, обновляем данные
         } else {
-            waterIntake = 0.0 // Начальное значение
+            waterIntake = 0.0 // Если записи нет, устанавливаем 0
         }
     }
 }

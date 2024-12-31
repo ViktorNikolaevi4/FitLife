@@ -11,6 +11,7 @@ struct StatsView: View {
     @State private var selectedTimeFrame: TimeFrame = .week
     @State private var selectedDataType: DataType = .calories
     @Environment(\.modelContext) private var modelContext
+    @Bindable var userData: UserData
 
     var body: some View {
         ZStack {
@@ -176,8 +177,6 @@ struct StatsView: View {
             return 0.0
         }
     }
-
-
     func getDateRanges(for timeFrame: TimeFrame, calendar: Calendar, today: Date) -> [Date] {
         switch timeFrame {
         case .week:

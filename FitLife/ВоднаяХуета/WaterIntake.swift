@@ -13,9 +13,11 @@ class WaterIntake {
     @Attribute(.unique) var id: UUID = UUID() // Уникальный идентификатор
     var date: Date // Дата записи
     var intake: Double // Количество выпитой воды в литрах
+    var user: UserData?
 
     init(date: Date, intake: Double) {
         self.date = date
         self.intake = intake
+     //   self.user = user
     }
 }

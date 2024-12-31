@@ -6,12 +6,14 @@ import Observation
 
 @Model
 class UserData {
+    var id: UUID = UUID() // Уникальный идентификатор пользователя
     var weight: Double
     var height: Double
     var age: Int
     var activityLevel: ActivityLevel
     var goal: WeightGoal
     var gender: Gender // Пол пользователя для фильтрации
+    var waterIntakes: [WaterIntake] = [] // Связанные записи о воде
 
     var calories: Int {
         guard weight > 0, height > 0, age > 0 else { return 0 }
