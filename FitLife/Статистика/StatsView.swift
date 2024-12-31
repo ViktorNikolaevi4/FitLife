@@ -102,72 +102,39 @@ struct StatsView: View {
         let today = Date()
         var data: [ChartData] = []
 
-        switch timeFrame {
-        case .week:
-            if let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: today)) {
-                for dayOffset in 0..<7 {
-                    if let date = calendar.date(byAdding: .day, value: dayOffset, to: startOfWeek) {
-                        if selectedDataType == .macros {
-                            let macros = calculateAverageMacros(for: timeFrame)
-                            data.append(ChartData(date: date, value: Double(macros["proteins"] ?? 0), color: .purple, lineType: "Белки"))
-                            data.append(ChartData(date: date, value: Double(macros["fats"] ?? 0), color: .red, lineType: "Жиры"))
-                            data.append(ChartData(date: date, value: Double(macros["carbs"] ?? 0), color: .green, lineType: "Углеводы"))
-                        } else {
-                            let average = getAverage(for: selectedDataType, in: .week, date: date, modelContext: modelContext)
-                            data.append(ChartData(date: date, value: average, color: .blue, lineType: "Основной"))
-                        }
-                    }
-                }
-            }
-        case .month:
-            if let range = calendar.range(of: .day, in: .month, for: today) {
-                for day in range {
-                    if let date = calendar.date(bySetting: .day, value: day, of: today) {
-                        if selectedDataType == .macros {
-                            let macros = calculateAverageMacros(for: timeFrame)
-                            data.append(ChartData(date: date, value: Double(macros["proteins"] ?? 0), color: .purple, lineType: "Белки"))
-                            data.append(ChartData(date: date, value: Double(macros["fats"] ?? 0), color: .red, lineType: "Жиры"))
-                            data.append(ChartData(date: date, value: Double(macros["carbs"] ?? 0), color: .green, lineType: "Углеводы"))
-                        } else {
-                            let average = getAverage(for: selectedDataType, in: .month, date: date, modelContext: modelContext)
-                            data.append(ChartData(date: date, value: average, color: .blue, lineType: "Основной"))
-                        }
-                    }
-                }
-            }
-        case .halfYear:
-            for monthOffset in -5...0 {
-                if let date = calendar.date(byAdding: .month, value: monthOffset, to: today) {
-                    if selectedDataType == .macros {
-                        let macros = calculateAverageMacros(for: timeFrame)
-                        data.append(ChartData(date: date, value: Double(macros["proteins"] ?? 0), color: .purple, lineType: "Белки"))
-                        data.append(ChartData(date: date, value: Double(macros["fats"] ?? 0), color: .red, lineType: "Жиры"))
-                        data.append(ChartData(date: date, value: Double(macros["carbs"] ?? 0), color: .green, lineType: "Углеводы"))
-                    } else {
-                        let average = getAverage(for: selectedDataType, in: .halfYear, date: date, modelContext: modelContext)
-                        data.append(ChartData(date: date, value: average, color: .blue, lineType: "Основной"))
-                    }
-                }
-            }
-        case .year:
-            for monthOffset in -11...0 {
-                if let date = calendar.date(byAdding: .month, value: monthOffset, to: today) {
-                    if selectedDataType == .macros {
-                        let macros = calculateAverageMacros(for: timeFrame)
-                        data.append(ChartData(date: date, value: Double(macros["proteins"] ?? 0), color: .purple, lineType: "Белки"))
-                        data.append(ChartData(date: date, value: Double(macros["fats"] ?? 0), color: .red, lineType: "Жиры"))
-                        data.append(ChartData(date: date, value: Double(macros["carbs"] ?? 0), color: .green, lineType: "Углеводы"))
-                    } else {
-                        let average = getAverage(for: selectedDataType, in: .year, date: date, modelContext: modelContext)
-                        data.append(ChartData(date: date, value: average, color: .blue, lineType: "Основной"))
-                    }
-                }
+        // Получение диапазона дат
+        let dateRanges = getDateRanges(for: timeFrame, calendar: calendar, today: today)
+
+        for date in dateRanges {
+            if selectedDataType == .macros {
+                let macros = calculateAverageMacros(for: timeFrame)
+                data.append(contentsOf: [
+                    ChartData(date: date, value: Double(macros["proteins"] ?? 0), color: .purple, lineType: "proteins"), // Белки
+                    ChartData(date: date, value: Double(macros["fats"] ?? 0), color: .red, lineType: "fats"),       // Жиры
+                    ChartData(date: date, value: Double(macros["carbs"] ?? 0), color: .green, lineType: "carbs")    // Углеводы
+                ])
+            } else {
+                let average = getAverage(for: selectedDataType, in: timeFrame, date: date, modelContext: modelContext)
+                data.append(ChartData(date: date, value: average, color: .blue, lineType: selectedDataType.rawValue))
             }
         }
-
         return data
     }
 
+    func getDateRanges(for timeFrame: TimeFrame, calendar: Calendar, today: Date) -> [Date] {
+        switch timeFrame {
+        case .week:
+            guard let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: today)) else { return [] }
+            return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: startOfWeek) }
+        case .month:
+            guard let range = calendar.range(of: .day, in: .month, for: today) else { return [] }
+            return range.compactMap { calendar.date(bySetting: .day, value: $0, of: today) }
+        case .halfYear:
+            return (-5...0).compactMap { calendar.date(byAdding: .month, value: $0, to: today) }
+        case .year:
+            return (-11...0).compactMap { calendar.date(byAdding: .month, value: $0, to: today) }
+        }
+    }
 
     func getAverage(for dataType: DataType, in timeFrame: TimeFrame, date: Date, modelContext: ModelContext) -> Double {
         switch dataType {
@@ -181,8 +148,7 @@ struct StatsView: View {
         case .weight:
             return calculateAverageWeight(for: timeFrame)
         }
-    }
-    // Расчёт среднего значения калорий
+    }    // Расчёт среднего значения калорий
     func calculateAverageCalories(for timeFrame: TimeFrame) -> Int {
         let calendar = Calendar.current
         let today = Date()
