@@ -74,7 +74,7 @@ struct StatsView: View {
                             .font(.headline)
                             .foregroundStyle(.green)
                     case .water:
-                        Text(String(format: "%.2f л", calculateAverageWaterIntake(for: selectedTimeFrame)))
+                        Text(String(format: "%.2f л", calculateAverageWaterIntake(for: selectedTimeFrame, gender: userData.gender)))
                             .font(.largeTitle)
                             .foregroundStyle(.blue)
                     case .weight:
@@ -161,7 +161,7 @@ struct StatsView: View {
             case .water:
                 let waterEntries = try modelContext.fetch(FetchDescriptor<WaterIntake>())
                 let filteredEntries = waterEntries.filter {
-                    Calendar.current.isDate($0.date, inSameDayAs: date)
+                    Calendar.current.isDate($0.date, inSameDayAs: date) && $0.gender == gender
                 }
                 return filteredEntries.reduce(0.0) { $0 + $1.intake }
             case .weight:
@@ -202,7 +202,7 @@ struct StatsView: View {
             let macros = calculateAverageMacros(for: timeFrame, gender: userData.gender)
             return Double(macros["proteins"] ?? 0) // Например, возвращаем только белки
         case .water:
-            return calculateAverageWaterIntake(for: timeFrame)
+            return calculateAverageWaterIntake(for: timeFrame, gender: userData.gender)
         case .weight:
             return calculateAverageWeight(for: timeFrame)
         }
@@ -286,7 +286,7 @@ struct StatsView: View {
 
 
     // Расчёт среднего значения выпитой воды
-    func calculateAverageWaterIntake(for timeFrame: TimeFrame) -> Double {
+    func calculateAverageWaterIntake(for timeFrame: TimeFrame,  gender: Gender) -> Double {
         let calendar = Calendar.current
         let today = Date()
         var startDate: Date?
@@ -308,7 +308,7 @@ struct StatsView: View {
         do {
             let waterEntries = try modelContext.fetch(FetchDescriptor<WaterIntake>())
             let filteredEntries = waterEntries.filter {
-                $0.date >= startDate && $0.date <= endDate
+                $0.date >= startDate && $0.date <= endDate && $0.gender == gender
             }
 
             let totalWater = filteredEntries.reduce(into: 0.0) { $0 += $1.intake }

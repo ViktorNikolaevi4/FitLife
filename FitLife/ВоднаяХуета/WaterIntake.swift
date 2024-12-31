@@ -14,10 +14,12 @@ class WaterIntake {
     var date: Date // Дата записи
     var intake: Double // Количество выпитой воды в литрах
     var user: UserData?
+    var gender: Gender
 
-    init(date: Date, intake: Double) {
+    init(date: Date, intake: Double, gender: Gender) {
         self.date = date
         self.intake = intake
+        self.gender = gender
      //   self.user = user
     }
 }

@@ -156,7 +156,7 @@ struct WaterTrackerView: View {
             existingEntry.intake = waterIntake // Обновление записи
         } else {
             // Создаём новую запись о воде
-            let newEntry = WaterIntake(date: today, intake: waterIntake)
+            let newEntry = WaterIntake(date: today, intake: waterIntake, gender: userData.gender)
             newEntry.user = userInContext // Устанавливаем связь с пользователем
             modelContext.insert(newEntry)
         }
