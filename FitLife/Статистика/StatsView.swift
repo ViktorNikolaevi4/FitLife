@@ -309,16 +309,45 @@ struct StatsChartView: View {
 
     var body: some View {
         VStack {
-            Chart(data) { item in
-                LineMark(
-                    x: .value("Date", item.date, unit: unit),
-                    y: .value("Value", item.value)
-                )
-                .symbol(Circle())
-                .foregroundStyle(item.color)
+            // График с тремя линиями для БЖУ
+            Chart {
+                ForEach(data) { item in
+                    LineMark(
+                        x: .value("Дата", item.date, unit: unit),
+                        y: .value("Значение", item.value),
+                        series: .value("Тип", item.lineType)
+                    )
+                    .symbol(Circle())
+                    .foregroundStyle(by: .value("Тип", item.lineType))
+                }
             }
             .frame(height: chartHeight)
             .padding(.horizontal)
+
+            // Легенда
+            HStack {
+                LegendItem(color: .purple, text: "Белки")
+                LegendItem(color: .red, text: "Жиры")
+                LegendItem(color: .green, text: "Углеводы")
+            }
+            .padding(.top, 10)
+        }
+    }
+
+    // Компонент легенды
+    private struct LegendItem: View {
+        let color: Color
+        let text: String
+
+        var body: some View {
+            HStack {
+                Circle()
+                    .fill(color)
+                    .frame(width: 10, height: 10)
+                Text(text)
+                    .font(.caption)
+                    .foregroundColor(.white)
+            }
         }
     }
 }
