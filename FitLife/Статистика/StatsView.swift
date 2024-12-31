@@ -107,19 +107,76 @@ struct StatsView: View {
 
         for date in dateRanges {
             if selectedDataType == .macros {
-                let macros = calculateAverageMacros(for: timeFrame)
+                // Получение средних значений БЖУ за день
+                let macros = calculateDailyMacros(for: date, modelContext: modelContext)
                 data.append(contentsOf: [
-                    ChartData(date: date, value: Double(macros["proteins"] ?? 0), color: .purple, lineType: "proteins"), // Белки
-                    ChartData(date: date, value: Double(macros["fats"] ?? 0), color: .red, lineType: "fats"),       // Жиры
-                    ChartData(date: date, value: Double(macros["carbs"] ?? 0), color: .green, lineType: "carbs")    // Углеводы
+                    ChartData(date: date, value: macros["proteins"] ?? 0, color: .purple, lineType: "Белки"),
+                    ChartData(date: date, value: macros["fats"] ?? 0, color: .red, lineType: "Жиры"),
+                    ChartData(date: date, value: macros["carbs"] ?? 0, color: .green, lineType: "Углеводы")
                 ])
             } else {
-                let average = getAverage(for: selectedDataType, in: timeFrame, date: date, modelContext: modelContext)
+                // Получение среднего значения за день
+                let average = calculateDailyAverage(for: date, dataType: selectedDataType, modelContext: modelContext)
                 data.append(ChartData(date: date, value: average, color: .blue, lineType: selectedDataType.rawValue))
             }
         }
         return data
     }
+
+    // Функция для расчета среднего значения БЖУ за конкретный день
+    func calculateDailyMacros(for date: Date, modelContext: ModelContext) -> [String: Double] {
+        do {
+            let foodEntries = try modelContext.fetch(FetchDescriptor<FoodEntry>())
+            let filteredEntries = foodEntries.filter {
+                Calendar.current.isDate($0.date, inSameDayAs: date)
+            }
+
+            let totalProteins = filteredEntries.reduce(0.0) { $0 + Double($1.product.protein) }
+            let totalFats = filteredEntries.reduce(0.0) { $0 + Double($1.product.fat) }
+            let totalCarbs = filteredEntries.reduce(0.0) { $0 + Double($1.product.carbs) }
+
+            return [
+                "proteins": totalProteins,
+                "fats": totalFats,
+                "carbs": totalCarbs
+            ]
+        } catch {
+            print("Ошибка загрузки данных БЖУ: \(error)")
+            return ["proteins": 0, "fats": 0, "carbs": 0]
+        }
+    }
+
+    // Функция для расчета среднего значения (например, калорий, воды, веса) за конкретный день
+    func calculateDailyAverage(for date: Date, dataType: DataType, modelContext: ModelContext) -> Double {
+        do {
+            switch dataType {
+            case .calories:
+                let foodEntries = try modelContext.fetch(FetchDescriptor<FoodEntry>())
+                let filteredEntries = foodEntries.filter {
+                    Calendar.current.isDate($0.date, inSameDayAs: date)
+                }
+                return filteredEntries.reduce(0.0) { $0 + Double($1.product.calories) }
+            case .water:
+                let waterEntries = try modelContext.fetch(FetchDescriptor<WaterIntake>())
+                let filteredEntries = waterEntries.filter {
+                    Calendar.current.isDate($0.date, inSameDayAs: date)
+                }
+                return filteredEntries.reduce(0.0) { $0 + $1.intake }
+            case .weight:
+                let weightEntries = try modelContext.fetch(FetchDescriptor<UserData>())
+                let filteredEntries = weightEntries.filter {
+                    Calendar.current.isDate($0.weightDate, inSameDayAs: date)
+                }
+                return filteredEntries.last?.weight ?? 0.0
+            default:
+                return 0.0
+            }
+        } catch {
+            print("Ошибка загрузки данных: \(error)")
+            return 0.0
+        }
+    }
+
 
     func getDateRanges(for timeFrame: TimeFrame, calendar: Calendar, today: Date) -> [Date] {
         switch timeFrame {
