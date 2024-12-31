@@ -56,13 +56,14 @@ struct StatsView: View {
                         .font(.headline)
                         .foregroundStyle(.white)
 
+                    // Вызов функций в StatsView
                     switch selectedDataType {
                     case .calories:
-                        Text("\(calculateAverageCalories(for: selectedTimeFrame)) ккал")
+                        Text("\(calculateAverageCalories(for: selectedTimeFrame, gender: userData.gender)) ккал")
                             .font(.largeTitle)
                             .foregroundStyle(.white)
                     case .macros:
-                        let averageMacros = calculateAverageMacros(for: selectedTimeFrame)
+                        let averageMacros = calculateAverageMacros(for: selectedTimeFrame, gender: userData.gender)
                         Text("Белки: \(averageMacros["proteins"] ?? 0) г")
                             .font(.headline)
                             .foregroundStyle(.purple)
@@ -109,7 +110,7 @@ struct StatsView: View {
         for date in dateRanges {
             if selectedDataType == .macros {
                 // Получение средних значений БЖУ за день
-                let macros = calculateDailyMacros(for: date, modelContext: modelContext)
+                let macros = calculateDailyMacros(for: date, modelContext: modelContext, gender: userData.gender)
                 data.append(contentsOf: [
                     ChartData(date: date, value: macros["proteins"] ?? 0, color: .purple, lineType: "Белки"),
                     ChartData(date: date, value: macros["fats"] ?? 0, color: .red, lineType: "Жиры"),
@@ -117,7 +118,7 @@ struct StatsView: View {
                 ])
             } else {
                 // Получение среднего значения за день
-                let average = calculateDailyAverage(for: date, dataType: selectedDataType, modelContext: modelContext)
+                let average = calculateDailyAverage(for: date, dataType: selectedDataType, modelContext: modelContext, gender: userData.gender)
                 data.append(ChartData(date: date, value: average, color: .blue, lineType: selectedDataType.rawValue))
             }
         }
@@ -125,11 +126,11 @@ struct StatsView: View {
     }
 
     // Функция для расчета среднего значения БЖУ за конкретный день
-    func calculateDailyMacros(for date: Date, modelContext: ModelContext) -> [String: Double] {
+    func calculateDailyMacros(for date: Date, modelContext: ModelContext, gender: Gender) -> [String: Double] {
         do {
             let foodEntries = try modelContext.fetch(FetchDescriptor<FoodEntry>())
             let filteredEntries = foodEntries.filter {
-                Calendar.current.isDate($0.date, inSameDayAs: date)
+                Calendar.current.isDate($0.date, inSameDayAs: date) && $0.gender == gender
             }
 
             let totalProteins = filteredEntries.reduce(0.0) { $0 + Double($1.product.protein) }
@@ -148,13 +149,13 @@ struct StatsView: View {
     }
 
     // Функция для расчета среднего значения (например, калорий, воды, веса) за конкретный день
-    func calculateDailyAverage(for date: Date, dataType: DataType, modelContext: ModelContext) -> Double {
+    func calculateDailyAverage(for date: Date, dataType: DataType, modelContext: ModelContext, gender: Gender) -> Double {
         do {
             switch dataType {
             case .calories:
                 let foodEntries = try modelContext.fetch(FetchDescriptor<FoodEntry>())
                 let filteredEntries = foodEntries.filter {
-                    Calendar.current.isDate($0.date, inSameDayAs: date)
+                    Calendar.current.isDate($0.date, inSameDayAs: date) && $0.gender == gender
                 }
                 return filteredEntries.reduce(0.0) { $0 + Double($1.product.calories) }
             case .water:
@@ -166,7 +167,7 @@ struct StatsView: View {
             case .weight:
                 let weightEntries = try modelContext.fetch(FetchDescriptor<UserData>())
                 let filteredEntries = weightEntries.filter {
-                    Calendar.current.isDate($0.weightDate, inSameDayAs: date)
+                    Calendar.current.isDate($0.weightDate, inSameDayAs: date) && $0.gender == gender
                 }
                 return filteredEntries.last?.weight ?? 0.0
             default:
@@ -177,6 +178,7 @@ struct StatsView: View {
             return 0.0
         }
     }
+
     func getDateRanges(for timeFrame: TimeFrame, calendar: Calendar, today: Date) -> [Date] {
         switch timeFrame {
         case .week:
@@ -195,9 +197,9 @@ struct StatsView: View {
     func getAverage(for dataType: DataType, in timeFrame: TimeFrame, date: Date, modelContext: ModelContext) -> Double {
         switch dataType {
         case .calories:
-            return Double(calculateAverageCalories(for: timeFrame))
+            return Double(calculateAverageCalories(for: timeFrame, gender: userData.gender))
         case .macros:
-            let macros = calculateAverageMacros(for: timeFrame)
+            let macros = calculateAverageMacros(for: timeFrame, gender: userData.gender)
             return Double(macros["proteins"] ?? 0) // Например, возвращаем только белки
         case .water:
             return calculateAverageWaterIntake(for: timeFrame)
@@ -205,7 +207,7 @@ struct StatsView: View {
             return calculateAverageWeight(for: timeFrame)
         }
     }    // Расчёт среднего значения калорий
-    func calculateAverageCalories(for timeFrame: TimeFrame) -> Int {
+    func calculateAverageCalories(for timeFrame: TimeFrame, gender: Gender) -> Int {
         let calendar = Calendar.current
         let today = Date()
         var startDate: Date?
@@ -227,10 +229,10 @@ struct StatsView: View {
         do {
             let foodEntries = try modelContext.fetch(FetchDescriptor<FoodEntry>())
             let filteredEntries = foodEntries.filter {
-                $0.date >= startDate && $0.date <= endDate
+                $0.date >= startDate && $0.date <= endDate && $0.gender == gender
             }
 
-            let totalCalories = filteredEntries.reduce(into: 0) { $0 += $1.product.calories }
+            let totalCalories = filteredEntries.reduce(0) { $0 + $1.product.calories }
             let daysCount = calendar.dateComponents([.day], from: startDate, to: endDate).day! + 1
             return totalCalories / max(daysCount, 1)
         } catch {
@@ -239,8 +241,9 @@ struct StatsView: View {
         }
     }
 
+
     // Расчёт среднего значения БЖУ
-    func calculateAverageMacros(for timeFrame: TimeFrame) -> [String: Int] {
+    func calculateAverageMacros(for timeFrame: TimeFrame, gender: Gender) -> [String: Int] {
         let calendar = Calendar.current
         let today = Date()
         var startDate: Date?
@@ -262,24 +265,25 @@ struct StatsView: View {
         do {
             let foodEntries = try modelContext.fetch(FetchDescriptor<FoodEntry>())
             let filteredEntries = foodEntries.filter {
-                $0.date >= startDate && $0.date <= endDate
+                $0.date >= startDate && $0.date <= endDate && $0.gender == gender
             }
 
-            let totalProteins = filteredEntries.reduce(into: 0) { $0 += $1.product.protein }
-            let totalFats = filteredEntries.reduce(into: 0) { $0 += $1.product.fat }
-            let totalCarbs = filteredEntries.reduce(into: 0) { $0 += $1.product.carbs }
+            let totalProteins = filteredEntries.reduce(0) { $0 + Int($1.product.protein) }
+            let totalFats = filteredEntries.reduce(0) { $0 + Int($1.product.fat) }
+            let totalCarbs = filteredEntries.reduce(0) { $0 + Int($1.product.carbs) }
             let daysCount = calendar.dateComponents([.day], from: startDate, to: endDate).day! + 1
 
             return [
-                "proteins": Int(totalProteins) / max(daysCount, 1),
-                "fats": Int(totalFats) / max(daysCount, 1),
-                "carbs": Int(totalCarbs) / max(daysCount, 1)
+                "proteins": totalProteins / max(daysCount, 1),
+                "fats": totalFats / max(daysCount, 1),
+                "carbs": totalCarbs / max(daysCount, 1)
             ]
         } catch {
             print("Ошибка загрузки данных: \(error)")
             return [:]
         }
     }
+
 
     // Расчёт среднего значения выпитой воды
     func calculateAverageWaterIntake(for timeFrame: TimeFrame) -> Double {

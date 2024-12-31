@@ -72,7 +72,7 @@ struct BottomNavigationView: View {
                         }.foregroundStyle(.white)
                     }
                     Spacer()
-                    NavigationLink(destination: StatsView()) {
+                    NavigationLink(destination: StatsView(userData: userData)) {
                         VStack {
                             Image(systemName: "arrow.up.forward")
                             Text("Стат.")
