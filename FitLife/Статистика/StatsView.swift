@@ -39,8 +39,7 @@ struct StatsView: View {
 
                 // Используем StatsChartView для отображения графика
                 StatsChartView(
-                    data: getData(for: selectedTimeFrame),
-                  //  title: "График построен исходя из средних значений за выбранный период",
+                    data: getData(for: selectedTimeFrame, selectedDataType: selectedDataType, modelContext: modelContext),
                     unit: .day,
                     chartHeight: 200
                 )
@@ -73,16 +72,17 @@ struct StatsView: View {
                             .font(.headline)
                             .foregroundStyle(.green)
                     case .water:
-                        Text("\(calculateAverageWaterIntake(for: selectedTimeFrame), specifier: "%.2f") л")
+                        Text(String(format: "%.2f л", calculateAverageWaterIntake(for: selectedTimeFrame)))
                             .font(.largeTitle)
                             .foregroundStyle(.blue)
                     case .weight:
-                        Text("\(calculateAverageWeight(for: selectedTimeFrame), specifier: "%.1f") кг")
+                        Text(String(format: "%.1f кг", calculateAverageWeight(for: selectedTimeFrame)))
                             .font(.largeTitle)
                             .foregroundStyle(.gray)
                     }
                 }
                 Spacer()
+
                 // Пикер типа данных (Ккал, БЖУ, Вес, Вода)
                 Picker("Выберите тип данных", selection: $selectedDataType) {
                     ForEach(DataType.allCases, id: \.self) { dataType in
@@ -93,6 +93,93 @@ struct StatsView: View {
                 .padding(.horizontal)
             }
             .padding()
+        }
+    }
+
+    // Получение данных для графика
+    func getData(for timeFrame: TimeFrame, selectedDataType: DataType, modelContext: ModelContext) -> [ChartData] {
+        let calendar = Calendar.current
+        let today = Date()
+        var data: [ChartData] = []
+
+        switch timeFrame {
+        case .week:
+            if let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: today)) {
+                for dayOffset in 0..<7 {
+                    if let date = calendar.date(byAdding: .day, value: dayOffset, to: startOfWeek) {
+                        if selectedDataType == .macros {
+                            let macros = calculateAverageMacros(for: timeFrame)
+                            data.append(ChartData(date: date, value: Double(macros["proteins"] ?? 0), color: .purple, lineType: "Белки"))
+                            data.append(ChartData(date: date, value: Double(macros["fats"] ?? 0), color: .red, lineType: "Жиры"))
+                            data.append(ChartData(date: date, value: Double(macros["carbs"] ?? 0), color: .green, lineType: "Углеводы"))
+                        } else {
+                            let average = getAverage(for: selectedDataType, in: .week, date: date, modelContext: modelContext)
+                            data.append(ChartData(date: date, value: average, color: .blue, lineType: "Основной"))
+                        }
+                    }
+                }
+            }
+        case .month:
+            if let range = calendar.range(of: .day, in: .month, for: today) {
+                for day in range {
+                    if let date = calendar.date(bySetting: .day, value: day, of: today) {
+                        if selectedDataType == .macros {
+                            let macros = calculateAverageMacros(for: timeFrame)
+                            data.append(ChartData(date: date, value: Double(macros["proteins"] ?? 0), color: .purple, lineType: "Белки"))
+                            data.append(ChartData(date: date, value: Double(macros["fats"] ?? 0), color: .red, lineType: "Жиры"))
+                            data.append(ChartData(date: date, value: Double(macros["carbs"] ?? 0), color: .green, lineType: "Углеводы"))
+                        } else {
+                            let average = getAverage(for: selectedDataType, in: .month, date: date, modelContext: modelContext)
+                            data.append(ChartData(date: date, value: average, color: .blue, lineType: "Основной"))
+                        }
+                    }
+                }
+            }
+        case .halfYear:
+            for monthOffset in -5...0 {
+                if let date = calendar.date(byAdding: .month, value: monthOffset, to: today) {
+                    if selectedDataType == .macros {
+                        let macros = calculateAverageMacros(for: timeFrame)
+                        data.append(ChartData(date: date, value: Double(macros["proteins"] ?? 0), color: .purple, lineType: "Белки"))
+                        data.append(ChartData(date: date, value: Double(macros["fats"] ?? 0), color: .red, lineType: "Жиры"))
+                        data.append(ChartData(date: date, value: Double(macros["carbs"] ?? 0), color: .green, lineType: "Углеводы"))
+                    } else {
+                        let average = getAverage(for: selectedDataType, in: .halfYear, date: date, modelContext: modelContext)
+                        data.append(ChartData(date: date, value: average, color: .blue, lineType: "Основной"))
+                    }
+                }
+            }
+        case .year:
+            for monthOffset in -11...0 {
+                if let date = calendar.date(byAdding: .month, value: monthOffset, to: today) {
+                    if selectedDataType == .macros {
+                        let macros = calculateAverageMacros(for: timeFrame)
+                        data.append(ChartData(date: date, value: Double(macros["proteins"] ?? 0), color: .purple, lineType: "Белки"))
+                        data.append(ChartData(date: date, value: Double(macros["fats"] ?? 0), color: .red, lineType: "Жиры"))
+                        data.append(ChartData(date: date, value: Double(macros["carbs"] ?? 0), color: .green, lineType: "Углеводы"))
+                    } else {
+                        let average = getAverage(for: selectedDataType, in: .year, date: date, modelContext: modelContext)
+                        data.append(ChartData(date: date, value: average, color: .blue, lineType: "Основной"))
+                    }
+                }
+            }
+        }
+
+        return data
+    }
+
+
+    func getAverage(for dataType: DataType, in timeFrame: TimeFrame, date: Date, modelContext: ModelContext) -> Double {
+        switch dataType {
+        case .calories:
+            return Double(calculateAverageCalories(for: timeFrame))
+        case .macros:
+            let macros = calculateAverageMacros(for: timeFrame)
+            return Double(macros["proteins"] ?? 0) // Например, возвращаем только белки
+        case .water:
+            return calculateAverageWaterIntake(for: timeFrame)
+        case .weight:
+            return calculateAverageWeight(for: timeFrame)
         }
     }
     // Расчёт среднего значения калорий
@@ -129,6 +216,7 @@ struct StatsView: View {
             return 0
         }
     }
+
     // Расчёт среднего значения БЖУ
     func calculateAverageMacros(for timeFrame: TimeFrame) -> [String: Int] {
         let calendar = Calendar.current
@@ -170,6 +258,7 @@ struct StatsView: View {
             return [:]
         }
     }
+
     // Расчёт среднего значения выпитой воды
     func calculateAverageWaterIntake(for timeFrame: TimeFrame) -> Double {
         let calendar = Calendar.current
@@ -226,40 +315,56 @@ struct StatsView: View {
         guard let startDate = startDate else { return 0.0 }
 
         do {
-            // Создаём предикат для фильтрации данных
             let predicate = #Predicate<UserData> { user in
-                user.weight > 0 // Проверяем, что вес указан корректно
+                user.weight > 0
             }
 
-            // Используем FetchDescriptor с предикатом
             let fetchDescriptor = FetchDescriptor<UserData>(predicate: predicate)
-
-            // Выполняем запрос
             let weightEntries = try modelContext.fetch(fetchDescriptor)
 
-            // Фильтруем данные по дате вручную
             let filteredEntries = weightEntries.filter {
-                ($0.weightDate) >= startDate && ($0.weightDate) <= endDate
+                $0.weightDate >= startDate && $0.weightDate <= endDate
             }
 
-            // Вычисляем средний вес
             let totalWeight = filteredEntries.reduce(into: 0.0) { $0 += $1.weight }
             let count = filteredEntries.count
-            return totalWeight / Double(max(count, 1)) // Возвращаем средний вес
+            return totalWeight / Double(max(count, 1))
         } catch {
             print("Ошибка загрузки данных веса: \(error)")
             return 0.0
         }
     }
-
-
 }
+
+struct StatsChartView: View {
+    let data: [ChartData]
+    let unit: Calendar.Component
+    let chartHeight: CGFloat
+
+    var body: some View {
+        VStack {
+            Chart(data) { item in
+                LineMark(
+                    x: .value("Date", item.date, unit: unit),
+                    y: .value("Value", item.value)
+                )
+                .symbol(Circle())
+                .foregroundStyle(item.color)
+            }
+            .frame(height: chartHeight)
+            .padding(.horizontal)
+        }
+    }
+}
+
 
 struct ChartData: Identifiable {
     let id = UUID()
     let date: Date
     let value: Double
     let color: Color
+    let lineType: String // Тип линии (например, "Белки", "Жиры", "Углеводы")
+
 }
 
 enum TimeFrame: String, CaseIterable {
@@ -275,15 +380,9 @@ enum DataType: String, CaseIterable {
     case weight = "Вес"
     case water = "Вода"
 }
+
 extension UserData {
-    /// Дата последнего изменения веса пользователя
     var weightDate: Date {
-        // Если нужно хранить дату в базе данных, нужно добавить `storedWeightDate` как свойство модели.
-        // Здесь для примера просто возвращаем текущую дату.
-        // Для баз данных стоит заменить на реальное значение.
-        return Date() // Верните реальную дату изменения веса, если она хранится
+        return Date()
     }
-}
-#Preview {
-    StatsView()
 }
