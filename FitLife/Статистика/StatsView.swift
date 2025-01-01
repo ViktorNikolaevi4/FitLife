@@ -166,14 +166,9 @@ struct StatsView: View {
                 }
                 return filteredEntries.reduce(0.0) { $0 + $1.intake }
             case .weight:
-                let weightEntries = try modelContext.fetch(FetchDescriptor<UserData>())
-                print("Записи веса:", weightEntries)
-
-                let filteredEntries = weightEntries.filter {
-                    Calendar.current.isDate($0.weightDate, inSameDayAs: date) && $0.gender == gender
-                }
-                print("Фильтрованные записи:", filteredEntries)
-
+                let userEntries = try modelContext.fetch(FetchDescriptor<UserData>())
+                let filteredEntries = userEntries.filter { $0.gender == gender }
+             //   print("Фильтрованные записи:", filteredEntries)
                 return filteredEntries.last?.weight ?? 0.0
             default:
                 return 0.0
@@ -346,18 +341,18 @@ struct StatsView: View {
         guard let startDate = startDate else { return 0.0 }
 
         do {
-            let predicate = #Predicate<UserData> { user in
-                user.weight > 0
-            }
+            // Загрузка всех данных, фильтрация будет выполняться вручную
+            let weightEntries = try modelContext.fetch(FetchDescriptor<UserData>())
 
-            let fetchDescriptor = FetchDescriptor<UserData>(predicate: predicate)
-            let weightEntries = try modelContext.fetch(fetchDescriptor)
-
+            // Фильтрация записей
             let filteredEntries = weightEntries.filter {
-                $0.weightDate >= startDate && $0.weightDate <= endDate
+                $0.weight > 0 &&
+                $0.gender == gender &&
+                $0.id != nil // Убедитесь, что ID установлен
             }
 
-            let totalWeight = filteredEntries.reduce(into: 0.0) { $0 += $1.weight }
+            // Подсчёт среднего веса
+            let totalWeight = filteredEntries.reduce(0.0) { $0 + $1.weight }
             let count = filteredEntries.count
             return totalWeight / Double(max(count, 1))
         } catch {
@@ -365,6 +360,8 @@ struct StatsView: View {
             return 0.0
         }
     }
+
+
 }
 
 struct StatsChartView: View {
