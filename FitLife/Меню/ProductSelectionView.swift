@@ -228,14 +228,14 @@ struct ProductSelectionView: View {
                         .font(.caption)
                 }.foregroundStyle(.black)
                 Spacer()
+                // Кнопка удаления
                 Button(action: {
-                    if let index = customProducts.firstIndex(where: { $0.id == customProduct.id }) {
-                        customProducts[index].isFavorite.toggle()
-                    }
+                    deleteCustomProduct(customProduct) // Удаляем продукт
                 }) {
-                    Image(systemName: customProduct.isFavorite ? "star.fill" : "star")
-                        .foregroundColor(customProduct.isFavorite ? .yellow : .gray)
+                    Image(systemName: "trash")
+                        .foregroundColor(.red)
                 }
+                .buttonStyle(BorderlessButtonStyle()) // Убирает стандартный стиль кнопки
             }
         }
     }
@@ -305,6 +305,27 @@ struct ProductSelectionView: View {
             print("Статус избранного сохранен для продукта: \(product.name)")
         } catch {
             print("Ошибка сохранения избранного статуса: \(error)")
+        }
+    }
+    private func deleteCustomProduct(_ customProduct: CustomProduct) {
+        let fetchDescriptor = FetchDescriptor<CustomProduct>()
+        do {
+            // Загружаем все пользовательские продукты
+            let allCustomProducts = try modelContext.fetch(fetchDescriptor)
+            // Ищем продукт, который нужно удалить
+            if let productToDelete = allCustomProducts.first(where: { $0.id == customProduct.id }) {
+                modelContext.delete(productToDelete) // Удаляем продукт из базы
+                try modelContext.save() // Сохраняем изменения
+                // Удаляем продукт из локального массива
+                if let index = customProducts.firstIndex(where: { $0.id == customProduct.id }) {
+                    customProducts.remove(at: index)
+                }
+                print("Продукт успешно удалён: \(customProduct.name)")
+            } else {
+                print("Продукт не найден для удаления: \(customProduct.name)")
+            }
+        } catch {
+            print("Ошибка при удалении продукта: \(error)")
         }
     }
 
