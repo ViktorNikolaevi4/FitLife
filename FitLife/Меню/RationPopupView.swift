@@ -1,9 +1,3 @@
-//
-//  RationPopupView.swift
-//  FitLife
-//
-//  Created by Виктор Корольков on 12.12.2024.
-//
 
 import SwiftUI
 import SwiftData
@@ -340,7 +334,6 @@ struct RationPopupView: View {
             print("Ошибка при сохранении продукта: \(error)")
         }
     }
-
     private func appendOrUpdateProduct(_ products: inout [Product], with newProduct: Product) {
         if let index = products.firstIndex(where: { $0.name == newProduct.name }) {
             products[index].protein += newProduct.protein
@@ -351,9 +344,6 @@ struct RationPopupView: View {
             products.append(newProduct)
         }
     }
-
-
-
 private func calculateCalories(for product: Product) -> Int {
     let portion = Double(portionSize) ?? 100
     return Int((Double(product.calories) * portion) / 100)
