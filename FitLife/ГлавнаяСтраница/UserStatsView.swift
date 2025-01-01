@@ -108,27 +108,14 @@ struct UserStatsView: View {
     }
 
     private func updateUserData() {
-        let fetchDescriptor = FetchDescriptor<UserData>() // Создаем FetchDescriptor
-        // Пытаемся найти первого пользователя
-        if let user = try? modelContext.fetch(fetchDescriptor).first {
-            user.weight = userData.weight
-            user.height = userData.height
-            user.age = userData.age
-            user.activityLevel = userData.activityLevel
-            user.goal = userData.goal
-        } else {
-            // Если пользователь не найден, создаем нового
-            let newUser = UserData(
-                weight: userData.weight,
-                height: userData.height,
-                age: userData.age,
-                activityLevel: userData.activityLevel,
-                goal: userData.goal,
-                gender: userData.gender
-            )
-            modelContext.insert(newUser)
-        }
-        // Сохранение изменений в модельном контексте
+        // Обновляем данные текущего пользователя
+        userData.weight = userData.weight
+        userData.height = userData.height
+        userData.age = userData.age
+        userData.activityLevel = userData.activityLevel
+        userData.goal = userData.goal
+
+        // Сохраняем изменения в контексте
         try? modelContext.save()
     }
 

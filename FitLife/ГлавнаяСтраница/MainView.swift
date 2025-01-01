@@ -39,9 +39,9 @@ import SwiftData
                     } else {
                         Text("Данные не найдены")
                             .font(.headline)
-                            .onAppear {
-                                createNewUser(for: selectedGender) // Создаем нового пользователя, если данных нет
-                            }
+//                            .onAppear {
+//                                createNewUser(for: selectedGender) // Создаем нового пользователя, если данных нет
+//                            }
                     }
                 }
                 .onAppear {
@@ -67,18 +67,25 @@ import SwiftData
         }
         
         private func createNewUser(for gender: Gender) {
+            // Проверяем, существует ли уже пользователь с данным полом
+            if userData.contains(where: { $0.gender == gender }) {
+                return // Если пользователь с таким полом уже есть, выходим из функции
+            }
+
+            // Создаём нового пользователя
             let newUser = UserData(
                 weight: 0,
                 height: 0,
                 age: 0,
                 activityLevel: .none,
                 goal: .currentWeight,
-          //      selectedGender: selectedGender,
                 gender: gender // Указываем пол
             )
+
             modelContext.insert(newUser) // Вставляем нового пользователя в контекст
             try? modelContext.save() // Сохраняем изменения
         }
+
 //        private func showRationPopup() {
 //            let popup = RationPopupView(selectedDate: $selectedDate, selectedGender: selectedGender)
 //            // Логика для показа popup (например, через .sheet)
