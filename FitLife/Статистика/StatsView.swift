@@ -78,7 +78,7 @@ struct StatsView: View {
                             .font(.largeTitle)
                             .foregroundStyle(.blue)
                     case .weight:
-                        Text(String(format: "%.1f кг", calculateAverageWeight(for: selectedTimeFrame)))
+                        Text(String(format: "%.1f кг", calculateAverageWeight(for: selectedTimeFrame, gender: userData.gender)))
                             .font(.largeTitle)
                             .foregroundStyle(.gray)
                     }
@@ -119,6 +119,7 @@ struct StatsView: View {
             } else {
                 // Получение среднего значения за день
                 let average = calculateDailyAverage(for: date, dataType: selectedDataType, modelContext: modelContext, gender: userData.gender)
+                print("Дата: \(date), Средний вес: \(average)")
                 data.append(ChartData(date: date, value: average, color: .blue, lineType: selectedDataType.rawValue))
             }
         }
@@ -166,9 +167,13 @@ struct StatsView: View {
                 return filteredEntries.reduce(0.0) { $0 + $1.intake }
             case .weight:
                 let weightEntries = try modelContext.fetch(FetchDescriptor<UserData>())
+                print("Записи веса:", weightEntries)
+
                 let filteredEntries = weightEntries.filter {
                     Calendar.current.isDate($0.weightDate, inSameDayAs: date) && $0.gender == gender
                 }
+                print("Фильтрованные записи:", filteredEntries)
+
                 return filteredEntries.last?.weight ?? 0.0
             default:
                 return 0.0
@@ -204,7 +209,7 @@ struct StatsView: View {
         case .water:
             return calculateAverageWaterIntake(for: timeFrame, gender: userData.gender)
         case .weight:
-            return calculateAverageWeight(for: timeFrame)
+            return calculateAverageWeight(for: timeFrame, gender: userData.gender)
         }
     }    // Расчёт среднего значения калорий
     func calculateAverageCalories(for timeFrame: TimeFrame, gender: Gender) -> Int {
@@ -321,7 +326,7 @@ struct StatsView: View {
     }
 
     // Расчёт среднего значения веса
-    func calculateAverageWeight(for timeFrame: TimeFrame) -> Double {
+    func calculateAverageWeight(for timeFrame: TimeFrame, gender: Gender) -> Double {
         let calendar = Calendar.current
         let today = Date()
         var startDate: Date?
@@ -436,8 +441,3 @@ enum DataType: String, CaseIterable {
     case water = "Вода"
 }
 
-extension UserData {
-    var weightDate: Date {
-        return Date()
-    }
-}

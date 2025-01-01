@@ -14,6 +14,7 @@ class UserData {
     var goal: WeightGoal
     var gender: Gender // Пол пользователя для фильтрации
     var waterIntakes: [WaterIntake] = [] // Связанные записи о воде
+    var weightDate: Date
 
     var calories: Int {
         guard weight > 0, height > 0, age > 0 else { return 0 }
@@ -38,7 +39,8 @@ class UserData {
         activityLevel: ActivityLevel = ActivityLevel.none, // Полностью квалифицированное имя
         goal: WeightGoal = WeightGoal.currentWeight,      // Полностью квалифицированное имя
     //    selectedGender: Gender = Gender.male,
-        gender: Gender = .male
+        gender: Gender = .male,
+        weightDate: Date = Date()
     ) {
         self.weight = weight
         self.height = height
@@ -47,6 +49,7 @@ class UserData {
         self.goal = goal
      //   self.selectedGender = selectedGender
         self.gender = gender
+        self.weightDate = weightDate
     }
 }
 
