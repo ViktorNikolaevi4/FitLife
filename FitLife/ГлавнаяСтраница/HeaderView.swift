@@ -76,7 +76,3 @@ struct HeaderView: View {
         }.zIndex(1)
     }
 }
-//
-//#Preview {
-//    HeaderView()
-//}
