@@ -65,12 +65,12 @@ struct BottomNavigationView: View {
                             .presentationDragIndicator(.visible)
                     }
                     Spacer()
-                    Button(action: {}) {
-                        VStack {
-                            Image(systemName: "book")
-                            Text("Меню")
-                        }.foregroundStyle(.white)
-                    }
+                    NavigationLink(destination: MenuView()) { // Переход на новое представление
+                                       VStack {
+                                           Image(systemName: "book")
+                                           Text("Меню")
+                                       }.foregroundStyle(.white)
+                                   }
                     Spacer()
                     NavigationLink(destination: StatsView(userData: userData)) {
                         VStack {
