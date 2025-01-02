@@ -378,7 +378,13 @@ struct ProductSelectionView: View {
             let fetchDescriptor = FetchDescriptor<FoodEntry>()
             do {
                 let foodEntries = try self.modelContext.fetch(fetchDescriptor)
-                let favoritesDict = Dictionary(uniqueKeysWithValues: foodEntries.map { ($0.product.name, $0.isFavorite) })
+
+                // Убираем дубликаты, оставляя только первый элемент с уникальным именем
+                let uniqueEntries = Dictionary(grouping: foodEntries, by: { $0.product.name })
+                    .compactMapValues { $0.first }
+
+                // Создаем словарь из уникальных значений
+                let favoritesDict = uniqueEntries.mapValues { $0.isFavorite }
 
                 DispatchQueue.main.async {
                     for productIndex in self.productLoader.products.indices {
@@ -389,6 +395,7 @@ struct ProductSelectionView: View {
 
                     // Обновляем cachedFilteredProducts
                     self.cachedFilteredProducts = self.productLoader.products.filter { $0.isFavorite }
+                    print("Избранные продукты обновлены.")
                 }
             } catch {
                 DispatchQueue.main.async {
