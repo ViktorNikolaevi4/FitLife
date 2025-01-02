@@ -27,17 +27,25 @@ struct ProductSelectionView: View {
         case custom = "Свои"
     }
 
-    var filteredProducts: [Product] {
-        let baseList = selectedFilter == .favorites ?
-            productLoader.products.filter { $0.isFavorite } :
-            productLoader.products
+    @State private var cachedFilteredProducts: [Product] = []
 
-        if searchText.isEmpty {
-            return baseList
-        } else {
-            return baseList.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-        }
+    var filteredProducts: [Product] {
+        let baseList = selectedFilter == .favorites
+            ? cachedFilteredProducts
+            : productLoader.products
+
+        let filteredList = searchText.isEmpty ? baseList : baseList.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+
+        // Ограничиваем количество элементов до 100
+        return Array(filteredList.prefix(300))
     }
+
+
+
+//    .onAppear {
+//        cachedFilteredProducts = productLoader.products.filter { $0.isFavorite }
+//    }
+
 
     var filteredCustomProducts: [CustomProduct] {
         if searchText.isEmpty {
@@ -179,8 +187,10 @@ struct ProductSelectionView: View {
                 }
             }
             .onAppear {
+              //  cachedFilteredProducts = productLoader.products.filter { $0.isFavorite }
                 loadFavorites()
                 loadCustomProducts()
+                cachedFilteredProducts = productLoader.products.filter { $0.isFavorite }
             }
         }
     }
@@ -202,9 +212,11 @@ struct ProductSelectionView: View {
                 Spacer()
                 // Кнопка "звезда" для добавления в избранное
                 Button(action: {
-                    if let index = productLoader.products.firstIndex(where: { $0.id == product.id }) {
-                        productLoader.products[index].isFavorite.toggle() // Переключение избранного
-                        saveFavoriteStatus(for: productLoader.products[index])
+                    Task {
+                        if let index = productLoader.products.firstIndex(where: { $0.id == product.id }) {
+                            productLoader.products[index].isFavorite.toggle() // Переключение избранного
+                            await  saveFavoriteStatus(for: productLoader.products[index])
+                        }
                     }
                 }) {
                     Image(systemName: product.isFavorite ? "star.fill" : "star")
@@ -284,10 +296,13 @@ struct ProductSelectionView: View {
         customProductFat = ""
         customProductCarbs = ""
     }
-    private func saveFavoriteStatus(for product: Product) {
+    private func saveFavoriteStatus(for product: Product) async {
         let fetchDescriptor = FetchDescriptor<FoodEntry>()
         do {
-            let foodEntries = try modelContext.fetch(fetchDescriptor)
+            // Выполняем асинхронный запрос на получение записей
+            let foodEntries = try  modelContext.fetch(fetchDescriptor)
+
+            // Обновляем или создаем запись
             if let entry = foodEntries.first(where: { $0.product.name == product.name }) {
                 entry.isFavorite = product.isFavorite
             } else {
@@ -301,12 +316,23 @@ struct ProductSelectionView: View {
                 )
                 modelContext.insert(newEntry)
             }
+
+            // Сохраняем изменения
             try modelContext.save()
-            print("Статус избранного сохранен для продукта: \(product.name)")
+
+            // Обновляем cachedFilteredProducts
+            await MainActor.run {
+                self.cachedFilteredProducts = self.productLoader.products.filter { $0.isFavorite }
+                print("Статус избранного сохранен для продукта: \(product.name)")
+            }
         } catch {
-            print("Ошибка сохранения избранного статуса: \(error)")
+            await MainActor.run {
+                print("Ошибка сохранения избранного статуса: \(error)")
+            }
         }
     }
+
+
     private func deleteCustomProduct(_ customProduct: CustomProduct) {
         let fetchDescriptor = FetchDescriptor<CustomProduct>()
         do {
@@ -330,26 +356,46 @@ struct ProductSelectionView: View {
     }
 
     private func loadCustomProducts() {
-        let fetchDescriptor = FetchDescriptor<CustomProduct>()
-        do {
-            customProducts = try modelContext.fetch(fetchDescriptor)
-            print("Загружены пользовательские продукты: \(customProducts.map { $0.name })")
-        } catch {
-            print("Ошибка загрузки пользовательских продуктов: \(error)")
+        DispatchQueue.global(qos: .background).async {
+            let fetchDescriptor = FetchDescriptor<CustomProduct>()
+            do {
+                let products = try modelContext.fetch(fetchDescriptor)
+                DispatchQueue.main.async {
+                    self.customProducts = products
+                    print("Загружены пользовательские продукты: \(products.map { $0.name })")
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    print("Ошибка загрузки пользовательских продуктов: \(error)")
+                }
+            }
         }
     }
 
+
     private func loadFavorites() {
-        let fetchDescriptor = FetchDescriptor<FoodEntry>()
-        do {
-            let foodEntries = try modelContext.fetch(fetchDescriptor)
-            for productIndex in productLoader.products.indices {
-                if let entry = foodEntries.first(where: { $0.product.name == productLoader.products[productIndex].name }) {
-                    productLoader.products[productIndex].isFavorite = entry.isFavorite
+        DispatchQueue.global(qos: .background).async {
+            let fetchDescriptor = FetchDescriptor<FoodEntry>()
+            do {
+                let foodEntries = try self.modelContext.fetch(fetchDescriptor)
+                let favoritesDict = Dictionary(uniqueKeysWithValues: foodEntries.map { ($0.product.name, $0.isFavorite) })
+
+                DispatchQueue.main.async {
+                    for productIndex in self.productLoader.products.indices {
+                        if let isFavorite = favoritesDict[self.productLoader.products[productIndex].name] {
+                            self.productLoader.products[productIndex].isFavorite = isFavorite
+                        }
+                    }
+
+                    // Обновляем cachedFilteredProducts
+                    self.cachedFilteredProducts = self.productLoader.products.filter { $0.isFavorite }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    print("Ошибка загрузки избранных продуктов: \(error)")
                 }
             }
-        } catch {
-            print("Ошибка загрузки избранных продуктов: \(error)")
         }
     }
+
 }
