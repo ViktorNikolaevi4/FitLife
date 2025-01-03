@@ -15,9 +15,9 @@ class UserData {
     var gender: Gender // Пол пользователя для фильтрации
     var waterIntakes: [WaterIntake] = [] // Связанные записи о воде
 
-    var calories: Int {
+    func calculateCalories() async -> Int {
         guard weight > 0, height > 0, age > 0 else { return 0 }
-        return MacrosCalculator.calculateCaloriesMifflin(
+        return await MacrosCalculator.calculateCaloriesMifflin(
             gender: gender,
             weight: weight,
             height: height,
@@ -27,8 +27,9 @@ class UserData {
         )
     }
 
-    var macros: (proteins: Int, fats: Int, carbs: Int) {
-        return MacrosCalculator.calculateMacros(calories: calories, goal: goal)
+    func calculateMacros() async -> (proteins: Int, fats: Int, carbs: Int) {
+        let calories = await calculateCalories()
+        return await MacrosCalculator.calculateMacros(calories: calories, goal: goal)
     }
 
     init(

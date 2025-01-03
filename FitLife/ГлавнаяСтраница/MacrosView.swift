@@ -4,7 +4,6 @@
 //
 //  Created by Виктор Корольков on 08.12.2024.
 //
-
 import SwiftUI
 
 enum WeightGoal: String, CaseIterable, Codable {
@@ -16,58 +15,45 @@ enum WeightGoal: String, CaseIterable, Codable {
 struct MacrosView: View {
     @Bindable var userData: UserData
 
-    @State private var callories: Int = 0
-    @State private var selectedGoal: WeightGoal = .currentWeight
+    @State private var calories: Int = 0
+    @State private var macros: (proteins: Int, fats: Int, carbs: Int) = (0, 0, 0)
 
     var body: some View {
         VStack(spacing: 5) {
+            // Блок с калориями и круговой диаграммой
             HStack(spacing: 20) {
                 VStack {
                     Text("Энергия:")
                         .font(.title2)
                         .fontWeight(.bold)
-                    Text("\(userData.calories)")
+                    Text("\(calories)")
                         .font(.title)
                         .fontWeight(.bold)
+                }
+                .foregroundStyle(.white)
 
-                }.foregroundStyle(.white)
                 // Круговая диаграмма
-                PieChartView(userData: userData)
+                PieChartView(userData: userData, macros: $macros)
             }
             .padding()
+
+            // Блок с БЖУ
             HStack(spacing: 60) {
                 VStack {
                     Text("Белки")
-                    Text("\(userData.macros.proteins) г")
+                    Text("\(macros.proteins) г")
                 }
                 VStack {
                     Text("Жиры")
-                    Text("\(userData.macros.fats) г")
+                    Text("\(macros.fats) г")
                 }
                 VStack {
                     Text("Углеводы")
-                    Text("\(userData.macros.carbs) г")
+                    Text("\(macros.carbs) г")
                 }
             }
             .font(.headline)
-//            VStack {
-//                Text("Осталось съесть за день")
-//                Text("калорий: \(userData.calories)")
-//                HStack(spacing: 60) {
-//                    VStack {
-//                        Text("Белки")
-//                        Text("\(userData.macros.proteins) г")
-//                    }
-//                    VStack {
-//                        Text("Жиры")
-//                        Text("\(userData.macros.fats) г")
-//                    }
-//                    VStack {
-//                        Text("Углеводы")
-//                        Text("\(userData.macros.carbs) г")
-//                    }
-//                }
-//            }
+
             // Пикер для выбора цели
             VStack(spacing: 10) {
                 Text("Цель")
@@ -78,13 +64,33 @@ struct MacrosView: View {
                         Text(goal.rawValue)
                     }
                 }
-                .pickerStyle(SegmentedPickerStyle()) // Используем стиль сегментированного пикера
+                .pickerStyle(SegmentedPickerStyle())
                 .padding()
-                .onChange(of: userData.goal) {
-                      // Перерисовка при изменении цели
-                      userData.goal = userData.goal
-                  }
+            }
+        }
+        .onAppear {
+            Task {
+                await updateData()
+            }
+        }
+        .onChange(of: userData.goal) {
+            Task {
+                await updateData()
+            }
+        }
+        .onChange(of: userData.activityLevel) {
+            Task {
+                await updateData()
             }
         }
     }
+
+    // Асинхронное обновление данных
+    @MainActor
+    private func updateData() async {
+        calories = await userData.calculateCalories()
+        macros = await userData.calculateMacros()
+    }
 }
+
+

@@ -13,6 +13,9 @@ struct StatsView: View {
     @Environment(\.modelContext) private var modelContext
     @Bindable var userData: UserData
 
+    @State private var chartData: [ChartData] = [] // Кэшируем данные
+    @State private var cachedData: [String: [ChartData]] = [:]
+
     var body: some View {
         ZStack {
             GradientView()
@@ -37,10 +40,14 @@ struct StatsView: View {
                 }
                 .pickerStyle(.segmented)
                 .padding()
-
+                .onChange(of: selectedTimeFrame) {
+                    Task {
+                        await loadChartData()
+                    }
+                }
                 // Используем StatsChartView для отображения графика
                 StatsChartView(
-                    data: getData(for: selectedTimeFrame, selectedDataType: selectedDataType, modelContext: modelContext),
+                    data: chartData,
                     unit: .day,
                     chartHeight: 200
                 )
@@ -93,41 +100,74 @@ struct StatsView: View {
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
+                .onChange(of: selectedDataType) {
+                    Task {
+                        await loadChartData()
+                    }
+                }
             }
             .padding()
         }
-    }
-
-    // Получение данных для графика
-    func getData(for timeFrame: TimeFrame, selectedDataType: DataType, modelContext: ModelContext) -> [ChartData] {
-        let calendar = Calendar.current
-        let today = Date()
-        var data: [ChartData] = []
-
-        // Получение диапазона дат
-        let dateRanges = getDateRanges(for: timeFrame, calendar: calendar, today: today)
-
-        for date in dateRanges {
-            if selectedDataType == .macros {
-                // Получение средних значений БЖУ за день
-                let macros = calculateDailyMacros(for: date, modelContext: modelContext, gender: userData.gender)
-                data.append(contentsOf: [
-                    ChartData(date: date, value: macros["proteins"] ?? 0, color: .purple, lineType: "Белки"),
-                    ChartData(date: date, value: macros["fats"] ?? 0, color: .red, lineType: "Жиры"),
-                    ChartData(date: date, value: macros["carbs"] ?? 0, color: .green, lineType: "Углеводы")
-                ])
-            } else {
-                // Получение среднего значения за день
-                let average = calculateDailyAverage(for: date, dataType: selectedDataType, modelContext: modelContext, gender: userData.gender)
-                print("Дата: \(date), Средний вес: \(average)")
-                data.append(ChartData(date: date, value: average, color: .blue, lineType: selectedDataType.rawValue))
-            }
+        .task {
+            await loadChartData()
         }
-        return data
     }
 
-    // Функция для расчета среднего значения БЖУ за конкретный день
-    func calculateDailyMacros(for date: Date, modelContext: ModelContext, gender: Gender) -> [String: Double] {
+    func loadChartData() async {
+        let cacheKey = "\(selectedTimeFrame.rawValue)-\(selectedDataType.rawValue)"
+
+        if let cached = cachedData[cacheKey] {
+            await MainActor.run {
+                self.chartData = cached
+            }
+            return
+        }
+
+        do {
+            let data = try await getData(for: selectedTimeFrame, selectedDataType: selectedDataType, modelContext: modelContext)
+            await MainActor.run {
+                self.chartData = data
+                cachedData[cacheKey] = data
+            }
+        } catch {
+            print("Ошибка загрузки данных: \(error)")
+        }
+    }
+
+    // Асинхронная функция получения данных для графика
+    func getData(for timeFrame: TimeFrame, selectedDataType: DataType, modelContext: ModelContext) async throws -> [ChartData] {
+        let today = Date()
+        let dateRanges = getDateRanges(for: timeFrame, calendar: Calendar.current, today: today)
+
+        return try await withThrowingTaskGroup(of: [ChartData].self) { group in
+            for date in dateRanges {
+                group.addTask {
+                    if selectedDataType == .macros {
+                        let macros = await calculateDailyMacros(for: date, modelContext: modelContext, gender: userData.gender)
+                        return [
+                            ChartData(date: date, value: macros["proteins"] ?? 0, color: .purple, lineType: "Белки"),
+                            ChartData(date: date, value: macros["fats"] ?? 0, color: .red, lineType: "Жиры"),
+                            ChartData(date: date, value: macros["carbs"] ?? 0, color: .green, lineType: "Углеводы")
+                        ]
+                    } else {
+                        let average = await calculateDailyAverage(for: date, dataType: selectedDataType, modelContext: modelContext, gender: userData.gender)
+                        return [ChartData(date: date, value: average, color: .blue, lineType: selectedDataType.rawValue)]
+                    }
+                }
+            }
+
+            var data: [ChartData] = []
+            for try await result in group {
+                data.append(contentsOf: result)
+            }
+            return data
+        }
+    }
+
+
+
+    // Асинхронная функция для расчёта среднего значения БЖУ
+    func calculateDailyMacros(for date: Date, modelContext: ModelContext, gender: Gender) async -> [String: Double] {
         do {
             let foodEntries = try modelContext.fetch(FetchDescriptor<FoodEntry>())
             let filteredEntries = foodEntries.filter {
@@ -149,8 +189,8 @@ struct StatsView: View {
         }
     }
 
-    // Функция для расчета среднего значения (например, калорий, воды, веса) за конкретный день
-    func calculateDailyAverage(for date: Date, dataType: DataType, modelContext: ModelContext, gender: Gender) -> Double {
+    // Асинхронная функция для расчёта среднего значения (калорий, воды, веса)
+    func calculateDailyAverage(for date: Date, dataType: DataType, modelContext: ModelContext, gender: Gender) async -> Double {
         do {
             switch dataType {
             case .calories:
@@ -168,7 +208,6 @@ struct StatsView: View {
             case .weight:
                 let userEntries = try modelContext.fetch(FetchDescriptor<UserData>())
                 let filteredEntries = userEntries.filter { $0.gender == gender }
-             //   print("Фильтрованные записи:", filteredEntries)
                 return filteredEntries.last?.weight ?? 0.0
             default:
                 return 0.0

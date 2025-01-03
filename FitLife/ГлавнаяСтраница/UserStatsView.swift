@@ -44,7 +44,9 @@ struct UserStatsView: View {
                             Text("\(Int(userData.weight))")
                                 .onTapGesture {
                                     togglePicker(&isWeightPickerVisible)
-                                    updateUserData()
+                                    Task {
+                                         updateUserData()
+                                    }
                                 }
                         }.foregroundStyle(.white)
                         VStack {
@@ -52,7 +54,9 @@ struct UserStatsView: View {
                             Text("\(Int(userData.height))")
                                 .onTapGesture {
                                     togglePicker(&isHeightPickerVisible)
-                                    updateUserData()
+                                    Task {
+                                         updateUserData()
+                                    }
                                 }
                         }.foregroundStyle(.white)
                         VStack {
@@ -60,7 +64,9 @@ struct UserStatsView: View {
                             Text("\(userData.age)")
                                 .onTapGesture {
                                     togglePicker(&isAgePickerVisible)
-                                    updateUserData()
+                                    Task {
+                                         updateUserData()
+                                    }
                                 }
                         }.foregroundStyle(.white)
                     }
@@ -108,15 +114,29 @@ struct UserStatsView: View {
     }
 
     private func updateUserData() {
-        // Обновляем данные текущего пользователя
-        userData.weight = userData.weight
-        userData.height = userData.height
-        userData.age = userData.age
-        userData.activityLevel = userData.activityLevel
-        userData.goal = userData.goal
+        Task {
+            // Обновляем данные текущего пользователя
+            userData.weight = userData.weight
+            userData.height = userData.height
+            userData.age = userData.age
+            userData.activityLevel = userData.activityLevel
+            userData.goal = userData.goal
 
-        // Сохраняем изменения в контексте
-        try? modelContext.save()
+            // Асинхронное сохранение изменений в контексте
+            do {
+                try  modelContext.save()
+            } catch {
+                print("Ошибка сохранения: \(error)")
+            }
+            // Обновляем калории и макросы
+            await updateData()
+        }
+    }
+    @MainActor
+    private func updateData() async {
+        let calories = await userData.calculateCalories()
+        let macros = await userData.calculateMacros()
+    //    print("Калории: \(calories), Белки: \(macros.proteins), Жиры: \(macros.fats), Углеводы: \(macros.carbs)")
     }
 
     private func togglePicker(_ visibility: inout Bool) {
@@ -201,6 +221,11 @@ struct ActivitySelectorView: View {
             }
             .pickerStyle(SegmentedPickerStyle())
             .padding()
+            .onChange(of: userData.activityLevel) {
+                Task {
+                    await updateData()
+                }
+            }
 
             Text(userData.activityLevel.message) // Сообщение для текущего уровня активности
                 .font(.body)
@@ -209,6 +234,12 @@ struct ActivitySelectorView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(.white)
         }
+    }
+    @MainActor
+    private func updateData() async {
+        let calories = await userData.calculateCalories()
+        let macros = await userData.calculateMacros()
+    //    print("Калории: \(calories), Белки: \(macros.proteins), Жиры: \(macros.fats), Углеводы: \(macros.carbs)")
     }
 }
 
