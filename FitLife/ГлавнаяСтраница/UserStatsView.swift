@@ -2,14 +2,6 @@
 import SwiftUI
 import SwiftData
 
-//// Модель пользователя
-//struct User: Identifiable {
-//    var id = UUID()
-//    var weight: Double
-//    var height: Double
-//    var age: Int
-//}
-
 struct UserStatsView: View {
     @Bindable var userData: UserData
     @Environment(\.modelContext) private var modelContext
