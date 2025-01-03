@@ -44,7 +44,7 @@ struct UserStatsView: View {
                             Text("\(Int(userData.weight))")
                                 .onTapGesture {
                                     togglePicker(&isWeightPickerVisible)
-                                    updateUserData()
+                                 //   updateUserData()
                                 }
                         }.foregroundStyle(.white)
                         VStack {
@@ -52,7 +52,7 @@ struct UserStatsView: View {
                             Text("\(Int(userData.height))")
                                 .onTapGesture {
                                     togglePicker(&isHeightPickerVisible)
-                                    updateUserData()
+                               //     updateUserData()
                                 }
                         }.foregroundStyle(.white)
                         VStack {
@@ -60,7 +60,7 @@ struct UserStatsView: View {
                             Text("\(userData.age)")
                                 .onTapGesture {
                                     togglePicker(&isAgePickerVisible)
-                                    updateUserData()
+                                   // updateUserData()
                                 }
                         }.foregroundStyle(.white)
                     }
@@ -77,9 +77,14 @@ struct UserStatsView: View {
                 PickerView(title: "Выберите вес",
                            range: 30...200,
                            selectedValue: Binding(
-                               get: { Int(userData.weight) },
-                               set: { userData.weight = Double($0) } ),
-                           isVisible: $isWeightPickerVisible)
+                            get: { Int(userData.weight) },
+                            set: { newValue in
+                                // При реальном изменении веса сохраняем
+                                updateUserData(weight: Double(newValue))
+                            }
+                        ),
+                        isVisible: $isWeightPickerVisible
+                    )
                     .zIndex(1) // PickerView отображается над
                     .frame(maxWidth: .infinity, maxHeight: 150)
             }
@@ -88,35 +93,79 @@ struct UserStatsView: View {
                 PickerView(title: "Выберите рост",
                            range: 100...250,
                            selectedValue: Binding(
-                               get: { Int(userData.height) },
-                               set: { userData.height = Double($0) } ),
-                           isVisible: $isHeightPickerVisible)
+                            get: { Int(userData.height) },
+                            set: { newValue in
+                                updateUserData(height: Double(newValue))
+                            }
+                        ),
+                        isVisible: $isHeightPickerVisible
+                    )
                     .zIndex(1)
                     .frame(maxWidth: .infinity, maxHeight: 150)
 
             }
 
+            // Отображение PickerView — возраст
             if isAgePickerVisible {
-                PickerView(title: "Выберите возраст",
-                           range: 1...120,
-                           selectedValue: $userData.age,
-                           isVisible: $isAgePickerVisible)
+                PickerView(
+                    title: "Выберите возраст",
+                    range: 1...120,
+                    selectedValue: Binding(
+                        get: { userData.age },
+                        set: { newValue in
+                            updateUserData(age: newValue)
+                        }
+                    ),
+                    isVisible: $isAgePickerVisible
+                )
                     .zIndex(1)
                     .frame(maxWidth: .infinity, maxHeight: 150)
             }
         }
     }
 
-    private func updateUserData() {
-        // Обновляем данные текущего пользователя
-        userData.weight = userData.weight
-        userData.height = userData.height
-        userData.age = userData.age
-        userData.activityLevel = userData.activityLevel
-        userData.goal = userData.goal
+    /// Обновляем данные только при реальном изменении
+    private func updateUserData(weight: Double? = nil,
+                                height: Double? = nil,
+                                age: Int? = nil) {
+        var dataChanged = false
 
-        // Сохраняем изменения в контексте
-        try? modelContext.save()
+        if let newWeight = weight, userData.weight != newWeight {
+            userData.weight = newWeight
+            dataChanged = true
+        }
+        if let newHeight = height, userData.height != newHeight {
+            userData.height = newHeight
+            dataChanged = true
+        }
+        if let newAge = age, userData.age != newAge {
+            userData.age = newAge
+            dataChanged = true
+        }
+
+        // Если что-то реально поменялось, пересчитаем и сохраним
+        if dataChanged {
+            // Пересчёт калорий и БЖУ
+            let newCalories = MacrosCalculator.calculateCaloriesMifflin(
+                gender: userData.gender,
+                weight: userData.weight,
+                height: userData.height,
+                age: userData.age,
+                activityLevel: userData.activityLevel,
+                goal: userData.goal
+            )
+
+            let newMacros = MacrosCalculator.calculateMacros(
+                calories: newCalories,
+                goal: userData.goal
+            )
+
+            userData.calories = newCalories
+            userData.macros = newMacros
+
+            // Сохраняем изменения в контексте
+            try? modelContext.save()
+        }
     }
 
     private func togglePicker(_ visibility: inout Bool) {
@@ -191,6 +240,7 @@ enum ActivityLevel: String, CaseIterable, Codable {
 struct ActivitySelectorView: View {
     @Bindable var userData: UserData
    // @State private var selectedActivity: ActivityLevel // Уровень активности по умолчанию
+    @Environment(\.modelContext) private var modelContext
 
     var body: some View {
         VStack {
@@ -201,6 +251,10 @@ struct ActivitySelectorView: View {
             }
             .pickerStyle(SegmentedPickerStyle())
             .padding()
+            .onChange(of: userData.activityLevel) {
+                // При смене активности пересчитаем данные
+                recalcAndSave()
+            }
 
             Text(userData.activityLevel.message) // Сообщение для текущего уровня активности
                 .font(.body)
@@ -210,6 +264,24 @@ struct ActivitySelectorView: View {
                 .foregroundStyle(.white)
         }
     }
+    private func recalcAndSave() {
+         let newCalories = MacrosCalculator.calculateCaloriesMifflin(
+             gender: userData.gender,
+             weight: userData.weight,
+             height: userData.height,
+             age: userData.age,
+             activityLevel: userData.activityLevel,
+             goal: userData.goal
+         )
+         let newMacros = MacrosCalculator.calculateMacros(
+             calories: newCalories,
+             goal: userData.goal
+         )
+         userData.calories = newCalories
+         userData.macros = newMacros
+
+         try? modelContext.save()
+     }
 }
 
 //

@@ -1,52 +1,61 @@
 
+import SwiftUI
 import SwiftData
 import Foundation
-import SwiftUI
 import Observation
 
 @Model
 class UserData {
-    var id: UUID = UUID() // Уникальный идентификатор пользователя
+    // Основные параметры
     var weight: Double
     var height: Double
     var age: Int
     var activityLevel: ActivityLevel
     var goal: WeightGoal
-    var gender: Gender // Пол пользователя для фильтрации
-    var waterIntakes: [WaterIntake] = [] // Связанные записи о воде
+    var gender: Gender
 
-    var calories: Int {
-        guard weight > 0, height > 0, age > 0 else { return 0 }
-        return MacrosCalculator.calculateCaloriesMifflin(
-            gender: gender,
-            weight: weight,
-            height: height,
-            age: age,
-            activityLevel: activityLevel,
-            goal: goal
-        )
-    }
+    // Ранее вы хранили это так:
+    // var macros: (proteins: Int, fats: Int, carbs: Int)
 
-    var macros: (proteins: Int, fats: Int, carbs: Int) {
-        return MacrosCalculator.calculateMacros(calories: calories, goal: goal)
-    }
+    // Теперь сохраняем как отдельные поля
+    var calories: Int
+    var proteins: Int
+    var fats: Int
+    var carbs: Int
 
-    init(
-        weight: Double = 0,
-        height: Double = 0,
-        age: Int = 0,
-        activityLevel: ActivityLevel = ActivityLevel.none, // Полностью квалифицированное имя
-        goal: WeightGoal = WeightGoal.currentWeight,      // Полностью квалифицированное имя
-    //    selectedGender: Gender = Gender.male,
-        gender: Gender = .male
-    ) {
+    // Инициализатор
+    init(weight: Double = 0,
+         height: Double = 0,
+         age: Int = 0,
+         activityLevel: ActivityLevel = .none,
+         goal: WeightGoal = .currentWeight,
+         gender: Gender = .male,
+         calories: Int = 0,
+         proteins: Int = 0,
+         fats: Int = 0,
+         carbs: Int = 0) {
+
         self.weight = weight
         self.height = height
         self.age = age
         self.activityLevel = activityLevel
         self.goal = goal
-     //   self.selectedGender = selectedGender
         self.gender = gender
+        self.calories = calories
+        self.proteins = proteins
+        self.fats = fats
+        self.carbs = carbs
     }
 }
 
+// При этом, если нужно работать с кортежем:
+extension UserData {
+    var macros: (proteins: Int, fats: Int, carbs: Int) {
+        get { (proteins, fats, carbs) }
+        set {
+            proteins = newValue.proteins
+            fats = newValue.fats
+            carbs = newValue.carbs
+        }
+    }
+}

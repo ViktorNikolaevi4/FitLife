@@ -81,10 +81,31 @@ struct MacrosView: View {
                 .pickerStyle(SegmentedPickerStyle()) // Используем стиль сегментированного пикера
                 .padding()
                 .onChange(of: userData.goal) {
-                      // Перерисовка при изменении цели
-                      userData.goal = userData.goal
-                  }
+                    // При смене цели пересчитываем и сохраняем
+                    recalcAndSave()
+                }
             }
         }
     }
+    @Environment(\.modelContext) private var modelContext
+
+    private func recalcAndSave() {
+        let newCalories = MacrosCalculator.calculateCaloriesMifflin(
+            gender: userData.gender,
+            weight: userData.weight,
+            height: userData.height,
+            age: userData.age,
+            activityLevel: userData.activityLevel,
+            goal: userData.goal
+        )
+        let newMacros = MacrosCalculator.calculateMacros(
+            calories: newCalories,
+            goal: userData.goal
+        )
+        userData.calories = newCalories
+        userData.macros = newMacros
+
+        try? modelContext.save()
+    }
 }
+
