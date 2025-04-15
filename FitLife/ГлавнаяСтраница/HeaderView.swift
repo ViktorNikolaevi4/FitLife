@@ -74,5 +74,6 @@ struct HeaderView: View {
                 : nil
             )
         }.zIndex(1)
+            .environment(\.locale, Locale(identifier: "ru_RU"))
     }
 }

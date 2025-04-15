@@ -1,8 +1,4 @@
-//
-//  StatsView.swift
-//  FitLife
-//
-//  Created by Виктор Корольков on 29.12.2024.
+
 import SwiftUI
 import Charts
 import SwiftData
@@ -325,7 +321,7 @@ struct StatsView: View {
         let calendar = Calendar.current
         let today = Date()
         var startDate: Date?
-        let endDate: Date = today
+        let _: Date = today
 
         switch timeFrame {
         case .week:
@@ -338,7 +334,7 @@ struct StatsView: View {
             startDate = calendar.date(byAdding: .year, value: -1, to: today)
         }
 
-        guard let startDate = startDate else { return 0.0 }
+        guard startDate != nil else { return 0.0 }
 
         do {
             // Загрузка всех данных, фильтрация будет выполняться вручную
