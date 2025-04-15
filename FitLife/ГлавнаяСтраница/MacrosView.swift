@@ -19,16 +19,26 @@ struct MacrosView: View {
     @State private var dailyConsumedCalories: Int = 0
 
     var body: some View {
+        let remainingCalories = userData.calories - dailyConsumedCalories
         VStack(spacing: 5) {
             HStack(spacing: 20) {
                 VStack {
                     Text("Энергия:")
-                        .font(.title2)
+                        .font(.title3)
                         .fontWeight(.bold)
                     Text("\(userData.calories)")
-                        .font(.title)
+                        .font(.title3)
                         .fontWeight(.bold)
-                }.foregroundStyle(.white)
+                    VStack {
+                        Text("Осталось:")
+                            .font(.title3)
+                            .fontWeight(.bold)
+                        Text("\(remainingCalories > 0 ? remainingCalories : 0)")
+                            .font(.title3)
+                            .fontWeight(.bold)
+                    }
+                }
+                .foregroundStyle(.white)
                 // Круговая диаграмма
                 PieChartView(userData: userData)
             }
@@ -48,17 +58,15 @@ struct MacrosView: View {
                 }
             }
             .font(.headline)
-            // -- Добавляем наш новый блок: "Сегодня съедено" и "Осталось" --
-               let remainingCalories = userData.calories - dailyConsumedCalories
-            VStack(spacing: 8) {
-                Text("Сегодня уже ввели: \(dailyConsumedCalories) ккал")
-                    .font(.subheadline)
-                    .foregroundStyle(.white)
-
-                Text("Осталось: \(remainingCalories > 0 ? remainingCalories : 0) ккал")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.8))
+            HStack {
+                Text("Сегодня уже ввели:")
+                    .foregroundStyle(.primary)
+                Text("\(dailyConsumedCalories) ккал")
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.primary)
             }
+
 //            VStack {
 //                Text("Осталось съесть за день")
 //                Text("калорий: \(userData.calories)")
