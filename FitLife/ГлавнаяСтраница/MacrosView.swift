@@ -14,9 +14,16 @@ struct MacrosView: View {
     // Привязка к выбранной дате (та же, что и в HeaderView)
     @Binding var selectedDate: Date
 
+    // Привязка к общей переменной «Сколько калорий уже съедено»
+    @Binding var dailyConsumedCalories: Int
+
+    // Функция для пересчёта, которую мы зовём когда надо
+    let loadDailyConsumedCalories: (Date, Gender) -> Void
+
+    @Environment(\.modelContext) private var modelContext
+
     @State private var callories: Int = 0
     @State private var selectedGoal: WeightGoal = .currentWeight
-    @State private var dailyConsumedCalories: Int = 0
 
     var body: some View {
         let remainingCalories = userData.calories - dailyConsumedCalories
@@ -104,13 +111,13 @@ struct MacrosView: View {
             }
         }
         .onAppear {
-            loadDailyConsumedCalories(for: Date(), gender: userData.gender)
+            loadDailyConsumedCalories(Date(), userData.gender)
         }
         .onChange(of: selectedDate) {
-            loadDailyConsumedCalories(for: selectedDate, gender: userData.gender)
+            loadDailyConsumedCalories(selectedDate, userData.gender)
         }
     }
-    @Environment(\.modelContext) private var modelContext
+  //  @Environment(\.modelContext) private var modelContext
 
     private func recalcAndSave() {
         let newCalories = MacrosCalculator.calculateCaloriesMifflin(
@@ -129,23 +136,6 @@ struct MacrosView: View {
         userData.macros = newMacros
 
         try? modelContext.save()
-    }
-    private func loadDailyConsumedCalories(for date: Date, gender: Gender) {
-        let fetchDescriptor = FetchDescriptor<FoodEntry>()
-        do {
-            let entries = try modelContext.fetch(fetchDescriptor)
-            let filtered = entries.filter {
-                Calendar.current.isDate($0.date, inSameDayAs: date) &&
-                $0.gender == gender
-            }
-            let total = filtered.reduce(0) { sum, entry in
-                sum + entry.product.calories
-            }
-            dailyConsumedCalories = total
-        } catch {
-            print("Ошибка при загрузке FoodEntry: \(error)")
-            dailyConsumedCalories = 0
-        }
     }
 }
 

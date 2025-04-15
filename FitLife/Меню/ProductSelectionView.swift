@@ -404,5 +404,4 @@ struct ProductSelectionView: View {
             }
         }
     }
-
 }

@@ -9,6 +9,8 @@ import SwiftData
 
         var selectedGender: Gender // Получаем выбранный пол
 
+        @State private var dailyConsumedCalories: Int = 0
+
         // Фильтрованные данные для выбранного пола
         var filteredUserData: UserData? {
             userData.first(where: { $0.gender == selectedGender }) // Ищем данные для текущего пола
@@ -26,9 +28,17 @@ import SwiftData
                      //   Spacer()
                         // Статистика пользователя
                         UserStatsView(userData: userData)
-                        MacrosView(userData: userData, selectedDate: $selectedDate)
+                        MacrosView(userData: userData,
+                                   selectedDate: $selectedDate,
+                                   dailyConsumedCalories: $dailyConsumedCalories,
+                                   loadDailyConsumedCalories: loadDailyConsumedCalories
+
+                        )
                         Spacer() // Выталкиваем оставшиеся элементы вниз
-                        BottomNavigationView(selectedDate: $selectedDate, userData: userData)
+                        BottomNavigationView(selectedDate: $selectedDate,
+                                             userData: userData,
+                                             dailyConsumedCalories: $dailyConsumedCalories,
+                                            loadDailyConsumedCalories: loadDailyConsumedCalories)
 
                     } else {
                         Text("Данные не найдены")
@@ -44,13 +54,29 @@ import SwiftData
                     } else if filteredUserData == nil { // Если данных для выбранного пола нет
                         createNewUser(for: selectedGender)
                     }
+                    // При первом появлении посчитаем калории на сегодняшнюю дату
+                    loadDailyConsumedCalories(selectedDate, selectedGender)
                 }
-//
-//                .ignoresSafeArea(edges: [.top, .bottom])
-//                .background(GradientView())
             }
         }
-        
+        func loadDailyConsumedCalories(_ date: Date, _ gender: Gender) {
+            let fetchDescriptor = FetchDescriptor<FoodEntry>()
+            do {
+                let entries = try modelContext.fetch(fetchDescriptor)
+                let filtered = entries.filter {
+                    Calendar.current.isDate($0.date, inSameDayAs: date) &&
+                    $0.gender == gender
+                }
+                let total = filtered.reduce(0) { sum, entry in
+                    sum + entry.product.calories
+                }
+                dailyConsumedCalories = total
+            } catch {
+                print("Ошибка при загрузке FoodEntry: \(error)")
+                dailyConsumedCalories = 0
+            }
+        }
+
         // Функция для получения верхней безопасной зоны
         private func safeAreaTopInset() -> CGFloat {
             guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
@@ -79,12 +105,8 @@ import SwiftData
             modelContext.insert(newUser) // Вставляем нового пользователя в контекст
             try? modelContext.save() // Сохраняем изменения
         }
-
-//        private func showRationPopup() {
-//            let popup = RationPopupView(selectedDate: $selectedDate, selectedGender: selectedGender)
-//            // Логика для показа popup (например, через .sheet)
-//        }
     }
+
 
 #Preview {
     Group {

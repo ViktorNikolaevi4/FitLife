@@ -32,6 +32,8 @@ struct RationPopupView: View {
     @Environment(\.modelContext) private var modelContext
 
     let selectedGender: Gender
+    // Колбэк, который будет вызван после добавления продукта??
+    let onMealAdded: () -> Void
 
     init(
         breakfastProducts: [Product] = [],
@@ -39,7 +41,8 @@ struct RationPopupView: View {
         dinnerProducts: [Product] = [],
         snacksProducts: [Product] = [],
         gender: Gender,
-        selectedDate: Binding<Date> // Binding<Date> вместо Date
+        selectedDate: Binding<Date>, // Binding<Date> вместо Date
+        onMealAdded: @escaping () -> Void
     ) {
         _breakfastProducts = State(initialValue: breakfastProducts)
         _lunchProducts = State(initialValue: lunchProducts)
@@ -47,12 +50,11 @@ struct RationPopupView: View {
         _snacksProducts = State(initialValue: snacksProducts)
         self.selectedGender = gender
         self._selectedDate = selectedDate // Привязка инициализируется через `_`
+        self.onMealAdded = onMealAdded
     }
 
     var body: some View {
         VStack(spacing: 16) {
-         //   HeaderView(selectedDate: $selectedDate)
-
             Text("Рацион на день")
                 .font(.title2)
                 .fontWeight(.bold)
@@ -319,7 +321,7 @@ struct RationPopupView: View {
 
         // Сохраняем в базу
         let foodEntry = FoodEntry(
-            date: Date(),
+            date: selectedDate,
             mealType: selectedMeal.rawValue,
             product: adjustedProduct,
             portion: portion,
@@ -330,6 +332,8 @@ struct RationPopupView: View {
             modelContext.insert(foodEntry)
             try modelContext.save()
             print("Продукт успешно сохранен!")
+            //вызываем колбэк
+            onMealAdded()
         } catch {
             print("Ошибка при сохранении продукта: \(error)")
         }
