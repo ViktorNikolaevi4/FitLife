@@ -343,8 +343,8 @@ struct StatsView: View {
             // Фильтрация записей
             let filteredEntries = weightEntries.filter {
                 $0.weight > 0 &&
-                $0.gender == gender &&
-                $0.id != nil // Убедитесь, что ID установлен
+                $0.gender == gender
+             //   $0.id != nil // Убедитесь, что ID установлен
             }
 
             // Подсчёт среднего веса

@@ -1,9 +1,3 @@
-//
-//  MainView.swift
-//  FitLife
-//
-//  Created by Виктор Корольков on 07.12.2024.
-//
 
 import SwiftUI
 import SwiftData
@@ -32,7 +26,7 @@ import SwiftData
                      //   Spacer()
                         // Статистика пользователя
                         UserStatsView(userData: userData)
-                        MacrosView(userData: userData)
+                        MacrosView(userData: userData, selectedDate: $selectedDate)
                         Spacer() // Выталкиваем оставшиеся элементы вниз
                         BottomNavigationView(selectedDate: $selectedDate, userData: userData)
 

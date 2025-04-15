@@ -1,9 +1,3 @@
-//
-//  WaterIntake.swift
-//  FitLife
-//
-//  Created by Виктор Корольков on 28.12.2024.
-//
 
 import SwiftData
 import Foundation

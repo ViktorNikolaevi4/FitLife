@@ -14,7 +14,6 @@ struct UserStatsView: View {
     @Bindable var userData: UserData
     @Environment(\.modelContext) private var modelContext
 
-
 //    var selectedGender: Gender // Пол пользователя
 //
 //    // Состояния для выбранных значений

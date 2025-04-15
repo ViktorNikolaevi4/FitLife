@@ -1,9 +1,3 @@
-//
-//  NotificationSettingsView.swift
-//  FitLife
-//
-//  Created by Виктор Корольков on 13.12.2024.
-//
 
 import SwiftUI
 import UserNotifications

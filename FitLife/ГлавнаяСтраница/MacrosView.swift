@@ -1,11 +1,6 @@
-//
-//  MacrosView.swift
-//  FitLife
-//
-//  Created by Виктор Корольков on 08.12.2024.
-//
 
 import SwiftUI
+import SwiftData
 
 enum WeightGoal: String, CaseIterable, Codable {
     case loseWeight = "Снизить вес"
@@ -16,8 +11,12 @@ enum WeightGoal: String, CaseIterable, Codable {
 struct MacrosView: View {
     @Bindable var userData: UserData
 
+    // Привязка к выбранной дате (та же, что и в HeaderView)
+    @Binding var selectedDate: Date
+
     @State private var callories: Int = 0
     @State private var selectedGoal: WeightGoal = .currentWeight
+    @State private var dailyConsumedCalories: Int = 0
 
     var body: some View {
         VStack(spacing: 5) {
@@ -29,7 +28,6 @@ struct MacrosView: View {
                     Text("\(userData.calories)")
                         .font(.title)
                         .fontWeight(.bold)
-
                 }.foregroundStyle(.white)
                 // Круговая диаграмма
                 PieChartView(userData: userData)
@@ -50,6 +48,17 @@ struct MacrosView: View {
                 }
             }
             .font(.headline)
+            // -- Добавляем наш новый блок: "Сегодня съедено" и "Осталось" --
+               let remainingCalories = userData.calories - dailyConsumedCalories
+            VStack(spacing: 8) {
+                Text("Сегодня уже ввели: \(dailyConsumedCalories) ккал")
+                    .font(.subheadline)
+                    .foregroundStyle(.white)
+
+                Text("Осталось: \(remainingCalories > 0 ? remainingCalories : 0) ккал")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.8))
+            }
 //            VStack {
 //                Text("Осталось съесть за день")
 //                Text("калорий: \(userData.calories)")
@@ -86,6 +95,12 @@ struct MacrosView: View {
                 }
             }
         }
+        .onAppear {
+            loadDailyConsumedCalories(for: Date(), gender: userData.gender)
+        }
+        .onChange(of: selectedDate) {
+            loadDailyConsumedCalories(for: selectedDate, gender: userData.gender)
+        }
     }
     @Environment(\.modelContext) private var modelContext
 
@@ -106,6 +121,23 @@ struct MacrosView: View {
         userData.macros = newMacros
 
         try? modelContext.save()
+    }
+    private func loadDailyConsumedCalories(for date: Date, gender: Gender) {
+        let fetchDescriptor = FetchDescriptor<FoodEntry>()
+        do {
+            let entries = try modelContext.fetch(fetchDescriptor)
+            let filtered = entries.filter {
+                Calendar.current.isDate($0.date, inSameDayAs: date) &&
+                $0.gender == gender
+            }
+            let total = filtered.reduce(0) { sum, entry in
+                sum + entry.product.calories
+            }
+            dailyConsumedCalories = total
+        } catch {
+            print("Ошибка при загрузке FoodEntry: \(error)")
+            dailyConsumedCalories = 0
+        }
     }
 }
 

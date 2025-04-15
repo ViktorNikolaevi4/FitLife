@@ -1,9 +1,3 @@
-//
-//  BottomNavigationView.swift
-//  FitLife
-//
-//  Created by Виктор Корольков on 10.12.2024.
-//
 
 import SwiftUI
 

@@ -1,6 +1,4 @@
-//
-//  WaterTrackerView.swift
-//  FitLife
+
 import SwiftUI
 import SwiftData
 

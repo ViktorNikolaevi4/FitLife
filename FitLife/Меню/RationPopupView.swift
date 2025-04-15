@@ -101,8 +101,8 @@ struct RationPopupView: View {
         .onAppear {
             loadData(for: selectedDate, gender: selectedGender) // Загружаем данные для текущей даты и выбранного гендера
         }
-        .onChange(of: selectedDate) { newDate in
-            loadData(for: newDate, gender: selectedGender)
+        .onChange(of: selectedDate) {
+            loadData(for: selectedDate, gender: selectedGender)
         }
         .sheet(isPresented: Binding(
             get: { showProductSelection && selectedMeal != nil },
