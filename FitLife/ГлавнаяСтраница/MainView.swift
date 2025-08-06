@@ -25,8 +25,7 @@ import SwiftData
                         // Заголовок с датой
                         HeaderView(selectedDate: $selectedDate)
                             .padding(.top, 5) // Учет безопасной зоны сверху
-                     //   Spacer()
-                        // Статистика пользователя
+
                         UserStatsView(userData: userData)
                         MacrosView(userData: userData,
                                    selectedDate: $selectedDate,
@@ -43,9 +42,7 @@ import SwiftData
                     } else {
                         Text("Данные не найдены")
                             .font(.headline)
-//                            .onAppear {
-//                                createNewUser(for: selectedGender) // Создаем нового пользователя, если данных нет
-//                            }
+
                     }
                 }
                 .onAppear {
@@ -76,7 +73,6 @@ import SwiftData
                 dailyConsumedCalories = 0
             }
         }
-
         // Функция для получения верхней безопасной зоны
         private func safeAreaTopInset() -> CGFloat {
             guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
@@ -85,13 +81,12 @@ import SwiftData
             }
             return window.safeAreaInsets.top
         }
-        
+
         private func createNewUser(for gender: Gender) {
             // Проверяем, существует ли уже пользователь с данным полом
             if userData.contains(where: { $0.gender == gender }) {
                 return // Если пользователь с таким полом уже есть, выходим из функции
             }
-
             // Создаём нового пользователя
             let newUser = UserData(
                 weight: 0,
@@ -107,12 +102,9 @@ import SwiftData
         }
     }
 
-
 #Preview {
     Group {
         MainView(selectedGender: .male)
         MainView(selectedGender: .female)
     }
 }
-//
-//            BottomNavigationView()
