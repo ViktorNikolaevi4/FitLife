@@ -20,9 +20,12 @@ struct PieChartView: View {
             Chart(data, id: \.category) { item in
                 SectorMark(
                     angle: .value("Value", item.value),
-                    innerRadius: .ratio(0.5),
-                    outerRadius: .ratio(1.0)
+                //    innerRadius: .ratio(0.75),
+                    outerRadius: .ratio(1.0),
+                    angularInset: 1.5
                 )
+                .cornerRadius(8)
+
                 .foregroundStyle(by: .value("Category", item.category))
             }
             .frame(height: 125)
