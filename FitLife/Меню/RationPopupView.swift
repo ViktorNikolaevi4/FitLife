@@ -102,11 +102,8 @@ struct RationPopupView: View {
                 .padding()
             }
 
-            // Модальное окно ввода порции
+            // Модальное окно ввода порции без затемнения
             if showProductDetails, let selectedProduct = selectedProduct {
-                Color.black.opacity(0.4)
-                    .edgesIgnoringSafeArea(.all)
-                    .zIndex(1)
                 VStack(spacing: 16) {
                     Text(selectedProduct.name)
                         .font(.headline)
@@ -147,7 +144,8 @@ struct RationPopupView: View {
                 .background(Color.white)
                 .cornerRadius(10)
                 .shadow(radius: 10)
-                .zIndex(2)
+                .frame(maxWidth: 300) // Ограничение ширины для центрирования
+                .offset(y: -50) // Смещение вверх для лучшего позиционирования
             }
         }
         .presentationDetents([.medium, .large])
