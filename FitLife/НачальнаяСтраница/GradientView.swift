@@ -1,9 +1,4 @@
-//
-//  GradientView.swift
-//  FitLife
-//
-//  Created by Виктор Корольков on 07.12.2024.
-//
+
 
 import SwiftUI
 
@@ -18,7 +13,4 @@ struct GradientView: View {
                        startPoint: .top,
                        endPoint: .bottom)
     }
-}
-#Preview {
-    GradientView()
 }

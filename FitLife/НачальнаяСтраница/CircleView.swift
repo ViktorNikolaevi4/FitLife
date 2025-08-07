@@ -1,9 +1,3 @@
-//
-//  CircleView.swift
-//  FitLife
-//
-//  Created by Виктор Корольков on 07.12.2024.
-//
 
 import SwiftUI
 

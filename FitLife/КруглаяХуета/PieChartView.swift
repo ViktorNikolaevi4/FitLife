@@ -45,9 +45,3 @@ struct PieChartView: View {
         ]
     }
 }
-
-
-
-#Preview {
-    PieChartView(userData: UserData())
-}

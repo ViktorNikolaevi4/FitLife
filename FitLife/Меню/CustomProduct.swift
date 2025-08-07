@@ -1,9 +1,4 @@
-//
-//  CustomProduct.swift
-//  FitLife
-//
-//  Created by Виктор Корольков on 25.12.2024.
-//
+
 
 import Foundation
 import SwiftData

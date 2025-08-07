@@ -2,24 +2,9 @@
 import SwiftUI
 import SwiftData
 
-//// Модель пользователя
-//struct User: Identifiable {
-//    var id = UUID()
-//    var weight: Double
-//    var height: Double
-//    var age: Int
-//}
-
 struct UserStatsView: View {
     @Bindable var userData: UserData
     @Environment(\.modelContext) private var modelContext
-
-//    var selectedGender: Gender // Пол пользователя
-//
-//    // Состояния для выбранных значений
-//    @State private var weight: Int = 0
-//    @State private var height: Int = 0
-//    @State private var age: Int = 0
     
 
     // Состояния для управления отображением барабанов
@@ -282,11 +267,3 @@ struct ActivitySelectorView: View {
          try? modelContext.save()
      }
 }
-
-//
-//#Preview {
-//    Group {
-//        UserStatsView(selectedGender: .male)
-//        UserStatsView(selectedGender: .female)
-//    }
-//}
