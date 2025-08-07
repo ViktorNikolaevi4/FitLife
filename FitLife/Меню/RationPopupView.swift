@@ -32,7 +32,6 @@ struct RationPopupView: View {
     @Environment(\.modelContext) private var modelContext
 
     let selectedGender: Gender
-    // Колбэк, который будет вызван после добавления продукта??
     let onMealAdded: () -> Void
 
     init(
@@ -41,7 +40,7 @@ struct RationPopupView: View {
         dinnerProducts: [Product] = [],
         snacksProducts: [Product] = [],
         gender: Gender,
-        selectedDate: Binding<Date>, // Binding<Date> вместо Date
+        selectedDate: Binding<Date>,
         onMealAdded: @escaping () -> Void
     ) {
         _breakfastProducts = State(initialValue: breakfastProducts)
@@ -49,61 +48,56 @@ struct RationPopupView: View {
         _dinnerProducts = State(initialValue: dinnerProducts)
         _snacksProducts = State(initialValue: snacksProducts)
         self.selectedGender = gender
-        self._selectedDate = selectedDate // Привязка инициализируется через `_`
+        self._selectedDate = selectedDate
         self.onMealAdded = onMealAdded
     }
 
     var body: some View {
-        ZStack {
-            // Основной контент, который скрывается при showProductDetails
+        VStack(spacing: 16) {
             if !showProductDetails {
-                VStack(spacing: 16) {
-                    Text("Рацион на день")
-                        .font(.title2)
-                        .fontWeight(.bold)
+                // Основной контент
+                Text("Рацион на день")
+                    .font(.title2)
+                    .fontWeight(.bold)
 
-                    VStack {
-                        Text("Итого за день:")
-                            .font(.headline)
-                        Text("Калорий: \(totalCalories) ккал")
-                        HStack(spacing: 20) {
-                            Text("Белки: \(totalProteins) г")
-                            Text("Жиры: \(totalFats) г")
-                            Text("Углеводы: \(totalCarbs) г")
-                        }
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
+                VStack {
+                    Text("Итого за день:")
+                        .font(.headline)
+                    Text("Калорий: \(totalCalories) ккал")
+                    HStack(spacing: 20) {
+                        Text("Белки: \(totalProteins) г")
+                        Text("Жиры: \(totalFats) г")
+                        Text("Углеводы: \(totalCarbs) г")
                     }
-                    Divider()
-
-                    ScrollView {
-                        VStack(spacing: 8) {
-                            mealRow(for: .breakfast, products: breakfastProducts)
-                            Divider()
-                            mealRow(for: .lunch, products: lunchProducts)
-                            Divider()
-                            mealRow(for: .dinner, products: dinnerProducts)
-                            Divider()
-                            mealRow(for: .snacks, products: snacksProducts)
-                        }
-                        .padding(.horizontal)
-                    }
-                    Spacer()
-
-                    Button("OK") {
-                        dismiss()
-                    }
-                    .font(.headline)
-                    .padding()
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
                 }
-                .padding()
-            }
+                Divider()
 
-            // Модальное окно ввода порции без затемнения
-            if showProductDetails, let selectedProduct = selectedProduct {
+                ScrollView {
+                    VStack(spacing: 8) {
+                        mealRow(for: .breakfast, products: breakfastProducts)
+                        Divider()
+                        mealRow(for: .lunch, products: lunchProducts)
+                        Divider()
+                        mealRow(for: .dinner, products: dinnerProducts)
+                        Divider()
+                        mealRow(for: .snacks, products: snacksProducts)
+                    }
+                    .padding(.horizontal)
+                }
+                Spacer()
+
+                Button("OK") {
+                    dismiss()
+                }
+                .font(.headline)
+                .padding()
+                .background(Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(10)
+            } else if let selectedProduct = selectedProduct {
+                // Окно ввода порции
                 VStack(spacing: 16) {
                     Text(selectedProduct.name)
                         .font(.headline)
@@ -144,10 +138,10 @@ struct RationPopupView: View {
                 .background(Color.white)
                 .cornerRadius(10)
                 .shadow(radius: 10)
-                .frame(maxWidth: 300) // Ограничение ширины для центрирования
-                .offset(y: -50) // Смещение вверх для лучшего позиционирования
+                .frame(maxWidth: 300)
             }
         }
+        .padding()
         .presentationDetents([.medium, .large])
         .onAppear {
             loadData(for: selectedDate, gender: selectedGender)
