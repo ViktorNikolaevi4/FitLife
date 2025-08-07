@@ -47,19 +47,20 @@ struct HeaderView: View {
                 .datePickerStyle(.graphical)
                 .labelsHidden()
                 .environment(\.locale, Locale(identifier: "ru_RU"))
+                .tint(.blue)
                 .padding(.top, 20)
 
                 Button("OK") {
                     selectedDate = tempDate
                     isDatePickerVisible = false
                 }
+             //   .frame(maxWidth: .infinity, minHeight: 44)
+               
                 .font(.headline)
-                .frame(maxWidth: .infinity)
                 .padding()
                 .background(Color.blue.opacity(colorScheme == .dark ? 0.9 : 1.0))
-                .foregroundColor(.black)
-                .cornerRadius(12)
-                .padding([.leading, .trailing, .bottom])
+                .foregroundColor(.white)
+                .cornerRadius(10)
             }
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
