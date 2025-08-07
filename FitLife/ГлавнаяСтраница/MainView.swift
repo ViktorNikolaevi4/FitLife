@@ -101,10 +101,3 @@ import SwiftData
             try? modelContext.save() // Сохраняем изменения
         }
     }
-
-#Preview {
-    Group {
-        MainView(selectedGender: .male)
-        MainView(selectedGender: .female)
-    }
-}
