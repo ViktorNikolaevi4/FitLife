@@ -2,78 +2,74 @@ import SwiftUI
 import Observation
 
 struct HeaderView: View {
-    @Binding var selectedDate: Date // Текущая дата по умолчанию
-    @State private var isDatePickerVisible = false // Флаг для отображения календаря
+    @Binding var selectedDate: Date
+    @State private var isDatePickerVisible = false
+    @State private var tempDate: Date = Date()
+    @Environment(\.colorScheme) private var colorScheme // Определение текущей темы
 
     var body: some View {
-        ZStack {
-            // Основной интерфейс
-            VStack(alignment: .center) {
-                HStack {
-                    Text(selectedDate, style: .date) // Отображение выбранной даты
+        HStack {
+            Spacer()
+            Button(action: {
+                tempDate = selectedDate // Сохраняем временно
+                isDatePickerVisible = true
+            }) {
+                HStack(spacing: 8) {
+                    Text(formattedDate(selectedDate))
                         .font(.title3)
                         .fontWeight(.semibold)
                         .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity, alignment: .center) // Выровнять по центру
-
-                    Spacer()
-
-                    Button(action: {
-                        isDatePickerVisible.toggle() // Показать/скрыть календарь
-                    }) {
-                        Image(systemName: "calendar")
-                            .font(.title)
-                            .foregroundStyle(.white)
-                    }
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 14)
+                    Image(systemName: "calendar")
+                        .font(.title2)
+                        .foregroundStyle(.white)
                 }
-                .padding()
-
-                Spacer() // Остальная часть интерфейса
+                .background(
+                    Color.white.opacity(colorScheme == .dark ? 0.25 : 0.15)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.gray.opacity(colorScheme == .dark ? 0.4 : 0.2), lineWidth: 1)
+                )
+                .cornerRadius(12)
             }
-            .overlay(
-                // Календарь как наложение
-                isDatePickerVisible ? ZStack {
-                    Color.black.opacity(0.4) // Полупрозрачный фон
-                        .ignoresSafeArea()
-                        .onTapGesture {
-                            isDatePickerVisible = false // Закрыть календарь при нажатии на фон
-                        }
+            Spacer()
+        }
+        .padding(.top, 10)
+        .sheet(isPresented: $isDatePickerVisible) {
+            VStack(spacing: 0) {
+                DatePicker(
+                    "Выберите дату",
+                    selection: $tempDate,
+                    displayedComponents: .date
+                )
+                .datePickerStyle(.graphical)
+                .labelsHidden()
+                .environment(\.locale, Locale(identifier: "ru_RU"))
+                .padding(.top, 20)
 
-                    VStack {
-                        DatePicker(
-                            "Выберите дату",
-                            selection: $selectedDate,
-                            displayedComponents: .date
-                        )
-                        .datePickerStyle(.wheel)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.white)
-                                .shadow(radius: 8)
-                        )
-                        .padding()
-
-                        Button("OK") {
-                            isDatePickerVisible = false // Закрыть календарь
-                        }
-                        .font(.headline)
-                        .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color.blue)
-                        )
-                        .foregroundColor(.white)
-                    }
-                    .frame(maxWidth: 300) // Фиксированная ширина для DatePicker
-                    .padding()
-                    .offset(y: 40)
+                Button("OK") {
+                    selectedDate = tempDate
+                    isDatePickerVisible = false
                 }
-                .zIndex(1) // Устанавливаем zIndex, чтобы календарь был поверх
-                .transition(.opacity) // Анимация появления
-                .animation(.easeInOut, value: isDatePickerVisible) // Анимация
-                : nil
-            )
-        }.zIndex(1)
-            .environment(\.locale, Locale(identifier: "ru_RU"))
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.blue.opacity(colorScheme == .dark ? 0.9 : 1.0))
+                .foregroundColor(.black)
+                .cornerRadius(12)
+                .padding([.leading, .trailing, .bottom])
+            }
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+        }
+    }
+
+    func formattedDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.setLocalizedDateFormatFromTemplate("d MMM yyyy")
+        return formatter.string(from: date)
     }
 }
