@@ -95,13 +95,11 @@ struct RationPopupView: View {
             Button("OK") {
                 dismissRation()
             }
-            .font(.headline)
-            .frame(maxWidth: .infinity, minHeight: 44)
+            .font(.title3)
+            .padding()
             .background(Color.blue)
             .foregroundColor(.white)
             .cornerRadius(10)
-            .padding(.horizontal)
-            .padding(.bottom, 10)
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
@@ -155,6 +153,25 @@ struct RationPopupView: View {
                         .font(.largeTitle)
                         .bold()
 
+                    // 🚀 БЖУ без String(format:) и без вложенных кавычек
+                    let grams = Double(defaultPortion) ?? 0
+                    let factor = grams / 100
+
+                    let pValue = (product.protein * factor)
+                        .formatted(.number.precision(.fractionLength(1)))
+                    let fValue = (product.fat * factor)
+                        .formatted(.number.precision(.fractionLength(1)))
+                    let cValue = (product.carbs * factor)
+                        .formatted(.number.precision(.fractionLength(1)))
+
+                    HStack(spacing: 16) {
+                        Text("Б: \(pValue) г")
+                        Text("Ж: \(fValue) г")
+                        Text("У: \(cValue) г")
+                    }
+                    .font(.body)
+                    .foregroundColor(.secondary)
+
                     TextField("Порция в граммах", text: $defaultPortion)
                         .keyboardType(.numberPad)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -172,8 +189,10 @@ struct RationPopupView: View {
                         .cornerRadius(12)
 
                         Button("Добавить") {
-                            let grams = Int(defaultPortion) ?? 100
-                            addGenericProduct(meal: meal, product: product, portion: Double(grams))
+                            let gramsInt = Int(defaultPortion) ?? 100
+                            addGenericProduct(meal: meal,
+                                              product: product,
+                                              portion: Double(gramsInt))
                             showProductDetails = false
                         }
                         .frame(maxWidth: .infinity, minHeight: 44)
