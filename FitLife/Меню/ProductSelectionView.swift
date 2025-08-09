@@ -1,21 +1,17 @@
-
 import SwiftUI
 import SwiftData
 
 struct ProductSelectionView: View {
     @State private var customProducts: [CustomProduct] = []
-    let mealType: MealType // Тип приема пищи (Завтрак, Обед и т.д.)
-    let date: Date           // Текущая дата
+    let mealType: MealType
+    let date: Date
     @State var productLoader = ProductLoader()
     @Environment(\.dismiss) private var dismiss
     @State private var searchText: String = ""
-    @State private var selectedFilter: FilterType = .all // Управление текущим фильтром
-    @State private var isCreatingProduct: Bool = false // Управление формой создания продукта
-    @State private var customProductName: String = ""
-    @State private var customProductCalories: String = ""
-    @State private var customProductProtein: String = ""
-    @State private var customProductFat: String = ""
-    @State private var customProductCarbs: String = ""
+    @State private var selectedFilter: FilterType = .all
+    @State private var isCreatingProduct: Bool = false
+    @State private var cachedFilteredProducts: [Product] = []
+
     var onProductSelected: (Product) -> Void
     var onCustomProductSelected: (CustomProduct) -> Void
 
@@ -27,34 +23,18 @@ struct ProductSelectionView: View {
         case custom = "Свои"
     }
 
-    @State private var cachedFilteredProducts: [Product] = []
-
     var filteredProducts: [Product] {
         let baseList = selectedFilter == .favorites
             ? cachedFilteredProducts
             : productLoader.products
 
         let filteredList = searchText.isEmpty ? baseList : baseList.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-
-        // Ограничиваем количество элементов до 100
         return Array(filteredList.prefix(300))
     }
 
-
-
-//    .onAppear {
-//        cachedFilteredProducts = productLoader.products.filter { $0.isFavorite }
-//    }
-
-
     var filteredCustomProducts: [CustomProduct] {
-        if searchText.isEmpty {
-            return customProducts
-        } else {
-            return customProducts.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-        }
+        searchText.isEmpty ? customProducts : customProducts.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
-
 
     var body: some View {
         NavigationStack {
@@ -64,13 +44,12 @@ struct ProductSelectionView: View {
                     Text("(данные указаны на 100 г продукта)")
                 }.foregroundStyle(.black)
 
-                // Picker для фильтров
                 Picker("Выберите категорию", selection: $selectedFilter) {
                     ForEach(FilterType.allCases, id: \.self) { filter in
                         Text(filter.rawValue).tag(filter)
                     }
                 }
-                .pickerStyle(SegmentedPickerStyle()) // Сегментированный стиль
+                .pickerStyle(SegmentedPickerStyle())
                 .padding(.horizontal)
 
                 TextField("Поиск еды...", text: $searchText)
@@ -94,91 +73,25 @@ struct ProductSelectionView: View {
                         }
                     }
                 }
-
-                if isCreatingProduct {
-                    ZStack {
-                        Color.black.opacity(0.4).edgesIgnoringSafeArea(.all)
-
-                        VStack(spacing: 16) {
-                            Text("Новый продукт")
-                                .font(.headline)
-                            Text("(БЖУ указывайте на 100 г продукта)")
-                                .font(.caption)
-
-                            TextField("Наименование", text: $customProductName)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .padding(.horizontal)
-
-                            TextField("Энергия, ккал", text: $customProductCalories)
-                                .keyboardType(.decimalPad)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .padding(.horizontal)
-
-                            HStack(spacing: 16) {
-                                TextField("Белки, г.", text: $customProductProtein)
-                                    .keyboardType(.decimalPad)
-                                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                                TextField("Жиры, г.", text: $customProductFat)
-                                    .keyboardType(.decimalPad)
-                                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                                TextField("Углеводы, г.", text: $customProductCarbs)
-                                    .keyboardType(.decimalPad)
-                                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                            }
-                            .padding(.horizontal)
-
-                            HStack {
-                                Button("Создать") {
-                                    createCustomProduct()
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.blue)
-                                .foregroundColor(.white)
-                                .cornerRadius(10)
-
-                                Button("Отмена") {
-                                    isCreatingProduct = false
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.gray)
-                                .foregroundColor(.white)
-                                .cornerRadius(10)
-                            }
-                            .padding(.horizontal)
-                        }
-                        .padding()
-                        .background(Color.white)
-                        .cornerRadius(10)
-                        .shadow(radius: 10)
-                    }
-                }
             }
-            // Навигационный заголовок с приемом пищи и датой
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                // Кнопка "Создать" слева
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Создать") {
-                        // Логика для кнопки "Создать"
                         isCreatingProduct = true
                     }
                     .foregroundColor(.blue)
                 }
-                // Кастомный заголовок с VStack
                 ToolbarItem(placement: .principal) {
                     VStack {
-                        Text(mealType.displayName) // Название приема пищи
+                        Text(mealType.displayName)
                             .font(.headline)
                             .foregroundColor(.primary)
-                        Text(formattedDate) // Отформатированная дата
+                        Text(formattedDate)
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
                 }
-
-                // Кнопка "Закрыть" в правом углу
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Закрыть") {
                         dismiss()
@@ -187,35 +100,37 @@ struct ProductSelectionView: View {
                 }
             }
             .onAppear {
-              //  cachedFilteredProducts = productLoader.products.filter { $0.isFavorite }
                 loadFavorites()
                 loadCustomProducts()
                 cachedFilteredProducts = productLoader.products.filter { $0.isFavorite }
             }
+            .sheet(isPresented: $isCreatingProduct) {
+                CustomProductCreationView { newProduct in
+                    customProducts.append(newProduct)
+                }
+            }
         }
     }
-    private  func productRow(product: Product) -> some View {
+
+    private func productRow(product: Product) -> some View {
         Button(action: {
-            onProductSelected(product) // Передаем выбранный продукт
+            onProductSelected(product)
             dismiss()
         }) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    // Название продукта
                     Text(product.name)
                         .font(.headline)
-                    // Дополнительная информация
                     Text("На 100 г: \(product.calories) ккал, Б \(String(format: "%.1f", product.protein)) г., Ж \(String(format: "%.1f", product.fat)) г., У \(String(format: "%.1f", product.carbs)) г.")
                         .font(.caption)
                 }
                 .foregroundColor(.black)
                 Spacer()
-                // Кнопка "звезда" для добавления в избранное
                 Button(action: {
                     Task {
                         if let index = productLoader.products.firstIndex(where: { $0.id == product.id }) {
-                            productLoader.products[index].isFavorite.toggle() // Переключение избранного
-                            await  saveFavoriteStatus(for: productLoader.products[index])
+                            productLoader.products[index].isFavorite.toggle()
+                            await saveFavoriteStatus(for: productLoader.products[index])
                         }
                     }
                 }) {
@@ -223,10 +138,11 @@ struct ProductSelectionView: View {
                         .foregroundColor(product.isFavorite ? .yellow : .gray)
                 }
                 .buttonStyle(BorderlessButtonStyle())
-                .padding(.vertical, 4) // Отступы сверху и снизу для читаемости
+                .padding(.vertical, 4)
             }
         }
     }
+
     private func customProductRow(customProduct: CustomProduct) -> some View {
         Button(action: {
             onCustomProductSelected(customProduct)
@@ -240,69 +156,27 @@ struct ProductSelectionView: View {
                         .font(.caption)
                 }.foregroundStyle(.black)
                 Spacer()
-                // Кнопка удаления
                 Button(action: {
-                    deleteCustomProduct(customProduct) // Удаляем продукт
+                    deleteCustomProduct(customProduct)
                 }) {
                     Image(systemName: "trash")
                         .foregroundColor(.red)
                 }
-                .buttonStyle(BorderlessButtonStyle()) // Убирает стандартный стиль кнопки
+                .buttonStyle(BorderlessButtonStyle())
             }
         }
     }
-    // Форматирование даты
+
     private var formattedDate: String {
         let formatter = DateFormatter()
         formatter.dateStyle = .long
         return formatter.string(from: date)
     }
-    private func createCustomProduct() {
-        guard
-            let calories = Double(customProductCalories),
-            let protein = Double(customProductProtein),
-            let fat = Double(customProductFat),
-            let carbs = Double(customProductCarbs),
-            !customProductName.isEmpty
-        else {
-            print("Ошибка: Пожалуйста, заполните все поля корректно.")
-            return
-        }
 
-        let newCustomProduct = CustomProduct(
-            name: customProductName,
-            protein: protein,
-            fat: fat,
-            carbs: carbs,
-            calories: Int(calories)
-        )
-
-        do {
-            modelContext.insert(newCustomProduct) // Добавляем объект в базу данных
-            try modelContext.save() // Сохраняем изменения
-            print("Пользовательский продукт сохранен!")
-            isCreatingProduct = false // Закрываем форму создания
-            clearCustomProductFields() // Очищаем поля формы
-        } catch {
-            print("Ошибка при сохранении пользовательского продукта: \(error)")
-        }
-    }
-
-
-    private func clearCustomProductFields() {
-        customProductName = ""
-        customProductCalories = ""
-        customProductProtein = ""
-        customProductFat = ""
-        customProductCarbs = ""
-    }
     private func saveFavoriteStatus(for product: Product) async {
         let fetchDescriptor = FetchDescriptor<FoodEntry>()
         do {
-            // Выполняем асинхронный запрос на получение записей
-            let foodEntries = try  modelContext.fetch(fetchDescriptor)
-
-            // Обновляем или создаем запись
+            let foodEntries = try modelContext.fetch(fetchDescriptor)
             if let entry = foodEntries.first(where: { $0.product.name == product.name }) {
                 entry.isFavorite = product.isFavorite
             } else {
@@ -311,16 +185,12 @@ struct ProductSelectionView: View {
                     mealType: mealType.rawValue,
                     product: product,
                     portion: 100,
-                    gender: .male, // Здесь укажите текущий пол пользователя
+                    gender: .male,
                     isFavorite: product.isFavorite
                 )
                 modelContext.insert(newEntry)
             }
-
-            // Сохраняем изменения
             try modelContext.save()
-
-            // Обновляем cachedFilteredProducts
             await MainActor.run {
                 self.cachedFilteredProducts = self.productLoader.products.filter { $0.isFavorite }
                 print("Статус избранного сохранен для продукта: \(product.name)")
@@ -332,17 +202,13 @@ struct ProductSelectionView: View {
         }
     }
 
-
     private func deleteCustomProduct(_ customProduct: CustomProduct) {
         let fetchDescriptor = FetchDescriptor<CustomProduct>()
         do {
-            // Загружаем все пользовательские продукты
             let allCustomProducts = try modelContext.fetch(fetchDescriptor)
-            // Ищем продукт, который нужно удалить
             if let productToDelete = allCustomProducts.first(where: { $0.id == customProduct.id }) {
-                modelContext.delete(productToDelete) // Удаляем продукт из базы
-                try modelContext.save() // Сохраняем изменения
-                // Удаляем продукт из локального массива
+                modelContext.delete(productToDelete)
+                try modelContext.save()
                 if let index = customProducts.firstIndex(where: { $0.id == customProduct.id }) {
                     customProducts.remove(at: index)
                 }
@@ -372,18 +238,13 @@ struct ProductSelectionView: View {
         }
     }
 
-
     private func loadFavorites() {
         DispatchQueue.global(qos: .background).async {
             let fetchDescriptor = FetchDescriptor<FoodEntry>()
             do {
                 let foodEntries = try self.modelContext.fetch(fetchDescriptor)
-
-                // Убираем дубликаты, оставляя только первый элемент с уникальным именем
                 let uniqueEntries = Dictionary(grouping: foodEntries, by: { $0.product.name })
                     .compactMapValues { $0.first }
-
-                // Создаем словарь из уникальных значений
                 let favoritesDict = uniqueEntries.mapValues { $0.isFavorite }
 
                 DispatchQueue.main.async {
@@ -392,8 +253,6 @@ struct ProductSelectionView: View {
                             self.productLoader.products[productIndex].isFavorite = isFavorite
                         }
                     }
-
-                    // Обновляем cachedFilteredProducts
                     self.cachedFilteredProducts = self.productLoader.products.filter { $0.isFavorite }
                     print("Избранные продукты обновлены.")
                 }
@@ -403,5 +262,111 @@ struct ProductSelectionView: View {
                 }
             }
         }
+    }
+}
+
+// CustomProductCreationView
+struct CustomProductCreationView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+
+    @State private var name = ""
+    @State private var calories = ""
+    @State private var protein  = ""
+    @State private var fat      = ""
+    @State private var carbs    = ""
+
+    var onProductCreated: (CustomProduct) -> Void
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(footer: Text("БЖУ указывайте на 100 г продукта")) {
+                    TextField("Наименование", text: $name)
+                        .textInputAutocapitalization(.never)
+
+                    TextField("Энергия, ккал", text: $calories)
+                        .keyboardType(.decimalPad)
+
+                    HStack {
+                        TextField("Белки, г.", text: $protein)
+                            .keyboardType(.decimalPad)
+                        TextField("Жиры, г.", text: $fat)
+                            .keyboardType(.decimalPad)
+                        TextField("Углеводы, г.", text: $carbs)
+                            .keyboardType(.decimalPad)
+                    }
+                }
+
+                Section {
+                    // СОЗДАТЬ — синий, становится активной когда все поля валидны
+                    Button {
+                        submit()
+                    } label: {
+                        Text("Создать")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.blue)
+                    .controlSize(.large)
+                    .disabled(!isValid)
+
+                    // ОТМЕНА — красная
+                    Button(role: .destructive) {
+                        dismiss()
+                    } label: {
+                        Text("Отмена")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                    .controlSize(.large)
+                }
+                .listRowBackground(Color.clear)
+            }
+            .navigationTitle("Новый продукт")
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Готово") { hideKeyboard() }
+                }
+            }
+        }
+        .scrollDismissesKeyboard(.interactively)
+    }
+
+    private var isValid: Bool {
+        !name.isEmpty &&
+        Double(calories.replacingOccurrences(of: ",", with: ".")) != nil &&
+        Double(protein .replacingOccurrences(of: ",", with: ".")) != nil &&
+        Double(fat     .replacingOccurrences(of: ",", with: ".")) != nil &&
+        Double(carbs   .replacingOccurrences(of: ",", with: ".")) != nil
+    }
+
+    private func submit() {
+        guard
+            let kcal = Double(calories.replacingOccurrences(of: ",", with: ".")),
+            let p    = Double(protein .replacingOccurrences(of: ",", with: ".")),
+            let f    = Double(fat     .replacingOccurrences(of: ",", with: ".")),
+            let c    = Double(carbs   .replacingOccurrences(of: ",", with: "."))
+        else { return }
+
+        let newItem = CustomProduct(name: name,
+                                    protein: p, fat: f, carbs: c,
+                                    calories: Int(kcal))
+        do {
+            modelContext.insert(newItem)
+            try modelContext.save()
+            onProductCreated(newItem)
+            dismiss()
+        } catch {
+            print("Ошибка сохранения: \(error)")
+        }
+    }
+
+    private func hideKeyboard() {
+        #if canImport(UIKit)
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        #endif
     }
 }
