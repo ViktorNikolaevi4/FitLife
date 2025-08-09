@@ -270,69 +270,106 @@ struct CustomProductCreationView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
+    // Поля
     @State private var name = ""
     @State private var calories = ""
     @State private var protein  = ""
     @State private var fat      = ""
     @State private var carbs    = ""
 
+    // Фокус
+    private enum Field: Hashable { case name, calories, protein, fat, carbs }
+    @FocusState private var focusedField: Field?
+
     var onProductCreated: (CustomProduct) -> Void
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section(footer: Text("БЖУ указывайте на 100 г продукта")) {
-                    TextField("Наименование", text: $name)
-                        .textInputAutocapitalization(.never)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
 
-                    TextField("Энергия, ккал", text: $calories)
-                        .keyboardType(.decimalPad)
+                    Text("Новый продукт")
+                        .font(.largeTitle.bold())
 
-                    HStack {
-                        TextField("Белки, г.", text: $protein)
-                            .keyboardType(.decimalPad)
-                        TextField("Жиры, г.", text: $fat)
-                            .keyboardType(.decimalPad)
-                        TextField("Углеводы, г.", text: $carbs)
-                            .keyboardType(.decimalPad)
+                    Text("БЖУ указывайте на 100 г продукта")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    // Поля с обводкой и подсветкой активного
+                    borderedTextField("Наименование", text: $name,
+                                      field: .name, keyboard: .default, submit: .next)
+                        .onSubmit { focusedField = .calories }
+
+                    borderedTextField("Энергия, ккал", text: $calories,
+                                      field: .calories, keyboard: .decimalPad, submit: .next)
+                        .onSubmit { focusedField = .protein }
+
+                    HStack(spacing: 12) {
+                        borderedTextField("Белки, г.", text: $protein,
+                                          field: .protein, keyboard: .decimalPad, submit: .next)
+                            .onSubmit { focusedField = .fat }
+
+                        borderedTextField("Жиры, г.", text: $fat,
+                                          field: .fat, keyboard: .decimalPad, submit: .next)
+                            .onSubmit { focusedField = .carbs }
+
+                        borderedTextField("Углеводы, г.", text: $carbs,
+                                          field: .carbs, keyboard: .decimalPad, submit: .done)
+                            .onSubmit { focusedField = nil }
                     }
-                }
 
-                Section {
-                    // СОЗДАТЬ — синий, становится активной когда все поля валидны
-                    Button {
-                        submit()
-                    } label: {
-                        Text("Создать")
+                    // Кнопки обычного размера
+                    VStack(spacing: 10) {
+                        Button("Создать", action: submit)
+                            .buttonStyle(.borderedProminent)
+                            .tint(.blue)
+                            .disabled(!isValid)
+                            .frame(maxWidth: .infinity)
+
+                        Button("Отмена", role: .destructive) { dismiss() }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.red)
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.blue)
-                    .controlSize(.large)
-                    .disabled(!isValid)
-
-                    // ОТМЕНА — красная
-                    Button(role: .destructive) {
-                        dismiss()
-                    } label: {
-                        Text("Отмена")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.red)
-                    .controlSize(.large)
                 }
-                .listRowBackground(Color.clear)
+                .padding(20)
             }
-            .navigationTitle("Новый продукт")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
+                    Button("Назад") { previousField() }.disabled(focusedField == .name)
+                    Button("Далее") { nextField() }.disabled(focusedField == .carbs)
                     Spacer()
-                    Button("Готово") { hideKeyboard() }
+                    Button("Готово") { focusedField = nil }
                 }
             }
+            .onAppear { focusedField = .name } // автофокус и мигающий курсор
         }
         .scrollDismissesKeyboard(.interactively)
+    }
+
+    // MARK: - Вспомогательные
+
+    private func borderedTextField(
+        _ title: String,
+        text: Binding<String>,
+        field: Field,
+        keyboard: UIKeyboardType,
+        submit: SubmitLabel
+    ) -> some View {
+        TextField(title, text: text)
+            .keyboardType(keyboard)
+            .textInputAutocapitalization(.never)
+            .focused($focusedField, equals: field)
+            .submitLabel(submit)
+            .padding(12)
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(focusedField == field ? Color.blue : Color.gray.opacity(0.35),
+                            lineWidth: focusedField == field ? 2 : 1)
+            )
+            .animation(.easeInOut(duration: 0.15), value: focusedField == field)
     }
 
     private var isValid: Bool {
@@ -343,30 +380,44 @@ struct CustomProductCreationView: View {
         Double(carbs   .replacingOccurrences(of: ",", with: ".")) != nil
     }
 
+    private func nextField() {
+        switch focusedField {
+        case .name:     focusedField = .calories
+        case .calories: focusedField = .protein
+        case .protein:  focusedField = .fat
+        case .fat:      focusedField = .carbs
+        default:        focusedField = nil
+        }
+    }
+
+    private func previousField() {
+        switch focusedField {
+        case .carbs:    focusedField = .fat
+        case .fat:      focusedField = .protein
+        case .protein:  focusedField = .calories
+        case .calories: focusedField = .name
+        default:        break
+        }
+    }
+
     private func submit() {
         guard
-            let kcal = Double(calories.replacingOccurrences(of: ",", with: ".")),
-            let p    = Double(protein .replacingOccurrences(of: ",", with: ".")),
-            let f    = Double(fat     .replacingOccurrences(of: ",", with: ".")),
-            let c    = Double(carbs   .replacingOccurrences(of: ",", with: "."))
+            let k = Double(calories.replacingOccurrences(of: ",", with: ".")),
+            let p = Double(protein .replacingOccurrences(of: ",", with: ".")),
+            let f = Double(fat     .replacingOccurrences(of: ",", with: ".")),
+            let c = Double(carbs   .replacingOccurrences(of: ",", with: "."))
         else { return }
 
-        let newItem = CustomProduct(name: name,
-                                    protein: p, fat: f, carbs: c,
-                                    calories: Int(kcal))
+        let item = CustomProduct(name: name, protein: p, fat: f, carbs: c, calories: Int(k))
         do {
-            modelContext.insert(newItem)
+            modelContext.insert(item)
             try modelContext.save()
-            onProductCreated(newItem)
+            onProductCreated(item)
             dismiss()
         } catch {
             print("Ошибка сохранения: \(error)")
         }
     }
-
-    private func hideKeyboard() {
-        #if canImport(UIKit)
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        #endif
-    }
 }
+
+
