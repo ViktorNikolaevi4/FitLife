@@ -55,150 +55,149 @@ struct RationPopupView: View {
     }
 
     var body: some View {
-        VStack(spacing: 16) {
+        ZStack {
+            mainContent
+                .opacity(showProductDetails ? 0 : 1)
+                .allowsHitTesting(!showProductDetails)
 
-            // Если нужно вводить порцию — показываем только этот экран
             if showProductDetails, let prod = selectedProduct {
-                // расчёт БЖУ под текущую порцию
-                let macros = calculateMacros(for: prod)
-
-                Text(prod.name)
-                    .font(.headline)
-
-                Text("Энергия, ккал")
-                Text("\(calculateCalories(for: prod)) ккал")
-                    .font(.largeTitle)
-
-                // БЖУ под текущую порцию
-                HStack(spacing: 20) {
-                    Text("Б: \(String(format: "%.1f", macros.protein)) г")
-                    Text("Ж: \(String(format: "%.1f", macros.fat)) г")
-                    Text("У: \(String(format: "%.1f", macros.carbs)) г")
-                }
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-
-                TextField("Порция, г", text: $portionSize)
-                    .keyboardType(.numberPad)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .padding(.horizontal)
-                    .onChange(of: portionSize) {
-                        portionSize = portionSize.filter { $0.isNumber }
-                    }
-
-                Text("Порция в граммах")
-                    .padding(.bottom, 8)
-
-                HStack(spacing: 16) {
-                    Button("Добавить") {
-                        if let p = Double(portionSize) {
-                            addGenericProductToMeal(prod, portion: p, gender: selectedGender)
-                        }
-                        dismiss()
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
-
-                    Button("Отмена") {
-                        showProductDetails = false
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.gray)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
-                }
-            } else {
-                // Основной экран: итоги и список приёмов пищи
-                Text("Рацион на день")
-                    .font(.title2).fontWeight(.bold)
-
-                VStack {
-                    Text("Итого за день:").font(.headline)
-                    Text("Калорий: \(totalCalories) ккал")
-                    HStack(spacing: 20) {
-                        Text("Белки: \(totalProteins) г")
-                        Text("Жиры: \(totalFats) г")
-                        Text("Углеводы: \(totalCarbs) г")
-                    }
-                    .font(.subheadline).foregroundColor(.gray)
-                }
-
-                Divider()
-
-                ScrollView {
-                    VStack(spacing: 8) {
-                        mealRow(for: .breakfast, products: breakfastProducts)
-                        Divider()
-                        mealRow(for: .lunch, products: lunchProducts)
-                        Divider()
-                        mealRow(for: .dinner, products: dinnerProducts)
-                        Divider()
-                        mealRow(for: .snacks, products: snacksProducts)
-                    }
-                    .padding(.horizontal)
-                }
-
-                Spacer()
-
-                Button("OK") {
-                    dismiss()
-                }
-                .font(.headline)
-                .padding()
-                .background(Color.blue)
-                .foregroundColor(.white)
-                .cornerRadius(10)
+                gramsContent(prod)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(1)
             }
-
-        } // VStack
+        }
         .padding()
         .presentationDetents([.medium, .large])
-        .onAppear {
-            loadData(for: selectedDate, gender: selectedGender)
-        }
-        .onChange(of: selectedDate) { _ in
-            loadData(for: selectedDate, gender: selectedGender)
-        }
-        // Лист выбора продукта (всегда поверх текущего экрана)
-                .sheet(item: $selectedMeal) { meal in
-                   ProductSelectionView(
-                        mealType: meal,
-                        date: selectedDate,
-                        onProductSelected: { product in
-                            selectedProduct = product
-                            activeMeal     = meal       // ← запоминаем, куда добавлять
-                           selectedMeal   = nil
-                    // небольшой лаг, чтобы закрылась карта выбора
+        .animation(.spring(response: 0.35, dampingFraction: 0.9), value: showProductDetails)
+        .onAppear { loadData(for: selectedDate, gender: selectedGender) }
+        .onChange(of: selectedDate) { _ in loadData(for: selectedDate, gender: selectedGender) }
+        .sheet(item: $selectedMeal) { meal in
+            ProductSelectionView(
+                mealType: meal,
+                date: selectedDate,
+                onProductSelected: { product in
+                    selectedProduct = product
+                    activeMeal = meal
+                    selectedMeal = nil
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        showProductDetails = true
-                        portionSize = "100"
+                        withAnimation { // ← плавное открытие
+                            showProductDetails = true
+                            portionSize = "100"
+                        }
                     }
                 },
                 onCustomProductSelected: { custom in
                     let generic = Product(
-                        name:       custom.name,
-                        protein:    custom.protein,
-                        fat:        custom.fat,
-                        carbs:      custom.carbs,
-                        calories:   custom.calories,
-                        isFavorite: custom.isFavorite,
-                        isCustom:   true
+                        name: custom.name, protein: custom.protein,
+                        fat: custom.fat, carbs: custom.carbs,
+                        calories: custom.calories, isFavorite: custom.isFavorite, isCustom: true
                     )
                     selectedProduct = generic
-                    activeMeal     = meal
+                    activeMeal = meal
                     selectedMeal = nil
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        showProductDetails = true
-                        portionSize = "100"
+                        withAnimation {
+                            showProductDetails = true
+                            portionSize = "100"
+                        }
                     }
                 }
             )
         }
     }
+    @ViewBuilder
+    private var mainContent: some View {
+        VStack(spacing: 16) {
+            Text("Рацион на день").font(.title2).fontWeight(.bold)
+            VStack {
+                Text("Итого за день:").font(.headline)
+                Text("Калорий: \(totalCalories) ккал")
+                HStack(spacing: 20) {
+                    Text("Белки: \(totalProteins) г")
+                    Text("Жиры: \(totalFats) г")
+                    Text("Углеводы: \(totalCarbs) г")
+                }
+                .font(.subheadline).foregroundColor(.gray)
+            }
+            Divider()
+            ScrollView {
+                VStack(spacing: 8) {
+                    mealRow(for: .breakfast, products: breakfastProducts)
+                    Divider()
+                    mealRow(for: .lunch, products: lunchProducts)
+                    Divider()
+                    mealRow(for: .dinner, products: dinnerProducts)
+                    Divider()
+                    mealRow(for: .snacks, products: snacksProducts)
+                }
+                .padding(.horizontal)
+            }
+            Spacer()
+            Button("OK") { dismiss() }
+                .font(.headline)
+                .padding()
+                .background(Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(10)
+        }
+    }
+
+    @ViewBuilder
+    private func gramsContent(_ prod: Product) -> some View {
+        VStack(spacing: 16) {
+            Text(prod.name).font(.headline)
+            Text("Энергия, ккал")
+            Text("\(calculateCalories(for: prod)) ккал").font(.largeTitle)
+
+            // если добавляли расчёт БЖУ:
+            let macros = calculateMacros(for: prod)
+            HStack(spacing: 20) {
+                Text("Б: \(String(format: "%.1f", macros.protein)) г")
+                Text("Ж: \(String(format: "%.1f", macros.fat)) г")
+                Text("У: \(String(format: "%.1f", macros.carbs)) г")
+            }
+            .font(.subheadline).foregroundColor(.secondary)
+
+            TextField("Порция, г", text: $portionSize)
+                .keyboardType(.numberPad)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .padding(.horizontal)
+                .onChange(of: portionSize) { portionSize = portionSize.filter { $0.isNumber } }
+
+            Text("Порция в граммах").padding(.bottom, 8)
+
+            HStack(spacing: 16) {
+                Button("Добавить") {
+                    if let p = Double(portionSize) {
+                        addGenericProductToMeal(prod, portion: p, gender: selectedGender)
+                    }
+                    dismiss()
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(10)
+
+                Button("Отмена") {
+                    withAnimation { // ← плавное закрытие
+                        showProductDetails = false
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.gray)
+                .foregroundColor(.white)
+                .cornerRadius(10)
+            }
+        }
+        .padding(.horizontal, 20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+//        .background(Color.white)
+//        .cornerRadius(12)
+//        .shadow(radius: 10)
+    }
+
 
     private func calculateMacros(for product: Product) -> (protein: Double, fat: Double, carbs: Double) {
         let portion = Double(portionSize) ?? 100
