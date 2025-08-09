@@ -8,6 +8,9 @@ struct WaterTrackerView: View {
     @State private var showNotificationSettings = false
     @Environment(\.dismiss) private var dismiss
     @Bindable var userData: UserData // Данные пользователя, с привязкой
+    @State private var stepML: Double = 250
+    private var stepLiters: Double { stepML / 1000.0 }
+    private let portionOptions: [Double] = [200, 250, 300, 400, 500]
 
     @State private var selectedTemperature: WaterTemperature = .warm // Выбранная температура воды
     @State private var waterIntake: Double = 0.0 // Текущее количество выпитой воды
@@ -75,27 +78,57 @@ struct WaterTrackerView: View {
     // Кнопки для добавления воды и напоминания
     private var actionButtons: some View {
         HStack {
-            Button(action: { addWater(amount: 0.25) }) {
-                VStack {
-                    Image(systemName: "plus")
-                    Text("Добавить воду")
-                }.font(.title3)
-            }.foregroundStyle(.black)
+            // Левая колонка: кнопка + меню порции
+            VStack(spacing: 8) {
+                Button(action: { addWater(amount: stepLiters) }) {
+                    VStack(spacing: 2) {
+                        Image(systemName: "plus")
+                        Text("Добавить воду")
+                    }
+                    .font(.title3)
+                }
+                .foregroundStyle(.black)
+
+                // ВЫПАДАЮЩЕЕ МЕНЮ ПО НАЖАТИЮ
+                Menu {
+                    ForEach(portionOptions, id: \.self) { ml in
+                        Button {
+                            stepML = ml
+                        } label: {
+                            HStack {
+                                Text("\(Int(ml)) мл")
+                                if stepML == ml { Image(systemName: "checkmark") }
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("\(Int(stepML)) мл")
+                        Image(systemName: "chevron.down")
+                    }
+                    .font(.headline) // крупнее подпись
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(Color(.systemGray6)))
+                }
+            }
 
             Spacer()
 
+            // Правая колонка — как было
             Button(action: { showNotificationSettings = true }) {
                 VStack {
                     Image(systemName: "bell")
                     Text("Напомнить")
                 }.font(.title3)
-            }.foregroundStyle(.black)
+            }
+            .foregroundStyle(.black)
             .fullScreenCover(isPresented: $showNotificationSettings) {
                 NotificationSettingsView()
             }
         }
-        .padding()
-    }
+        .padding()    }
 
     // Кнопка подтверждения
     private var confirmButton: some View {
