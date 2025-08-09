@@ -59,11 +59,24 @@ struct RationPopupView: View {
 
             // Если нужно вводить порцию — показываем только этот экран
             if showProductDetails, let prod = selectedProduct {
+                // расчёт БЖУ под текущую порцию
+                let macros = calculateMacros(for: prod)
+
                 Text(prod.name)
                     .font(.headline)
+
                 Text("Энергия, ккал")
                 Text("\(calculateCalories(for: prod)) ккал")
                     .font(.largeTitle)
+
+                // БЖУ под текущую порцию
+                HStack(spacing: 20) {
+                    Text("Б: \(String(format: "%.1f", macros.protein)) г")
+                    Text("Ж: \(String(format: "%.1f", macros.fat)) г")
+                    Text("У: \(String(format: "%.1f", macros.carbs)) г")
+                }
+                .font(.subheadline)
+                .foregroundColor(.secondary)
 
                 TextField("Порция, г", text: $portionSize)
                     .keyboardType(.numberPad)
@@ -81,7 +94,6 @@ struct RationPopupView: View {
                         if let p = Double(portionSize) {
                             addGenericProductToMeal(prod, portion: p, gender: selectedGender)
                         }
-                        // закрываем весь popup
                         dismiss()
                     }
                     .frame(maxWidth: .infinity)
@@ -91,7 +103,6 @@ struct RationPopupView: View {
                     .cornerRadius(10)
 
                     Button("Отмена") {
-                        // просто возвращаемся к списку приёмов пищи
                         showProductDetails = false
                     }
                     .frame(maxWidth: .infinity)
@@ -100,7 +111,6 @@ struct RationPopupView: View {
                     .foregroundColor(.white)
                     .cornerRadius(10)
                 }
-
             } else {
                 // Основной экран: итоги и список приёмов пищи
                 Text("Рацион на день")
@@ -188,6 +198,14 @@ struct RationPopupView: View {
                 }
             )
         }
+    }
+
+    private func calculateMacros(for product: Product) -> (protein: Double, fat: Double, carbs: Double) {
+        let portion = Double(portionSize) ?? 100
+        let factor = portion / 100
+        return (product.protein * factor,
+                product.fat * factor,
+                product.carbs * factor)
     }
 
     // MARK: — Подсчёты
