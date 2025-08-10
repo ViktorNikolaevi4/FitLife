@@ -217,7 +217,7 @@ struct ContentView: View {
                 }
             }
         }
-        .tint(.white)
+       // .tint(.white)
         .sheet(isPresented: $showMailView) {
             MailComposeView(showMailView: $showMailView, result: $mailComposeResult)
         }

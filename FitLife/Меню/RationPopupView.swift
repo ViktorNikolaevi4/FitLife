@@ -13,13 +13,13 @@ enum MealType: String, CaseIterable, Identifiable {
 }
 
 struct RationPopupView: View {
-    // MARK: — Состояние для продуктов
-    @State private var breakfastProducts: [Product] = []
-    @State private var lunchProducts:    [Product] = []
-    @State private var dinnerProducts:   [Product] = []
-    @State private var snacksProducts:   [Product] = []
+    // MARK: — Храним именно записи FoodEntry (а не Product)
+    @State private var breakfastEntries: [FoodEntry] = []
+    @State private var lunchEntries:    [FoodEntry] = []
+    @State private var dinnerEntries:   [FoodEntry] = []
+    @State private var snacksEntries:   [FoodEntry] = []
 
-    // MARK: — Управление состоянием показа
+    // MARK: — Управление состоянием
     @State private var selectedMeal: MealType? = nil
     @State private var selectedProduct: Product? = nil
     @State private var showProductDetails = false
@@ -35,7 +35,7 @@ struct RationPopupView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
-    // MARK: — Инициализатор
+    // MARK: — Инициализатор (сигнатура как у вас)
     init(
         breakfastProducts: [Product] = [],
         lunchProducts:    [Product] = [],
@@ -45,12 +45,8 @@ struct RationPopupView: View {
         selectedDate:     Binding<Date>,
         onMealAdded:      @escaping () -> Void
     ) {
-        _breakfastProducts = State(initialValue: breakfastProducts)
-        _lunchProducts     = State(initialValue: lunchProducts)
-        _dinnerProducts    = State(initialValue: dinnerProducts)
-        _snacksProducts    = State(initialValue: snacksProducts)
-        self.selectedGender = gender
         self._selectedDate  = selectedDate
+        self.selectedGender = gender
         self.onMealAdded    = onMealAdded
     }
 
@@ -80,7 +76,7 @@ struct RationPopupView: View {
                     activeMeal = meal
                     selectedMeal = nil
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        withAnimation { // ← плавное открытие
+                        withAnimation {
                             showProductDetails = true
                             portionSize = "100"
                         }
@@ -88,9 +84,13 @@ struct RationPopupView: View {
                 },
                 onCustomProductSelected: { custom in
                     let generic = Product(
-                        name: custom.name, protein: custom.protein,
-                        fat: custom.fat, carbs: custom.carbs,
-                        calories: custom.calories, isFavorite: custom.isFavorite, isCustom: true
+                        name: custom.name,
+                        protein: custom.protein,
+                        fat: custom.fat,
+                        carbs: custom.carbs,
+                        calories: custom.calories,
+                        isFavorite: custom.isFavorite,
+                        isCustom: true
                     )
                     selectedProduct = generic
                     activeMeal = meal
@@ -105,10 +105,13 @@ struct RationPopupView: View {
             )
         }
     }
+
+    // MARK: — Основной контент
     @ViewBuilder
     private var mainContent: some View {
         VStack(spacing: 16) {
             Text("Рацион на день").font(.title2).fontWeight(.bold)
+
             VStack {
                 Text("Итого за день:").font(.headline)
                 Text("Калорий: \(totalCalories) ккал")
@@ -117,22 +120,23 @@ struct RationPopupView: View {
                     Text("Жиры: \(totalFats) г")
                     Text("Углеводы: \(totalCarbs) г")
                 }
-                .font(.subheadline).foregroundColor(.gray)
+                .font(.subheadline)
+                .foregroundColor(.gray)
             }
+
             Divider()
-            ScrollView {
-                VStack(spacing: 8) {
-                    mealRow(for: .breakfast, products: breakfastProducts)
-                    Divider()
-                    mealRow(for: .lunch, products: lunchProducts)
-                    Divider()
-                    mealRow(for: .dinner, products: dinnerProducts)
-                    Divider()
-                    mealRow(for: .snacks, products: snacksProducts)
-                }
-                .padding(.horizontal)
+
+            // Секции с нативным свайп-удалением
+            List {
+                mealSection(.breakfast, entries: breakfastEntries)
+                mealSection(.lunch,     entries: lunchEntries)
+                mealSection(.dinner,    entries: dinnerEntries)
+                mealSection(.snacks,    entries: snacksEntries)
             }
-            Spacer()
+            .listStyle(.insetGrouped)
+
+            Spacer(minLength: 8)
+
             Button("OK") { dismiss() }
                 .font(.headline)
                 .padding()
@@ -142,21 +146,61 @@ struct RationPopupView: View {
         }
     }
 
+    // MARK: — Секция одного приёма пищи
+    @ViewBuilder
+    private func mealSection(_ meal: MealType, entries: [FoodEntry]) -> some View {
+        Section {
+            ForEach(entries) { entry in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(entry.product.name)
+                        .font(.headline)
+                    Text("Калории: \(entry.product.calories) ккал, " +
+                         "Б: \(String(format: "%.1f", entry.product.protein)) г, " +
+                         "Ж: \(String(format: "%.1f", entry.product.fat)) г, " +
+                         "У: \(String(format: "%.1f", entry.product.carbs)) г")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .swipeActions(edge: .trailing) {
+                    Button(role: .destructive) {
+                        deleteEntry(entry, for: meal)
+                    } label: {
+                        Label("Удалить", systemImage: "trash")
+                    }
+                }
+            }
+        } header: {
+            HStack {
+                Text(meal.displayName)
+                Spacer()
+                Text("\(entries.reduce(0) { $0 + $1.product.calories }) ккал")
+                    .foregroundColor(.blue)
+                Button("+ добавить еду") {
+                    selectedMeal = meal
+                }
+                .font(.caption)
+                .foregroundStyle(.blue)
+            }
+        }
+    }
+
+    // MARK: — Оверлей с вводом граммовки
     @ViewBuilder
     private func gramsContent(_ prod: Product) -> some View {
         VStack(spacing: 16) {
             Text(prod.name).font(.headline)
+
             Text("Энергия, ккал")
             Text("\(calculateCalories(for: prod)) ккал").font(.largeTitle)
 
-            // если добавляли расчёт БЖУ:
             let macros = calculateMacros(for: prod)
             HStack(spacing: 20) {
                 Text("Б: \(String(format: "%.1f", macros.protein)) г")
                 Text("Ж: \(String(format: "%.1f", macros.fat)) г")
                 Text("У: \(String(format: "%.1f", macros.carbs)) г")
             }
-            .font(.subheadline).foregroundColor(.secondary)
+            .font(.subheadline)
+            .foregroundColor(.secondary)
 
             TextField("Порция, г", text: $portionSize)
                 .keyboardType(.numberPad)
@@ -171,7 +215,6 @@ struct RationPopupView: View {
                     if let p = Double(portionSize) {
                         addGenericProductToMeal(prod, portion: p, gender: selectedGender)
                     }
-                    dismiss()
                 }
                 .frame(maxWidth: .infinity)
                 .padding()
@@ -180,9 +223,7 @@ struct RationPopupView: View {
                 .cornerRadius(10)
 
                 Button("Отмена") {
-                    withAnimation { // ← плавное закрытие
-                        showProductDetails = false
-                    }
+                    withAnimation { showProductDetails = false }
                 }
                 .frame(maxWidth: .infinity)
                 .padding()
@@ -193,11 +234,25 @@ struct RationPopupView: View {
         }
         .padding(.horizontal, 20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-//        .background(Color.white)
-//        .cornerRadius(12)
-//        .shadow(radius: 10)
     }
 
+    // MARK: — Подсчёты
+    private var totalCalories: Int {
+        [breakfastEntries, lunchEntries, dinnerEntries, snacksEntries]
+            .flatMap { $0 }.reduce(0) { $0 + $1.product.calories }
+    }
+    private var totalProteins: Int {
+        [breakfastEntries, lunchEntries, dinnerEntries, snacksEntries]
+            .flatMap { $0 }.reduce(0) { $0 + Int($1.product.protein) }
+    }
+    private var totalFats: Int {
+        [breakfastEntries, lunchEntries, dinnerEntries, snacksEntries]
+            .flatMap { $0 }.reduce(0) { $0 + Int($1.product.fat) }
+    }
+    private var totalCarbs: Int {
+        [breakfastEntries, lunchEntries, dinnerEntries, snacksEntries]
+            .flatMap { $0 }.reduce(0) { $0 + Int($1.product.carbs) }
+    }
 
     private func calculateMacros(for product: Product) -> (protein: Double, fat: Double, carbs: Double) {
         let portion = Double(portionSize) ?? 100
@@ -207,74 +262,28 @@ struct RationPopupView: View {
                 product.carbs * factor)
     }
 
-    // MARK: — Подсчёты
-    private var totalCalories: Int {
-        [breakfastProducts, lunchProducts, dinnerProducts, snacksProducts]
-            .flatMap { $0 }.reduce(0) { $0 + $1.calories }
-    }
-    private var totalProteins: Int {
-        [breakfastProducts, lunchProducts, dinnerProducts, snacksProducts]
-            .flatMap { $0 }.reduce(0) { $0 + Int($1.protein) }
-    }
-    private var totalFats: Int {
-        [breakfastProducts, lunchProducts, dinnerProducts, snacksProducts]
-            .flatMap { $0 }.reduce(0) { $0 + Int($1.fat) }
-    }
-    private var totalCarbs: Int {
-        [breakfastProducts, lunchProducts, dinnerProducts, snacksProducts]
-            .flatMap { $0 }.reduce(0) { $0 + Int($1.carbs) }
+    private func calculateCalories(for product: Product) -> Int {
+        let p = Double(portionSize) ?? 100
+        return Int(Double(product.calories) * p / 100)
     }
 
     // MARK: — Загрузка из SwiftData
     private func loadData(for date: Date, gender: Gender) {
         let req = FetchDescriptor<FoodEntry>()
         do {
-            let all = try modelContext.fetch(req)
-            let filtered = all.filter {
+            let all = try modelContext.fetch(req).filter {
                 Calendar.current.isDate($0.date, inSameDayAs: date) && $0.gender == gender
             }
-            breakfastProducts = filtered
-                .filter { $0.mealType == MealType.breakfast.rawValue }
-                .compactMap { $0.product }
-            lunchProducts = filtered
-                .filter { $0.mealType == MealType.lunch.rawValue }
-                .compactMap { $0.product }
-            dinnerProducts = filtered
-                .filter { $0.mealType == MealType.dinner.rawValue }
-                .compactMap { $0.product }
-            snacksProducts = filtered
-                .filter { $0.mealType == MealType.snacks.rawValue }
-                .compactMap { $0.product }
+            breakfastEntries = all.filter { $0.mealType == MealType.breakfast.rawValue }
+            lunchEntries     = all.filter { $0.mealType == MealType.lunch.rawValue }
+            dinnerEntries    = all.filter { $0.mealType == MealType.dinner.rawValue }
+            snacksEntries    = all.filter { $0.mealType == MealType.snacks.rawValue }
         } catch {
             print("Ошибка загрузки данных: \(error)")
         }
     }
 
-    // MARK: — Отображение строки приема пищи
-    private func mealRow(for mealType: MealType, products: [Product]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(mealType.displayName)
-                Spacer()
-                Text("\(products.reduce(0) { $0 + $1.calories }) ккал")
-                    .foregroundColor(.blue)
-                Button("+ добавить еду") {
-                    selectedMeal = mealType
-                }
-                .font(.caption).foregroundStyle(.blue)
-            }
-
-            ForEach(products) { p in
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(p.name).font(.headline)
-                    Text("Калории: \(p.calories) ккал, Б: \(String(format: "%.1f", p.protein)) г, Ж: \(String(format: "%.1f", p.fat)) г, У: \(String(format: "%.1f", p.carbs)) г")
-                        .font(.caption).foregroundColor(.secondary)
-                }
-            }
-        }
-    }
-
-    // MARK: — Сохранение продукта
+    // MARK: — Добавление записи (учитываем порцию)
     private func addGenericProductToMeal(_ product: Product, portion: Double, gender: Gender) {
         guard let meal = activeMeal else { return }
         let factor = portion / 100
@@ -288,13 +297,6 @@ struct RationPopupView: View {
             isCustom:   product.isCustom
         )
 
-        switch meal {
-        case .breakfast: appendOrUpdate(&breakfastProducts, with: adjusted)
-        case .lunch:     appendOrUpdate(&lunchProducts,    with: adjusted)
-        case .dinner:    appendOrUpdate(&dinnerProducts,   with: adjusted)
-        case .snacks:    appendOrUpdate(&snacksProducts,   with: adjusted)
-        }
-
         let entry = FoodEntry(
             date:      selectedDate,
             mealType:  meal.rawValue,
@@ -303,30 +305,41 @@ struct RationPopupView: View {
             gender:    gender,
             isFavorite: product.isFavorite
         )
+
         do {
             modelContext.insert(entry)
             try modelContext.save()
+
+            switch meal {
+            case .breakfast: breakfastEntries.append(entry)
+            case .lunch:     lunchEntries.append(entry)
+            case .dinner:    dinnerEntries.append(entry)
+            case .snacks:    snacksEntries.append(entry)
+            }
+
             onMealAdded()
-            activeMeal = nil 
+            activeMeal = nil
+            withAnimation { showProductDetails = false }
         } catch {
             print("Ошибка при сохранении продукта: \(error)")
         }
     }
 
-    private func appendOrUpdate(_ array: inout [Product], with newP: Product) {
-        if let idx = array.firstIndex(where: { $0.name == newP.name }) {
-            array[idx].protein  += newP.protein
-            array[idx].fat      += newP.fat
-            array[idx].carbs    += newP.carbs
-            array[idx].calories += newP.calories
-        } else {
-            array.append(newP)
+    // MARK: — Удаление записи (свайп-действие)
+    private func deleteEntry(_ entry: FoodEntry, for meal: MealType) {
+        modelContext.delete(entry)
+        do {
+            try modelContext.save()
+            switch meal {
+            case .breakfast: breakfastEntries.removeAll { $0.id == entry.id }
+            case .lunch:     lunchEntries.removeAll     { $0.id == entry.id }
+            case .dinner:    dinnerEntries.removeAll    { $0.id == entry.id }
+            case .snacks:    snacksEntries.removeAll    { $0.id == entry.id }
+            }
+            onMealAdded()
+        } catch {
+            print("Ошибка удаления: \(error)")
         }
-    }
-
-    private func calculateCalories(for product: Product) -> Int {
-        let p = Double(portionSize) ?? 100
-        return Int(Double(product.calories) * p / 100)
     }
 }
 
