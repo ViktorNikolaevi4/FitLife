@@ -6,6 +6,7 @@ import SwiftData
         @State private var selectedDate = Date()
         @Query private var userData: [UserData]
         @Environment(\.modelContext) private var modelContext
+        @Environment(\.dismiss) private var dismiss
 
         var selectedGender: Gender // Получаем выбранный пол
 
@@ -55,6 +56,19 @@ import SwiftData
                     loadDailyConsumedCalories(selectedDate, selectedGender)
                 }
             }
+            .navigationBarBackButtonHidden(true)
+            .toolbar {
+                 ToolbarItem(placement: .topBarLeading) {
+                     Button {
+                         dismiss()
+                     } label: {
+                         Image(systemName: "chevron.left")  // только стрелка, без текста
+                             .font(.system(size: 17, weight: .semibold))
+                     }
+                     .tint(.white)                         // цвет стрелки (любая Tint)
+                 }
+             }
+
         }
         func loadDailyConsumedCalories(_ date: Date, _ gender: Gender) {
             let fetchDescriptor = FetchDescriptor<FoodEntry>()

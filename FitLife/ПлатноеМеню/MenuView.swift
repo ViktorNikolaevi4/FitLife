@@ -4,96 +4,117 @@
 //
 //  Created by Виктор Корольков on 01.01.2025.
 //
+// MenuView.swift
 import SwiftUI
 
 struct MenuView: View {
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                GradientView()
-                    .ignoresSafeArea()
-                VStack {
-                    Text("Выберите")
-                        .foregroundStyle(.white)
-                        .font(.title)
-
-                    Text("Программу питания")
-                        .foregroundStyle(.white)
-                        .font(.title)
-                        .padding()
-
-                    // RoundedTextView с переходами
-                    NavigationLink(destination: WeekView(calories: "1300 Ккалорий", dailyTexts: uniqueTextsFor1300)) {
-                        RoundedTextView(text: "1300 Ккалорий")
-                    }
-                    NavigationLink(destination: WeekView(calories: "1700 Ккалорий", dailyTexts: uniqueTextsFor1700)) {
-                        RoundedTextView(text: "1700 Ккалорий")
-                    }
-                    NavigationLink(destination: WeekView(calories: "2100 Ккалорий", dailyTexts: uniqueTextsFor2100)) {
-                        RoundedTextView(text: "2100 Ккалорий")
-                    }
-
-                    Spacer()
-                }
-            }
-        }
-    }
-}
-
-// Представление с днями недели
-struct WeekView: View {
-    var calories: String // Количество калорий для отображения
-    var dailyTexts: [String: String] // Уникальные тексты для каждого дня недели
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         ZStack {
-            GradientView()
-                .ignoresSafeArea()
+            GradientView().ignoresSafeArea()
             VStack {
-                List {
-                    Section(header: Text("\(calories)")
-                        .font(.headline)) {
-                            ForEach(["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"], id: \.self) { day in
-                                NavigationLink(destination: DetailView(day: day, text: dailyTexts[day] ?? "Нет данных")) {
-                                    Text(day)
-                                        .padding()
-                                }
-                            }
-                        }
+                Text("Выберите").foregroundStyle(.white).font(.title)
+                Text("Программу питания").foregroundStyle(.white).font(.title).padding()
+
+                NavigationLink(destination: WeekView(calories: "1300 Ккалорий", dailyTexts: uniqueTextsFor1300)) {
+                    RoundedTextView(text: "1300 Ккалорий")
                 }
-                .navigationTitle("Дни недели")
-                .navigationBarTitleDisplayMode(.inline)
+                NavigationLink(destination: WeekView(calories: "1700 Ккалорий", dailyTexts: uniqueTextsFor1700)) {
+                    RoundedTextView(text: "1700 Ккалорий")
+                }
+                NavigationLink(destination: WeekView(calories: "2100 Ккалорий", dailyTexts: uniqueTextsFor2100)) {
+                    RoundedTextView(text: "2100 Ккалорий")
+                }
+
+                Spacer()
             }
         }
+        .navigationBarBackButtonHidden(true)         // прячем «Back»
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 17, weight: .semibold))
+                }
+                .tint(.white)                         // цвет стрелки
+            }
+        }
+        .toolbarBackground(.hidden, for: .navigationBar) // градиент под навбаром
     }
 }
 
-// Детальное представление для каждого дня
+
+// WeekView — список дней
+struct WeekView: View {
+    @Environment(\.dismiss) private var dismiss
+    var calories: String
+    var dailyTexts: [String: String]
+
+    var body: some View {
+        ZStack {
+            GradientView().ignoresSafeArea()
+            VStack {
+                List {
+                    Section(header: Text("\(calories)").font(.headline)) {
+                        ForEach(["Понедельник","Вторник","Среда","Четверг","Пятница","Суббота","Воскресенье"], id: \.self) { day in
+                            NavigationLink(destination: DetailView(day: day, text: dailyTexts[day] ?? "Нет данных")) {
+                                Text(day).padding()
+                            }
+                        }
+                    }
+                }
+                .scrollContentBackground(.hidden) // чтобы фон списка не был белым
+            }
+        }
+        .navigationTitle("Дни недели")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 17, weight: .semibold))
+                }
+                .tint(.white)
+            }
+        }
+        .toolbarBackground(.hidden, for: .navigationBar)
+    }
+}
+
+
+// DetailView — экран дня
 struct DetailView: View {
+    @Environment(\.dismiss) private var dismiss
     var day: String
     var text: String
 
     var body: some View {
         ZStack {
-            GradientView()
-                .ignoresSafeArea()
+            GradientView().ignoresSafeArea()
             VStack {
-                Text(day)
-                    .font(.largeTitle)
-                    .padding()
-
-                Text(text)
-                    .font(.title2)
-                    .multilineTextAlignment(.center)
-                    .padding()
-
+                Text(day).font(.largeTitle).padding()
+                Text(text).font(.title2).multilineTextAlignment(.center).padding()
                 Spacer()
             }
-            .navigationTitle(day)
-            .navigationBarTitleDisplayMode(.inline)
         }
+        .navigationTitle(day)
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 17, weight: .semibold))
+                }
+                .tint(.white) // любой цвет
+            }
+        }
+        .toolbarBackground(.hidden, for: .navigationBar)
     }
 }
+
 
 // Уникальные тексты для каждого варианта калорий
 let uniqueTextsFor1300 = [
