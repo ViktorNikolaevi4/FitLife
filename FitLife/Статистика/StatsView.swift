@@ -4,6 +4,7 @@ import Charts
 import SwiftData
 
 struct StatsView: View {
+    @Environment(\.dismiss) private var dismiss
     @State private var selectedTimeFrame: TimeFrame = .week
     @State private var selectedDataType: DataType = .calories
     @Environment(\.modelContext) private var modelContext
@@ -92,7 +93,19 @@ struct StatsView: View {
             }
             .padding()
         }
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 17, weight: .semibold))
+                }
+                .tint(.white)                        // ← цвет стрелки (поставь любой)
+            }
+        }
+        .toolbarBackground(.hidden, for: .navigationBar) // чтобы градиент был под навбаром
     }
+
 
     // Получение данных для графика
     func getData(for timeFrame: TimeFrame, selectedDataType: DataType, modelContext: ModelContext) -> [ChartData] {
