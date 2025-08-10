@@ -20,14 +20,17 @@ struct PieChartView: View {
             Chart(data, id: \.category) { item in
                 SectorMark(
                     angle: .value("Value", item.value),
-                //    innerRadius: .ratio(0.75),
                     outerRadius: .ratio(1.0),
                     angularInset: 1.5
                 )
                 .cornerRadius(8)
-
-                .foregroundStyle(by: .value("Category", item.category))
+                .foregroundStyle(by: .value("Category", item.category)) // привязываем к масштабу
             }
+            .chartForegroundStyleScale([
+                "Белки": .blue,
+                "Жиры": .red,
+                "Углеводы": .green  
+            ])
             .frame(height: 125)
         }
     }
