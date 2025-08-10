@@ -23,30 +23,38 @@ struct UserStatsView: View {
                         .clipShape(Circle())
 
                     HStack(spacing: 20) {
-                        VStack {
-                            Text("ВЕС, КГ")
-                            Text("\(Int(userData.weight))")
-                                .onTapGesture {
-                                    togglePicker(&isWeightPickerVisible)
-                                 //   updateUserData()
-                                }
-                        }.foregroundStyle(.white)
-                        VStack {
-                            Text("РОСТ, СМ")
-                            Text("\(Int(userData.height))")
-                                .onTapGesture {
-                                    togglePicker(&isHeightPickerVisible)
-                               //     updateUserData()
-                                }
-                        }.foregroundStyle(.white)
-                        VStack {
-                            Text("ВОЗРАСТ")
-                            Text("\(userData.age)")
-                                .onTapGesture {
-                                    togglePicker(&isAgePickerVisible)
-                                   // updateUserData()
-                                }
-                        }.foregroundStyle(.white)
+                        Button {
+                            togglePicker(&isWeightPickerVisible)
+                        } label: {
+                            VStack {
+                                Text("ВЕС, КГ")
+                                Text("\(Int(userData.weight))")
+                            }
+                            .foregroundStyle(.white)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            togglePicker(&isHeightPickerVisible)
+                        } label: {
+                            VStack {
+                                Text("РОСТ, СМ")
+                                Text("\(Int(userData.height))")
+                            }
+                            .foregroundStyle(.white)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            togglePicker(&isAgePickerVisible)
+                        } label: {
+                            VStack {
+                                Text("ВОЗРАСТ")
+                                Text("\(userData.age)")
+                            }
+                            .foregroundStyle(.white)
+                        }
+                        .buttonStyle(.plain)
                     }
                     .font(.headline)
                 }
