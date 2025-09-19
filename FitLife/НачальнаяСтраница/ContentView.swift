@@ -47,13 +47,12 @@ struct ContentView: View {
                         HStack(spacing: 40) {
                             ForEach(Gender.allCases, id: \.self) { gender in
                                 VStack {
-                                    NavigationLink(
-                                        destination: MainView(selectedGender: gender),
-                                        label: {
-                                            CircleView(imageName: gender.imageName)
-                                                .opacity(gender == .male ? 0.8 : 1.0)
-                                        }
-                                    )
+                                    NavigationLink {
+                                        MainTabView(selectedGender: gender)
+                                    } label: {
+                                        CircleView(imageName: gender.imageName)
+                                            .opacity(gender == .male ? 0.8 : 1.0)
+                                    }
                                     Text(gender.rawValue)
                                         .font(.title2)
                                         .foregroundStyle(.white)

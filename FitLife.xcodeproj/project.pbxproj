@@ -10,6 +10,20 @@
 		B61FAE172D12FAD60034C54D /* SwiftCSV in Frameworks */ = {isa = PBXBuildFile; productRef = B61FAE162D12FAD60034C54D /* SwiftCSV */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXBuildRule section */
+		B606BA4B2E7D511E00C75F92 /* PBXBuildRule */ = {
+			isa = PBXBuildRule;
+			compilerSpec = com.apple.compilers.proxy.script;
+			fileType = pattern.proxy;
+			inputFiles = (
+			);
+			isEditable = 1;
+			outputFiles = (
+			);
+			script = "# Type a script or drag a script file from your workspace to insert its path.\n";
+		};
+/* End PBXBuildRule section */
+
 /* Begin PBXFileReference section */
 		B6B3C67F2D0480B900D0226C /* FitLife.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FitLife.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -62,6 +76,7 @@
 				B6B3C67D2D0480B900D0226C /* Resources */,
 			);
 			buildRules = (
+				B606BA4B2E7D511E00C75F92 /* PBXBuildRule */,
 			);
 			dependencies = (
 			);
@@ -84,7 +99,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1610;
-				LastUpgradeCheck = 1640;
+				LastUpgradeCheck = 2600;
 				TargetAttributes = {
 					B6B3C67E2D0480B900D0226C = {
 						CreatedOnToolsVersion = 16.1;
@@ -193,6 +208,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -250,6 +266,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};
