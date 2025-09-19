@@ -103,14 +103,14 @@ struct DashboardScreen: View {
                     header(theme)
 
                     if let user = userData {
-                        BalanceCard(consumed: dailyConsumedCalories, target: user.calories, theme: theme)
-
-                        VStack(spacing: 12) {
-                            MacroProgressRow(title: "Белки", current: consumedProteins, target: user.proteins, systemImage: "bolt.fill", tint: theme.protein, theme: theme)
-                            MacroProgressRow(title: "Жиры", current: consumedFats, target: user.fats, systemImage: "drop.fill", tint: theme.fat, theme: theme)
-                            MacroProgressRow(title: "Углеводы", current: consumedCarbs, target: user.carbs, systemImage: "leaf.fill", tint: theme.carb, theme: theme)
-                        }
-                        .padding(.horizontal)
+                                                BalanceCard(
+                                                    consumed: dailyConsumedCalories,
+                                                    target: user.calories,
+                                                    proteins: (consumedProteins, user.proteins),
+                                                    fats:     (consumedFats,     user.fats),
+                                                    carbs:    (consumedCarbs,    user.carbs),
+                                                    theme: theme
+                                                )
 
                         MealsSection(theme: theme)
                             .padding(.horizontal)
@@ -206,6 +206,10 @@ struct DashboardScreen: View {
 struct BalanceCard: View {
     var consumed: Int
     var target: Int
+    // CHANGED: добавили макросы внутрь карточки
+    var proteins: (current: Int, target: Int)
+    var fats:     (current: Int, target: Int)
+    var carbs:    (current: Int, target: Int)
     let theme: AppTheme
 
     private var progress: Double {
@@ -221,22 +225,51 @@ struct BalanceCard: View {
                 .padding(.top, 12)
 
             HStack {
-                            Spacer()
-                            Donut(progress: progress, track: theme.ringTrack, gradient: theme.ringGradient)
-                               .frame(width: 140, height: 140) // можно вернуть 120 при желании
-                                .overlay(
-                                    VStack(spacing: 2) {
-                                        Text("\(consumed)")
-                                            .font(.title)
-                                            .fontWeight(.bold)
-                                        Text("ккал")
-                                            .font(.footnote)
-                                           .foregroundStyle(.secondary)
-                                    }
-                                )
-                            Spacer()
-                        }
-            .padding(.bottom, 12)
+                 Spacer()
+                 Donut(progress: progress, track: theme.ringTrack, gradient: theme.ringGradient)
+                     .frame(width: 140, height: 140)
+                     .overlay(
+                         VStack(spacing: 2) {
+                             Text("\(consumed)")
+                                 .font(.title)
+                                .fontWeight(.bold)
+                             Text("ккал")
+                                 .font(.footnote)
+                                .foregroundStyle(.secondary)
+                         }
+                     )
+                 Spacer()
+             }
+
+             // CHANGED: прогрессы Б/Ж/У внутри карточки
+             VStack(spacing: 10) {
+                 MacroProgressRow(
+                    title: "Белки",
+                     current: proteins.current,
+                     target: proteins.target,
+                     systemImage: "bolt.fill",
+                     tint: theme.protein,
+                     theme: theme
+                 )
+                 MacroProgressRow(
+                     title: "Жиры",
+                     current: fats.current,
+                     target: fats.target,
+                     systemImage: "drop.fill",
+                    tint: theme.fat,
+                     theme: theme
+                 )
+                 MacroProgressRow(
+                     title: "Углеводы",
+                     current: carbs.current,
+                     target: carbs.target,
+                     systemImage: "leaf.fill",
+                     tint: theme.carb,
+                     theme: theme
+                 )
+             }
+             .padding(.horizontal, 12)
+             .padding(.bottom, 12)
         }
         .background(RoundedRectangle(cornerRadius: 16).fill(theme.card))
         .overlay(
@@ -296,13 +329,11 @@ struct MacroProgressRow: View {
                 .tint(tint)
                 .animation(.easeInOut(duration: 0.25), value: fraction)
         }
-        .padding(14)
-        .background(RoundedRectangle(cornerRadius: 14).fill(theme.card))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14).strokeBorder(theme.border)
-        )
+        .padding(.horizontal, 12)   // CHANGED: только отступы
+        .padding(.bottom, 8)        // CHANGED: без карточки/фона
     }
 }
+
 
 // MARK: - Meals section (4 rectangular items)
 struct MealsSection: View {
