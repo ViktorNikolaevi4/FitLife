@@ -227,7 +227,7 @@ struct BalanceCard: View {
             HStack {
                  Spacer()
                  Donut(progress: progress, track: theme.ringTrack, gradient: theme.ringGradient)
-                     .frame(width: 140, height: 140)
+                     .frame(width: 120, height: 120)
                      .overlay(
                          VStack(spacing: 2) {
                              Text("\(consumed)")
@@ -268,8 +268,8 @@ struct BalanceCard: View {
                      theme: theme
                  )
              }
-             .padding(.horizontal, 12)
-             .padding(.bottom, 12)
+             .padding(.horizontal, 8)
+             .padding(.bottom, 8)
         }
         .background(RoundedRectangle(cornerRadius: 16).fill(theme.card))
         .overlay(
@@ -359,7 +359,7 @@ struct MealRow: View {
         HStack(spacing: 12) {
             Image(systemName: systemImage)
                 .font(.title3)
-                .frame(width: 28, height: 28)
+                .frame(width: 24, height: 24)
                 .padding(8)
                 .background(Circle().fill(theme.subtleFill))
 
