@@ -59,7 +59,7 @@ struct AppTheme {
             carb = .blue
             ringGradient = Gradient(colors: [.blue.opacity(0.95), .cyan.opacity(0.9), .blue.opacity(0.95)])
         } else {
-            bg = Color(UIColor.systemGroupedBackground)
+            bg = Color(UIColor.systemGray5)   
             card = Color(UIColor.secondarySystemBackground)
             border = Color.black.opacity(0.06)
             subtleFill = Color.black.opacity(0.06)
