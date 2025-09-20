@@ -90,6 +90,13 @@ struct DashboardScreen: View {
     @State private var consumedFats: Int = 0
     @State private var consumedCarbs: Int = 0
 
+    @State private var breakfastKcal: Int = 0
+    @State private var lunchKcal: Int = 0
+    @State private var dinnerKcal: Int = 0
+    @State private var snacksKcal: Int = 0
+
+    @State private var showAddSheet = false
+
     private var userData: UserData? {
         users.first(where: { $0.gender == selectedGender })
     }
@@ -112,8 +119,16 @@ struct DashboardScreen: View {
                                                     theme: theme
                                                 )
 
-                        MealsSection(theme: theme)
-                            .padding(.horizontal)
+                        MealsSection(
+                            theme: theme,
+                            calories: (
+                                breakfast: breakfastKcal,
+                                lunch:     lunchKcal,
+                                dinner:    dinnerKcal,
+                                snacks:    snacksKcal
+                            )
+                        )
+                        .padding(.horizontal)
                     } else {
                         ContentUnavailableView(
                             "Нет данных пользователя",
@@ -135,6 +150,15 @@ struct DashboardScreen: View {
         .onChange(of: selectedDate) { new in
             recalcFor(new)
         }
+        .sheet(isPresented: $showAddSheet) {
+            RationPopupView(
+                gender: selectedGender,
+                selectedDate: $selectedDate
+            ) {
+                // колбэк onMealAdded — пересчитываем всё
+                recalcFor(selectedDate)
+            }
+        }
     }
 
     // MARK: Header (Сегодня + плюс)
@@ -148,7 +172,7 @@ struct DashboardScreen: View {
 
             Spacer()
 
-            Button(action: { /* TODO: add action later */ }) {
+            Button(action: { showAddSheet = true }) {
                 Image(systemName: "plus.circle.fill")
                     .font(.system(size: 28, weight: .semibold))
             }
@@ -180,26 +204,36 @@ struct DashboardScreen: View {
     }
 
     private func recalcFor(_ date: Date) {
-        // Загружаем FoodEntry за выбранный день и суммируем калории и БЖУ
         let descriptor = FetchDescriptor<FoodEntry>()
         do {
             let all = try modelContext.fetch(descriptor)
-            let items = all.filter { Calendar.current.isDate($0.date, inSameDayAs: date) && $0.gender == selectedGender }
+            let items = all.filter {
+                Calendar.current.isDate($0.date, inSameDayAs: date) && $0.gender == selectedGender
+            }
 
+            // суммарно
             dailyConsumedCalories = items.reduce(0) { $0 + $1.product.calories }
-            consumedProteins = Int(items.reduce(0.0) { $0 + ($1.product.protein) })
-            consumedFats     = Int(items.reduce(0.0) { $0 + ($1.product.fat) })
-            consumedCarbs    = Int(items.reduce(0.0) { $0 + ($1.product.carbs) })
+            consumedProteins = Int(items.reduce(0.0) { $0 + $1.product.protein })
+            consumedFats     = Int(items.reduce(0.0) { $0 + $1.product.fat })
+            consumedCarbs    = Int(items.reduce(0.0) { $0 + $1.product.carbs })
+
+            // по приёмам пищи
+            breakfastKcal = items.filter { $0.mealType == MealType.breakfast.rawValue }.reduce(0) { $0 + $1.product.calories }
+            lunchKcal     = items.filter { $0.mealType == MealType.lunch.rawValue     }.reduce(0) { $0 + $1.product.calories }
+            dinnerKcal    = items.filter { $0.mealType == MealType.dinner.rawValue    }.reduce(0) { $0 + $1.product.calories }
+            snacksKcal    = items.filter { $0.mealType == MealType.snacks.rawValue    }.reduce(0) { $0 + $1.product.calories }
         } catch {
             dailyConsumedCalories = 0
             consumedProteins = 0
             consumedFats = 0
             consumedCarbs = 0
+            breakfastKcal = 0; lunchKcal = 0; dinnerKcal = 0; snacksKcal = 0
             #if DEBUG
             print("Recalc error:", error)
             #endif
         }
     }
+
 }
 
 // MARK: - Balance card with donut chart
@@ -338,13 +372,18 @@ struct MacroProgressRow: View {
 // MARK: - Meals section (4 rectangular items)
 struct MealsSection: View {
     let theme: AppTheme
+    let calories: (breakfast: Int, lunch: Int, dinner: Int, snacks: Int)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            MealRow(title: "Завтрак",    systemImage: "sunrise.fill",  kcal: nil, theme: theme)
-            MealRow(title: "Обед",       systemImage: "fork.knife",     kcal: nil, theme: theme)
-            MealRow(title: "Ужин",       systemImage: "moon.stars.fill",kcal: nil, theme: theme)
-            MealRow(title: "Перекус",    systemImage: "takeoutbag.and.cup.and.straw.fill", kcal: nil, theme: theme)
+            MealRow(title: "Завтрак", systemImage: "sunrise.fill",
+                    kcal: calories.breakfast > 0 ? calories.breakfast : nil, theme: theme)
+            MealRow(title: "Обед", systemImage: "fork.knife",
+                    kcal: calories.lunch > 0 ? calories.lunch : nil, theme: theme)
+            MealRow(title: "Ужин", systemImage: "moon.stars.fill",
+                    kcal: calories.dinner > 0 ? calories.dinner : nil, theme: theme)
+            MealRow(title: "Перекус", systemImage: "takeoutbag.and.cup.and.straw.fill",
+                    kcal: calories.snacks > 0 ? calories.snacks : nil, theme: theme)
         }
     }
 }
