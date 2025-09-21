@@ -3,17 +3,15 @@ import SwiftData
 
 struct ProfileScreen: View {
     @Query private var users: [UserData]
-    let selectedGender: Gender
-
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var scheme
 
-    // Редактируемый профиль (можно переключать пол прямо на экране)
+    @AppStorage(Gender.appStorageKey) private var activeGenderRaw: String = Gender.male.rawValue
     @State private var editingGender: Gender
 
-    init(selectedGender: Gender) {
-        self.selectedGender = selectedGender
-        _editingGender = State(initialValue: selectedGender)
+    init() {
+        let raw = UserDefaults.standard.string(forKey: Gender.appStorageKey) ?? Gender.male.rawValue
+        _editingGender = State(initialValue: Gender(rawValue: raw) ?? .male)
     }
 
     private var user: UserData? {
@@ -75,15 +73,20 @@ struct ProfileScreen: View {
         }
         .background(Color(.systemGray6)) // мягкий серый фон
         .onChange(of: editingGender) { _, new in
+            activeGenderRaw = new.rawValue              // << синхронизируем
             ensureUserIfNeeded(for: new)
             if let u = users.first(where: { $0.gender == new }) {
-                // держим поле gender в синхроне (на всякий случай)
                 u.gender = new
                 try? modelContext.save()
                 recalc(u)
             }
         }
-        .onAppear { ensureUserIfNeeded(for: editingGender) }
+   //     .onAppear { ensureUserIfNeeded(for: editingGender) }
+        .onAppear {
+            activeGenderRaw = editingGender.rawValue
+            ensureUserIfNeeded(for: editingGender)
+        }
+
         .navigationTitle("Профиль")
         .navigationBarTitleDisplayMode(.inline)
     }

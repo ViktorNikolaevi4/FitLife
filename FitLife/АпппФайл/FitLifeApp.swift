@@ -6,7 +6,7 @@ import SwiftData
 struct FitLifeApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            MainTabView()
         }
         .modelContainer(for: [UserData.self,
                               FoodEntry.self,

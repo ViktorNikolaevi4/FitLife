@@ -6,17 +6,9 @@ extension Gender {
 }
 
 struct MainTabView: View {
-    private let initialGender: Gender
-    @State private var selectedGender: Gender
-
-    init(selectedGender: Gender) {
-        self.initialGender = selectedGender
-        _selectedGender = State(initialValue: selectedGender)
-    }
-
     var body: some View {
         TabView {
-            DashboardScreen(selectedGender: selectedGender)
+            DashboardScreen()
                 .tabItem {
                     Image(systemName: "house.fill")
                     Text("Главная")
@@ -34,8 +26,7 @@ struct MainTabView: View {
                     Text("Статистика")
                 }
 
-            // NEW:
-            ProfileScreen(selectedGender: selectedGender)
+            ProfileScreen()                       // ← без параметров
                 .tabItem {
                     Image(systemName: "person.fill")
                     Text("Профиль")
@@ -43,6 +34,7 @@ struct MainTabView: View {
         }
     }
 }
+
 
 
 // MARK: - Theme (Light/Dark)
@@ -90,7 +82,10 @@ struct DashboardScreen: View {
     // Data
     @Environment(\.modelContext) private var modelContext
     @Query private var users: [UserData]
-    let selectedGender: Gender
+
+    @AppStorage(Gender.appStorageKey)
+    private var activeGenderRaw: String = Gender.male.rawValue
+    private var selectedGender: Gender { Gender(rawValue: activeGenderRaw) ?? .male }
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -160,12 +155,14 @@ struct DashboardScreen: View {
         .onChange(of: selectedDate) { new in
             recalcFor(new)
         }
+        .onChange(of: activeGenderRaw) { _ in
+            recalcFor(selectedDate)
+        }
         .sheet(isPresented: $showAddSheet) {
             RationPopupView(
                 gender: selectedGender,
                 selectedDate: $selectedDate
             ) {
-                // колбэк onMealAdded — пересчитываем всё
                 recalcFor(selectedDate)
             }
         }
@@ -274,7 +271,7 @@ struct BalanceCard: View {
                      .frame(width: 120, height: 120)
                      .overlay(
                          VStack(spacing: 2) {
-                             Text("\(consumed)")
+                             Text("\(target)")
                                  .font(.title)
                                 .fontWeight(.bold)
                              Text("ккал")
