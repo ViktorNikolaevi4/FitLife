@@ -96,6 +96,7 @@ struct DashboardScreen: View {
 
     // ЕДИНЫЙ ключ шита
     @State private var sheet: RationSheet? = nil
+    @State private var showCalendar = false
 
     private var userData: UserData? {
         users.first(where: { $0.gender == selectedGender })
@@ -154,18 +155,53 @@ struct DashboardScreen: View {
                 preselectedMeal: preset
             )
         }
+        .sheet(isPresented: $showCalendar) {
+            NavigationStack {
+                VStack {
+                    DatePicker(
+                        "",
+                        selection: $selectedDate,
+                        displayedComponents: .date
+                    )
+                    .datePickerStyle(.graphical)   // календарь
+                    .labelsHidden()
+                    .environment(\.locale, Locale(identifier: "ru_RU"))
+                }
+                .padding()
+                .navigationTitle("Выберите дату")
+                .toolbarTitleDisplayMode(.inline)  
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Сегодня") {
+                            selectedDate = Date()
+                            showCalendar = false
+                        }
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Готово") { showCalendar = false }
+                    }
+                }
+            }
+            .presentationDetents([.medium])
+        }
     }
 
     // Шапка + кнопка «+»
     private func header(_ theme: AppTheme) -> some View {
         HStack(alignment: .center) {
-            Text(formattedToday(selectedDate))
-                .font(.largeTitle).fontWeight(.bold)
-                .lineLimit(1).minimumScaleFactor(0.8)
-
+            Button {
+                showCalendar = true
+            } label: {
+                Text(formattedToday(selectedDate))
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .contentShape(Rectangle())   // удобная зона тапа
+            }
+            .buttonStyle(.plain)
             Spacer()
-
-            Button { sheet = .ration } label: {
+            Button(action: { sheet = .ration }) {
                 Image(systemName: "plus.circle.fill")
                     .font(.system(size: 28, weight: .semibold))
             }
@@ -394,7 +430,7 @@ struct MealsSection: View {
                     kcal: calories.breakfast > 0 ? calories.breakfast : nil,
                     macros: calories.breakfast > 0 ? macros.breakfast : nil,
                     theme: theme,
-                    badgeFill: .pink
+                    badgeFill: .pinkovo
                 )
             }.buttonStyle(.plain)
 
@@ -405,7 +441,7 @@ struct MealsSection: View {
                     kcal: calories.lunch > 0 ? calories.lunch : nil,
                     macros: calories.lunch > 0 ? macros.lunch : nil,
                     theme: theme,
-                    badgeFill: .green
+                    badgeFill: .zeleneko
                 )
             }.buttonStyle(.plain)
 
@@ -416,7 +452,7 @@ struct MealsSection: View {
                     kcal: calories.dinner > 0 ? calories.dinner : nil,
                     macros: calories.dinner > 0 ? macros.dinner : nil,
                     theme: theme,
-                    badgeFill: .blue
+                    badgeFill: .sinenko
                 )
             }.buttonStyle(.plain)
 
@@ -427,7 +463,7 @@ struct MealsSection: View {
                     kcal: calories.snacks > 0 ? calories.snacks : nil,
                     macros: calories.snacks > 0 ? macros.snacks : nil,
                     theme: theme,
-                    badgeFill: .yellow
+                    badgeFill: .zheltenko
                 )
             }.buttonStyle(.plain)
         }
