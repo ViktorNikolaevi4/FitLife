@@ -242,13 +242,28 @@ struct BalanceCard: View {
             }
 
             VStack(spacing: 10) {
-                MacroProgressRow(title: "Белки", current: proteins.current, target: proteins.target,
-                                 systemImage: "bolt.fill", tint: theme.protein, theme: theme)
-                MacroProgressRow(title: "Жиры", current: fats.current, target: fats.target,
-                                 systemImage: "drop.fill", tint: theme.fat, theme: theme)
-                MacroProgressRow(title: "Углеводы", current: carbs.current, target: carbs.target,
-                                 systemImage: "leaf.fill", tint: theme.carb, theme: theme)
+                MacroProgressRow(title: "Белки",
+                                 current: proteins.current,
+                                 target: proteins.target,
+                                 tint: theme.protein,
+                                 theme: theme,
+                                 height: 6)
+
+                MacroProgressRow(title: "Жиры",
+                                 current: fats.current,
+                                 target: fats.target,
+                                 tint: theme.fat,
+                                 theme: theme,
+                                 height: 6)
+
+                MacroProgressRow(title: "Углеводы",
+                                 current: carbs.current,
+                                 target: carbs.target,
+                                 tint: theme.carb,
+                                 theme: theme,
+                                 height: 6)
             }
+
             .padding(.horizontal, 8).padding(.bottom, 8)
         }
         .background(RoundedRectangle(cornerRadius: 16).fill(theme.card))
@@ -278,29 +293,37 @@ struct MacroProgressRow: View {
     let title: String
     let current: Int
     let target: Int
-    let systemImage: String
     let tint: Color
     let theme: AppTheme
+    var height: CGFloat = 6   // можно 12–14 для ещё толще
 
-    private var fraction: Double { guard target > 0 else { return 0 }
-        return min(Double(current) / Double(target), 1) }
+    private var fraction: Double {
+        guard target > 0 else { return 0 }
+        return min(Double(current) / Double(target), 1)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Label(title, systemImage: systemImage)
+                Text(title)
                 Spacer()
                 Text("\(current) / \(target) г")
-                    .font(.subheadline).foregroundStyle(.secondary)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
-            ProgressView(value: fraction)
-                .progressViewStyle(.linear)
-                .tint(tint)
-                .animation(.easeInOut(duration: 0.25), value: fraction)
+            ThickProgressBar(
+                fraction: fraction,
+                fill: tint,
+                track: theme.ringTrack,
+                height: height
+            )
+            .animation(.easeInOut(duration: 0.25), value: fraction)
         }
-        .padding(.horizontal, 12).padding(.bottom, 8)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
     }
 }
+
 
 struct MealsSection: View {
     let theme: AppTheme
@@ -382,6 +405,25 @@ struct MealRow: View {
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 14).fill(theme.card))
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(theme.border))
+    }
+}
+
+struct ThickProgressBar: View {
+    var fraction: Double      // 0...1
+    var fill: Color           // цвет заполнения
+    var track: Color          // цвет трека
+    var height: CGFloat = 10  // толщина
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: height/2).fill(track)
+                RoundedRectangle(cornerRadius: height/2)
+                    .fill(fill)
+                    .frame(width: max(0, geo.size.width * fraction))
+            }
+        }
+        .frame(height: height)
     }
 }
 
