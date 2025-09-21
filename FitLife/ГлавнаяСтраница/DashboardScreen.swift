@@ -101,6 +101,7 @@ struct DashboardScreen: View {
     @State private var snacksKcal: Int = 0
 
     @State private var showAddSheet = false
+    @State private var presetMeal: MealType? = nil
 
     private var userData: UserData? {
         users.first(where: { $0.gender == selectedGender })
@@ -131,7 +132,11 @@ struct DashboardScreen: View {
                                 lunch:     lunchKcal,
                                 dinner:    dinnerKcal,
                                 snacks:    snacksKcal
-                            )
+                            ),
+                            onTapMeal: { meal in
+                                presetMeal = meal
+                                showAddSheet = true
+                            }
                         )
                         .padding(.horizontal)
                     } else {
@@ -158,13 +163,13 @@ struct DashboardScreen: View {
         .onChange(of: activeGenderRaw) { _ in
             recalcFor(selectedDate)
         }
-        .sheet(isPresented: $showAddSheet) {
+        .sheet(isPresented: $showAddSheet, onDismiss: { presetMeal = nil }) {
             RationPopupView(
                 gender: selectedGender,
-                selectedDate: $selectedDate
-            ) {
-                recalcFor(selectedDate)
-            }
+                selectedDate: $selectedDate,
+                onMealAdded: { recalcFor(selectedDate) },
+                preselectedMeal: presetMeal                  // <- ВАЖНО
+            )
         }
     }
 
@@ -380,20 +385,45 @@ struct MacroProgressRow: View {
 struct MealsSection: View {
     let theme: AppTheme
     let calories: (breakfast: Int, lunch: Int, dinner: Int, snacks: Int)
+    var onTapMeal: (MealType) -> Void   // новый колбэк
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            MealRow(title: "Завтрак", systemImage: "sunrise.fill",
-                    kcal: calories.breakfast > 0 ? calories.breakfast : nil, theme: theme)
-            MealRow(title: "Обед", systemImage: "fork.knife",
-                    kcal: calories.lunch > 0 ? calories.lunch : nil, theme: theme)
-            MealRow(title: "Ужин", systemImage: "moon.stars.fill",
-                    kcal: calories.dinner > 0 ? calories.dinner : nil, theme: theme)
-            MealRow(title: "Перекус", systemImage: "takeoutbag.and.cup.and.straw.fill",
-                    kcal: calories.snacks > 0 ? calories.snacks : nil, theme: theme)
+            Button { onTapMeal(.breakfast) } label: {
+                MealRow(title: "Завтрак",
+                        systemImage: "sunrise.fill",
+                        kcal: calories.breakfast > 0 ? calories.breakfast : nil,
+                        theme: theme)
+            }
+            .buttonStyle(.plain)
+
+            Button { onTapMeal(.lunch) } label: {
+                MealRow(title: "Обед",
+                        systemImage: "fork.knife",
+                        kcal: calories.lunch > 0 ? calories.lunch : nil,
+                        theme: theme)
+            }
+            .buttonStyle(.plain)
+
+            Button { onTapMeal(.dinner) } label: {
+                MealRow(title: "Ужин",
+                        systemImage: "moon.stars.fill",
+                        kcal: calories.dinner > 0 ? calories.dinner : nil,
+                        theme: theme)
+            }
+            .buttonStyle(.plain)
+
+            Button { onTapMeal(.snacks) } label: {
+                MealRow(title: "Перекус",
+                        systemImage: "takeoutbag.and.cup.and.straw.fill",
+                        kcal: calories.snacks > 0 ? calories.snacks : nil,
+                        theme: theme)
+            }
+            .buttonStyle(.plain)
         }
     }
 }
+
 
 struct MealRow: View {
     let title: String

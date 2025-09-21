@@ -21,6 +21,7 @@ struct RationPopupView: View {
 
     // MARK: — Управление состоянием
     @State private var selectedMeal: MealType? = nil
+    @State private var autostartMeal: MealType? = nil
     @State private var selectedProduct: Product? = nil
     @State private var showProductDetails = false
     @State private var portionSize: String = "100"
@@ -30,6 +31,8 @@ struct RationPopupView: View {
     @Binding var selectedDate: Date
     let selectedGender: Gender
     let onMealAdded: () -> Void
+
+    let preselectedMeal: MealType?
 
     // MARK: — Окружение
     @Environment(\.dismiss) private var dismiss
@@ -43,11 +46,13 @@ struct RationPopupView: View {
         snacksProducts:   [Product] = [],
         gender:           Gender,
         selectedDate:     Binding<Date>,
-        onMealAdded:      @escaping () -> Void
+        onMealAdded:      @escaping () -> Void,
+        preselectedMeal: MealType? = nil
     ) {
         self._selectedDate  = selectedDate
         self.selectedGender = gender
         self.onMealAdded    = onMealAdded
+        self.preselectedMeal = preselectedMeal
     }
 
     var body: some View {
@@ -65,8 +70,15 @@ struct RationPopupView: View {
         .padding()
         .presentationDetents([.medium, .large])
         .animation(.spring(response: 0.35, dampingFraction: 0.9), value: showProductDetails)
-        .onAppear { loadData(for: selectedDate, gender: selectedGender) }
-        .onChange(of: selectedDate) { _ in loadData(for: selectedDate, gender: selectedGender) }
+        .onAppear {
+            loadData(for: selectedDate, gender: selectedGender)
+            if let m = preselectedMeal {          // <- используем переданный приём
+                selectedMeal = m                  // авто-открываем каталог для него
+            }
+        }
+        .onChange(of: selectedDate) { _ in
+            loadData(for: selectedDate, gender: selectedGender)
+        }
         .sheet(item: $selectedMeal) { meal in
             ProductSelectionView(
                 mealType: meal,
