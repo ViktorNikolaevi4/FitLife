@@ -166,7 +166,7 @@ struct DashboardScreen: View {
     private func formattedToday(_ date: Date) -> String {
         let df = DateFormatter()
         df.locale = Locale(identifier: "ru_RU")
-        df.setLocalizedDateFormatFromTemplate("Сегодня, d MMM")
+        df.setLocalizedDateFormatFromTemplate("d MMMM") // 21 сентября
         return df.string(from: date)
     }
 
