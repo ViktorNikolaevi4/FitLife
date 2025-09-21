@@ -310,36 +310,71 @@ struct MealsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Button { onTapMeal(.breakfast) } label: {
-                MealRow(title: "Завтрак", systemImage: "sunrise.fill",
-                        kcal: calories.breakfast > 0 ? calories.breakfast : nil, theme: theme)
+                MealRow(
+                    title: "Завтрак",
+                    systemImage: "sunrise.fill",
+                    kcal: calories.breakfast > 0 ? calories.breakfast : nil,
+                    theme: theme,
+                    accent: Color("pinkovo")      // ← твой цвет
+                )
             }.buttonStyle(.plain)
 
             Button { onTapMeal(.lunch) } label: {
-                MealRow(title: "Обед", systemImage: "fork.knife",
-                        kcal: calories.lunch > 0 ? calories.lunch : nil, theme: theme)
+                MealRow(
+                    title: "Обед",
+                    systemImage: "fork.knife",
+                    kcal: calories.lunch > 0 ? calories.lunch : nil,
+                    theme: theme,
+                    accent: Color("zeleneko")      // ← твой цвет
+                )
             }.buttonStyle(.plain)
 
             Button { onTapMeal(.dinner) } label: {
-                MealRow(title: "Ужин", systemImage: "moon.stars.fill",
-                        kcal: calories.dinner > 0 ? calories.dinner : nil, theme: theme)
+                MealRow(
+                    title: "Ужин",
+                    systemImage: "moon.stars.fill",
+                    kcal: calories.dinner > 0 ? calories.dinner : nil,
+                    theme: theme,
+                    accent: Color("sinenko")      // ← твой цвет
+                )
             }.buttonStyle(.plain)
 
             Button { onTapMeal(.snacks) } label: {
-                MealRow(title: "Перекус", systemImage: "takeoutbag.and.cup.and.straw.fill",
-                        kcal: calories.snacks > 0 ? calories.snacks : nil, theme: theme)
+                MealRow(
+                    title: "Перекус",
+                    systemImage: "takeoutbag.and.cup.and.straw.fill",
+                    kcal: calories.snacks > 0 ? calories.snacks : nil,
+                    theme: theme,
+                    accent: Color("zheltenko")    // ← твой цвет
+                )
             }.buttonStyle(.plain)
         }
     }
 }
 
+
+
 struct MealRow: View {
-    let title: String, systemImage: String, kcal: Int?, theme: AppTheme
+    let title: String
+    let systemImage: String
+    let kcal: Int?
+    let theme: AppTheme
+    let accent: Color                    // ← НОВОЕ
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: systemImage)
-                .font(.title3).frame(width: 24, height: 24)
-                .padding(8).background(Circle().fill(theme.subtleFill))
+                .symbolRenderingMode(.monochrome) // чтобы сложные SF Symbols были однотонными
+                .foregroundStyle(.white)          // ← белая иконка
+                .font(.title3)
+                .frame(width: 24, height: 24)
+                .padding(8)
+                .background(                       // ← цветной круг
+                    Circle().fill(accent)          // можно .fill(accent.opacity(0.9)) если хочется мягче
+                )
+
             Text(title).font(.headline)
+
             Spacer()
             Text(kcal.map { "\($0) kcal" } ?? "Добавить")
                 .foregroundStyle(.secondary)
@@ -349,3 +384,5 @@ struct MealRow: View {
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(theme.border))
     }
 }
+
+
