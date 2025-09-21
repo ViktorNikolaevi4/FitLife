@@ -1,9 +1,18 @@
 import SwiftUI
 import SwiftData
 
-// MARK: - Root TabView you can navigate to after gender selection
+extension Gender {
+    static let appStorageKey = "activeGender"
+}
+
 struct MainTabView: View {
-    let selectedGender: Gender
+    private let initialGender: Gender
+    @State private var selectedGender: Gender
+
+    init(selectedGender: Gender) {
+        self.initialGender = selectedGender
+        _selectedGender = State(initialValue: selectedGender)
+    }
 
     var body: some View {
         TabView {
@@ -13,7 +22,6 @@ struct MainTabView: View {
                     Text("Главная")
                 }
 
-            // Заглушки вкладок — подключите реальные экраны позже
             Text("Дневник")
                 .tabItem {
                     Image(systemName: "book")
@@ -26,7 +34,8 @@ struct MainTabView: View {
                     Text("Статистика")
                 }
 
-            Text("Профиль")
+            // NEW:
+            ProfileScreen(selectedGender: selectedGender)
                 .tabItem {
                     Image(systemName: "person.fill")
                     Text("Профиль")
@@ -34,6 +43,7 @@ struct MainTabView: View {
         }
     }
 }
+
 
 // MARK: - Theme (Light/Dark)
 struct AppTheme {
