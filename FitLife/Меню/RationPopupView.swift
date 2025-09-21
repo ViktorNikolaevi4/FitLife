@@ -53,69 +53,109 @@ struct RationPopupView: View {
         self.selectedGender = gender
         self.onMealAdded    = onMealAdded
         self.preselectedMeal = preselectedMeal
+        
+        self._selectedMeal = State(initialValue: preselectedMeal)
     }
 
     var body: some View {
         ZStack {
-            mainContent
-                .opacity(showProductDetails ? 0 : 1)
-                .allowsHitTesting(!showProductDetails)
+            // если пришёл preselectedMeal – базовый «Рацион…» не рисуем вовсе
+            if preselectedMeal == nil {
+                mainContent
+                    .opacity(showProductDetails ? 0 : 1)
+                    .allowsHitTesting(!showProductDetails)
+            }
 
+            // Список продуктов как контент этой же простыни
+            if let meal = selectedMeal {
+                ProductSelectionView(
+                    mealType: meal,
+                    date: selectedDate,
+                    onProductSelected: { product in
+                        selectedProduct = product
+                        activeMeal = meal
+                        // закрывать список не нужно — остаёмся в этой же простыни
+                        withAnimation {
+                            showProductDetails = true
+                            portionSize = "100"
+                        }
+                    },
+                    onCustomProductSelected: { custom in
+                        let generic = Product(
+                            name: custom.name,
+                            protein: custom.protein,
+                            fat: custom.fat,
+                            carbs: custom.carbs,
+                            calories: custom.calories,
+                            isFavorite: custom.isFavorite,
+                            isCustom: true
+                        )
+                        selectedProduct = generic
+                        activeMeal = meal
+                        withAnimation {
+                            showProductDetails = true
+                            portionSize = "100"
+                        }
+                    }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(1)
+            }
+
+            // Оверлей ввода граммов
             if showProductDetails, let prod = selectedProduct {
                 gramsContent(prod)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .zIndex(1)
+                    .zIndex(2)
             }
         }
         .padding()
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.large])
         .animation(.spring(response: 0.35, dampingFraction: 0.9), value: showProductDetails)
         .onAppear {
+            // просто подгружаем данные, без автопоказа второго sheet
             loadData(for: selectedDate, gender: selectedGender)
-            if let m = preselectedMeal {          // <- используем переданный приём
-                selectedMeal = m                  // авто-открываем каталог для него
-            }
         }
         .onChange(of: selectedDate) { _ in
             loadData(for: selectedDate, gender: selectedGender)
         }
-        .sheet(item: $selectedMeal) { meal in
-            ProductSelectionView(
-                mealType: meal,
-                date: selectedDate,
-                onProductSelected: { product in
-                    selectedProduct = product
-                    activeMeal = meal
-                    selectedMeal = nil
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        withAnimation {
-                            showProductDetails = true
-                            portionSize = "100"
-                        }
-                    }
-                },
-                onCustomProductSelected: { custom in
-                    let generic = Product(
-                        name: custom.name,
-                        protein: custom.protein,
-                        fat: custom.fat,
-                        carbs: custom.carbs,
-                        calories: custom.calories,
-                        isFavorite: custom.isFavorite,
-                        isCustom: true
-                    )
-                    selectedProduct = generic
-                    activeMeal = meal
-                    selectedMeal = nil
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        withAnimation {
-                            showProductDetails = true
-                            portionSize = "100"
-                        }
-                    }
-                }
-            )
-        }
+//        .sheet(item: $selectedMeal) { meal in
+//            ProductSelectionView(
+//                mealType: meal,
+//                date: selectedDate,
+//                onProductSelected: { product in
+//                    selectedProduct = product
+//                    activeMeal = meal
+//                    selectedMeal = nil
+//                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+//                        withAnimation {
+//                            showProductDetails = true
+//                            portionSize = "100"
+//                        }
+//                    }
+//                },
+//                onCustomProductSelected: { custom in
+//                    let generic = Product(
+//                        name: custom.name,
+//                        protein: custom.protein,
+//                        fat: custom.fat,
+//                        carbs: custom.carbs,
+//                        calories: custom.calories,
+//                        isFavorite: custom.isFavorite,
+//                        isCustom: true
+//                    )
+//                    selectedProduct = generic
+//                    activeMeal = meal
+//                    selectedMeal = nil
+//                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+//                        withAnimation {
+//                            showProductDetails = true
+//                            portionSize = "100"
+//                        }
+//                    }
+//                }
+//            )
+//        }
     }
 
     // MARK: — Основной контент
