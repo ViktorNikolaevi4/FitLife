@@ -14,6 +14,8 @@ struct ProductSelectionView: View {
 
     var onProductSelected: (Product) -> Void
     var onCustomProductSelected: (CustomProduct) -> Void
+    /// Если экран встроен в уже открытый лист — передайте onClose, чтобы свернуть список (а не dismiss всего листа).
+    var onClose: (() -> Void)? = nil
 
     @Environment(\.modelContext) private var modelContext
 
@@ -24,16 +26,17 @@ struct ProductSelectionView: View {
     }
 
     var filteredProducts: [Product] {
-        let baseList = selectedFilter == .favorites
-            ? cachedFilteredProducts
-            : productLoader.products
-
-        let filteredList = searchText.isEmpty ? baseList : baseList.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+        let baseList = selectedFilter == .favorites ? cachedFilteredProducts : productLoader.products
+        let filteredList = searchText.isEmpty
+            ? baseList
+            : baseList.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
         return Array(filteredList.prefix(300))
     }
 
     var filteredCustomProducts: [CustomProduct] {
-        searchText.isEmpty ? customProducts : customProducts.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+        searchText.isEmpty
+            ? customProducts
+            : customProducts.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
 
     var body: some View {
@@ -42,18 +45,19 @@ struct ProductSelectionView: View {
                 VStack {
                     Text("Таблица калорийности продуктов питания")
                     Text("(данные указаны на 100 г продукта)")
-                }.foregroundStyle(.black)
+                }
+                .foregroundStyle(.black)
 
                 Picker("Выберите категорию", selection: $selectedFilter) {
                     ForEach(FilterType.allCases, id: \.self) { filter in
                         Text(filter.rawValue).tag(filter)
                     }
                 }
-                .pickerStyle(SegmentedPickerStyle())
+                .pickerStyle(.segmented)
                 .padding(.horizontal)
 
                 TextField("Поиск еды...", text: $searchText)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .textFieldStyle(.roundedBorder)
                     .padding()
 
                 List {
@@ -77,10 +81,8 @@ struct ProductSelectionView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Создать") {
-                        isCreatingProduct = true
-                    }
-                    .foregroundColor(.blue)
+                    Button("Создать") { isCreatingProduct = true }
+                        .foregroundColor(.blue)
                 }
                 ToolbarItem(placement: .principal) {
                     VStack {
@@ -94,7 +96,9 @@ struct ProductSelectionView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Закрыть") {
-                        dismiss()
+                        // Если встроено в родительскую простыню — свернуть список;
+                        // иначе (показан как отдельный sheet) — dismiss.
+                        if let onClose { onClose() } else { dismiss() }
                     }
                     .foregroundColor(.blue)
                 }
@@ -109,18 +113,17 @@ struct ProductSelectionView: View {
                     customProducts.append(newProduct)
                 }
             }
+            .background(Color(.systemBackground).ignoresSafeArea()) 
         }
     }
 
     private func productRow(product: Product) -> some View {
         Button(action: {
-            onProductSelected(product)
-            dismiss()
+            onProductSelected(product)   // ⬅️ НЕ dismiss — поверх откроется оверлей граммов
         }) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(product.name)
-                        .font(.headline)
+                    Text(product.name).font(.headline)
                     Text("На 100 г: \(product.calories) ккал, Б \(String(format: "%.1f", product.protein)) г., Ж \(String(format: "%.1f", product.fat)) г., У \(String(format: "%.1f", product.carbs)) г.")
                         .font(.caption)
                 }
@@ -137,7 +140,7 @@ struct ProductSelectionView: View {
                     Image(systemName: product.isFavorite ? "star.fill" : "star")
                         .foregroundColor(product.isFavorite ? .yellow : .gray)
                 }
-                .buttonStyle(BorderlessButtonStyle())
+                .buttonStyle(.borderless)
                 .padding(.vertical, 4)
             }
         }
@@ -145,24 +148,20 @@ struct ProductSelectionView: View {
 
     private func customProductRow(customProduct: CustomProduct) -> some View {
         Button(action: {
-            onCustomProductSelected(customProduct)
-            dismiss()
+            onCustomProductSelected(customProduct) // ⬅️ без dismiss
         }) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(customProduct.name)
-                        .font(.headline)
+                    Text(customProduct.name).font(.headline)
                     Text("На 100 г: \(customProduct.calories) ккал, Б \(String(format: "%.1f", customProduct.protein)) г., Ж \(String(format: "%.1f", customProduct.fat)) г., У \(String(format: "%.1f", customProduct.carbs)) г.")
                         .font(.caption)
-                }.foregroundStyle(.black)
-                Spacer()
-                Button(action: {
-                    deleteCustomProduct(customProduct)
-                }) {
-                    Image(systemName: "trash")
-                        .foregroundColor(.red)
                 }
-                .buttonStyle(BorderlessButtonStyle())
+                .foregroundStyle(.black)
+                Spacer()
+                Button(action: { deleteCustomProduct(customProduct) }) {
+                    Image(systemName: "trash").foregroundColor(.red)
+                }
+                .buttonStyle(.borderless)
             }
         }
     }
@@ -193,91 +192,77 @@ struct ProductSelectionView: View {
             try modelContext.save()
             await MainActor.run {
                 self.cachedFilteredProducts = self.productLoader.products.filter { $0.isFavorite }
-                print("Статус избранного сохранен для продукта: \(product.name)")
+                print("Статус избранного сохранён: \(product.name)")
             }
         } catch {
-            await MainActor.run {
-                print("Ошибка сохранения избранного статуса: \(error)")
-            }
+            await MainActor.run { print("Ошибка сохранения избранного: \(error)") }
         }
     }
 
     private func deleteCustomProduct(_ customProduct: CustomProduct) {
-        let fetchDescriptor = FetchDescriptor<CustomProduct>()
+        let fd = FetchDescriptor<CustomProduct>()
         do {
-            let allCustomProducts = try modelContext.fetch(fetchDescriptor)
-            if let productToDelete = allCustomProducts.first(where: { $0.id == customProduct.id }) {
-                modelContext.delete(productToDelete)
+            let all = try modelContext.fetch(fd)
+            if let toDelete = all.first(where: { $0.id == customProduct.id }) {
+                modelContext.delete(toDelete)
                 try modelContext.save()
-                if let index = customProducts.firstIndex(where: { $0.id == customProduct.id }) {
-                    customProducts.remove(at: index)
+                if let idx = customProducts.firstIndex(where: { $0.id == customProduct.id }) {
+                    customProducts.remove(at: idx)
                 }
-                print("Продукт успешно удалён: \(customProduct.name)")
-            } else {
-                print("Продукт не найден для удаления: \(customProduct.name)")
+                print("Пользовательский продукт удалён: \(customProduct.name)")
             }
         } catch {
-            print("Ошибка при удалении продукта: \(error)")
+            print("Ошибка удаления: \(error)")
         }
     }
 
     private func loadCustomProducts() {
         DispatchQueue.global(qos: .background).async {
-            let fetchDescriptor = FetchDescriptor<CustomProduct>()
+            let fd = FetchDescriptor<CustomProduct>()
             do {
-                let products = try modelContext.fetch(fetchDescriptor)
-                DispatchQueue.main.async {
-                    self.customProducts = products
-                    print("Загружены пользовательские продукты: \(products.map { $0.name })")
-                }
+                let products = try modelContext.fetch(fd)
+                DispatchQueue.main.async { self.customProducts = products }
             } catch {
-                DispatchQueue.main.async {
-                    print("Ошибка загрузки пользовательских продуктов: \(error)")
-                }
+                DispatchQueue.main.async { print("Ошибка загрузки своих продуктов: \(error)") }
             }
         }
     }
 
     private func loadFavorites() {
         DispatchQueue.global(qos: .background).async {
-            let fetchDescriptor = FetchDescriptor<FoodEntry>()
+            let fd = FetchDescriptor<FoodEntry>()
             do {
-                let foodEntries = try self.modelContext.fetch(fetchDescriptor)
-                let uniqueEntries = Dictionary(grouping: foodEntries, by: { $0.product.name })
+                let entries = try self.modelContext.fetch(fd)
+                let unique = Dictionary(grouping: entries, by: { $0.product.name })
                     .compactMapValues { $0.first }
-                let favoritesDict = uniqueEntries.mapValues { $0.isFavorite }
+                let dict = unique.mapValues { $0.isFavorite }
 
                 DispatchQueue.main.async {
-                    for productIndex in self.productLoader.products.indices {
-                        if let isFavorite = favoritesDict[self.productLoader.products[productIndex].name] {
-                            self.productLoader.products[productIndex].isFavorite = isFavorite
+                    for i in self.productLoader.products.indices {
+                        if let fav = dict[self.productLoader.products[i].name] {
+                            self.productLoader.products[i].isFavorite = fav
                         }
                     }
                     self.cachedFilteredProducts = self.productLoader.products.filter { $0.isFavorite }
-                    print("Избранные продукты обновлены.")
                 }
             } catch {
-                DispatchQueue.main.async {
-                    print("Ошибка загрузки избранных продуктов: \(error)")
-                }
+                DispatchQueue.main.async { print("Ошибка загрузки избранного: \(error)") }
             }
         }
     }
 }
 
-// CustomProductCreationView
+// MARK: - CustomProductCreationView (как было)
 struct CustomProductCreationView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
-    // Поля
     @State private var name = ""
     @State private var calories = ""
     @State private var protein  = ""
     @State private var fat      = ""
     @State private var carbs    = ""
 
-    // Фокус
     private enum Field: Hashable { case name, calories, protein, fat, carbs }
     @FocusState private var focusedField: Field?
 
@@ -287,38 +272,25 @@ struct CustomProductCreationView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-
-                    Text("Новый продукт")
-                        .font(.largeTitle.bold())
-
+                    Text("Новый продукт").font(.largeTitle.bold())
                     Text("БЖУ указывайте на 100 г продукта")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(.secondary)
 
-                    // Поля с обводкой и подсветкой активного
-                    borderedTextField("Наименование", text: $name,
-                                      field: .name, keyboard: .default, submit: .next)
+                    field("Наименование", text: $name, field: .name, kb: .default, submit: .next)
                         .onSubmit { focusedField = .calories }
 
-                    borderedTextField("Энергия, ккал", text: $calories,
-                                      field: .calories, keyboard: .decimalPad, submit: .next)
+                    field("Энергия, ккал", text: $calories, field: .calories, kb: .decimalPad, submit: .next)
                         .onSubmit { focusedField = .protein }
 
                     HStack(spacing: 12) {
-                        borderedTextField("Белки, г.", text: $protein,
-                                          field: .protein, keyboard: .decimalPad, submit: .next)
+                        field("Белки, г.", text: $protein, field: .protein, kb: .decimalPad, submit: .next)
                             .onSubmit { focusedField = .fat }
-
-                        borderedTextField("Жиры, г.", text: $fat,
-                                          field: .fat, keyboard: .decimalPad, submit: .next)
+                        field("Жиры, г.", text: $fat, field: .fat, kb: .decimalPad, submit: .next)
                             .onSubmit { focusedField = .carbs }
-
-                        borderedTextField("Углеводы, г.", text: $carbs,
-                                          field: .carbs, keyboard: .decimalPad, submit: .done)
+                        field("Углеводы, г.", text: $carbs, field: .carbs, kb: .decimalPad, submit: .done)
                             .onSubmit { focusedField = nil }
                     }
 
-                    // Кнопки обычного размера
                     VStack(spacing: 10) {
                         Button("Создать", action: submit)
                             .buttonStyle(.borderedProminent)
@@ -337,28 +309,20 @@ struct CustomProductCreationView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
-                    Button("Назад") { previousField() }.disabled(focusedField == .name)
-                    Button("Далее") { nextField() }.disabled(focusedField == .carbs)
+                    Button("Назад") { prev() }.disabled(focusedField == .name)
+                    Button("Далее") { next() }.disabled(focusedField == .carbs)
                     Spacer()
                     Button("Готово") { focusedField = nil }
                 }
             }
-            .onAppear { focusedField = .name } // автофокус и мигающий курсор
+            .onAppear { focusedField = .name }
         }
         .scrollDismissesKeyboard(.interactively)
     }
 
-    // MARK: - Вспомогательные
-
-    private func borderedTextField(
-        _ title: String,
-        text: Binding<String>,
-        field: Field,
-        keyboard: UIKeyboardType,
-        submit: SubmitLabel
-    ) -> some View {
+    private func field(_ title: String, text: Binding<String>, field: Field, kb: UIKeyboardType, submit: SubmitLabel) -> some View {
         TextField(title, text: text)
-            .keyboardType(keyboard)
+            .keyboardType(kb)
             .textInputAutocapitalization(.never)
             .focused($focusedField, equals: field)
             .submitLabel(submit)
@@ -380,7 +344,7 @@ struct CustomProductCreationView: View {
         Double(carbs   .replacingOccurrences(of: ",", with: ".")) != nil
     }
 
-    private func nextField() {
+    private func next() {
         switch focusedField {
         case .name:     focusedField = .calories
         case .calories: focusedField = .protein
@@ -389,8 +353,7 @@ struct CustomProductCreationView: View {
         default:        focusedField = nil
         }
     }
-
-    private func previousField() {
+    private func prev() {
         switch focusedField {
         case .carbs:    focusedField = .fat
         case .fat:      focusedField = .protein
@@ -419,5 +382,6 @@ struct CustomProductCreationView: View {
         }
     }
 }
+
 
 
