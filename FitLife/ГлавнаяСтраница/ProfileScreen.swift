@@ -19,77 +19,79 @@ struct ProfileScreen: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                // Пол
-                SectionCard(title: "Пол") {
-                    Picker("", selection: $editingGender) {
-                        ForEach(Gender.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                }
+         ScrollView {
+             VStack(spacing: 16) {
+                 // Пол
+                 SectionCard(title: "Пол") {
+                     Picker("", selection: $editingGender) {
+                         ForEach(Gender.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                     }
+                     .pickerStyle(.segmented)
+                 }
 
-                if let user {
-                    // Делаем биндинги к @Model через @Bindable
-                    @Bindable var u = user
+                 if let user {
+                     // биндинг к @Model
+                     @Bindable var u = user
 
-                    // Возраст / Вес / Рост
-                    SectionCard(title: "Параметры") {
-                        LabeledStepperI(title: "Возраст", value: $u.age,    range: 1...100,   step: 1,   suffix: "лет")
-                        LabeledStepperD(title: "Вес",     value: $u.weight, range: 30...200,  step: 1.0, suffix: "кг")
-                        LabeledStepperD(title: "Рост",    value: $u.height, range: 100...230, step: 1.0, suffix: "см")
-                    }
-                    .onChange(of: u.age)    { _,_ in recalc(u) }
-                    .onChange(of: u.weight) { _,_ in recalc(u) }
-                    .onChange(of: u.height) { _,_ in recalc(u) }
+                     // Параметры
+                     SectionCard(title: "Параметры") {
+                         LabeledStepperI(title: "Возраст", value: $u.age,    range: 1...100,   step: 1,   suffix: "лет")
+                         LabeledStepperD(title: "Вес",     value: $u.weight, range: 30...200,  step: 1.0, suffix: "кг")
+                         LabeledStepperD(title: "Рост",    value: $u.height, range: 100...230, step: 1.0, suffix: "см")
+                     }
+                     .onChange(of: u.age)    { _,_ in recalc(u) }
+                     .onChange(of: u.weight) { _,_ in recalc(u) }
+                     .onChange(of: u.height) { _,_ in recalc(u) }
 
-                    // Активность
-                    SectionCard(title: "Физическая активность") {
-                        Picker("", selection: $u.activityLevel) {
-                            ForEach(ActivityLevel.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                        }
-                        .pickerStyle(.segmented)
-                    }
-                    .onChange(of: u.activityLevel) { _,_ in recalc(u) }
+                     // Активность
+                     SectionCard(title: "Физическая активность") {
+                         Picker("", selection: $u.activityLevel) {
+                             ForEach(ActivityLevel.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                         }
+                         .pickerStyle(.segmented)
+                     }
+                     .onChange(of: u.activityLevel) { _,_ in recalc(u) }
 
-                    // Цель
-                    SectionCard(title: "Цель") {
-                        Picker("", selection: $u.goal) {
-                            ForEach(WeightGoal.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                        }
-                        .pickerStyle(.segmented)
-                    }
-                    .onChange(of: u.goal) { _,_ in recalc(u) }
-                } else {
-                    ContentUnavailableView(
-                        "Профиль не найден",
-                        systemImage: "person.crop.circle.badge.questionmark",
-                        description: Text("Создам профиль автоматически.")
-                    )
-                    .task { ensureUserIfNeeded(for: editingGender) }
-                }
-            }
-            .padding(.vertical, 16)
-        }
-        .background(Color(.systemGray6)) // мягкий серый фон
-        .onChange(of: editingGender) { _, new in
-            activeGenderRaw = new.rawValue              // << синхронизируем
-            ensureUserIfNeeded(for: new)
-            if let u = users.first(where: { $0.gender == new }) {
-                u.gender = new
-                try? modelContext.save()
-                recalc(u)
-            }
-        }
-   //     .onAppear { ensureUserIfNeeded(for: editingGender) }
-        .onAppear {
-            activeGenderRaw = editingGender.rawValue
-            ensureUserIfNeeded(for: editingGender)
-        }
+                     // Цель
+                     SectionCard(title: "Цель") {
+                         Picker("", selection: $u.goal) {
+                             ForEach(WeightGoal.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                         }
+                         .pickerStyle(.segmented)
+                     }
+                     .onChange(of: u.goal) { _,_ in recalc(u) }
 
-        .navigationTitle("Профиль")
-        .navigationBarTitleDisplayMode(.inline)
-    }
+                     // -------- ИМТ (новая секция) --------
+                     BMISection(userData: u)
+                     // ------------------------------------
+                 } else {
+                     ContentUnavailableView(
+                         "Профиль не найден",
+                         systemImage: "person.crop.circle.badge.questionmark",
+                         description: Text("Создам профиль автоматически.")
+                     )
+                     .task { ensureUserIfNeeded(for: editingGender) }
+                 }
+             }
+             .padding(.vertical, 16)
+         }
+         .background(Color(.systemGray6))
+         .onChange(of: editingGender) { _, new in
+             activeGenderRaw = new.rawValue
+             ensureUserIfNeeded(for: new)
+             if let u = users.first(where: { $0.gender == new }) {
+                 u.gender = new
+                 try? modelContext.save()
+                 recalc(u)
+             }
+         }
+         .onAppear {
+             activeGenderRaw = editingGender.rawValue
+             ensureUserIfNeeded(for: editingGender)
+         }
+         .navigationTitle("Профиль")
+         .navigationBarTitleDisplayMode(.inline)
+     }
 
     // Создаём профиль при необходимости
     private func ensureUserIfNeeded(for gender: Gender) {
