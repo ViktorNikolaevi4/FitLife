@@ -24,15 +24,18 @@ struct WaterTrackerView: View {
 
             // Пикер температуры воды
             temperaturePicker
-     //       Spacer()
-            // Отображение прогресса по воде
-            waterProgressView
-
-            // Кнопки для управления
+            Spacer()                                // ← центрируем вертикально
+            Text("\(Int(waterPercentage))%")
+                .font(.system(size: 48, weight: .semibold))
+                .foregroundStyle(.blue)
+            Spacer()
+            Text("\(waterIntake, specifier: "%.2f") л из \(dailyGoal, specifier: "%.2f") л")
+                .font(.title3)
+                .foregroundColor(.gray)
+                .padding(.bottom, 8)
             actionButtons
-
-            // Кнопка подтверждения
             confirmButton
+                .padding(.bottom, 8)
         }
         .padding()
         .onAppear {

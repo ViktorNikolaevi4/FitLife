@@ -173,6 +173,3 @@ struct NotificationSettingsView: View {
         return arr.isEmpty ? "" : "Сегодня: " + arr.joined(separator: " • ")
     }
 }
-
-
-

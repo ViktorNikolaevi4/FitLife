@@ -1,174 +1,128 @@
-
-
 import Foundation
 import SwiftUI
 import SwiftData
 
 struct WaterTrackerViewOne: View {
-    // SwiftData
     @Environment(\.modelContext) private var modelContext
     @Query private var users: [UserData]
 
-    // активный пол, как и на главном экране
     @AppStorage(Gender.appStorageKey) private var activeGenderRaw: String = Gender.male.rawValue
     private var selectedGender: Gender { Gender(rawValue: activeGenderRaw) ?? .male }
 
-    // UI state
     @State private var showNotificationSettings = false
-    @State private var stepML: Double = 250
-    private var stepLiters: Double { stepML / 1000.0 }
-    private let portionOptions: [Double] = [200, 250, 300, 400, 500]
+    @State private var stepML: Int = 250
+    private var stepLiters: Double { Double(stepML) / 1000.0 }
+    private let portionOptions: [Int] = [200, 250, 300, 400, 500]
 
     @State private var selectedTemperature: WaterTemperature = .warm
     @State private var waterIntake: Double = 0.0
 
-    // текущий пользователь по активному полу
-    private var userData: UserData? {
-        users.first(where: { $0.gender == selectedGender })
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: AppTheme { AppTheme(colorScheme) }
+
+    private var userData: UserData? { users.first(where: { $0.gender == selectedGender }) }
+
+    // прогресс для кольца 0...1
+    private var ringProgress: Double {
+        guard dailyGoal > 0 else { return 0 }
+        return min(waterIntake / dailyGoal, 1)
     }
 
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Трекер воды")
-                .font(.headline)
-                .padding(.top, 20)
+        NavigationStack {
+            VStack(spacing: 16) {
 
-            // Температура
-            Picker("Температура воды", selection: $selectedTemperature) {
-                ForEach(WaterTemperature.allCases, id: \.self) { temp in
-                    Text(temp.rawValue).tag(temp)
+                Picker("Температура воды", selection: $selectedTemperature) {
+                    ForEach(WaterTemperature.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal)
-            .onChange(of: selectedTemperature) { _ in
-                // цель пересчитается реактивно через dailyGoal
-            }
-
-            // Прогресс
-            VStack(spacing: 8) {
-                Text("\(Int(waterPercentage))%")
-                    .font(.system(size: 30, weight: .medium))
-                    .foregroundColor(.blue)
-
-                Text("\(waterIntake, specifier: "%.2f") л из \(dailyGoal, specifier: "%.2f") л")
-                    .font(.title3)
-                    .foregroundColor(.gray)
-            }
-
-            // Кнопки
-            HStack {
-                // Левая колонка
-                VStack(spacing: 8) {
-                    Button(action: { addWater(amount: stepLiters) }) {
-                        VStack(spacing: 2) {
-                            Image(systemName: "plus")
-                            Text("Добавить воду")
-                        }
-                        .font(.title3)
-                    }
-                    .foregroundStyle(.black)
-
-                    Menu {
-                        ForEach(portionOptions, id: \.self) { ml in
-                            Button {
-                                stepML = ml
-                            } label: {
-                                HStack {
-                                    Text("\(Int(ml)) мл")
-                                    if stepML == ml { Image(systemName: "checkmark") }
-                                }
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text("\(Int(stepML)) мл")
-                            Image(systemName: "chevron.down")
-                        }
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Capsule().fill(Color(.systemGray6)))
-                    }
-                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
 
                 Spacer()
 
-                // Правая колонка
-                Button(action: { showNotificationSettings = true }) {
-                    VStack {
-                        Image(systemName: "bell")
-                        Text("Напомнить")
+                // КРУГОВАЯ ДИАГРАММА В ЦЕНТРЕ
+                HStack {
+                    Spacer()
+                    ZStack {
+                        Donut(progress: ringProgress,
+                              lineWidth: 14,
+                              track: theme.ringTrack,
+                              gradient: theme.ringGradient)
+                        .frame(width: 220, height: 220)
+                        .animation(.easeInOut(duration: 0.25), value: ringProgress)
+
+                        VStack(spacing: 6) {
+                            Text("\(Int(waterPercentage))%")
+                                .font(.system(size: 44, weight: .semibold))
+                                .foregroundStyle(.blue)
+                            Text("\(waterIntake, specifier: "%.2f") л из \(dailyGoal, specifier: "%.2f") л")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
                     }
-                    .font(.title3)
+                    Spacer()
                 }
-                .foregroundStyle(.black)
-                .sheet(isPresented: $showNotificationSettings) {
-                    NotificationSettingsView()
+
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background(theme.bg.ignoresSafeArea())
+            .onAppear { ensureUserIfNeeded(); loadWaterIntake() }
+            .onChange(of: activeGenderRaw) { _ in ensureUserIfNeeded(); loadWaterIntake() }
+            .onChange(of: users) { _ in loadWaterIntake() }
+            .navigationTitle("Трекер воды")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showNotificationSettings = true } label: {
+                        HStack(spacing: 6) { Image(systemName: "bell"); Text("Напомнить") }
+                    }
                 }
             }
-            .padding(.horizontal)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarBackground(theme.bg, for: .navigationBar)
+            .sheet(isPresented: $showNotificationSettings) { NotificationSettingsView() }
 
-            Spacer(minLength: 8)
-        }
-        .padding(.bottom, 16)
-        .onAppear {
-            ensureUserIfNeeded()
-            loadWaterIntake()
-        }
-        // если поменяли активный пол — подгрузим запись для другого пользователя
-        .onChange(of: activeGenderRaw) { _ in
-            ensureUserIfNeeded()
-            loadWaterIntake()
-        }
-        // если изменился вес пользователя — прогресс сам обновится, но перезагрузим цель/данные
-        .onChange(of: users) { _ in
-            loadWaterIntake()
+            // Белая карточка снизу
+            .safeAreaInset(edge: .bottom) {
+                VStack(spacing: 10) {
+                    WaterAddRow(
+                        portionML: $stepML,
+                        options: portionOptions,
+                        onAdd: { addWater(amount: stepLiters) }
+                    )
+                    .padding(.horizontal)
+                }
+                .padding(.top, 8)
+                .padding(.bottom, 8)
+                .background(theme.bg)
+            }
         }
     }
 
     // MARK: - Расчёты
     private var dailyGoal: Double {
         guard let user = userData else { return 0 }
-        let multiplier: Double
-        switch selectedTemperature {
-        case .cold: multiplier = 30.0
-        case .warm: multiplier = 35.0
-        case .hot:  multiplier = 40.0
-        }
-        return (user.weight * multiplier) / 1000.0
+        let m: Double = switch selectedTemperature { case .cold: 30; case .warm: 35; case .hot: 40 }
+        return (user.weight * m) / 1000.0
     }
-
     private var waterPercentage: Double {
         guard dailyGoal > 0 else { return 0 }
         return min((waterIntake / dailyGoal) * 100, 100)
     }
 
-    // MARK: - Действия
-    private func addWater(amount: Double) {
-        waterIntake += amount
-        saveWaterIntake()
-    }
+    // MARK: - Данные
+    private func addWater(amount: Double) { waterIntake += amount; saveWaterIntake() }
 
-    // MARK: - SwiftData
     private func ensureUserIfNeeded() {
         if userData == nil {
-            let newUser = UserData(
-                weight: 0, height: 0, age: 0,
-                activityLevel: .none,
-                goal: .currentWeight,
-                gender: selectedGender
-            )
-            modelContext.insert(newUser)
-            try? modelContext.save()
+            let u = UserData(weight: 0, height: 0, age: 0, activityLevel: .none, goal: .currentWeight, gender: selectedGender)
+            modelContext.insert(u); try? modelContext.save()
         }
     }
-
     private func saveWaterIntake() {
         guard let user = userData else { return }
         let today = Calendar.current.startOfDay(for: Date())
-
         do {
             let all = try modelContext.fetch(FetchDescriptor<WaterIntake>())
             if let existing = all.first(where: {
@@ -177,35 +131,80 @@ struct WaterTrackerViewOne: View {
                 existing.intake = waterIntake
             } else {
                 let entry = WaterIntake(date: today, intake: waterIntake, gender: user.gender)
-                entry.user = user
-                modelContext.insert(entry)
+                entry.user = user; modelContext.insert(entry)
             }
-            try modelContext.save()
-        } catch {
-            #if DEBUG
-            print("saveWaterIntake error:", error)
-            #endif
-        }
+            try? modelContext.save()
+        } catch { print("saveWaterIntake error:", error) }
     }
-
     private func loadWaterIntake() {
         guard let user = userData else { waterIntake = 0; return }
         let today = Calendar.current.startOfDay(for: Date())
-
         do {
             let all = try modelContext.fetch(FetchDescriptor<WaterIntake>())
             if let existing = all.first(where: {
                 Calendar.current.isDate($0.date, inSameDayAs: today) && $0.user?.id == user.id
             }) {
                 waterIntake = existing.intake
-            } else {
-                waterIntake = 0
+            } else { waterIntake = 0 }
+        } catch { waterIntake = 0 }
+    }
+}
+
+// MARK: - Белая карточка добавления воды
+private struct WaterAddRow: View {
+    @Binding var portionML: Int
+    let options: [Int]
+    var onAdd: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle().fill(Color.blue)
+                Image(systemName: "drop.fill").foregroundStyle(.white)
             }
-        } catch {
-            waterIntake = 0
-            #if DEBUG
-            print("loadWaterIntake error:", error)
-            #endif
+            .frame(width: 40, height: 40)
+
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Добавить воду").font(.headline)
+                Text("Порция \(portionML) мл")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+            }
+
+            Spacer()
+
+            Menu {
+                ForEach(options, id: \.self) { ml in
+                    Button {
+                        portionML = ml
+                    } label: {
+                        HStack { Text("\(ml) мл"); if portionML == ml { Image(systemName: "checkmark") } }
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text("\(portionML) мл").font(.subheadline.weight(.semibold))
+                    Image(systemName: "chevron.down").font(.footnote)
+                }
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background(Capsule().fill(Color(.systemGray6)))
+                .overlay(Capsule().stroke(Color.black.opacity(0.06)))
+                .foregroundStyle(.primary)
+                .contentShape(Capsule())
+            }
         }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color(.systemBackground))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.black.opacity(0.06))
+        )
+        .shadow(color: .black.opacity(0.03), radius: 6, x: 0, y: 2)
+        .contentShape(Rectangle())
+        .onTapGesture { onAdd() }
     }
 }
