@@ -9,16 +9,16 @@ struct MainTabView: View {
     var body: some View {
         TabView {
             DashboardScreen()
-                .tabItem { Image(systemName: "house.fill"); Text("Главная") }
-
-            Text("Дневник")
-                .tabItem { Image(systemName: "book"); Text("Дневник") }
-
-            Text("Статистика")
-                .tabItem { Image(systemName: "chart.bar.fill"); Text("Статистика") }
+                .tabItem { Label("Главная", systemImage: "house.fill") }
 
             ProfileScreen()
-                .tabItem { Image(systemName: "person.fill"); Text("Профиль") }
+                .tabItem { Label("Профиль", systemImage: "person.fill") }
+
+            WaterTrackerViewOne()          // ← Вода
+                .tabItem { Label("Вода", systemImage: "drop.fill") }
+
+            SettingsScreen()            // ← Настройки
+                .tabItem { Label("Настройки", systemImage: "gearshape.fill") }
         }
     }
 }
