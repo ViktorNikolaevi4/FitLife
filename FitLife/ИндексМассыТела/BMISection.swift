@@ -52,7 +52,7 @@ private struct BMICardView: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(Color(UIColor.secondarySystemBackground))
+                .fill(Color(.systemBackground))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14)

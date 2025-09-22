@@ -14,86 +14,91 @@ struct ProfileScreen: View {
         _editingGender = State(initialValue: Gender(rawValue: raw) ?? .male)
     }
 
-    private var user: UserData? {
-        users.first(where: { $0.gender == editingGender })
-    }
+    private var user: UserData? { users.first(where: { $0.gender == editingGender }) }
 
     var body: some View {
-         ScrollView {
-             VStack(spacing: 16) {
-                 // Пол
-                 SectionCard(title: "Пол") {
-                     Picker("", selection: $editingGender) {
-                         ForEach(Gender.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                     }
-                     .pickerStyle(.segmented)
-                 }
+        let bg = Color(.systemGray6)
 
-                 if let user {
-                     // биндинг к @Model
-                     @Bindable var u = user
+        NavigationStack {                // ⬅️ добавили стек
+            ScrollView {
+                VStack(spacing: 16) {
+                    // Пол
+                    SectionCard(title: "Пол") {
+                        Picker("", selection: $editingGender) {
+                            ForEach(Gender.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                    }
 
-                     // Параметры
-                     SectionCard(title: "Параметры") {
-                         LabeledStepperI(title: "Возраст", value: $u.age,    range: 1...100,   step: 1,   suffix: "лет")
-                         LabeledStepperD(title: "Вес",     value: $u.weight, range: 30...200,  step: 1.0, suffix: "кг")
-                         LabeledStepperD(title: "Рост",    value: $u.height, range: 100...230, step: 1.0, suffix: "см")
-                     }
-                     .onChange(of: u.age)    { _,_ in recalc(u) }
-                     .onChange(of: u.weight) { _,_ in recalc(u) }
-                     .onChange(of: u.height) { _,_ in recalc(u) }
+                    if let user {
+                        @Bindable var u = user
 
-                     // Активность
-                     SectionCard(title: "Физическая активность") {
-                         Picker("", selection: $u.activityLevel) {
-                             ForEach(ActivityLevel.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                         }
-                         .pickerStyle(.segmented)
-                     }
-                     .onChange(of: u.activityLevel) { _,_ in recalc(u) }
+                        // Параметры
+                        SectionCard(title: "Параметры") {
+                            LabeledStepperI(title: "Возраст", value: $u.age,    range: 1...100,   step: 1,   suffix: "лет")
+                            LabeledStepperD(title: "Вес",     value: $u.weight, range: 30...200,  step: 1.0, suffix: "кг")
+                            LabeledStepperD(title: "Рост",    value: $u.height, range: 100...230, step: 1.0, suffix: "см")
+                        }
+                        .onChange(of: u.age)    { _,_ in recalc(u) }
+                        .onChange(of: u.weight) { _,_ in recalc(u) }
+                        .onChange(of: u.height) { _,_ in recalc(u) }
 
-                     // Цель
-                     SectionCard(title: "Цель") {
-                         Picker("", selection: $u.goal) {
-                             ForEach(WeightGoal.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                         }
-                         .pickerStyle(.segmented)
-                     }
-                     .onChange(of: u.goal) { _,_ in recalc(u) }
+                        // Активность
+                        SectionCard(title: "Физическая активность") {
+                            Picker("", selection: $u.activityLevel) {
+                                ForEach(ActivityLevel.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                            }
+                            .pickerStyle(.segmented)
+                        }
+                        .onChange(of: u.activityLevel) { _,_ in recalc(u) }
 
-                     // -------- ИМТ (новая секция) --------
-                     BMISection(userData: u)
-                     // ------------------------------------
-                 } else {
-                     ContentUnavailableView(
-                         "Профиль не найден",
-                         systemImage: "person.crop.circle.badge.questionmark",
-                         description: Text("Создам профиль автоматически.")
-                     )
-                     .task { ensureUserIfNeeded(for: editingGender) }
-                 }
-             }
-             .padding(.vertical, 16)
-         }
-         .background(Color(.systemGray6))
-         .onChange(of: editingGender) { _, new in
-             activeGenderRaw = new.rawValue
-             ensureUserIfNeeded(for: new)
-             if let u = users.first(where: { $0.gender == new }) {
-                 u.gender = new
-                 try? modelContext.save()
-                 recalc(u)
-             }
-         }
-         .onAppear {
-             activeGenderRaw = editingGender.rawValue
-             ensureUserIfNeeded(for: editingGender)
-         }
-         .navigationTitle("Профиль")
-         .navigationBarTitleDisplayMode(.inline)
-     }
+                        // Цель
+                        SectionCard(title: "Цель") {
+                            Picker("", selection: $u.goal) {
+                                ForEach(WeightGoal.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                            }
+                            .pickerStyle(.segmented)
+                        }
+                        .onChange(of: u.goal) { _,_ in recalc(u) }
 
-    // Создаём профиль при необходимости
+                        // ИМТ
+                        BMISection(userData: u)
+                    } else {
+                        ContentUnavailableView(
+                            "Профиль не найден",
+                            systemImage: "person.crop.circle.badge.questionmark",
+                            description: Text("Создам профиль автоматически.")
+                        )
+                        .task { ensureUserIfNeeded(for: editingGender) }
+                    }
+                }
+                .padding(.vertical, 16)
+              //  .background(Color(.systemGray6))
+            }
+            .background(bg)
+            .navigationTitle("Профиль")                   // теперь видно
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarBackground(bg, for: .navigationBar)
+           // .toolbarBorderHidden(true, for: .navigationBar)
+// или .large если нужен большой заголовок
+            //.toolbarBackground(.visible, for: .navigationBar) // можно раскомментировать, если фон скрывается
+        }
+        .onChange(of: editingGender) { _, new in
+            activeGenderRaw = new.rawValue
+            ensureUserIfNeeded(for: new)
+            if let u = users.first(where: { $0.gender == new }) {
+                u.gender = new
+                try? modelContext.save()
+                recalc(u)
+            }
+        }
+        .onAppear {
+            activeGenderRaw = editingGender.rawValue
+            ensureUserIfNeeded(for: editingGender)
+        }
+    }
+
     private func ensureUserIfNeeded(for gender: Gender) {
         if users.first(where: { $0.gender == gender }) == nil {
             let u = UserData(weight: 70, height: 170, age: 25,
@@ -104,7 +109,6 @@ struct ProfileScreen: View {
         }
     }
 
-    // Пересчёт калорий и БЖУ + сохранение
     private func recalc(_ u: UserData) {
         let cals = MacrosCalculator.calculateCaloriesMifflin(
             gender: u.gender, weight: u.weight, height: u.height, age: u.age,
@@ -116,6 +120,7 @@ struct ProfileScreen: View {
         try? modelContext.save()
     }
 }
+
 
 // — Вспомогательные мини-контролы без дженериков —
 
@@ -165,15 +170,25 @@ private struct SectionCard<Content: View>: View {
     init(title: String? = nil, @ViewBuilder content: () -> Content) {
         self.title = title; self.content = content()
     }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let title { Text(title).font(.headline) }
             content
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Color(.secondarySystemBackground)))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.black.opacity(0.06)))
+        // если хочешь ВСЕГДА белый (даже в тёмной теме) — поставь .white
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color(.systemBackground))   // динамичный белый/чёрный
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.black.opacity(0.06))
+        )
+        .shadow(color: .black.opacity(0.03), radius: 6, x: 0, y: 2)
         .padding(.horizontal)
     }
 }
+
 
