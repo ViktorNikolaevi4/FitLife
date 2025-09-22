@@ -73,13 +73,13 @@ struct RationPopupView: View {
     var body: some View {
         ZStack {
             if preselectedMeal == nil {
-            // Основной контент (не рисуем при быстром запуске)
-            mainContent
+                // Основной контент (не рисуем при быстром запуске)
+                mainContent
                 // Прячем, когда открыт список продуктов ИЛИ открыт оверлей граммов
-                .opacity((selectedMeal == nil && !showProductDetails) ? 1 : 0)
-                .allowsHitTesting(selectedMeal == nil && !showProductDetails)
-                .padding() // пернесли padding сюда, чтобы он касался только mainContent
-        }
+                    .opacity((selectedMeal == nil && !showProductDetails) ? 1 : 0)
+                    .allowsHitTesting(selectedMeal == nil && !showProductDetails)
+                    .padding() // пернесли padding сюда, чтобы он касался только mainContent
+            }
             // Список продуктов как часть ЭТОГО ЖЕ листа
             if let meal = selectedMeal {
                 ProductSelectionView(
@@ -120,7 +120,7 @@ struct RationPopupView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(0)
             }
-
+            
             // Полупрозрачный фон под карточкой граммов
             if showProductDetails {
                 Color.black.opacity(0.25)
@@ -135,7 +135,7 @@ struct RationPopupView: View {
                         }
                     }
             }
-
+            
             // Оверлей граммов
             if showProductDetails, let prod = selectedProduct {
                 gramsContent(prod)
@@ -143,11 +143,23 @@ struct RationPopupView: View {
                     .zIndex(2)
             }
         }
-  //      .padding()
+        //      .padding()
         .presentationDetents([.large])
         .animation(.spring(response: 0.35, dampingFraction: 0.9), value: showProductDetails)
         .onAppear { loadData(for: selectedDate, gender: selectedGender) }
         .onChange(of: selectedDate) { _ in loadData(for: selectedDate, gender: selectedGender) }
+        .overlay(alignment: .topTrailing) {
+            if preselectedMeal == nil && selectedMeal == nil && !showProductDetails {
+                Button("Закрыть") { dismiss() }
+                    .font(.callout.weight(.semibold))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .padding(.top, 8)
+                    .padding(.trailing, 16)
+                    .accessibilityLabel("Закрыть")
+            }
+        }
     }
 
     // MARK: — Основной контент
@@ -177,15 +189,15 @@ struct RationPopupView: View {
                 mealSection(.snacks,    entries: snacksEntries)
             }
             .listStyle(.insetGrouped)
-
-            Spacer(minLength: 8)
-
-            Button("OK") { dismiss() }
-                .font(.headline)
-                .padding()
-                .background(Color.blue)
-                .foregroundColor(.white)
-                .cornerRadius(10)
+//
+//            Spacer(minLength: 8)
+//
+//            Button("OK") { dismiss() }
+//                .font(.headline)
+//                .padding()
+//                .background(Color.blue)
+//                .foregroundColor(.white)
+//                .cornerRadius(10)
         }
     }
 

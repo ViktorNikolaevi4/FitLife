@@ -281,6 +281,8 @@ struct DashboardScreen: View {
 }
 
 // MARK: - Карточка «Баланс»
+private enum RingDisplayMode { case target, consumed, remaining }
+
 struct BalanceCard: View {
     var consumed: Int
     var target: Int
@@ -289,9 +291,27 @@ struct BalanceCard: View {
     var carbs:    (current: Int, target: Int)
     let theme: AppTheme
 
+    @State private var mode: RingDisplayMode = .target
+
     private var progress: Double {
         guard target > 0 else { return 0 }
         return min(Double(consumed) / Double(target), 1)
+    }
+
+    private var ringNumber: Int {
+        switch mode {
+        case .target:    return target
+        case .consumed:  return consumed
+        case .remaining: return max(target - consumed, 0)
+        }
+    }
+
+    private var ringCaption: String {
+        switch mode {
+        case .target:    return "ккал"
+        case .consumed:  return "съедено"
+        case .remaining: return "осталось"
+        }
     }
 
     var body: some View {
@@ -299,16 +319,36 @@ struct BalanceCard: View {
             Text("Баланс").font(.headline)
                 .padding(.horizontal).padding(.top, 12)
 
+            // Кольцо + тап-переключатель
             HStack {
                 Spacer()
                 Donut(progress: progress, track: theme.ringTrack, gradient: theme.ringGradient)
                     .frame(width: 120, height: 120)
                     .overlay(
                         VStack(spacing: 2) {
-                            Text("\(target)").font(.title).fontWeight(.bold)
-                            Text("ккал").font(.footnote).foregroundStyle(.secondary)
+                            // красивое число с разделителями
+                            Text(ringNumber.formatted(.number.grouping(.automatic)))
+                                .font(.title).fontWeight(.bold)
+                                .contentTransition(.numericText()) // плавная смена цифр
+                            Text(ringCaption)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
                         }
                     )
+                    .contentShape(Rectangle()) // увеличиваем зону тапа
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
+                            mode = (mode == .target ? .consumed : .target)
+                        }
+                    }
+                    .onLongPressGesture {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
+                            mode = .remaining
+                        }
+                    }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel("Калорийное кольцо")
+                    .accessibilityValue("\(ringNumber) \(ringCaption)")
                 Spacer()
             }
 
@@ -336,12 +376,20 @@ struct BalanceCard: View {
             }
             .padding(.horizontal, 8)
             .padding(.bottom, 8)
+
+            // маленькая подсказка
+//            Text("Тап по кругу — съедено / цель • Долгое нажатие — осталось")
+//                .font(.caption2)
+//                .foregroundStyle(.secondary)
+//                .padding(.horizontal, 12)
+//                .padding(.bottom, 10)
         }
         .background(RoundedRectangle(cornerRadius: 16).fill(theme.card))
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(theme.border))
         .padding(.horizontal)
     }
 }
+
 
 struct Donut: View {
     var progress: Double

@@ -1,73 +1,61 @@
-//
-//  BMIPopupView.swift
-//  FitLife
-//
-//  Created by Виктор Корольков on 12.12.2024.
-//
-
 import SwiftUI
 
 struct BMIPopupView: View {
-
-    @Bindable var userData: UserData // Bindable данные пользователя
-    @Environment(\.dismiss) private var dismiss // Для закрытия окна
+    @Bindable var userData: UserData
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(spacing: 16) {
-            Text("Индекс массы тела")
-                .font(.title2)
-                .fontWeight(.bold)
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    // Заголовок теперь в navigation bar, поэтому здесь не дублируем
 
-            Text("Ваш индекс")
-                .font(.headline)
-                .foregroundColor(.gray)
+                    Text("Ваш индекс")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
 
-            let bmi = calculateBMI()
+                    let bmi = calculateBMI()
 
-            Text(String(format: "%.1f", bmi))
-                .font(.largeTitle)
-                .fontWeight(.bold)
-                .foregroundColor(colorForBMI(bmi))
+                    Text(String(format: "%.1f", bmi))
+                        .font(.system(size: 48, weight: .bold))
+                        .foregroundStyle(colorForBMI(bmi))
 
-            Text(bmiMessage(for: bmi))
-                .font(.body)
-                .foregroundColor(colorForBMI(bmi))
+                    Text(bmiMessage(for: bmi))
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(colorForBMI(bmi))
 
-            Divider()
+                    Divider().padding(.vertical, 4)
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("<18.5 — Дефицит массы тела")
-                Text("18.5 - 24.9 — Нормальная масса тела")
-                Text("25 - 29.9 — Избыточная масса тела")
-                Text(">30 — Ожирение")
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("<18.5 — Дефицит массы тела")
+                        Text("18.5 – 24.9 — Нормальная масса тела")
+                        Text("25 – 29.9 — Избыточная масса тела")
+                        Text(">30 — Ожирение")
+                    }
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                }
+                .padding(20)
             }
-            .font(.footnote)
-            .foregroundColor(.gray)
-
-            Spacer()
-
-            Button("OK") {
-                dismiss() // Закрыть окно
+            .navigationTitle("Индекс массы тела")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Закрыть") { dismiss() }
+                }
             }
-            .font(.headline)
-            .padding()
-       //     .frame(maxWidth: .infinity)
-            .background(Color.blue)
-            .foregroundColor(.white)
-            .cornerRadius(10)
         }
-        .padding()
-        .presentationDetents([.medium])
+        .presentationDetents([.medium])             // как и раньше
+        .presentationDragIndicator(.visible)
     }
 
-    // Функция для расчёта ИМТ
+    // MARK: - Расчёты и оформление
     private func calculateBMI() -> Double {
         guard userData.weight > 0, userData.height > 0 else { return 0.0 }
-        let heightInMeters = userData.height / 100
-        return userData.weight / (heightInMeters * heightInMeters)
+        let h = userData.height / 100
+        return userData.weight / (h * h)
     }
 
-    // Сообщение в зависимости от ИМТ
     private func bmiMessage(for bmi: Double) -> String {
         switch bmi {
         case ..<18.5: return "У вас дефицит массы тела"
@@ -77,7 +65,6 @@ struct BMIPopupView: View {
         }
     }
 
-    // Цвет в зависимости от ИМТ
     private func colorForBMI(_ bmi: Double) -> Color {
         switch bmi {
         case ..<18.5: return .blue
@@ -87,5 +74,6 @@ struct BMIPopupView: View {
         }
     }
 }
+
 
 
