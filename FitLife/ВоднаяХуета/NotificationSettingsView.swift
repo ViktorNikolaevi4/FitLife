@@ -69,7 +69,7 @@ struct NotificationSettingsView: View {
             .navigationTitle("Уведомления")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { dismiss() } label: { Image(systemName: "xmark") }
+                    Button("Закрыть") { dismiss() }
                 }
             }
             .tint(.blue)
