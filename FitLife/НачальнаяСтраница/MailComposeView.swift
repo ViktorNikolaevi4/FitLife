@@ -1,43 +1,66 @@
+//import SwiftUI
+//import MessageUI
 //
-//  MailComposeView.swift
-//  FitLife
+//struct MailAttachment {
+//    let data: Data
+//    let mimeType: String   // например "text/plain" или "image/png"
+//    let fileName: String   // например "log.txt"
+//}
 //
-//  Created by Виктор Корольков on 07.12.2024.
+//struct MailComposeView: UIViewControllerRepresentable {
+//    var to: [String]
+//    var subject: String
+//    var body: String
+//    var isHTML: Bool = false
+//    var attachments: [MailAttachment] = []
 //
-
-import SwiftUI
-import MessageUI
-
-// Компонент для отправки письма
-struct MailComposeView: UIViewControllerRepresentable {
-    @Binding var showMailView: Bool
-    @Binding var result: MFMailComposeResult?
-
-    func makeUIViewController(context: Context) -> MFMailComposeViewController {
-        let vc = MFMailComposeViewController()
-        vc.setToRecipients(["87v87@mail.ru"]) // Email разработчиков
-        vc.setSubject("Обратная связь по приложению")
-        vc.setMessageBody("Здравствуйте, хотел(а) бы поделиться следующим...", isHTML: false)
-        vc.mailComposeDelegate = context.coordinator
-        return vc
-    }
-
-    func updateUIViewController(_ uiViewController: MFMailComposeViewController, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-
-    class Coordinator: NSObject, MFMailComposeViewControllerDelegate {
-        var parent: MailComposeView
-
-        init(_ parent: MailComposeView) {
-            self.parent = parent
-        }
-
-        func mailComposeController(_ controller: MFMailComposeViewController, didFinishWith result: MFMailComposeResult, error: Error?) {
-            parent.result = result
-            parent.showMailView = false
-        }
-    }
-}
+//    @Binding var isPresented: Bool
+//    @Binding var result: MFMailComposeResult?
+//
+//    func makeUIViewController(context: Context) -> MFMailComposeViewController {
+//        let vc = MFMailComposeViewController()
+//        vc.setToRecipients(to)
+//        vc.setSubject(subject)
+//        vc.setMessageBody(body, isHTML: isHTML)
+//        attachments.forEach { a in
+//            vc.addAttachmentData(a.data, mimeType: a.mimeType, fileName: a.fileName)
+//        }
+//        vc.mailComposeDelegate = context.coordinator
+//        return vc
+//    }
+//
+//    func updateUIViewController(_ uiViewController: MFMailComposeViewController, context: Context) {}
+//
+//    func makeCoordinator() -> Coordinator { Coordinator(self) }
+//
+//    final class Coordinator: NSObject, MFMailComposeViewControllerDelegate {
+//        let parent: MailComposeView
+//        init(_ parent: MailComposeView) { self.parent = parent }
+//
+//        func mailComposeController(_ controller: MFMailComposeViewController,
+//                                   didFinishWith result: MFMailComposeResult,
+//                                   error: Error?) {
+//            parent.result = result
+//            parent.isPresented = false
+//        }
+//    }
+//}
+//
+//extension String {
+//    var urlEncoded: String {
+//        addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? self
+//    }
+//}
+//
+//extension Bundle {
+//    var appName: String {
+//        (object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
+//        ?? (object(forInfoDictionaryKey: "CFBundleName") as? String)
+//        ?? "App"
+//    }
+//    var appVersionBuild: String {
+//        let v = object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+//        let b = object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+//        return "\(v) (\(b))"
+//    }
+//}
