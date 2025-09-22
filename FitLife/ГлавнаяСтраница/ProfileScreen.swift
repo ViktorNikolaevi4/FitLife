@@ -35,10 +35,11 @@ struct ProfileScreen: View {
 
                         // Параметры
                         SectionCard(title: "Параметры") {
-                            LabeledStepperI(title: "Возраст", value: $u.age,    range: 1...100,   step: 1,   suffix: "лет")
-                            LabeledStepperD(title: "Вес",     value: $u.weight, range: 30...200,  step: 1.0, suffix: "кг")
-                            LabeledStepperD(title: "Рост",    value: $u.height, range: 100...230, step: 1.0, suffix: "см")
+                            ValueRowInt(title: "Возраст", value: $u.age,    range: 1...100,  unit: "лет")
+                            ValueRowDoubleAsInt(title: "Вес",   value: $u.weight, range: 30...200, unit: "кг")
+                            ValueRowDoubleAsInt(title: "Рост",  value: $u.height, range: 100...230, unit: "см")
                         }
+
                         .onChange(of: u.age)    { _,_ in recalc(u) }
                         .onChange(of: u.weight) { _,_ in recalc(u) }
                         .onChange(of: u.height) { _,_ in recalc(u) }
@@ -119,6 +120,139 @@ struct ProfileScreen: View {
         u.macros   = macros
         try? modelContext.save()
     }
+
+    // Строка с числом (Int) — по тапу открывает шит с колесом
+    private struct ValueRowInt: View {
+        let title: String
+        @Binding var value: Int
+        let range: ClosedRange<Int>
+        let unit: String
+        var step: Int = 1
+
+        @State private var showSheet = false
+
+        var body: some View {
+            Button {
+                showSheet = true
+            } label: {
+                HStack {
+                    Text(title)
+                    Spacer()
+                    Text("\(value) \(unit)")
+                        .foregroundStyle(.secondary)
+                    Image(systemName: "chevron.right")
+                        .font(.footnote)
+                        .foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .sheet(isPresented: $showSheet) {
+                NumberWheelPickerInt(
+                    title: title,
+                    value: $value,
+                    range: range,
+                    unit: unit,
+                    step: step
+                )
+            }
+        }
+    }
+
+    // Строка для Double, но колесо даёт целые (типичный кейс для кг/см)
+    // Внутри делает безопасное преобразование Int <-> Double
+    private struct ValueRowDoubleAsInt: View {
+        let title: String
+        @Binding var value: Double
+        let range: ClosedRange<Int>
+        let unit: String
+        var step: Int = 1
+
+        @State private var showSheet = false
+        @State private var temp: Int = 0
+
+        var body: some View {
+            Button {
+                temp = min(max(Int(value.rounded()), range.lowerBound), range.upperBound)
+                showSheet = true
+            } label: {
+                HStack {
+                    Text(title)
+                    Spacer()
+                    Text("\(Int(value.rounded())) \(unit)")
+                        .foregroundStyle(.secondary)
+                    Image(systemName: "chevron.right")
+                        .font(.footnote)
+                        .foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .sheet(isPresented: $showSheet) {
+                NumberWheelPickerInt(
+                    title: title,
+                    value: $temp,
+                    range: range,
+                    unit: unit,
+                    step: step,
+                    onDone: {
+                        value = Double(temp)
+                    }
+                )
+            }
+        }
+    }
+
+    // Сам шит с колесом выбора (Int)
+    private struct NumberWheelPickerInt: View {
+        let title: String
+        @Binding var value: Int
+        let range: ClosedRange<Int>
+        let unit: String
+        var step: Int = 1
+        var onDone: (() -> Void)? = nil
+
+        @Environment(\.dismiss) private var dismiss
+
+        private var values: [Int] {
+            Array(stride(from: range.lowerBound, through: range.upperBound, by: step))
+        }
+
+        var body: some View {
+            NavigationStack {
+                VStack(spacing: 0) {
+                    Picker("", selection: $value) {
+                        ForEach(values, id: \.self) { v in
+                            Text("\(v) \(unit)").tag(v)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.wheel)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 8)
+
+                    // Подпись текущего значения
+                    Text("\(value) \(unit)")
+                        .font(.title3.weight(.semibold))
+                        .padding(.vertical, 12)
+                        .foregroundStyle(.secondary)
+                }
+                .navigationTitle(title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Готово") {
+                            onDone?()
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            dismiss()
+                        }
+                    }
+                }
+                .presentationDetents([.medium, .large])
+            }
+        }
+    }
+
 }
 
 
