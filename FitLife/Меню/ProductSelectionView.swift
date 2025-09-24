@@ -173,10 +173,12 @@ struct ProductSelectionView: View {
     }
 
     private func saveFavoriteStatus(for product: Product) async {
-        let fetchDescriptor = FetchDescriptor<FoodEntry>()
+        let fd = FetchDescriptor<FoodEntry>()
         do {
-            let foodEntries = try modelContext.fetch(fetchDescriptor)
-            if let entry = foodEntries.first(where: { $0.product.name == product.name }) {
+            let entries = try modelContext.fetch(fd)
+
+            // ищем запись по id продукта (product — не опционален)
+            if let entry = entries.first(where: { $0.product?.id == product.id }) {
                 entry.isFavorite = product.isFavorite
             } else {
                 let newEntry = FoodEntry(
@@ -184,11 +186,12 @@ struct ProductSelectionView: View {
                     mealType: mealType.rawValue,
                     product: product,
                     portion: 100,
-                    gender: .male,
+                    gender: .male,              // подставь актуальный пол
                     isFavorite: product.isFavorite
                 )
                 modelContext.insert(newEntry)
             }
+
             try modelContext.save()
             await MainActor.run {
                 self.cachedFilteredProducts = self.productLoader.products.filter { $0.isFavorite }
@@ -198,6 +201,7 @@ struct ProductSelectionView: View {
             await MainActor.run { print("Ошибка сохранения избранного: \(error)") }
         }
     }
+
 
     private func deleteCustomProduct(_ customProduct: CustomProduct) {
         let fd = FetchDescriptor<CustomProduct>()
@@ -233,13 +237,17 @@ struct ProductSelectionView: View {
             let fd = FetchDescriptor<FoodEntry>()
             do {
                 let entries = try self.modelContext.fetch(fd)
-                let unique = Dictionary(grouping: entries, by: { $0.product.name })
-                    .compactMapValues { $0.first }
-                let dict = unique.mapValues { $0.isFavorite }
+
+                // словарь: id продукта -> isFavorite
+                let dict: [UUID: Bool] = entries.reduce(into: [:]) { acc, e in
+                    guard let id = e.product?.id else { return }
+                    acc[id] = e.isFavorite
+                }
 
                 DispatchQueue.main.async {
                     for i in self.productLoader.products.indices {
-                        if let fav = dict[self.productLoader.products[i].name] {
+                        let id = self.productLoader.products[i].id
+                        if let fav = dict[id] {
                             self.productLoader.products[i].isFavorite = fav
                         }
                     }

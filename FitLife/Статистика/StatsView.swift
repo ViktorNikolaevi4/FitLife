@@ -143,9 +143,10 @@ struct StatsView: View {
                 Calendar.current.isDate($0.date, inSameDayAs: date) && $0.gender == gender
             }
 
-            let totalProteins = filteredEntries.reduce(0.0) { $0 + Double($1.product.protein) }
-            let totalFats = filteredEntries.reduce(0.0) { $0 + Double($1.product.fat) }
-            let totalCarbs = filteredEntries.reduce(0.0) { $0 + Double($1.product.carbs) }
+            let totalProteins = filteredEntries.reduce(0.0) { $0 + ($1.product?.protein ?? 0) }
+            let totalFats     = filteredEntries.reduce(0.0) { $0 + ($1.product?.fat ?? 0) }
+            let totalCarbs    = filteredEntries.reduce(0.0) { $0 + ($1.product?.carbs ?? 0) }
+
 
             return [
                 "proteins": totalProteins,
@@ -167,7 +168,8 @@ struct StatsView: View {
                 let filteredEntries = foodEntries.filter {
                     Calendar.current.isDate($0.date, inSameDayAs: date) && $0.gender == gender
                 }
-                return filteredEntries.reduce(0.0) { $0 + Double($1.product.calories) }
+                return filteredEntries.reduce(0.0) { $0 + Double($1.caloriesSafe) }
+
             case .water:
                 let waterEntries = try modelContext.fetch(FetchDescriptor<WaterIntake>())
                 let filteredEntries = waterEntries.filter {
@@ -241,7 +243,7 @@ struct StatsView: View {
                 $0.date >= startDate && $0.date <= endDate && $0.gender == gender
             }
 
-            let totalCalories = filteredEntries.reduce(0) { $0 + $1.product.calories }
+            let totalCalories = filteredEntries.reduce(0) { $0 + $1.caloriesSafe }
             let daysCount = calendar.dateComponents([.day], from: startDate, to: endDate).day! + 1
             return totalCalories / max(daysCount, 1)
         } catch {
@@ -277,15 +279,16 @@ struct StatsView: View {
                 $0.date >= startDate && $0.date <= endDate && $0.gender == gender
             }
 
-            let totalProteins = filteredEntries.reduce(0) { $0 + Int($1.product.protein) }
-            let totalFats = filteredEntries.reduce(0) { $0 + Int($1.product.fat) }
-            let totalCarbs = filteredEntries.reduce(0) { $0 + Int($1.product.carbs) }
+            let totalProteins = filteredEntries.reduce(0.0) { $0 + $1.proteinSafe }
+            let totalFats     = filteredEntries.reduce(0.0) { $0 + $1.fatSafe }
+            let totalCarbs    = filteredEntries.reduce(0.0) { $0 + $1.carbsSafe }
+
             let daysCount = calendar.dateComponents([.day], from: startDate, to: endDate).day! + 1
 
             return [
-                "proteins": totalProteins / max(daysCount, 1),
-                "fats": totalFats / max(daysCount, 1),
-                "carbs": totalCarbs / max(daysCount, 1)
+                "proteins": Int(totalProteins) / max(daysCount, 1),
+                "fats": Int(totalFats) / max(daysCount, 1),
+                "carbs": Int(totalCarbs) / max(daysCount, 1)
             ]
         } catch {
             print("Ошибка загрузки данных: \(error)")

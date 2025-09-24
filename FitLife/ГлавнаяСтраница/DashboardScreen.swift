@@ -232,42 +232,53 @@ struct DashboardScreen: View {
     }
 
     private func recalcFor(_ date: Date) {
+        // общий помощник
+        func sumCalories(_ entries: [FoodEntry]) -> Int {
+            entries.reduce(0) { $0 + ($1.product?.calories ?? 0) }
+        }
+        func sumMacros(_ entries: [FoodEntry]) -> (Int, Int, Int) {
+            let p = entries.reduce(0.0) { $0 + ($1.product?.protein ?? 0) }
+            let f = entries.reduce(0.0) { $0 + ($1.product?.fat ?? 0) }
+            let c = entries.reduce(0.0) { $0 + ($1.product?.carbs ?? 0) }
+            return (Int(p), Int(f), Int(c))
+        }
+
         let descriptor = FetchDescriptor<FoodEntry>()
+
         do {
             let all = try modelContext.fetch(descriptor)
             let items = all.filter {
-                Calendar.current.isDate($0.date, inSameDayAs: date) && $0.gender == selectedGender
+                Calendar.current.isDate($0.date, inSameDayAs: date) &&
+                $0.gender == selectedGender
             }
 
-            // Разбивка по приемам
+            // Разбивка по приёмам
             let b = items.filter { $0.mealType == MealType.breakfast.rawValue }
             let l = items.filter { $0.mealType == MealType.lunch.rawValue }
             let d = items.filter { $0.mealType == MealType.dinner.rawValue }
             let s = items.filter { $0.mealType == MealType.snacks.rawValue }
 
-            // Калории по приемам
-            breakfastKcal = b.reduce(0) { $0 + $1.product.calories }
-            lunchKcal     = l.reduce(0) { $0 + $1.product.calories }
-            dinnerKcal    = d.reduce(0) { $0 + $1.product.calories }
-            snacksKcal    = s.reduce(0) { $0 + $1.product.calories }
+            // Калории по приёмам
+            breakfastKcal = sumCalories(b)
+            lunchKcal     = sumCalories(l)
+            dinnerKcal    = sumCalories(d)
+            snacksKcal    = sumCalories(s)
 
-            // Макросы по приемам (округление до целых)
-            func sumMacros(_ arr: [FoodEntry]) -> (Int, Int, Int) {
-                (Int(arr.reduce(0.0) { $0 + $1.product.protein }),
-                 Int(arr.reduce(0.0) { $0 + $1.product.fat }),
-                 Int(arr.reduce(0.0) { $0 + $1.product.carbs }))
-            }
+            // Макросы по приёмам
             let bm = sumMacros(b); breakfastMacros = (bm.0, bm.1, bm.2)
             let lm = sumMacros(l); lunchMacros     = (lm.0, lm.1, lm.2)
             let dm = sumMacros(d); dinnerMacros    = (dm.0, dm.1, dm.2)
             let sm = sumMacros(s); snacksMacros    = (sm.0, sm.1, sm.2)
 
             // Итоги дня
-            dailyConsumedCalories = items.reduce(0) { $0 + $1.product.calories }
-            consumedProteins = Int(items.reduce(0.0) { $0 + $1.product.protein })
-            consumedFats     = Int(items.reduce(0.0) { $0 + $1.product.fat })
-            consumedCarbs    = Int(items.reduce(0.0) { $0 + $1.product.carbs })
+            dailyConsumedCalories = sumCalories(items)
+            let total = sumMacros(items)
+            consumedProteins = total.0
+            consumedFats     = total.1
+            consumedCarbs    = total.2
+
         } catch {
+            // сбрасываем значения при ошибке
             dailyConsumedCalories = 0
             consumedProteins = 0
             consumedFats = 0
@@ -278,6 +289,7 @@ struct DashboardScreen: View {
             #endif
         }
     }
+
 }
 
 // MARK: - Карточка «Баланс»

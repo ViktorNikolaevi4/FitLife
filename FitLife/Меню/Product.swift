@@ -6,15 +6,13 @@ import SwiftData
 @Model
 class Product {
     @Attribute(.unique) var id: UUID = UUID()
-    var name: String
-    var protein: Double
-    var fat: Double
-    var carbs: Double
-    var calories: Int
+    var name: String = ""
+    var protein: Double = 0
+    var fat: Double = 0
+    var carbs: Double = 0
+    var calories: Int = 0
     var isFavorite: Bool = false
     var isCustom: Bool = false
-
-  //  @Relationship(inverse: \FoodEntry.product) var entries: [FoodEntry] = [] // Обратная связь
 
     init(name: String, protein: Double, fat: Double, carbs: Double, calories: Int, isFavorite: Bool = false, isCustom: Bool = false) {
         self.name = name
@@ -26,4 +24,3 @@ class Product {
         self.isCustom = isCustom
     }
 }
-

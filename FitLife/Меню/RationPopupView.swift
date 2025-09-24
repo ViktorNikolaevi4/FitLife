@@ -207,14 +207,17 @@ struct RationPopupView: View {
         Section {
             ForEach(entries) { entry in
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(entry.product.name)
+                    Text(entry.product?.name ?? "—")
                         .font(.headline)
-                    Text("Калории: \(entry.product.calories) ккал, " +
-                         "Б: \(String(format: "%.1f", entry.product.protein)) г, " +
-                         "Ж: \(String(format: "%.1f", entry.product.fat)) г, " +
-                         "У: \(String(format: "%.1f", entry.product.carbs)) г")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+
+                    Text(
+                        "Калории: \((entry.product?.calories ?? 0)) ккал, " +
+                        "Б: \(String(format: "%.1f", entry.product?.protein ?? 0)) г, " +
+                        "Ж: \(String(format: "%.1f", entry.product?.fat ?? 0)) г, " +
+                        "У: \(String(format: "%.1f", entry.product?.carbs ?? 0)) г"
+                    )
+                    .font(.caption)
+                    .foregroundColor(.secondary)
                 }
                 .swipeActions(edge: .trailing) {
                     Button(role: .destructive) {
@@ -226,7 +229,7 @@ struct RationPopupView: View {
             HStack {
                 Text(meal.displayName)
                 Spacer()
-                Text("\(entries.reduce(0) { $0 + $1.product.calories }) ккал")
+                Text("\(entries.reduce(0) { $0 + ( $1.product?.calories ?? 0 ) }) ккал")
                     .foregroundColor(.blue)
                 Button("+ добавить еду") { selectedMeal = meal }
                     .font(.caption)
@@ -300,22 +303,25 @@ struct RationPopupView: View {
     private var totalCalories: Int {
         [breakfastEntries, lunchEntries, dinnerEntries, snacksEntries]
             .flatMap { $0 }
-            .reduce(0) { $0 + $1.product.calories }
+            .reduce(0) { $0 + ( $1.product?.calories ?? 0 ) }
     }
+
     private var totalProteins: Int {
         [breakfastEntries, lunchEntries, dinnerEntries, snacksEntries]
             .flatMap { $0 }
-            .reduce(0) { $0 + Int($1.product.protein) }
+            .reduce(0) { $0 + Int($1.product?.protein ?? 0) }
     }
+
     private var totalFats: Int {
         [breakfastEntries, lunchEntries, dinnerEntries, snacksEntries]
             .flatMap { $0 }
-            .reduce(0) { $0 + Int($1.product.fat) }
+            .reduce(0) { $0 + Int($1.product?.fat ?? 0) }
     }
+
     private var totalCarbs: Int {
         [breakfastEntries, lunchEntries, dinnerEntries, snacksEntries]
             .flatMap { $0 }
-            .reduce(0) { $0 + Int($1.product.carbs) }
+            .reduce(0) { $0 + Int($1.product?.carbs ?? 0) }
     }
 
     private func calculateMacros(for product: Product) -> (protein: Double, fat: Double, carbs: Double) {

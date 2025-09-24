@@ -1,4 +1,3 @@
-
 import SwiftUI
 import SwiftData
 import Foundation
@@ -6,30 +5,24 @@ import Observation
 
 @Model
 class UserData {
-    // Основные параметры
-    var weight: Double
-    var height: Double
-    var age: Int
-    var activityLevel: ActivityLevel
-    var goal: WeightGoal
-    var gender: Gender
+    var weight: Double = 0
+    var height: Double = 0
+    var age: Int = 0
+    var activityLevel: ActivityLevel = FitLife.ActivityLevel.none
+    var goal: WeightGoal = FitLife.WeightGoal.currentWeight
+    var gender: Gender = FitLife.Gender.male
 
-    // Ранее вы хранили это так:
-    // var macros: (proteins: Int, fats: Int, carbs: Int)
+    var calories: Int = 0
+    var proteins: Int = 0
+    var fats: Int = 0
+    var carbs: Int = 0
 
-    // Теперь сохраняем как отдельные поля
-    var calories: Int
-    var proteins: Int
-    var fats: Int
-    var carbs: Int
-
-    // Инициализатор
     init(weight: Double = 0,
          height: Double = 0,
          age: Int = 0,
-         activityLevel: ActivityLevel = .none,
-         goal: WeightGoal = .currentWeight,
-         gender: Gender = .male,
+         activityLevel: ActivityLevel = FitLife.ActivityLevel.none,
+         goal: WeightGoal = FitLife.WeightGoal.currentWeight,
+         gender: Gender = FitLife.Gender.male,
          calories: Int = 0,
          proteins: Int = 0,
          fats: Int = 0,
@@ -48,7 +41,6 @@ class UserData {
     }
 }
 
-// При этом, если нужно работать с кортежем:
 extension UserData {
     var macros: (proteins: Int, fats: Int, carbs: Int) {
         get { (proteins, fats, carbs) }

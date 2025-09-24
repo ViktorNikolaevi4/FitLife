@@ -1,19 +1,17 @@
-
 import SwiftData
 import Foundation
 
 @Model
 class WaterIntake {
-    @Attribute(.unique) var id: UUID = UUID() // Уникальный идентификатор
-    var date: Date // Дата записи
-    var intake: Double // Количество выпитой воды в литрах
-    var user: UserData?
-    var gender: Gender
+    @Attribute(.unique) var id: UUID = UUID()
+    var date: Date = Foundation.Date.now
+    var intake: Double = 0
+    var user: UserData? = nil
+    var gender: Gender = FitLife.Gender.male
 
     init(date: Date, intake: Double, gender: Gender) {
         self.date = date
         self.intake = intake
         self.gender = gender
-     //   self.user = user
     }
 }

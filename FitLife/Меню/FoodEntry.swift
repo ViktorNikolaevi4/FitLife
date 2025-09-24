@@ -1,22 +1,16 @@
-//
-//  FoodEntry.swift
-//  FitLife
-//
-//  Created by Виктор Корольков on 21.12.2024.
-//
 import SwiftData
 import Foundation
 
 @Model
 class FoodEntry {
-    @Attribute(.unique) var id: UUID = UUID() // Уникальный идентификатор
-    var date: Date // Дата записи
-    var mealType: String // Тип приема пищи (Завтрак, Обед, Ужин, Перекус)
-    var portion: Double // Порция в граммах
-    var gender: Gender // Пол пользователя (мужской/женский)
-    var isFavorite: Bool = false // Новый флаг для избранного
+    @Attribute(.unique) var id: UUID = UUID()
+    var date: Date = Foundation.Date.now
+    var mealType: String = ""
+    var portion: Double = 0
+    var gender: Gender = FitLife.Gender.male
+    var isFavorite: Bool = false
 
-    @Relationship var product: Product // Ссылка на продукт
+    @Relationship var product: Product?
 
     init(date: Date, mealType: String, product: Product, portion: Double, gender: Gender, isFavorite: Bool = false) {
         self.date = date
@@ -27,4 +21,9 @@ class FoodEntry {
         self.isFavorite = isFavorite
     }
 }
-
+extension FoodEntry {
+    var caloriesSafe: Int   { product?.calories ?? 0 }
+    var proteinSafe: Double { product?.protein  ?? 0 }
+    var fatSafe: Double     { product?.fat      ?? 0 }
+    var carbsSafe: Double   { product?.carbs    ?? 0 }
+}

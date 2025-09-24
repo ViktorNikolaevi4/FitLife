@@ -18,6 +18,11 @@ struct SettingsScreen: View {
     var body: some View {
         NavigationStack {
             List {
+
+                Section {
+                    CloudStatusRow()
+                }
+
                 Section {
                     // Поделиться
                     ShareLink(item: shareURL,

@@ -79,7 +79,7 @@ import SwiftData
                     $0.gender == gender
                 }
                 let total = filtered.reduce(0) { sum, entry in
-                    sum + entry.product.calories
+                    sum + (entry.product?.calories ?? 0)
                 }
                 dailyConsumedCalories = total
             } catch {
