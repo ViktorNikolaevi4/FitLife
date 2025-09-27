@@ -44,7 +44,7 @@ struct FitLifeApp: App {
     }()
 
     var body: some Scene {
-        WindowGroup { MainTabView() }
+        WindowGroup {  RootView() }
             .modelContainer(modelContainer)
     }
 }
