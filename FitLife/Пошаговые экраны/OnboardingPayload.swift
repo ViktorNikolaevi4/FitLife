@@ -9,25 +9,86 @@ struct OnboardingPayload {
     var goal: WeightGoal = .currentWeight
 }
 
+private struct BasicsStep: View {
+    @Binding var gender: Gender
+    @Binding var age: Int
+    @Binding var weight: Double
+    @Binding var height: Double
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                Text("Основные данные")
+                    .font(.largeTitle).bold()
+                    .padding(.top, 40)
+
+                // Пол
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Пол").font(.headline)
+                    Picker("", selection: $gender) {
+                        Text("Мужчина").tag(Gender.male)
+                        Text("Женщина").tag(Gender.female)
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                // Возраст
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Возраст").font(.headline)
+                    HStack {
+                        Stepper(value: $age, in: 14...90, step: 1) { EmptyView() }
+                            .labelsHidden()
+                        Spacer()
+                        Text("\(age) лет").font(.title3).monospacedDigit()
+                    }
+                }
+
+                // Вес
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Вес").font(.headline)
+                    Slider(value: $weight, in: 35...250, step: 0.5)
+                    Text("\(weight, specifier: "%.1f") кг")
+                        .font(.title3).monospacedDigit()
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+
+                // Рост
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Рост").font(.headline)
+                    Slider(value: $height, in: 120...230, step: 1)
+                    Text("\(Int(height)) см")
+                        .font(.title3).monospacedDigit()
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.bottom, 24)
+        }
+    }
+}
+
+
 struct OnboardingView: View {
     var onFinish: (OnboardingPayload) -> Void
-
-    @Environment(\.dismiss) private var dismiss
 
     @State private var page = 0
     @State private var data = OnboardingPayload()
 
-    private let pages = 6
+    private let pages = 3   // basics + activity + goal
 
     var body: some View {
         VStack {
             TabView(selection: $page) {
-                GenderStep(gender: $data.gender).tag(0)
-                AgeStep(age: $data.age).tag(1)
-                WeightStep(weight: $data.weight).tag(2)
-                HeightStep(height: $data.height).tag(3)
-                ActivityStep(activity: $data.activity).tag(4)
-                GoalStep(goal: $data.goal).tag(5)
+                BasicsStep(
+                    gender: $data.gender,
+                    age: $data.age,
+                    weight: $data.weight,
+                    height: $data.height
+                )
+                .tag(0)
+
+                ActivityStep(activity: $data.activity).tag(1)
+                GoalStep(goal: $data.goal).tag(2)
             }
             .tabViewStyle(.page(indexDisplayMode: .always))
             .animation(.easeInOut, value: page)
@@ -50,71 +111,6 @@ struct OnboardingView: View {
         }
         .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
         .navigationBarHidden(true)
-    }
-}
-
-// MARK: — шаги
-
-private struct GenderStep: View {
-    @Binding var gender: Gender
-    var body: some View {
-        VStack(spacing: 24) {
-            Text("Кто вы?").font(.largeTitle).bold()
-            Picker("", selection: $gender) {
-                Text("Мужчина").tag(Gender.male)
-                Text("Женщина").tag(Gender.female)
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal)
-            Spacer()
-        }
-        .padding(.top, 40)
-    }
-}
-
-private struct AgeStep: View {
-    @Binding var age: Int
-    var body: some View {
-        VStack(spacing: 24) {
-            Text("Возраст").font(.largeTitle).bold()
-            Stepper(value: $age, in: 10...90, step: 1) {
-                Text("\(age) лет")
-                    .font(.title2).bold()
-            }
-            .padding(.horizontal)
-            Spacer()
-        }
-        .padding(.top, 40)
-    }
-}
-
-private struct WeightStep: View {
-    @Binding var weight: Double
-    var body: some View {
-        VStack(spacing: 24) {
-            Text("Вес").font(.largeTitle).bold()
-            Slider(value: $weight, in: 30...200, step: 0.5)
-                .padding(.horizontal)
-            Text(String(format: "%.1f кг", weight))
-                .font(.title2).bold()
-            Spacer()
-        }
-        .padding(.top, 40)
-    }
-}
-
-private struct HeightStep: View {
-    @Binding var height: Double
-    var body: some View {
-        VStack(spacing: 24) {
-            Text("Рост").font(.largeTitle).bold()
-            Slider(value: $height, in: 130...220, step: 1)
-                .padding(.horizontal)
-            Text("\(Int(height)) см")
-                .font(.title2).bold()
-            Spacer()
-        }
-        .padding(.top, 40)
     }
 }
 
