@@ -1,9 +1,13 @@
 import SwiftUI
 import SwiftData
 
+// MARK: - Хелперы
+
 extension Gender {
     static let appStorageKey = "activeGender"
 }
+
+// MARK: - Табы
 
 struct MainTabView: View {
     var body: some View {
@@ -14,14 +18,16 @@ struct MainTabView: View {
             ProfileScreen()
                 .tabItem { Label("Профиль", systemImage: "person.fill") }
 
-            WaterTrackerViewOne()          // ← Вода
+            WaterTrackerViewOne()
                 .tabItem { Label("Вода", systemImage: "drop.fill") }
 
-            SettingsScreen()            // ← Настройки
+            SettingsScreen()
                 .tabItem { Label("Настройки", systemImage: "gearshape.fill") }
         }
     }
 }
+
+// MARK: - Тема
 
 struct AppTheme {
     let bg: Color, card: Color, border: Color, subtleFill: Color, ringTrack: Color
@@ -36,7 +42,7 @@ struct AppTheme {
             subtleFill = Color.white.opacity(0.07)
             ringTrack = Color.white.opacity(0.10)
             protein = .orange; fat = .mint; carb = .blue
-            ringGradient = Gradient(colors: [.blue.opacity(0.95), .cyan.opacity(0.9), .blue.opacity(0.95)])
+            ringGradient = .init(colors: [.blue.opacity(0.95), .cyan.opacity(0.9), .blue.opacity(0.95)])
         } else {
             bg = Color(UIColor.systemGray5)
             card = Color(UIColor.secondarySystemBackground)
@@ -44,15 +50,16 @@ struct AppTheme {
             subtleFill = Color.black.opacity(0.06)
             ringTrack = Color.black.opacity(0.10)
             protein = .orange; fat = .green; carb = .blue
-            ringGradient = Gradient(colors: [.blue, .cyan, .blue])
+            ringGradient = .init(colors: [.blue, .cyan, .blue])
         }
     }
 }
 
-// ЕДИНЫЙ ключ показа нижнего листа
+// MARK: - Шиты
+
 private enum RationSheet: Identifiable {
-    case ration            // открыть «Рацион на день»
-    case quick(MealType)   // сразу открыть список продуктов для конкретного приема
+    case ration
+    case quick(MealType)
 
     var id: String {
         switch self {
@@ -63,8 +70,9 @@ private enum RationSheet: Identifiable {
 }
 
 // MARK: - Главный экран
+
 struct DashboardScreen: View {
-    // Дата
+    // Выбор даты
     @State private var selectedDate: Date = Date()
 
     // Данные
@@ -82,21 +90,30 @@ struct DashboardScreen: View {
     @State private var consumedFats = 0
     @State private var consumedCarbs = 0
 
-    // Калории по приемам
+    // Калории по приёмам
     @State private var breakfastKcal = 0
     @State private var lunchKcal = 0
     @State private var dinnerKcal = 0
     @State private var snacksKcal = 0
 
-    // Макросы по приемам (округляем до целых граммов)
+    // Макросы по приёмам
     @State private var breakfastMacros = (protein: 0, fat: 0, carb: 0)
     @State private var lunchMacros     = (protein: 0, fat: 0, carb: 0)
     @State private var dinnerMacros    = (protein: 0, fat: 0, carb: 0)
     @State private var snacksMacros    = (protein: 0, fat: 0, carb: 0)
 
-    // ЕДИНЫЙ ключ шита
+    // Шиты и календарь
     @State private var sheet: RationSheet? = nil
     @State private var showCalendar = false
+
+    // Состояния разворота списков
+    @State private var expandedMeals: Set<MealType> = []
+
+    // Списки продуктов по приёмам
+    @State private var breakfastItems: [FoodEntry] = []
+    @State private var lunchItems: [FoodEntry] = []
+    @State private var dinnerItems: [FoodEntry] = []
+    @State private var snacksItems: [FoodEntry] = []
 
     private var userData: UserData? {
         users.first(where: { $0.gender == selectedGender })
@@ -124,7 +141,9 @@ struct DashboardScreen: View {
                             theme: theme,
                             calories: (breakfastKcal, lunchKcal, dinnerKcal, snacksKcal),
                             macros: (breakfastMacros, lunchMacros, dinnerMacros, snacksMacros),
-                            onTapMeal: { meal in sheet = .quick(meal) }  // ← ОТКРЫВАЕМ СРАЗУ СПИСОК
+                            entries: (breakfastItems, lunchItems, dinnerItems, snacksItems),
+                            expanded: $expandedMeals,
+                            onTapMeal: { meal in sheet = .quick(meal) }
                         )
                         .padding(.horizontal)
                     } else {
@@ -145,9 +164,7 @@ struct DashboardScreen: View {
         .onChange(of: selectedDate) { recalcFor($0) }
         .onChange(of: activeGenderRaw) { _ in recalcFor(selectedDate) }
         .sheet(item: $sheet) { key in
-            let preset: MealType? = {
-                if case let .quick(m) = key { return m } else { return nil }
-            }()
+            let preset: MealType? = { if case let .quick(m) = key { m } else { nil } }()
             RationPopupView(
                 gender: selectedGender,
                 selectedDate: $selectedDate,
@@ -158,24 +175,17 @@ struct DashboardScreen: View {
         .sheet(isPresented: $showCalendar) {
             NavigationStack {
                 VStack {
-                    DatePicker(
-                        "",
-                        selection: $selectedDate,
-                        displayedComponents: .date
-                    )
-                    .datePickerStyle(.graphical)   // календарь
-                    .labelsHidden()
-                    .environment(\.locale, Locale(identifier: "ru_RU"))
+                    DatePicker("", selection: $selectedDate, displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                        .labelsHidden()
+                        .environment(\.locale, Locale(identifier: "ru_RU"))
                 }
                 .padding()
                 .navigationTitle("Выберите дату")
-                .toolbarTitleDisplayMode(.inline)  
+                .toolbarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
-                        Button("Сегодня") {
-                            selectedDate = Date()
-                            showCalendar = false
-                        }
+                        Button("Сегодня") { selectedDate = Date(); showCalendar = false }
                     }
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Готово") { showCalendar = false }
@@ -186,38 +196,39 @@ struct DashboardScreen: View {
         }
     }
 
-    // Шапка + кнопка «+»
+    // MARK: - Вью-шапка
+
     private func header(_ theme: AppTheme) -> some View {
         HStack(alignment: .center) {
-            Button {
-                showCalendar = true
-            } label: {
+            Button { showCalendar = true } label: {
                 Text(formattedToday(selectedDate))
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                    .contentShape(Rectangle())   // удобная зона тапа
+                    .font(.largeTitle).fontWeight(.bold)
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+
             Spacer()
+
             Button(action: { sheet = .ration }) {
                 Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 28, weight: .semibold))
+                    .font(.system(size: 34, weight: .semibold))
+                    .foregroundStyle(.blue)
             }
             .buttonStyle(.plain)
-            .tint(.blue)
+            .tint(theme.carb)
         }
         .padding(.horizontal)
     }
 
-    // «21 сентября»
     private func formattedToday(_ date: Date) -> String {
         let df = DateFormatter()
         df.locale = Locale(identifier: "ru_RU")
         df.setLocalizedDateFormatFromTemplate("d MMMM")
         return df.string(from: date)
     }
+
+    // MARK: - Данные
 
     private func ensureUserIfNeeded() {
         if userData == nil {
@@ -232,7 +243,6 @@ struct DashboardScreen: View {
     }
 
     private func recalcFor(_ date: Date) {
-        // общий помощник
         func sumCalories(_ entries: [FoodEntry]) -> Int {
             entries.reduce(0) { $0 + ($1.product?.calories ?? 0) }
         }
@@ -252,19 +262,24 @@ struct DashboardScreen: View {
                 $0.gender == selectedGender
             }
 
-            // Разбивка по приёмам
             let b = items.filter { $0.mealType == MealType.breakfast.rawValue }
             let l = items.filter { $0.mealType == MealType.lunch.rawValue }
             let d = items.filter { $0.mealType == MealType.dinner.rawValue }
             let s = items.filter { $0.mealType == MealType.snacks.rawValue }
 
-            // Калории по приёмам
+            // Списки для раскрытия
+            breakfastItems = b
+            lunchItems     = l
+            dinnerItems    = d
+            snacksItems    = s
+
+            // Калории
             breakfastKcal = sumCalories(b)
             lunchKcal     = sumCalories(l)
             dinnerKcal    = sumCalories(d)
             snacksKcal    = sumCalories(s)
 
-            // Макросы по приёмам
+            // Макросы
             let bm = sumMacros(b); breakfastMacros = (bm.0, bm.1, bm.2)
             let lm = sumMacros(l); lunchMacros     = (lm.0, lm.1, lm.2)
             let dm = sumMacros(d); dinnerMacros    = (dm.0, dm.1, dm.2)
@@ -278,7 +293,6 @@ struct DashboardScreen: View {
             consumedCarbs    = total.2
 
         } catch {
-            // сбрасываем значения при ошибке
             dailyConsumedCalories = 0
             consumedProteins = 0
             consumedFats = 0
@@ -289,10 +303,10 @@ struct DashboardScreen: View {
             #endif
         }
     }
-
 }
 
 // MARK: - Карточка «Баланс»
+
 private enum RingDisplayMode { case target, consumed, remaining }
 
 struct BalanceCard: View {
@@ -331,23 +345,21 @@ struct BalanceCard: View {
             Text("Баланс").font(.headline)
                 .padding(.horizontal).padding(.top, 12)
 
-            // Кольцо + тап-переключатель
             HStack {
                 Spacer()
                 Donut(progress: progress, track: theme.ringTrack, gradient: theme.ringGradient)
                     .frame(width: 120, height: 120)
                     .overlay(
                         VStack(spacing: 2) {
-                            // красивое число с разделителями
                             Text(ringNumber.formatted(.number.grouping(.automatic)))
                                 .font(.title).fontWeight(.bold)
-                                .contentTransition(.numericText()) // плавная смена цифр
+                                .contentTransition(.numericText())
                             Text(ringCaption)
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }
                     )
-                    .contentShape(Rectangle()) // увеличиваем зону тапа
+                    .contentShape(Rectangle())
                     .onTapGesture {
                         withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
                             mode = (mode == .target ? .consumed : .target)
@@ -365,43 +377,21 @@ struct BalanceCard: View {
             }
 
             VStack(spacing: 10) {
-                MacroProgressRow(title: "Белки",
-                                 current: proteins.current,
-                                 target: proteins.target,
-                                 tint: theme.protein,
-                                 theme: theme,
-                                 height: 8)
-
-                MacroProgressRow(title: "Жиры",
-                                 current: fats.current,
-                                 target: fats.target,
-                                 tint: theme.fat,
-                                 theme: theme,
-                                 height: 8)
-
-                MacroProgressRow(title: "Углеводы",
-                                 current: carbs.current,
-                                 target: carbs.target,
-                                 tint: theme.carb,
-                                 theme: theme,
-                                 height: 8)
+                MacroProgressRow(title: "Белки", current: proteins.current, target: proteins.target,
+                                 tint: theme.protein, theme: theme, height: 8)
+                MacroProgressRow(title: "Жиры", current: fats.current, target: fats.target,
+                                 tint: theme.fat, theme: theme, height: 8)
+                MacroProgressRow(title: "Углеводы", current: carbs.current, target: carbs.target,
+                                 tint: theme.carb, theme: theme, height: 8)
             }
             .padding(.horizontal, 8)
             .padding(.bottom, 8)
-
-            // маленькая подсказка
-//            Text("Тап по кругу — съедено / цель • Долгое нажатие — осталось")
-//                .font(.caption2)
-//                .foregroundStyle(.secondary)
-//                .padding(.horizontal, 12)
-//                .padding(.bottom, 10)
         }
         .background(RoundedRectangle(cornerRadius: 16).fill(theme.card))
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(theme.border))
         .padding(.horizontal)
     }
 }
-
 
 struct Donut: View {
     var progress: Double
@@ -426,7 +416,7 @@ struct MacroProgressRow: View {
     let target: Int
     let tint: Color
     let theme: AppTheme
-    var height: CGFloat = 8 // толщина
+    var height: CGFloat = 8
 
     private var fraction: Double {
         guard target > 0 else { return 0 }
@@ -451,10 +441,10 @@ struct MacroProgressRow: View {
 }
 
 struct ThickProgressBar: View {
-    var fraction: Double      // 0...1
-    var fill: Color           // цвет заполнения
-    var track: Color          // цвет трека
-    var height: CGFloat = 10  // толщина
+    var fraction: Double
+    var fill: Color
+    var track: Color
+    var height: CGFloat = 10
 
     var body: some View {
         GeometryReader { geo in
@@ -469,7 +459,8 @@ struct ThickProgressBar: View {
     }
 }
 
-// MARK: - Блок «Приемы пищи»
+// MARK: - Приёмы пищи + раскрывающиеся списки
+
 struct MealsSection: View {
     let theme: AppTheme
     let calories: (breakfast: Int, lunch: Int, dinner: Int, snacks: Int)
@@ -479,10 +470,26 @@ struct MealsSection: View {
         dinner:    (protein: Int, fat: Int, carb: Int),
         snacks:    (protein: Int, fat: Int, carb: Int)
     )
+    let entries: (
+        breakfast: [FoodEntry],
+        lunch:     [FoodEntry],
+        dinner:    [FoodEntry],
+        snacks:    [FoodEntry]
+    )
+
+    @Binding var expanded: Set<MealType>
     var onTapMeal: (MealType) -> Void
+
+    private func isExpanded(_ m: MealType) -> Bool { expanded.contains(m) }
+    private func toggle(_ m: MealType) {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            if expanded.remove(m) == nil { expanded.insert(m) }
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            // Завтрак
             Button { onTapMeal(.breakfast) } label: {
                 MealRow(
                     title: "Завтрак",
@@ -490,10 +497,19 @@ struct MealsSection: View {
                     kcal: calories.breakfast > 0 ? calories.breakfast : nil,
                     macros: calories.breakfast > 0 ? macros.breakfast : nil,
                     theme: theme,
-                    badgeFill: .pinkovo
+                    badgeFill: .pinkovo,
+                    showChevron: !entries.breakfast.isEmpty,
+                    chevronExpanded: isExpanded(.breakfast),
+                    onChevronTap: { toggle(.breakfast) }
                 )
-            }.buttonStyle(.plain)
+            }
+            .buttonStyle(.plain)
 
+            if isExpanded(.breakfast) {
+                ProductsList(entries.breakfast, theme: theme)
+            }
+
+            // Обед
             Button { onTapMeal(.lunch) } label: {
                 MealRow(
                     title: "Обед",
@@ -501,10 +517,19 @@ struct MealsSection: View {
                     kcal: calories.lunch > 0 ? calories.lunch : nil,
                     macros: calories.lunch > 0 ? macros.lunch : nil,
                     theme: theme,
-                    badgeFill: .zeleneko
+                    badgeFill: .zeleneko,
+                    showChevron: !entries.lunch.isEmpty,
+                    chevronExpanded: isExpanded(.lunch),
+                    onChevronTap: { toggle(.lunch) }
                 )
-            }.buttonStyle(.plain)
+            }
+            .buttonStyle(.plain)
 
+            if isExpanded(.lunch) {
+                ProductsList(entries.lunch, theme: theme)
+            }
+
+            // Ужин
             Button { onTapMeal(.dinner) } label: {
                 MealRow(
                     title: "Ужин",
@@ -512,10 +537,19 @@ struct MealsSection: View {
                     kcal: calories.dinner > 0 ? calories.dinner : nil,
                     macros: calories.dinner > 0 ? macros.dinner : nil,
                     theme: theme,
-                    badgeFill: .sinenko
+                    badgeFill: .sinenko,
+                    showChevron: !entries.dinner.isEmpty,
+                    chevronExpanded: isExpanded(.dinner),
+                    onChevronTap: { toggle(.dinner) }
                 )
-            }.buttonStyle(.plain)
+            }
+            .buttonStyle(.plain)
 
+            if isExpanded(.dinner) {
+                ProductsList(entries.dinner, theme: theme)
+            }
+
+            // Перекус
             Button { onTapMeal(.snacks) } label: {
                 MealRow(
                     title: "Перекус",
@@ -523,12 +557,22 @@ struct MealsSection: View {
                     kcal: calories.snacks > 0 ? calories.snacks : nil,
                     macros: calories.snacks > 0 ? macros.snacks : nil,
                     theme: theme,
-                    badgeFill: .zheltenko
+                    badgeFill: .zheltenko,
+                    showChevron: !entries.snacks.isEmpty,
+                    chevronExpanded: isExpanded(.snacks),
+                    onChevronTap: { toggle(.snacks) }
                 )
-            }.buttonStyle(.plain)
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded(.snacks) {
+                ProductsList(entries.snacks, theme: theme)
+            }
         }
     }
 }
+
+// MARK: - Ряд приёма пищи
 
 struct MealRow: View {
     let title: String
@@ -537,21 +581,19 @@ struct MealRow: View {
     let macros: (protein: Int, fat: Int, carb: Int)?
     let theme: AppTheme
     var badgeFill: Color = .accentColor
+
+    var showChevron: Bool = false
+    var chevronExpanded: Bool = false
+    var onChevronTap: (() -> Void)? = nil
+
     var macrosTopInset: CGFloat = 4
 
     var body: some View {
         HStack(spacing: 12) {
-            ZStack {
-                Circle().fill(badgeFill)
-                Image(systemName: systemImage)
-                    .font(.title3)
-                    .foregroundStyle(.white) // белая иконка
-            }
-            .frame(width: 40, height: 40)
+            ZstackIcon
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(title).font(.headline)
-
                 if let m = macros {
                     Text("Б \(m.protein) • Ж \(m.fat) • У \(m.carb) г")
                         .font(.caption)
@@ -561,11 +603,84 @@ struct MealRow: View {
             }
 
             Spacer()
-            Text(kcal.map { "\($0) kcal" } ?? "Добавить")
-                .foregroundStyle(.secondary)
+
+            HStack(spacing: 8) {
+                Text(kcal.map { "\($0) kcal" } ?? "Добавить")
+                    .foregroundStyle(.secondary)
+
+                if showChevron {
+                    Button(action: { onChevronTap?() }) {
+                        Image(systemName: "chevron.right")
+                            .rotationEffect(.degrees(chevronExpanded ? 90 : 0))
+                            .foregroundStyle(.secondary)
+                            .font(.system(size: 15, weight: .semibold))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 14).fill(theme.card))
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(theme.border))
+    }
+
+    private var ZstackIcon: some View {
+        ZStack {
+            Circle().fill(badgeFill)
+            Image(systemName: systemImage)
+                .font(.title3)
+                .foregroundStyle(.white)
+        }
+        .frame(width: 40, height: 40)
+    }
+}
+
+// MARK: - Список продуктов внутри раскрытия
+
+private struct ProductsList: View {
+    let items: [FoodEntry]
+    let theme: AppTheme
+
+    init(_ items: [FoodEntry], theme: AppTheme) {
+        self.items = items
+        self.theme = theme
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(items.indices, id: \.self) { i in
+                let entry = items[i]
+
+                HStack {
+                    Text(entry.product?.name ?? "Продукт")
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    HStack(spacing: 8) {
+                        if entry.portion > 0 {
+                            Text("\(Int(entry.portion)) г")
+                        }
+                        Text("\(entry.product?.calories ?? 0) ккал")
+                    }
+                    .foregroundStyle(.secondary)
+                }
+                .font(.subheadline)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+
+                // разделитель под строкой (кроме последней)
+                if i != items.indices.last {
+                    Rectangle()
+                        .fill(Color(UIColor.separator))   // системный цвет разделителя
+                        .frame(height: 0.5)
+                        .padding(.leading, 16)            // чтобы линия начиналась под текстом
+                }
+            }
+        }
+        .padding(.leading, 52)  // чтобы визуально «заходило» под круглую иконку
+        .padding(.trailing, 2)
+        .transition(.opacity.combined(with: .move(edge: .top)))
     }
 }
