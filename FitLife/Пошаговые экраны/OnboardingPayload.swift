@@ -46,12 +46,14 @@ private struct BasicsStep: View {
                 // Вес
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Вес").font(.headline)
-                    Slider(value: $weight, in: 35...250, step: 0.5)
-                    Text("\(weight, specifier: "%.1f") кг")
-                        .font(.title3).monospacedDigit()
-                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    HStack {
+                        Stepper(value: $weight, in: 35...250, step: 1) { EmptyView() }
+                            .labelsHidden()
+                        Spacer()
+                        Text("\(weight, specifier: "%.1f") кг")
+                            .font(.title3).monospacedDigit()
+                    }
                 }
-
                 // Рост
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Рост").font(.headline)
