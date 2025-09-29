@@ -605,7 +605,7 @@ struct MealRow: View {
             Spacer()
 
             HStack(spacing: 8) {
-                Text(kcal.map { "\($0) kcal" } ?? "Добавить")
+                Text(kcal.map { "\($0)\u{00A0}ккал" } ?? "Добавить")
                     .foregroundStyle(.secondary)
 
                 if showChevron {
