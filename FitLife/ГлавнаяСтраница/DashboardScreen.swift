@@ -416,29 +416,55 @@ struct MacroProgressRow: View {
     let target: Int
     let tint: Color
     let theme: AppTheme
-    var height: CGFloat = 8
+    var height: CGFloat = 8            // толщина прогресс-бара
+    var warnEnabled: Bool = true       // можно отключить, если надо
+
+    private var isOver: Bool {
+        warnEnabled && target > 0 && current > target
+    }
 
     private var fraction: Double {
         guard target > 0 else { return 0 }
         return min(Double(current) / Double(target), 1)
     }
 
+    private var fillColor: Color { isOver ? .red : tint }
+    private var trackColor: Color { isOver ? Color.red.opacity(0.25) : theme.ringTrack }
+    private var valueColor: Color { isOver ? .red : .secondary }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
+            HStack(spacing: 6) {
+                if isOver {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                        .accessibilityHidden(true)
+                }
                 Text(title)
+
                 Spacer()
                 Text("\(current) / \(target) г")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .fontWeight(isOver ? .semibold : .regular)
+                    .foregroundStyle(valueColor)
             }
-            ThickProgressBar(fraction: fraction, fill: tint, track: theme.ringTrack, height: height)
-                .animation(.easeInOut(duration: 0.25), value: fraction)
+
+            ThickProgressBar(
+                fraction: fraction,
+                fill: fillColor,
+                track: trackColor,
+                height: height
+            )
+            .animation(.easeInOut(duration: 0.25), value: fraction)
         }
         .padding(.horizontal, 12)
         .padding(.bottom, 8)
+        .accessibilityLabel(Text("\(title). \(current) из \(target) грамм"))
+        .accessibilityHint(isOver ? Text("Перебор по \(title.lowercased())") : Text(""))
     }
 }
+
 
 struct ThickProgressBar: View {
     var fraction: Double
