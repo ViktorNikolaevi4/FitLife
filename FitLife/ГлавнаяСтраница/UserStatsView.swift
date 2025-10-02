@@ -211,8 +211,8 @@ struct PickerView: View {
 
 enum ActivityLevel: String, CaseIterable, Codable {
     case none = "Нет"
-    case light = "1-2 раза"
-    case moderate = "3-5 раза"
+    case light = "1-3 раза"
+    case moderate = "4-5 раза"
     case pro = "PRO"
 
     var message: String {
