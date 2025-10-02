@@ -9,7 +9,8 @@ struct FitLifeApp: App {
             FoodEntry.self,
             Product.self,
             CustomProduct.self,
-            WaterIntake.self
+            WaterIntake.self,
+            BodyMeasurements.self
         ])
 
         #if DEBUG

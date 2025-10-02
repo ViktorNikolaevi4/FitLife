@@ -72,6 +72,7 @@ struct ProfileScreen: View {
                         )
                         .task { ensureUserIfNeeded(for: editingGender) }
                     }
+                    MeasurementsCard()
                 }
                 .padding(.vertical, 16)
               //  .background(Color(.systemGray6))

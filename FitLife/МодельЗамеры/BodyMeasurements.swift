@@ -1,0 +1,25 @@
+import Foundation
+import SwiftData
+
+@Model
+final class BodyMeasurements {
+    @Attribute(.unique) var id: UUID = UUID()
+    var date: Date = Foundation.Date.now               // дата замера
+    var chest: Double = 0               // грудь, см
+    var waist: Double = 0               // талия (самое узкое), см
+    var belly: Double = 0               // живот (на уровне пупка), см
+    var hips: Double = 0                // бёдра, см
+
+    init(date: Date = Foundation.Date.now,
+         chest: Double,
+         waist: Double,
+         belly: Double,
+         hips: Double
+    ) {
+        self.date = date
+        self.chest = chest
+        self.waist = waist
+        self.belly = belly
+        self.hips = hips
+    }
+}
