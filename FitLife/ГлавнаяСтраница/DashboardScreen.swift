@@ -201,12 +201,19 @@ struct DashboardScreen: View {
     // MARK: Header
 
     private func header(_ theme: AppTheme) -> some View {
-        HStack(alignment: .center) {
+        return HStack(alignment: .center) {
             Button { showCalendar = true } label: {
-                Text(formattedToday(selectedDate))
-                    .font(.largeTitle).fontWeight(.bold)
-                    .lineLimit(1).minimumScaleFactor(0.8)
-                    .contentShape(Rectangle())
+                HStack(spacing: 8) {
+                    Text(formattedToday(selectedDate))
+                        .font(.largeTitle).fontWeight(.bold)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+
+                    Image(systemName: "chevron.down")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 4)
+                }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
@@ -222,6 +229,7 @@ struct DashboardScreen: View {
         }
         .padding(.horizontal)
     }
+
 
     private func formattedToday(_ date: Date) -> String {
         let df = DateFormatter()
@@ -776,6 +784,8 @@ private struct EditEntrySheet: View {
     var onSave: (Double) -> Void
     var onDelete: () -> Void
 
+    @Environment(\.dismiss) private var dismiss
+
     var body: some View {
         VStack(spacing: 16) {
             RoundedRectangle(cornerRadius: 2)
@@ -783,7 +793,8 @@ private struct EditEntrySheet: View {
                 .opacity(0.2)
                 .padding(.top, 8)
 
-            Text(entry.product?.name ?? "Продукт").font(.headline)
+            Text(entry.product?.name ?? "Продукт")
+                .font(.headline)
 
             TextField("Порция, г", text: $gramsText)
                 .keyboardType(.numberPad)
@@ -791,10 +802,7 @@ private struct EditEntrySheet: View {
                 .padding(.horizontal)
                 .onChange(of: gramsText) { gramsText = gramsText.filter(\.isNumber) }
 
-            if
-                let p = Double(gramsText),
-                let pr = entry.product
-            {
+            if let p = Double(gramsText), let pr = entry.product {
                 // коэффициент пересчёта относительно текущей порции
                 let k = max(1.0, p) / max(1.0, entry.portion)
                 VStack(spacing: 6) {
@@ -826,5 +834,17 @@ private struct EditEntrySheet: View {
 
             Spacer(minLength: 8)
         }
+        // ← overlay ДОЛЖЕН быть модификатором у возвращаемого VStack
+        .overlay(alignment: .topTrailing) {
+                        Button("Закрыть") { dismiss() }
+                            .buttonStyle(.plain)
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(.secondary) 
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(.ultraThinMaterial, in: Capsule())
+                            .padding(8)
+                            .accessibilityLabel("Закрыть")
+                    }
     }
 }
