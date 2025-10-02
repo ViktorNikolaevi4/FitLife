@@ -396,10 +396,18 @@ struct BalanceCard: View {
                 Button(action: {
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) { cycleMode() }
                 }) {
-                    HStack(spacing: 6) {
-                        Text("\(modeTitle): \(modeValueText)")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                    HStack(spacing: 8) {
+                        VStack(alignment: .trailing, spacing: 2) {
+                               Text(modeTitle)
+                                   .font(.subheadline.weight(.semibold))
+                                   .foregroundStyle(.secondary)
+                               Text(modeValueText)
+                                   .font(.subheadline.weight(.semibold))
+                                   .foregroundStyle(.secondary)
+                                   .lineLimit(1)
+                           }
+                           .multilineTextAlignment(.trailing)
+                          .fixedSize(horizontal: false, vertical: true)
                         Image(systemName: "chevron.down")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
