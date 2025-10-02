@@ -368,11 +368,50 @@ struct BalanceCard: View {
         }
     }
 
+    // Текст для правого верхнего переключателя
+    private var modeTitle: String {
+        switch mode {
+        case .target:    return "Цель"
+        case .consumed:  return "Съедено"
+        case .remaining: return "Осталось"
+        }
+    }
+    private var modeValueText: String {
+        "\(ringNumber.formatted(.number.grouping(.automatic))) ккал"
+    }
+    private func cycleMode() {
+        switch mode {
+        case .target:    mode = .consumed
+        case .consumed:  mode = .remaining
+        case .remaining: mode = .target
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Баланс").font(.headline)
-                .padding(.horizontal).padding(.top, 12)
+            // Заголовок + переключатель режима справа
+            HStack {
+                Text("Баланс").font(.headline)
+                Spacer()
+                Button(action: {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) { cycleMode() }
+                }) {
+                    HStack(spacing: 6) {
+                        Text("\(modeTitle): \(modeValueText)")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Image(systemName: "chevron.down")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 1)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal)
+            .padding(.top, 12)
 
+            // Кольцо
             HStack {
                 Spacer()
                 Donut(progress: progress, track: theme.ringTrack, gradient: theme.ringGradient)
@@ -390,7 +429,7 @@ struct BalanceCard: View {
                     .contentShape(Rectangle())
                     .onTapGesture {
                         withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
-                            mode = (mode == .target ? .consumed : .target)
+                            cycleMode()
                         }
                     }
                     .onLongPressGesture {
@@ -420,6 +459,7 @@ struct BalanceCard: View {
         .padding(.horizontal)
     }
 }
+
 
 struct Donut: View {
     var progress: Double
