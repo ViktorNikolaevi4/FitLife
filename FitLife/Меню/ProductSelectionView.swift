@@ -6,18 +6,24 @@ struct ProductSelectionView: View {
     let mealType: MealType
     let date: Date
     @State var productLoader = ProductLoader()
+
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+
     @State private var searchText: String = ""
     @State private var selectedFilter: FilterType = .all
     @State private var isCreatingProduct: Bool = false
+
+    // кэш «Любимых»
     @State private var cachedFilteredProducts: [Product] = []
+
+    // частоты использования по имени продукта
+    @State private var usageCounts: [String: Int] = [:]
 
     var onProductSelected: (Product) -> Void
     var onCustomProductSelected: (CustomProduct) -> Void
     /// Если экран встроен в уже открытый лист — передайте onClose, чтобы свернуть список (а не dismiss всего листа).
     var onClose: (() -> Void)? = nil
-
-    @Environment(\.modelContext) private var modelContext
 
     enum FilterType: String, CaseIterable {
         case all = "Общие"
@@ -25,19 +31,37 @@ struct ProductSelectionView: View {
         case custom = "Свои"
     }
 
+    // MARK: - Списки (фильтр + сортировка: usage desc → name asc)
+
     var filteredProducts: [Product] {
-        let baseList = selectedFilter == .favorites ? cachedFilteredProducts : productLoader.products
-        let filteredList = searchText.isEmpty
-            ? baseList
-            : baseList.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-        return Array(filteredList.prefix(300))
+        let base = (selectedFilter == .favorites ? cachedFilteredProducts : productLoader.products)
+        let filtered = searchText.isEmpty
+            ? base
+            : base.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+
+        let sorted = filtered.sorted { a, b in
+            let ca = usageCounts[a.name] ?? 0
+            let cb = usageCounts[b.name] ?? 0
+            if ca != cb { return ca > cb }
+            return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+        }
+        return Array(sorted.prefix(300))
     }
 
     var filteredCustomProducts: [CustomProduct] {
-        searchText.isEmpty
+        let base = searchText.isEmpty
             ? customProducts
             : customProducts.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+
+        return base.sorted { a, b in
+            let ca = usageCounts[a.name] ?? 0
+            let cb = usageCounts[b.name] ?? 0
+            if ca != cb { return ca > cb }
+            return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+        }
     }
+
+    // MARK: - UI
 
     var body: some View {
         NavigationStack {
@@ -73,6 +97,13 @@ struct ProductSelectionView: View {
                         Section(header: Text("Свои продукты")) {
                             ForEach(filteredCustomProducts, id: \.id) { customProduct in
                                 customProductRow(customProduct: customProduct)
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                        Button(role: .destructive) {
+                                            deleteCustomProduct(customProduct)
+                                        } label: {
+                                            Label("Удалить", systemImage: "trash")
+                                        }
+                                    }
                             }
                         }
                     }
@@ -96,8 +127,6 @@ struct ProductSelectionView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Закрыть") {
-                        // Если встроено в родительскую простыню — свернуть список;
-                        // иначе (показан как отдельный sheet) — dismiss.
                         if let onClose { onClose() } else { dismiss() }
                     }
                     .foregroundColor(.blue)
@@ -107,15 +136,18 @@ struct ProductSelectionView: View {
                 loadFavorites()
                 loadCustomProducts()
                 cachedFilteredProducts = productLoader.products.filter { $0.isFavorite }
+                loadUsageCounts() // ← важно: посчитать частоты
             }
             .sheet(isPresented: $isCreatingProduct) {
                 CustomProductCreationView { newProduct in
                     customProducts.append(newProduct)
                 }
             }
-            .background(Color(.systemBackground).ignoresSafeArea()) 
+            .background(Color(.systemBackground).ignoresSafeArea())
         }
     }
+
+    // MARK: - Rows
 
     private func productRow(product: Product) -> some View {
         Button(action: {
@@ -148,23 +180,25 @@ struct ProductSelectionView: View {
 
     private func customProductRow(customProduct: CustomProduct) -> some View {
         Button(action: {
-            onCustomProductSelected(customProduct) // ⬅️ без dismiss
+            onCustomProductSelected(customProduct) // по тапу выбираем продукт
         }) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(customProduct.name).font(.headline)
-                    Text("На 100 г: \(customProduct.calories) ккал, Б \(String(format: "%.1f", customProduct.protein)) г., Ж \(String(format: "%.1f", customProduct.fat)) г., У \(String(format: "%.1f", customProduct.carbs)) г.")
+                    Text("На 100 г: \(customProduct.calories) ккал, " +
+                         "Б \(String(format: "%.1f", customProduct.protein)) г, " +
+                         "Ж \(String(format: "%.1f", customProduct.fat)) г, " +
+                         "У \(String(format: "%.1f", customProduct.carbs)) г")
                         .font(.caption)
                 }
                 .foregroundStyle(.black)
                 Spacer()
-                Button(action: { deleteCustomProduct(customProduct) }) {
-                    Image(systemName: "trash").foregroundColor(.red)
-                }
-                .buttonStyle(.borderless)
             }
         }
     }
+
+
+    // MARK: - Utils
 
     private var formattedDate: String {
         let formatter = DateFormatter()
@@ -172,12 +206,29 @@ struct ProductSelectionView: View {
         return formatter.string(from: date)
     }
 
+    // Частоты использования по FoodEntry (по имени продукта)
+    private func loadUsageCounts() {
+        let fd = FetchDescriptor<FoodEntry>()
+        do {
+            let entries = try modelContext.fetch(fd)
+            var map: [String: Int] = [:]
+            for e in entries {
+                let key = (e.product?.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !key.isEmpty else { continue }
+                map[key, default: 0] += 1
+            }
+            usageCounts = map
+        } catch {
+            print("Ошибка чтения usageCounts:", error)
+            usageCounts = [:]
+        }
+    }
+
     private func saveFavoriteStatus(for product: Product) async {
         let fd = FetchDescriptor<FoodEntry>()
         do {
             let entries = try modelContext.fetch(fd)
 
-            // ищем запись по id продукта (product — не опционален)
             if let entry = entries.first(where: { $0.product?.id == product.id }) {
                 entry.isFavorite = product.isFavorite
             } else {
@@ -186,7 +237,7 @@ struct ProductSelectionView: View {
                     mealType: mealType.rawValue,
                     product: product,
                     portion: 100,
-                    gender: .male,              // подставь актуальный пол
+                    gender: .male,              // TODO: подставить актуальный пол
                     isFavorite: product.isFavorite
                 )
                 modelContext.insert(newEntry)
@@ -201,7 +252,6 @@ struct ProductSelectionView: View {
             await MainActor.run { print("Ошибка сохранения избранного: \(error)") }
         }
     }
-
 
     private func deleteCustomProduct(_ customProduct: CustomProduct) {
         let fd = FetchDescriptor<CustomProduct>()
@@ -238,7 +288,7 @@ struct ProductSelectionView: View {
             do {
                 let entries = try self.modelContext.fetch(fd)
 
-                // словарь: id продукта -> isFavorite
+                // словарь: id продукта -> isFavorite (по последней записи)
                 let dict: [UUID: Bool] = entries.reduce(into: [:]) { acc, e in
                     guard let id = e.product?.id else { return }
                     acc[id] = e.isFavorite
@@ -261,6 +311,7 @@ struct ProductSelectionView: View {
 }
 
 // MARK: - CustomProductCreationView (как было)
+
 struct CustomProductCreationView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -390,3 +441,10 @@ struct CustomProductCreationView: View {
         }
     }
 }
+
+
+//VStack(alignment: .leading, spacing: 4) {
+//    Text(product.name).font(.headline)
+//    Text("На 100 г: \(product.calories) ккал, Б \(String(format: "%.1f", product.protein)) г., Ж \(String(format: "%.1f", product.fat)) г., У \(String(format: "%.1f", product.carbs)) г.")
+//        .font(.caption)
+//}
