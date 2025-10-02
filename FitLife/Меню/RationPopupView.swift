@@ -1,19 +1,3 @@
-//HStack(spacing: 20) {
-//    Text("Б: \(String(format: "%.1f", macros.protein)) г")
-//    Text("Ж: \(String(format: "%.1f", macros.fat)) г")
-//    Text("У: \(String(format: "%.1f", macros.carbs)) г")
-//}
-
-//VStack(alignment: .leading, spacing: 4) {
-//    Text(entry.product.name)
-//        .font(.headline)
-//    Text("Калории: \(entry.product.calories) ккал, " +
-//         "Б: \(String(format: "%.1f", entry.product.protein)) г, " +
-//         "Ж: \(String(format: "%.1f", entry.product.fat)) г, " +
-//         "У: \(String(format: "%.1f", entry.product.carbs)) г")
-//        .font(.caption)
-//        .foregroundColor(.secondary)
-//}
 
 import SwiftUI
 import SwiftData

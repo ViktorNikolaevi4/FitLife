@@ -7,7 +7,7 @@ extension Gender {
     static let appStorageKey = "activeGender"
 }
 
-// MARK: - Табы
+// MARK: - Табы (для контекста)
 
 struct MainTabView: View {
     var body: some View {
@@ -72,7 +72,7 @@ private enum RationSheet: Identifiable {
 // MARK: - Главный экран
 
 struct DashboardScreen: View {
-    // Выбор даты
+    // Дата
     @State private var selectedDate: Date = Date()
 
     // Данные
@@ -90,26 +90,26 @@ struct DashboardScreen: View {
     @State private var consumedFats = 0
     @State private var consumedCarbs = 0
 
-    // Калории по приёмам
+    // Калории по приемам
     @State private var breakfastKcal = 0
     @State private var lunchKcal = 0
     @State private var dinnerKcal = 0
     @State private var snacksKcal = 0
 
-    // Макросы по приёмам
+    // Макросы по приемам
     @State private var breakfastMacros = (protein: 0, fat: 0, carb: 0)
     @State private var lunchMacros     = (protein: 0, fat: 0, carb: 0)
     @State private var dinnerMacros    = (protein: 0, fat: 0, carb: 0)
     @State private var snacksMacros    = (protein: 0, fat: 0, carb: 0)
 
-    // Шиты и календарь
+    // Шиты / календарь
     @State private var sheet: RationSheet? = nil
     @State private var showCalendar = false
 
-    // Состояния разворота списков
+    // Состояние разворота
     @State private var expandedMeals: Set<MealType> = []
 
-    // Списки продуктов по приёмам
+    // Элементы по приёмам
     @State private var breakfastItems: [FoodEntry] = []
     @State private var lunchItems: [FoodEntry] = []
     @State private var dinnerItems: [FoodEntry] = []
@@ -143,7 +143,9 @@ struct DashboardScreen: View {
                             macros: (breakfastMacros, lunchMacros, dinnerMacros, snacksMacros),
                             entries: (breakfastItems, lunchItems, dinnerItems, snacksItems),
                             expanded: $expandedMeals,
-                            onTapMeal: { meal in sheet = .quick(meal) }
+                            onTapMeal: { meal in sheet = .quick(meal) },
+                            onDeleteEntry: { entry in deleteEntry(entry) },
+                            onUpdateEntry: { _ in recalcFor(selectedDate) }
                         )
                         .padding(.horizontal)
                     } else {
@@ -196,7 +198,7 @@ struct DashboardScreen: View {
         }
     }
 
-    // MARK: - Вью-шапка
+    // MARK: Header
 
     private func header(_ theme: AppTheme) -> some View {
         HStack(alignment: .center) {
@@ -228,7 +230,7 @@ struct DashboardScreen: View {
         return df.string(from: date)
     }
 
-    // MARK: - Данные
+    // MARK: Data
 
     private func ensureUserIfNeeded() {
         if userData == nil {
@@ -267,25 +269,21 @@ struct DashboardScreen: View {
             let d = items.filter { $0.mealType == MealType.dinner.rawValue }
             let s = items.filter { $0.mealType == MealType.snacks.rawValue }
 
-            // Списки для раскрытия
             breakfastItems = b
             lunchItems     = l
             dinnerItems    = d
             snacksItems    = s
 
-            // Калории
             breakfastKcal = sumCalories(b)
             lunchKcal     = sumCalories(l)
             dinnerKcal    = sumCalories(d)
             snacksKcal    = sumCalories(s)
 
-            // Макросы
             let bm = sumMacros(b); breakfastMacros = (bm.0, bm.1, bm.2)
             let lm = sumMacros(l); lunchMacros     = (lm.0, lm.1, lm.2)
             let dm = sumMacros(d); dinnerMacros    = (dm.0, dm.1, dm.2)
             let sm = sumMacros(s); snacksMacros    = (sm.0, sm.1, sm.2)
 
-            // Итоги дня
             dailyConsumedCalories = sumCalories(items)
             let total = sumMacros(items)
             consumedProteins = total.0
@@ -301,6 +299,28 @@ struct DashboardScreen: View {
             #if DEBUG
             print("Recalc error:", error)
             #endif
+        }
+    }
+
+    // Удаление записи (со сворачиванием пустого списка)
+    private func deleteEntry(_ entry: FoodEntry) {
+        modelContext.delete(entry)
+        do { try modelContext.save() } catch {
+            #if DEBUG
+            print("Delete error:", error)
+            #endif
+        }
+        recalcFor(selectedDate)
+
+        if let meal = MealType(rawValue: entry.mealType) {
+            let isEmpty: Bool
+            switch meal {
+            case .breakfast: isEmpty = breakfastItems.isEmpty
+            case .lunch:     isEmpty = lunchItems.isEmpty
+            case .dinner:    isEmpty = dinnerItems.isEmpty
+            case .snacks:    isEmpty = snacksItems.isEmpty
+            }
+            if isEmpty { expandedMeals.remove(meal) }
         }
     }
 }
@@ -370,18 +390,18 @@ struct BalanceCard: View {
                             mode = .remaining
                         }
                     }
-                    .accessibilityAddTraits(.isButton)
-                    .accessibilityLabel("Калорийное кольцо")
-                    .accessibilityValue("\(ringNumber) \(ringCaption)")
                 Spacer()
             }
 
             VStack(spacing: 10) {
-                MacroProgressRow(title: "Белки", current: proteins.current, target: proteins.target,
+                MacroProgressRow(title: "Белки",
+                                 current: proteins.current, target: proteins.target,
                                  tint: theme.protein, theme: theme, height: 8)
-                MacroProgressRow(title: "Жиры", current: fats.current, target: fats.target,
+                MacroProgressRow(title: "Жиры",
+                                 current: fats.current, target: fats.target,
                                  tint: theme.fat, theme: theme, height: 8)
-                MacroProgressRow(title: "Углеводы", current: carbs.current, target: carbs.target,
+                MacroProgressRow(title: "Углеводы",
+                                 current: carbs.current, target: carbs.target,
                                  tint: theme.carb, theme: theme, height: 8)
             }
             .padding(.horizontal, 8)
@@ -416,19 +436,17 @@ struct MacroProgressRow: View {
     let target: Int
     let tint: Color
     let theme: AppTheme
-    var height: CGFloat = 8            // толщина прогресс-бара
-    var warnEnabled: Bool = true       // можно отключить, если надо
+    var height: CGFloat = 8
+    var warnEnabled: Bool = true
 
     private var isOver: Bool {
         warnEnabled && target > 0 && current > target
     }
-
     private var fraction: Double {
         guard target > 0 else { return 0 }
         return min(Double(current) / Double(target), 1)
     }
-
-    private var fillColor: Color { isOver ? .red : tint }
+    private var fillColor: Color  { isOver ? .red : tint }
     private var trackColor: Color { isOver ? Color.red.opacity(0.25) : theme.ringTrack }
     private var valueColor: Color { isOver ? .red : .secondary }
 
@@ -439,32 +457,21 @@ struct MacroProgressRow: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.footnote)
                         .foregroundStyle(.red)
-                        .accessibilityHidden(true)
                 }
                 Text(title)
-
                 Spacer()
                 Text("\(current) / \(target) г")
                     .font(.subheadline)
                     .fontWeight(isOver ? .semibold : .regular)
                     .foregroundStyle(valueColor)
             }
-
-            ThickProgressBar(
-                fraction: fraction,
-                fill: fillColor,
-                track: trackColor,
-                height: height
-            )
-            .animation(.easeInOut(duration: 0.25), value: fraction)
+            ThickProgressBar(fraction: fraction, fill: fillColor, track: trackColor, height: height)
+                .animation(.easeInOut(duration: 0.25), value: fraction)
         }
         .padding(.horizontal, 12)
         .padding(.bottom, 8)
-        .accessibilityLabel(Text("\(title). \(current) из \(target) грамм"))
-        .accessibilityHint(isOver ? Text("Перебор по \(title.lowercased())") : Text(""))
     }
 }
-
 
 struct ThickProgressBar: View {
     var fraction: Double
@@ -485,7 +492,7 @@ struct ThickProgressBar: View {
     }
 }
 
-// MARK: - Приёмы пищи + раскрывающиеся списки
+// MARK: - Приёмы пищи
 
 struct MealsSection: View {
     let theme: AppTheme
@@ -505,6 +512,8 @@ struct MealsSection: View {
 
     @Binding var expanded: Set<MealType>
     var onTapMeal: (MealType) -> Void
+    var onDeleteEntry: (FoodEntry) -> Void
+    var onUpdateEntry: (FoodEntry) -> Void
 
     private func isExpanded(_ m: MealType) -> Bool { expanded.contains(m) }
     private func toggle(_ m: MealType) {
@@ -516,89 +525,85 @@ struct MealsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Завтрак
-            Button { onTapMeal(.breakfast) } label: {
-                MealRow(
-                    title: "Завтрак",
-                    systemImage: "sunrise.fill",
-                    kcal: calories.breakfast > 0 ? calories.breakfast : nil,
-                    macros: calories.breakfast > 0 ? macros.breakfast : nil,
-                    theme: theme,
-                    badgeFill: .pinkovo,
-                    showChevron: !entries.breakfast.isEmpty,
-                    chevronExpanded: isExpanded(.breakfast),
-                    onChevronTap: { toggle(.breakfast) }
-                )
-            }
-            .buttonStyle(.plain)
+            MealRow(
+                title: "Завтрак",
+                systemImage: "sunrise.fill",
+                kcal: calories.breakfast > 0 ? calories.breakfast : nil,
+                macros: calories.breakfast > 0 ? macros.breakfast : nil,
+                theme: theme,
+                badgeFill: .pinkovo,
+                showChevron: !entries.breakfast.isEmpty,
+                chevronExpanded: isExpanded(.breakfast),
+                onChevronTap: { toggle(.breakfast) }
+            )
+            .contentShape(Rectangle())
+            .onTapGesture { onTapMeal(.breakfast) }
 
             if isExpanded(.breakfast) {
-                ProductsList(entries.breakfast, theme: theme)
+                ProductsList(entries.breakfast, theme: theme, onDelete: onDeleteEntry, onUpdate: onUpdateEntry)
             }
 
             // Обед
-            Button { onTapMeal(.lunch) } label: {
-                MealRow(
-                    title: "Обед",
-                    systemImage: "fork.knife",
-                    kcal: calories.lunch > 0 ? calories.lunch : nil,
-                    macros: calories.lunch > 0 ? macros.lunch : nil,
-                    theme: theme,
-                    badgeFill: .zeleneko,
-                    showChevron: !entries.lunch.isEmpty,
-                    chevronExpanded: isExpanded(.lunch),
-                    onChevronTap: { toggle(.lunch) }
-                )
-            }
-            .buttonStyle(.plain)
+            MealRow(
+                title: "Обед",
+                systemImage: "fork.knife",
+                kcal: calories.lunch > 0 ? calories.lunch : nil,
+                macros: calories.lunch > 0 ? macros.lunch : nil,
+                theme: theme,
+                badgeFill: .zeleneko,
+                showChevron: !entries.lunch.isEmpty,
+                chevronExpanded: isExpanded(.lunch),
+                onChevronTap: { toggle(.lunch) }
+            )
+            .contentShape(Rectangle())
+            .onTapGesture { onTapMeal(.lunch) }
 
             if isExpanded(.lunch) {
-                ProductsList(entries.lunch, theme: theme)
+                ProductsList(entries.lunch, theme: theme, onDelete: onDeleteEntry, onUpdate: onUpdateEntry)
             }
 
             // Ужин
-            Button { onTapMeal(.dinner) } label: {
-                MealRow(
-                    title: "Ужин",
-                    systemImage: "moon.stars.fill",
-                    kcal: calories.dinner > 0 ? calories.dinner : nil,
-                    macros: calories.dinner > 0 ? macros.dinner : nil,
-                    theme: theme,
-                    badgeFill: .sinenko,
-                    showChevron: !entries.dinner.isEmpty,
-                    chevronExpanded: isExpanded(.dinner),
-                    onChevronTap: { toggle(.dinner) }
-                )
-            }
-            .buttonStyle(.plain)
+            MealRow(
+                title: "Ужин",
+                systemImage: "moon.stars.fill",
+                kcal: calories.dinner > 0 ? calories.dinner : nil,
+                macros: calories.dinner > 0 ? macros.dinner : nil,
+                theme: theme,
+                badgeFill: .sinenko,
+                showChevron: !entries.dinner.isEmpty,
+                chevronExpanded: isExpanded(.dinner),
+                onChevronTap: { toggle(.dinner) }
+            )
+            .contentShape(Rectangle())
+            .onTapGesture { onTapMeal(.dinner) }
 
             if isExpanded(.dinner) {
-                ProductsList(entries.dinner, theme: theme)
+                ProductsList(entries.dinner, theme: theme, onDelete: onDeleteEntry, onUpdate: onUpdateEntry)
             }
 
             // Перекус
-            Button { onTapMeal(.snacks) } label: {
-                MealRow(
-                    title: "Перекус",
-                    systemImage: "takeoutbag.and.cup.and.straw.fill",
-                    kcal: calories.snacks > 0 ? calories.snacks : nil,
-                    macros: calories.snacks > 0 ? macros.snacks : nil,
-                    theme: theme,
-                    badgeFill: .zheltenko,
-                    showChevron: !entries.snacks.isEmpty,
-                    chevronExpanded: isExpanded(.snacks),
-                    onChevronTap: { toggle(.snacks) }
-                )
-            }
-            .buttonStyle(.plain)
+            MealRow(
+                title: "Перекус",
+                systemImage: "takeoutbag.and.cup.and.straw.fill",
+                kcal: calories.snacks > 0 ? calories.snacks : nil,
+                macros: calories.snacks > 0 ? macros.snacks : nil,
+                theme: theme,
+                badgeFill: .zheltenko,
+                showChevron: !entries.snacks.isEmpty,
+                chevronExpanded: isExpanded(.snacks),
+                onChevronTap: { toggle(.snacks) }
+            )
+            .contentShape(Rectangle())
+            .onTapGesture { onTapMeal(.snacks) }
 
             if isExpanded(.snacks) {
-                ProductsList(entries.snacks, theme: theme)
+                ProductsList(entries.snacks, theme: theme, onDelete: onDeleteEntry, onUpdate: onUpdateEntry)
             }
         }
     }
 }
 
-// MARK: - Ряд приёма пищи
+// MARK: - Ряд приёма
 
 struct MealRow: View {
     let title: String
@@ -616,7 +621,13 @@ struct MealRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            ZstackIcon
+            ZStack {
+                Circle().fill(badgeFill)
+                Image(systemName: systemImage)
+                    .font(.title3)
+                    .foregroundStyle(.white)
+            }
+            .frame(width: 40, height: 40)
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(title).font(.headline)
@@ -650,63 +661,170 @@ struct MealRow: View {
         .background(RoundedRectangle(cornerRadius: 14).fill(theme.card))
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(theme.border))
     }
-
-    private var ZstackIcon: some View {
-        ZStack {
-            Circle().fill(badgeFill)
-            Image(systemName: systemImage)
-                .font(.title3)
-                .foregroundStyle(.white)
-        }
-        .frame(width: 40, height: 40)
-    }
 }
 
-// MARK: - Список продуктов внутри раскрытия
+// MARK: - Список продуктов (раскрытие + редактор по тапу)
 
 private struct ProductsList: View {
     let items: [FoodEntry]
     let theme: AppTheme
+    var onDelete: (FoodEntry) -> Void
+    var onUpdate: (FoodEntry) -> Void
 
-    init(_ items: [FoodEntry], theme: AppTheme) {
+    @State private var pendingDelete: FoodEntry?
+    @State private var editing: FoodEntry?
+    @State private var gramsText: String = ""
+
+    @Environment(\.modelContext) private var modelContext
+
+    init(_ items: [FoodEntry], theme: AppTheme, onDelete: @escaping (FoodEntry) -> Void, onUpdate: @escaping (FoodEntry) -> Void) {
         self.items = items
         self.theme = theme
+        self.onDelete = onDelete
+        self.onUpdate = onUpdate
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            ForEach(items.indices, id: \.self) { i in
-                let entry = items[i]
-
+            ForEach(items) { entry in
                 HStack {
                     Text(entry.product?.name ?? "Продукт")
                         .lineLimit(1)
-
                     Spacer()
-
                     HStack(spacing: 8) {
                         if entry.portion > 0 {
                             Text("\(Int(entry.portion)) г")
+                                .foregroundStyle(.secondary)
                         }
                         Text("\(entry.product?.calories ?? 0) ккал")
+                            .foregroundStyle(.secondary)
                     }
-                    .foregroundStyle(.secondary)
+                    .font(.subheadline)
                 }
                 .font(.subheadline)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-
-                // разделитель под строкой (кроме последней)
-                if i != items.indices.last {
-                    Rectangle()
-                        .fill(Color(UIColor.separator))   // системный цвет разделителя
-                        .frame(height: 0.5)
-                        .padding(.leading, 16)            // чтобы линия начиналась под текстом
+                .overlay(alignment: .bottom) { Divider().opacity(0.35) }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    editing = entry
+                    gramsText = String(Int(max(1, entry.portion)))
+                }
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    Button(role: .destructive) {
+                        pendingDelete = entry
+                    } label: {
+                        Label("Удалить", systemImage: "trash")
+                    }
                 }
             }
         }
-        .padding(.leading, 52)  // чтобы визуально «заходило» под круглую иконку
+        .padding(.leading, 52)
         .padding(.trailing, 2)
-        .transition(.opacity.combined(with: .move(edge: .top)))
+        .sheet(item: $editing) { entry in
+            EditEntrySheet(
+                entry: entry,
+                gramsText: $gramsText,
+                onSave: { newPortion in
+                    applyNewPortion(entry, newPortion: newPortion)
+                    onUpdate(entry)
+                    editing = nil
+                },
+                onDelete: {
+                    let e = entry
+                    editing = nil
+                    onDelete(e)
+                }
+            )
+            .presentationDetents([.height(320), .medium])
+        }
+        .alert("Удалить продукт?",
+               isPresented: Binding(
+                   get: { pendingDelete != nil },
+                   set: { if !$0 { pendingDelete = nil } }
+               )
+        ) {
+            Button("Удалить", role: .destructive) {
+                if let e = pendingDelete { onDelete(e) }
+                pendingDelete = nil
+            }
+            Button("Отмена", role: .cancel) { pendingDelete = nil }
+        } message: {
+            Text("Это действие нельзя отменить.")
+        }
+    }
+
+    /// Масштабируем хранимые в `entry.product` значения ккал/БЖУ по отношению new/old.
+    private func applyNewPortion(_ entry: FoodEntry, newPortion: Double) {
+        guard let product = entry.product, newPortion > 0 else { return }
+        let old = max(1.0, entry.portion)
+        let k = newPortion / old
+        product.protein *= k
+        product.fat     *= k
+        product.carbs   *= k
+        product.calories = Int(Double(product.calories) * k)
+        entry.portion = newPortion
+        do { try modelContext.save() } catch { print("Save error:", error) }
+    }
+}
+
+// MARK: - Малый лист редактирования продукта
+
+private struct EditEntrySheet: View {
+    let entry: FoodEntry
+    @Binding var gramsText: String
+    var onSave: (Double) -> Void
+    var onDelete: () -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            RoundedRectangle(cornerRadius: 2)
+                .frame(width: 36, height: 4)
+                .opacity(0.2)
+                .padding(.top, 8)
+
+            Text(entry.product?.name ?? "Продукт").font(.headline)
+
+            TextField("Порция, г", text: $gramsText)
+                .keyboardType(.numberPad)
+                .textFieldStyle(.roundedBorder)
+                .padding(.horizontal)
+                .onChange(of: gramsText) { gramsText = gramsText.filter(\.isNumber) }
+
+            if
+                let p = Double(gramsText),
+                let pr = entry.product
+            {
+                // коэффициент пересчёта относительно текущей порции
+                let k = max(1.0, p) / max(1.0, entry.portion)
+                VStack(spacing: 6) {
+                    Text("Будет: \(Int(Double(pr.calories) * k)) ккал")
+                        .font(.title3).bold()
+                    HStack(spacing: 16) {
+                        Text("Б \(String(format: "%.1f", pr.protein * k)) г")
+                        Text("Ж \(String(format: "%.1f", pr.fat * k)) г")
+                        Text("У \(String(format: "%.1f", pr.carbs * k)) г")
+                    }
+                    .foregroundStyle(.secondary)
+                }
+            }
+
+            HStack(spacing: 12) {
+                Button("Удалить", role: .destructive) { onDelete() }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                    .frame(maxWidth: .infinity)
+
+                Button("Сохранить") {
+                    if let v = Double(gramsText), v > 0 { onSave(v) }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.blue)
+                .frame(maxWidth: .infinity)
+            }
+            .padding(.horizontal)
+
+            Spacer(minLength: 8)
+        }
     }
 }

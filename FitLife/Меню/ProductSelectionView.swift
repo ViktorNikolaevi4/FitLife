@@ -390,6 +390,3 @@ struct CustomProductCreationView: View {
         }
     }
 }
-
-
-
