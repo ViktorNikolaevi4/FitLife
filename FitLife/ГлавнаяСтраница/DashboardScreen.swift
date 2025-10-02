@@ -41,7 +41,7 @@ struct AppTheme {
             border = Color.white.opacity(0.06)
             subtleFill = Color.white.opacity(0.07)
             ringTrack = Color.white.opacity(0.10)
-            protein = .orange; fat = .mint; carb = .blue
+            protein = .blue; fat = .red.opacity(0.8); carb = .green
             ringGradient = .init(colors: [.blue.opacity(0.95), .cyan.opacity(0.9), .blue.opacity(0.95)])
         } else {
             bg = Color(UIColor.systemGray5)
@@ -49,7 +49,7 @@ struct AppTheme {
             border = Color.black.opacity(0.06)
             subtleFill = Color.black.opacity(0.06)
             ringTrack = Color.black.opacity(0.10)
-            protein = .orange; fat = .green; carb = .blue
+            protein = .blue; fat = .red.opacity(0.8); carb = .green
             ringGradient = .init(colors: [.blue, .cyan, .blue])
         }
     }
