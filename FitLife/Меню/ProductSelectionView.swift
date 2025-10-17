@@ -68,9 +68,10 @@ struct ProductSelectionView: View {
             VStack {
                 VStack {
                     Text("Таблица калорийности продуктов питания")
+                        .foregroundStyle(.primary)
                     Text("(данные указаны на 100 г продукта)")
+                        .foregroundStyle(.secondary)
                 }
-                .foregroundStyle(.black)
 
                 Picker("Выберите категорию", selection: $selectedFilter) {
                     ForEach(FilterType.allCases, id: \.self) { filter in
@@ -159,7 +160,7 @@ struct ProductSelectionView: View {
                     Text("На 100 г: \(product.calories) ккал, Б \(String(format: "%.1f", product.protein)) г., Ж \(String(format: "%.1f", product.fat)) г., У \(String(format: "%.1f", product.carbs)) г.")
                         .font(.caption)
                 }
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
                 Spacer()
                 Button(action: {
                     Task {
@@ -191,7 +192,7 @@ struct ProductSelectionView: View {
                          "У \(String(format: "%.1f", customProduct.carbs)) г")
                         .font(.caption)
                 }
-                .foregroundStyle(.black)
+                .foregroundStyle(.primary)
                 Spacer()
             }
         }
@@ -441,10 +442,3 @@ struct CustomProductCreationView: View {
         }
     }
 }
-
-
-//VStack(alignment: .leading, spacing: 4) {
-//    Text(product.name).font(.headline)
-//    Text("На 100 г: \(product.calories) ккал, Б \(String(format: "%.1f", product.protein)) г., Ж \(String(format: "%.1f", product.fat)) г., У \(String(format: "%.1f", product.carbs)) г.")
-//        .font(.caption)
-//}

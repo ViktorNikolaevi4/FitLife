@@ -44,10 +44,12 @@ struct WaterTrackerViewOne: View {
                 HStack {
                     Spacer()
                     ZStack {
-                        Donut(progress: ringProgress,
-                              lineWidth: 14,
-                              track: theme.ringTrack,
-                              gradient: theme.ringGradient)
+                        Donut(
+                            progress: ringProgress,
+                            lineWidth: 14,
+                            track: theme.ringTrack,
+                            gradient: theme.ringGradient
+                        )
                         .frame(width: 220, height: 220)
                         .animation(.easeInOut(duration: 0.25), value: ringProgress)
 
@@ -83,7 +85,7 @@ struct WaterTrackerViewOne: View {
             .toolbarBackground(theme.bg, for: .navigationBar)
             .sheet(isPresented: $showNotificationSettings) { NotificationSettingsView() }
 
-            // Белая карточка снизу
+            // Карточка снизу
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 10) {
                     WaterAddRow(
@@ -96,7 +98,9 @@ struct WaterTrackerViewOne: View {
                 .padding(.top, 8)
                 .padding(.bottom, 8)
                 .background(theme.bg)
+                .overlay(alignment: .top) { Divider().opacity(0.25) } // тонкий разделитель
             }
+            .tint(.blue)
         }
     }
 
@@ -120,6 +124,7 @@ struct WaterTrackerViewOne: View {
             modelContext.insert(u); try? modelContext.save()
         }
     }
+
     private func saveWaterIntake() {
         guard let user = userData else { return }
         let today = Calendar.current.startOfDay(for: Date())
@@ -136,6 +141,7 @@ struct WaterTrackerViewOne: View {
             try? modelContext.save()
         } catch { print("saveWaterIntake error:", error) }
     }
+
     private func loadWaterIntake() {
         guard let user = userData else { waterIntake = 0; return }
         let today = Calendar.current.startOfDay(for: Date())
@@ -150,11 +156,12 @@ struct WaterTrackerViewOne: View {
     }
 }
 
-// MARK: - Белая карточка добавления воды
+// MARK: - Карточка добавления воды
 private struct WaterAddRow: View {
     @Binding var portionML: Int
     let options: [Int]
     var onAdd: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack(spacing: 12) {
@@ -179,7 +186,10 @@ private struct WaterAddRow: View {
                     Button {
                         portionML = ml
                     } label: {
-                        HStack { Text("\(ml) мл"); if portionML == ml { Image(systemName: "checkmark") } }
+                        HStack {
+                            Text("\(ml) мл")
+                            if portionML == ml { Image(systemName: "checkmark") }
+                        }
                     }
                 }
             } label: {
@@ -187,9 +197,16 @@ private struct WaterAddRow: View {
                     Text("\(portionML) мл").font(.subheadline.weight(.semibold))
                     Image(systemName: "chevron.down").font(.footnote)
                 }
-                .padding(.horizontal, 12).padding(.vertical, 8)
-                .background(Capsule().fill(Color(.systemGray6)))
-                .overlay(Capsule().stroke(Color.black.opacity(0.06)))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                // динамический фон для тёмной/светлой
+                .background(Capsule().fill(Color(.tertiarySystemFill)))
+                // аккуратная обводка через separator
+                .overlay(
+                    Capsule().stroke(
+                        Color(.separator).opacity(colorScheme == .dark ? 0.45 : 0.20)
+                    )
+                )
                 .foregroundStyle(.primary)
                 .contentShape(Capsule())
             }
@@ -197,13 +214,16 @@ private struct WaterAddRow: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(Color(.systemBackground))
+                .fill(Color(.secondarySystemBackground)) // чуть светлее фона
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14)
-                .stroke(Color.black.opacity(0.06))
+                .stroke(Color(.separator).opacity(colorScheme == .dark ? 0.55 : 0.20))
         )
-        .shadow(color: .black.opacity(0.03), radius: 6, x: 0, y: 2)
+        .shadow(
+            color: .black.opacity(colorScheme == .dark ? 0.00 : 0.06),
+            radius: 8, x: 0, y: 3
+        )
         .contentShape(Rectangle())
         .onTapGesture { onAdd() }
     }

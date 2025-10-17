@@ -161,7 +161,7 @@ struct RationPopupView: View {
                     Text("Углеводы: \(totalCarbs) г")
                 }
                 .font(.subheadline)
-                .foregroundColor(.gray)
+                .foregroundStyle(.secondary)
             }
 
             Divider()
