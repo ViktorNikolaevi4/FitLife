@@ -25,6 +25,14 @@ struct ProductSearchResponse {
     let messageKey: String?
 }
 
+enum USDAServiceError: Error {
+    case invalidURL
+    case invalidResponse
+    case httpStatus(Int)
+    case emptyFoods
+    case decodingFailed
+}
+
 @MainActor
 @Observable
 final class NetworkMonitor {
@@ -85,13 +93,21 @@ actor ProductSearchCoordinator {
 
         switch language {
         case .en:
-            let remoteProducts = await usdaService.searchFoods(matching: trimmedQuery)
+            let usdaResult = await usdaService.searchFoods(matching: trimmedQuery)
+            let remoteProducts = (try? usdaResult.get()) ?? []
             return ProductSearchResponse(
                 remoteProducts: remoteProducts,
                 route: .englishUSDAThenLocal,
-                messageKey: remoteProducts.isEmpty
-                    ? "search.message.usda_empty"
-                    : "search.message.usda_then_local"
+                messageKey: {
+                    switch usdaResult {
+                    case .success(let products):
+                        return products.isEmpty
+                            ? "search.message.usda_empty"
+                            : "search.message.usda_then_local"
+                    case .failure:
+                        return "search.message.usda_error"
+                    }
+                }()
             )
 
         case .ru:
@@ -125,14 +141,14 @@ actor ProductSearchCoordinator {
 actor USDAFoodService {
     private var cache: [String: [Product]] = [:]
 
-    func searchFoods(matching query: String) async -> [Product] {
+    func searchFoods(matching query: String) async -> Result<[Product], USDAServiceError> {
         let cacheKey = query.lowercased()
         if let cached = cache[cacheKey] {
-            return cached
+            return .success(cached)
         }
 
         guard let url = URL(string: "https://api.nal.usda.gov/fdc/v1/foods/search?api_key=\(USDAConfiguration.apiKey)") else {
-            return []
+            return .failure(.invalidURL)
         }
 
         var request = URLRequest(url: url)
@@ -152,15 +168,25 @@ actor USDAFoodService {
 
             guard let httpResponse = response as? HTTPURLResponse,
                   (200...299).contains(httpResponse.statusCode) else {
-                return []
+                let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+                return .failure(.httpStatus(status))
             }
 
-            let decoded = try JSONDecoder().decode(USDAFoodSearchResponse.self, from: data)
+            let decoded: USDAFoodSearchResponse
+            do {
+                decoded = try JSONDecoder().decode(USDAFoodSearchResponse.self, from: data)
+            } catch {
+                return .failure(.decodingFailed)
+            }
+
             let products = deduplicated(decoded.foods.compactMap { $0.makeProduct() })
+            guard !products.isEmpty else {
+                return .failure(.emptyFoods)
+            }
             cache[cacheKey] = products
-            return products
+            return .success(products)
         } catch {
-            return []
+            return .failure(.invalidResponse)
         }
     }
 
@@ -297,13 +323,13 @@ private struct USDAFood: Decodable {
 
     func makeProduct() -> Product? {
         let calories = labelNutrients?.calories?.value
-            ?? nutrientValue(number: "1008", nameCandidates: ["energy"])
+            ?? nutrientValue(numbers: ["1008", "208"], nameCandidates: ["energy"])
         let protein = labelNutrients?.protein?.value
-            ?? nutrientValue(number: "1003", nameCandidates: ["protein"])
+            ?? nutrientValue(numbers: ["1003", "203"], nameCandidates: ["protein"])
         let fat = labelNutrients?.fat?.value
-            ?? nutrientValue(number: "1004", nameCandidates: ["total lipid", "fat"])
+            ?? nutrientValue(numbers: ["1004", "204"], nameCandidates: ["total lipid", "fat"])
         let carbs = labelNutrients?.carbohydrates?.value
-            ?? nutrientValue(number: "1005", nameCandidates: ["carbohydrate"])
+            ?? nutrientValue(numbers: ["1005", "205"], nameCandidates: ["carbohydrate"])
 
         guard let calories else { return nil }
 
@@ -318,9 +344,10 @@ private struct USDAFood: Decodable {
         )
     }
 
-    private func nutrientValue(number: String, nameCandidates: [String]) -> Double? {
+    private func nutrientValue(numbers: [String], nameCandidates: [String]) -> Double? {
         foodNutrients?.first(where: {
-            if $0.nutrientNumber == number {
+            if let nutrientNumber = $0.nutrientNumber,
+               numbers.contains(nutrientNumber) {
                 return true
             }
 

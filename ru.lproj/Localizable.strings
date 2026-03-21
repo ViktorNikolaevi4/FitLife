@@ -65,6 +65,7 @@
 "search.message.barcode_not_found" = "Штрихкод не найден в Open Food Facts.";
 "search.message.barcode_checked" = "Штрихкод проверен через Open Food Facts.";
 "search.message.usda_empty" = "USDA ничего не вернул. Остается локальная база.";
+"search.message.usda_error" = "USDA временно недоступен или ответ не удалось обработать. Показана локальная база.";
 "search.message.usda_then_local" = "Сначала показаны результаты USDA, ниже локальная база.";
 "search.message.local_first" = "Сначала показана локальная база.";
 "search.message.local_and_off_empty" = "Локальная база пуста, Open Food Facts тоже ничего не нашел.";

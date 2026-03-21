@@ -169,8 +169,8 @@ struct DashboardScreen: View {
             .navigationBarHidden(true)
         }
         .onAppear { ensureUserIfNeeded(); recalcFor(selectedDate) }
-        .onChange(of: selectedDate) { recalcFor($0) }
-        .onChange(of: activeGenderRaw) { _ in recalcFor(selectedDate) }
+        .onChange(of: selectedDate) { _, newDate in recalcFor(newDate) }
+        .onChange(of: activeGenderRaw) { recalcFor(selectedDate) }
         .sheet(item: $sheet) { key in
             let preset: MealType? = { if case let .quick(m) = key { m } else { nil } }()
             RationPopupView(
@@ -310,20 +310,13 @@ struct DashboardScreen: View {
             consumedFats = 0
             consumedCarbs = 0
             breakfastKcal = 0; lunchKcal = 0; dinnerKcal = 0; snacksKcal = 0
-            #if DEBUG
-            print("Recalc error:", error)
-            #endif
         }
     }
 
     // Удаление записи (со сворачиванием пустого списка)
     private func deleteEntry(_ entry: FoodEntry) {
         modelContext.delete(entry)
-        do { try modelContext.save() } catch {
-            #if DEBUG
-            print("Delete error:", error)
-            #endif
-        }
+        do { try modelContext.save() } catch {}
         recalcFor(selectedDate)
 
         if let meal = MealType(rawValue: entry.mealType) {
@@ -826,7 +819,7 @@ private struct ProductsList: View {
         product.carbs   *= k
         product.calories = Int(Double(product.calories) * k)
         entry.portion = newPortion
-        do { try modelContext.save() } catch { print("Save error:", error) }
+        do { try modelContext.save() } catch {}
     }
 }
 

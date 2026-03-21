@@ -166,9 +166,7 @@ struct WaterTrackerView: View {
     }
 
     // Функция пересчёта цели воды
-    private func recalculateDailyGoal() {
-        print("Новая цель воды: \(dailyGoal) л")
-    }
+    private func recalculateDailyGoal() {}
 
     // Добавление воды
     private func addWater(amount: Double) {
@@ -180,10 +178,7 @@ struct WaterTrackerView: View {
         let today = Calendar.current.startOfDay(for: Date()) // Начало текущего дня
 
         // Убедитесь, что userData извлечён из текущего контекста
-        guard let userInContext = try? modelContext.fetch(FetchDescriptor<UserData>()).first(where: { $0.id == userData.id }) else {
-            print("UserData не найден в текущем контексте")
-            return
-        }
+        guard let userInContext = try? modelContext.fetch(FetchDescriptor<UserData>()).first(where: { $0.id == userData.id }) else { return }
 
         // Проверяем, есть ли уже запись о воде за сегодняшний день
         if let existingEntry = try? modelContext.fetch(FetchDescriptor<WaterIntake>()).first(where: { Calendar.current.isDate($0.date, inSameDayAs: today) && $0.user?.id == userInContext.id }) {

@@ -3,7 +3,7 @@ import Foundation
 
 @Model
 class WaterIntake {
-    @Attribute(.unique) var id: UUID = UUID()
+    var id: UUID = UUID()
     var date: Date = Foundation.Date.now
     var intake: Double = 0
     var user: UserData? = nil

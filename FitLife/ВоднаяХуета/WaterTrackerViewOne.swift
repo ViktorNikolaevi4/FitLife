@@ -70,8 +70,8 @@ struct WaterTrackerViewOne: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(theme.bg.ignoresSafeArea())
             .onAppear { ensureUserIfNeeded(); loadWaterIntake() }
-            .onChange(of: activeGenderRaw) { _ in ensureUserIfNeeded(); loadWaterIntake() }
-            .onChange(of: users) { _ in loadWaterIntake() }
+            .onChange(of: activeGenderRaw) { ensureUserIfNeeded(); loadWaterIntake() }
+            .onChange(of: users) { loadWaterIntake() }
             .navigationTitle(AppLocalizer.string("water.tracker.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -139,7 +139,7 @@ struct WaterTrackerViewOne: View {
                 entry.user = user; modelContext.insert(entry)
             }
             try? modelContext.save()
-        } catch { print("saveWaterIntake error:", error) }
+        } catch {}
     }
 
     private func loadWaterIntake() {

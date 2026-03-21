@@ -11,7 +11,9 @@ enum ProductSource: String, Codable {
 
 @Model
 class Product {
-    @Attribute(.unique) var id: UUID = UUID()
+    @Relationship(deleteRule: .nullify, inverse: \FoodEntry.product) var foodEntries: [FoodEntry]? = []
+
+    var id: UUID = UUID()
     var name: String = ""
     var nameEN: String?
     var protein: Double = 0

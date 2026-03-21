@@ -17,10 +17,7 @@ class ProductLoader {
             bundle.url(forResource: "Products_template_en", withExtension: "csv") ??
             bundle.url(forResource: "Продукты", withExtension: "csv")
 
-        guard let path else {
-            print("CSV file not found")
-            return
-        }
+        guard let path else { return }
 
         do {
             let csv = try CSV<Named>(url: path)
@@ -62,8 +59,6 @@ class ProductLoader {
                     self.products.append(product)
                 }
             }
-        } catch {
-            print("Error parsing CSV: \(error)")
-        }
+        } catch {}
     }
 }

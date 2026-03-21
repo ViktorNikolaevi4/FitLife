@@ -65,6 +65,7 @@
 "search.message.barcode_not_found" = "Barcode was not found in Open Food Facts.";
 "search.message.barcode_checked" = "Barcode was checked via Open Food Facts.";
 "search.message.usda_empty" = "USDA returned no results. Falling back to the local database.";
+"search.message.usda_error" = "USDA is temporarily unavailable or its response could not be processed. Showing the local database.";
 "search.message.usda_then_local" = "USDA results are shown first, followed by the local database.";
 "search.message.local_first" = "Showing the local database first.";
 "search.message.local_and_off_empty" = "The local database is empty and Open Food Facts found nothing either.";

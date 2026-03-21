@@ -83,7 +83,6 @@ import SwiftData
                 }
                 dailyConsumedCalories = total
             } catch {
-                print("Ошибка при загрузке FoodEntry: \(error)")
                 dailyConsumedCalories = 0
             }
         }

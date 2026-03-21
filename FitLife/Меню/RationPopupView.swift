@@ -142,7 +142,7 @@ struct RationPopupView: View {
         .presentationDetents([.large])
         .animation(.spring(response: 0.35, dampingFraction: 0.9), value: showProductDetails)
         .onAppear { loadData(for: selectedDate, gender: selectedGender) }
-        .onChange(of: selectedDate) { _ in loadData(for: selectedDate, gender: selectedGender) }
+        .onChange(of: selectedDate) { _, newDate in loadData(for: newDate, gender: selectedGender) }
         .overlay(alignment: .topTrailing) {
             if preselectedMeal == nil && selectedMeal == nil && !showProductDetails {
                 Button(AppLocalizer.string("common.close")) { dismiss() }
@@ -344,9 +344,7 @@ struct RationPopupView: View {
             lunchEntries     = all.filter { $0.mealType == MealType.lunch.rawValue }
             dinnerEntries    = all.filter { $0.mealType == MealType.dinner.rawValue }
             snacksEntries    = all.filter { $0.mealType == MealType.snacks.rawValue }
-        } catch {
-            print("Ошибка загрузки данных: \(error)")
-        }
+        } catch {}
     }
 
     // MARK: — Добавление
@@ -386,9 +384,7 @@ struct RationPopupView: View {
             onMealAdded()
             activeMeal = nil
             withAnimation { showProductDetails = false }
-        } catch {
-            print("Ошибка при сохранении продукта: \(error)")
-        }
+        } catch {}
     }
 
     // MARK: — Удаление
@@ -403,8 +399,6 @@ struct RationPopupView: View {
             case .snacks:    snacksEntries.removeAll    { $0.id == entry.id }
             }
             onMealAdded()
-        } catch {
-            print("Ошибка удаления: \(error)")
-        }
+        } catch {}
     }
 }

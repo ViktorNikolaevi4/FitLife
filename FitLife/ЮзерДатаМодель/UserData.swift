@@ -5,6 +5,8 @@ import Observation
 
 @Model
 class UserData {
+    @Relationship(deleteRule: .cascade, inverse: \WaterIntake.user) var waterEntries: [WaterIntake]? = []
+
     var weight: Double = 0
     var height: Double = 0
     var age: Int = 0

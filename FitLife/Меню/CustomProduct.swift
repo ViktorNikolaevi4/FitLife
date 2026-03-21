@@ -3,7 +3,7 @@ import SwiftData
 
 @Model
 class CustomProduct {
-    @Attribute(.unique) var id: UUID = UUID()
+    var id: UUID = UUID()
     var name: String = ""
     var protein: Double = 0
     var fat: Double = 0
@@ -20,5 +20,4 @@ class CustomProduct {
         self.isFavorite = isFavorite
     }
 }
-
 

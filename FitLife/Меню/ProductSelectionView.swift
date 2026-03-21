@@ -26,6 +26,8 @@ struct ProductSelectionView: View {
 
     // кэш «Любимых»
     @State private var cachedFilteredProducts: [Product] = []
+    @State private var filteredProductsCache: [Product] = []
+    @State private var filteredCustomProductsCache: [CustomProduct] = []
 
     // частоты использования по имени продукта
     @State private var usageCounts: [String: Int] = [:]
@@ -51,33 +53,9 @@ struct ProductSelectionView: View {
 
     // MARK: - Списки (фильтр + сортировка: usage desc → name asc)
 
-    var filteredProducts: [Product] {
-        let base = (selectedFilter == .favorites ? cachedFilteredProducts : productLoader.products)
-        let filtered = searchText.isEmpty
-            ? base
-            : base.filter { $0.matches(searchText) }
+    var filteredProducts: [Product] { filteredProductsCache }
 
-        let sorted = filtered.sorted { a, b in
-            let ca = usageCounts[a.name] ?? 0
-            let cb = usageCounts[b.name] ?? 0
-            if ca != cb { return ca > cb }
-            return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
-        }
-        return Array(sorted.prefix(300))
-    }
-
-    var filteredCustomProducts: [CustomProduct] {
-        let base = searchText.isEmpty
-            ? customProducts
-            : customProducts.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-
-        return base.sorted { a, b in
-            let ca = usageCounts[a.name] ?? 0
-            let cb = usageCounts[b.name] ?? 0
-            if ca != cb { return ca > cb }
-            return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
-        }
-    }
+    var filteredCustomProducts: [CustomProduct] { filteredCustomProductsCache }
 
     private var shouldShowRemoteSection: Bool {
         selectedFilter == .all && !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !remoteProducts.isEmpty
@@ -226,10 +204,16 @@ struct ProductSelectionView: View {
                 loadCustomProducts()
                 cachedFilteredProducts = productLoader.products.filter { $0.isFavorite }
                 loadUsageCounts() // ← важно: посчитать частоты
+                refreshVisibleProducts()
                 scheduleHybridSearch()
             }
             .onChange(of: searchText) { _, _ in
+                refreshVisibleProducts()
                 scheduleHybridSearch()
+            }
+            .onChange(of: selectedFilter) { _, _ in
+                refreshVisibleProducts()
+                scheduleHybridSearch(immediate: true)
             }
             .onChange(of: networkMonitor.isConnected) { _, _ in
                 scheduleHybridSearch(immediate: true)
@@ -237,6 +221,7 @@ struct ProductSelectionView: View {
             .sheet(isPresented: $isCreatingProduct) {
                 CustomProductCreationView { newProduct in
                     customProducts.append(newProduct)
+                    refreshVisibleProducts()
                 }
             }
             .background(Color(.systemBackground).ignoresSafeArea())
@@ -262,6 +247,7 @@ struct ProductSelectionView: View {
                         productLoader.products[index].isFavorite.toggle()
                         persistFavorites()
                         cachedFilteredProducts = productLoader.products.filter { $0.isFavorite }
+                        refreshVisibleProducts()
                     }) {
                         Image(systemName: product.isFavorite ? "star.fill" : "star")
                             .foregroundColor(product.isFavorite ? .yellow : .gray)
@@ -310,6 +296,41 @@ struct ProductSelectionView: View {
         return formatter.string(from: date)
     }
 
+    private func refreshVisibleProducts() {
+        let trimmedSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let baseProducts = selectedFilter == .favorites ? cachedFilteredProducts : productLoader.products
+        let localMatches = trimmedSearch.isEmpty
+            ? baseProducts
+            : baseProducts.filter { $0.matches(trimmedSearch) }
+
+        filteredProductsCache = Array(sortedProducts(localMatches).prefix(300))
+
+        let customMatches = trimmedSearch.isEmpty
+            ? customProducts
+            : customProducts.filter { $0.name.localizedCaseInsensitiveContains(trimmedSearch) }
+
+        filteredCustomProductsCache = sortedCustomProducts(customMatches)
+    }
+
+    private func sortedProducts(_ products: [Product]) -> [Product] {
+        products.sorted { a, b in
+            let ca = usageCounts[a.name] ?? 0
+            let cb = usageCounts[b.name] ?? 0
+            if ca != cb { return ca > cb }
+            return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+        }
+    }
+
+    private func sortedCustomProducts(_ products: [CustomProduct]) -> [CustomProduct] {
+        products.sorted { a, b in
+            let ca = usageCounts[a.name] ?? 0
+            let cb = usageCounts[b.name] ?? 0
+            if ca != cb { return ca > cb }
+            return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+        }
+    }
+
     // Частоты использования по FoodEntry (по имени продукта)
     private func loadUsageCounts() {
         let fd = FetchDescriptor<FoodEntry>()
@@ -322,9 +343,10 @@ struct ProductSelectionView: View {
                 map[key, default: 0] += 1
             }
             usageCounts = map
+            refreshVisibleProducts()
         } catch {
-            print("Ошибка чтения usageCounts:", error)
             usageCounts = [:]
+            refreshVisibleProducts()
         }
     }
 
@@ -338,20 +360,17 @@ struct ProductSelectionView: View {
                 if let idx = customProducts.firstIndex(where: { $0.id == customProduct.id }) {
                     customProducts.remove(at: idx)
                 }
-                print("Пользовательский продукт удалён: \(customProduct.name)")
+                refreshVisibleProducts()
             }
-        } catch {
-            print("Ошибка удаления: \(error)")
-        }
+        } catch {}
     }
 
     private func loadCustomProducts() {
         let fd = FetchDescriptor<CustomProduct>()
         do {
             customProducts = try modelContext.fetch(fd)
-        } catch {
-            print("Ошибка загрузки своих продуктов: \(error)")
-        }
+            refreshVisibleProducts()
+        } catch {}
     }
 
     private func loadFavorites() {
@@ -360,6 +379,7 @@ struct ProductSelectionView: View {
             productLoader.products[i].isFavorite = names.contains(productLoader.products[i].name)
         }
         cachedFilteredProducts = productLoader.products.filter { $0.isFavorite }
+        refreshVisibleProducts()
     }
 
     private func persistFavorites() {
@@ -385,6 +405,14 @@ struct ProductSelectionView: View {
             remoteSearchMessage = nil
             isSearchingRemotely = false
             currentSearchRoute = networkMonitor.isConnected ? .russianLocalThenOpenFoodFacts : .offlineLocal
+            return
+        }
+
+        if !ProductSearchCoordinator.looksLikeBarcode(trimmedSearch), searchLanguage == .en, trimmedSearch.count < 3 {
+            remoteProducts = []
+            remoteSearchMessage = nil
+            isSearchingRemotely = false
+            currentSearchRoute = .englishUSDAThenLocal
             return
         }
 
@@ -608,8 +636,6 @@ struct CustomProductCreationView: View {
             try modelContext.save()
             onProductCreated(item)
             dismiss()
-        } catch {
-            print("Ошибка сохранения: \(error)")
-        }
+        } catch {}
     }
 }

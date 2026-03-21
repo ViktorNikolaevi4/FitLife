@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import Foundation
 
 @main
 struct FitLifeApp: App {
@@ -16,25 +17,25 @@ struct FitLifeApp: App {
         ])
 
         #if DEBUG
-        let inMemory = false   // можно временно поставить true, чтобы не накапливать «битые» стора во время разработки
+        let inMemory = ProcessInfo.processInfo.arguments.contains("--in-memory-store")
         #else
         let inMemory = false
         #endif
 
+        let hasICloudAccount = FileManager.default.ubiquityIdentityToken != nil
+
         do {
-            // Основной вариант — с CloudKit
+            let cloudKitDatabase: ModelConfiguration.CloudKitDatabase =
+                (!inMemory && hasICloudAccount) ? .automatic : .none
             let ck = ModelConfiguration(
                 schema: schema,
                 isStoredInMemoryOnly: inMemory,
                 allowsSave: true,
                 groupContainer: .none,
-                cloudKitDatabase: inMemory ? .none : .automatic
+                cloudKitDatabase: cloudKitDatabase
             )
             return try ModelContainer(for: schema, configurations: ck)
         } catch {
-            print("⚠️ CloudKit ModelContainer failed:", error)
-
-            // Фолбэк — локальный store без CloudKit (чтобы приложение жило)
             let local = ModelConfiguration(
                 schema: schema,
                 isStoredInMemoryOnly: inMemory,

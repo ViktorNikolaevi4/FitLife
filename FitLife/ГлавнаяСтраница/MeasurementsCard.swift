@@ -138,7 +138,7 @@ struct MeasurementsCard: View {
 
         let entry = BodyMeasurements(date: date, chest: chest, waist: waist, belly: belly, hips: hips)
         modelContext.insert(entry)
-        do { try modelContext.save() } catch { print("Save measurements error:", error) }
+        do { try modelContext.save() } catch {}
         isEditing = false
     }
 }

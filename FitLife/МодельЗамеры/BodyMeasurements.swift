@@ -3,7 +3,7 @@ import SwiftData
 
 @Model
 final class BodyMeasurements {
-    @Attribute(.unique) var id: UUID = UUID()
+    var id: UUID = UUID()
     var date: Date = Foundation.Date.now               // дата замера
     var chest: Double = 0               // грудь, см
     var waist: Double = 0               // талия (самое узкое), см

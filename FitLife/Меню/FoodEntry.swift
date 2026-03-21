@@ -3,14 +3,14 @@ import Foundation
 
 @Model
 class FoodEntry {
-    @Attribute(.unique) var id: UUID = UUID()
+    var id: UUID = UUID()
     var date: Date = Foundation.Date.now
     var mealType: String = ""
     var portion: Double = 0
     var gender: Gender = FitLife.Gender.male
     var isFavorite: Bool = false
 
-    @Relationship var product: Product?
+    var product: Product?
 
     init(date: Date, mealType: String, product: Product, portion: Double, gender: Gender, isFavorite: Bool = false) {
         self.date = date
