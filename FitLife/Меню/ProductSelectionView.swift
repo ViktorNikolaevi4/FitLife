@@ -10,11 +10,18 @@ struct ProductSelectionView: View {
     @State var productLoader = ProductLoader()
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
     @Environment(\.modelContext) private var modelContext
 
     @State private var searchText: String = ""
     @State private var selectedFilter: FilterType = .all
     @State private var isCreatingProduct: Bool = false
+    @State private var networkMonitor = NetworkMonitor()
+    @State private var remoteProducts: [Product] = []
+    @State private var isSearchingRemotely = false
+    @State private var remoteSearchMessage: String?
+    @State private var currentSearchRoute: ProductSearchRoute = .offlineLocal
+    @State private var searchTask: Task<Void, Never>?
 
     // кэш «Любимых»
     @State private var cachedFilteredProducts: [Product] = []
@@ -33,13 +40,17 @@ struct ProductSelectionView: View {
         case custom = "Свои"
     }
 
+    private var searchLanguage: FoodSearchLanguage {
+        FoodSearchLanguage.from(locale: locale)
+    }
+
     // MARK: - Списки (фильтр + сортировка: usage desc → name asc)
 
     var filteredProducts: [Product] {
         let base = (selectedFilter == .favorites ? cachedFilteredProducts : productLoader.products)
         let filtered = searchText.isEmpty
             ? base
-            : base.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+            : base.filter { $0.matches(searchText) }
 
         let sorted = filtered.sorted { a, b in
             let ca = usageCounts[a.name] ?? 0
@@ -61,6 +72,51 @@ struct ProductSelectionView: View {
             if ca != cb { return ca > cb }
             return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
         }
+    }
+
+    private var shouldShowRemoteSection: Bool {
+        selectedFilter == .all && !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !remoteProducts.isEmpty
+    }
+
+    private var localSectionTitle: String {
+        switch selectedFilter {
+        case .all:
+            return shouldShowRemoteSection ? "Локальная база" : "Общие продукты"
+        case .favorites:
+            return "Любимые"
+        case .custom:
+            return "Свои продукты"
+        }
+    }
+
+    private var remoteSectionTitle: String {
+        switch currentSearchRoute {
+        case .barcodeOpenFoodFacts:
+            return "Open Food Facts"
+        case .englishUSDAThenLocal:
+            return "USDA"
+        case .russianLocalThenOpenFoodFacts:
+            return "Open Food Facts"
+        case .offlineLocal:
+            return "Онлайн"
+        }
+    }
+
+    private var searchStatusText: String? {
+        if isSearchingRemotely {
+            switch currentSearchRoute {
+            case .barcodeOpenFoodFacts:
+                return "Ищу штрихкод в Open Food Facts..."
+            case .englishUSDAThenLocal:
+                return "Ищу продукты в USDA..."
+            case .russianLocalThenOpenFoodFacts:
+                return "Проверяю Open Food Facts..."
+            case .offlineLocal:
+                return "Проверяю источник данных..."
+            }
+        }
+
+        return remoteSearchMessage
     }
 
     // MARK: - UI
@@ -86,10 +142,35 @@ struct ProductSelectionView: View {
                 TextField("Поиск еды...", text: $searchText)
                     .textFieldStyle(.roundedBorder)
                     .padding()
+                    .onSubmit {
+                        scheduleHybridSearch(immediate: true)
+                    }
+
+                if let searchStatusText {
+                    HStack(spacing: 8) {
+                        if isSearchingRemotely {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                        Text(searchStatusText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+                }
 
                 List {
+                    if shouldShowRemoteSection {
+                        Section(header: Text(remoteSectionTitle)) {
+                            ForEach(remoteProducts, id: \.id) { product in
+                                productRow(product: product)
+                            }
+                        }
+                    }
+
                     if selectedFilter != .custom {
-                        Section(header: Text("Общие продукты")) {
+                        Section(header: Text(localSectionTitle)) {
                             ForEach(filteredProducts, id: \.id) { product in
                                 productRow(product: product)
                             }
@@ -140,6 +221,13 @@ struct ProductSelectionView: View {
                 loadCustomProducts()
                 cachedFilteredProducts = productLoader.products.filter { $0.isFavorite }
                 loadUsageCounts() // ← важно: посчитать частоты
+                scheduleHybridSearch()
+            }
+            .onChange(of: searchText) { _, _ in
+                scheduleHybridSearch()
+            }
+            .onChange(of: networkMonitor.isConnected) { _, _ in
+                scheduleHybridSearch(immediate: true)
             }
             .sheet(isPresented: $isCreatingProduct) {
                 CustomProductCreationView { newProduct in
@@ -158,24 +246,31 @@ struct ProductSelectionView: View {
         }) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(product.name).font(.headline)
+                    Text(product.displayName(preferredLanguageCode: searchLanguage.rawValue)).font(.headline)
                     Text("На 100 г: \(product.calories) ккал, Б \(String(format: "%.1f", product.protein)) г., Ж \(String(format: "%.1f", product.fat)) г., У \(String(format: "%.1f", product.carbs)) г.")
                         .font(.caption)
                 }
                 .foregroundColor(.primary)
                 Spacer()
-                Button(action: {
-                    if let index = productLoader.products.firstIndex(where: { $0.id == product.id }) {
+                if let index = productLoader.products.firstIndex(where: { $0.id == product.id }) {
+                    Button(action: {
                         productLoader.products[index].isFavorite.toggle()
                         persistFavorites()
                         cachedFilteredProducts = productLoader.products.filter { $0.isFavorite }
+                    }) {
+                        Image(systemName: product.isFavorite ? "star.fill" : "star")
+                            .foregroundColor(product.isFavorite ? .yellow : .gray)
                     }
-                }) {
-                    Image(systemName: product.isFavorite ? "star.fill" : "star")
-                        .foregroundColor(product.isFavorite ? .yellow : .gray)
+                    .buttonStyle(.borderless)
+                    .padding(.vertical, 4)
+                } else {
+                    Text(sourceLabel(for: product.source))
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color(.secondarySystemBackground), in: Capsule())
                 }
-                .buttonStyle(.borderless)
-                .padding(.vertical, 4)
             }
         }
     }
@@ -272,6 +367,80 @@ struct ProductSelectionView: View {
     private func favoriteProductNames() -> Set<String> {
         let names = UserDefaults.standard.stringArray(forKey: Self.favoriteNamesKey) ?? []
         return Set(names)
+    }
+
+    private func scheduleHybridSearch(immediate: Bool = false) {
+        searchTask?.cancel()
+
+        let trimmedSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedSearch.isEmpty, selectedFilter == .all else {
+            remoteProducts = []
+            remoteSearchMessage = nil
+            isSearchingRemotely = false
+            currentSearchRoute = networkMonitor.isConnected ? .russianLocalThenOpenFoodFacts : .offlineLocal
+            return
+        }
+
+        let delayNanoseconds: UInt64
+        if immediate {
+            delayNanoseconds = 0
+        } else if ProductSearchCoordinator.looksLikeBarcode(trimmedSearch) {
+            delayNanoseconds = 150_000_000
+        } else if searchLanguage == .ru {
+            delayNanoseconds = 900_000_000
+        } else {
+            delayNanoseconds = 500_000_000
+        }
+
+        let language = searchLanguage
+        let localProducts = productLoader.products
+        let hasInternet = networkMonitor.isConnected
+
+        searchTask = Task {
+            if delayNanoseconds > 0 {
+                try? await Task.sleep(nanoseconds: delayNanoseconds)
+            }
+
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                isSearchingRemotely = hasInternet
+                remoteSearchMessage = nil
+
+                if ProductSearchCoordinator.looksLikeBarcode(trimmedSearch) {
+                    currentSearchRoute = .barcodeOpenFoodFacts
+                } else {
+                    currentSearchRoute = language == .en ? .englishUSDAThenLocal : .russianLocalThenOpenFoodFacts
+                }
+            }
+
+            let response = await ProductSearchCoordinator.shared.search(
+                query: trimmedSearch,
+                localProducts: localProducts,
+                language: language,
+                hasInternet: hasInternet
+            )
+
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                remoteProducts = response.remoteProducts
+                remoteSearchMessage = response.message
+                currentSearchRoute = response.route
+                isSearchingRemotely = false
+            }
+        }
+    }
+
+    private func sourceLabel(for source: ProductSource) -> String {
+        switch source {
+        case .localCSV:
+            return "CSV"
+        case .usda:
+            return "USDA"
+        case .openFoodFacts:
+            return "OFF"
+        }
     }
 }
 

@@ -12,13 +12,19 @@ class ProductLoader {
     }
 
     func loadCSV() {
-        guard let path = Bundle.main.url(forResource: "Продукты", withExtension: "csv") else {
+        let bundle = Bundle.main
+        let path =
+            bundle.url(forResource: "Products_template_en", withExtension: "csv") ??
+            bundle.url(forResource: "Продукты", withExtension: "csv")
+
+        guard let path else {
             print("CSV file not found")
             return
         }
 
         do {
             let csv = try CSV<Named>(url: path)
+            products.removeAll()
 
             // Создаём словарь с очищенными заголовками для ключей
             var cleanedRows: [[String: String]] = []
@@ -34,11 +40,12 @@ class ProductLoader {
 
             // Обрабатываем очищенные строки
             for row in cleanedRows {
-                let cleanedName = row["Продукты"] ?? "Неизвестно"
-                let cleanedProtein = row["Белки"] ?? "Неизвестно"
-                let cleanedFat = row["Жиры"] ?? "Неизвестно"
-                let cleanedCarbs = row["Углеводы"] ?? "Неизвестно"
-                let cleanedCalories = row["Калории"] ?? "Неизвестно"
+                let cleanedName = row["Name_RU"] ?? row["Продукты"] ?? "Неизвестно"
+                let cleanedEnglishName = row["Name_EN"]
+                let cleanedProtein = row["Protein"] ?? row["Белки"] ?? "Неизвестно"
+                let cleanedFat = row["Fat"] ?? row["Жиры"] ?? "Неизвестно"
+                let cleanedCarbs = row["Carbs"] ?? row["Углеводы"] ?? "Неизвестно"
+                let cleanedCalories = row["Calories"] ?? row["Калории"] ?? "Неизвестно"
 
                 if let protein = Double(cleanedProtein),
                    let fat = Double(cleanedFat),
@@ -46,6 +53,7 @@ class ProductLoader {
                    let calories = Int(cleanedCalories) {
                     let product = Product(
                         name: cleanedName,
+                        nameEN: cleanedEnglishName?.isEmpty == false ? cleanedEnglishName : nil,
                         protein: protein,
                         fat: fat,
                         carbs: carbs,
