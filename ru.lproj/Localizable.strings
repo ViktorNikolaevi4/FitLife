@@ -1,0 +1,259 @@
+/* 
+  Localizable.strings
+  FitLife
+
+  Created by Виктор Корольков on 21.03.2026.
+  
+*/
+"tab.home" = "Главная";
+"tab.profile" = "Профиль";
+"tab.water" = "Вода";
+"tab.settings" = "Настройки";
+
+"common.close" = "Закрыть";
+"common.create" = "Создать";
+"common.delete" = "Удалить";
+
+"settings.title" = "Настройки";
+"settings.language.section" = "Язык приложения";
+"settings.language.label" = "Язык";
+"settings.language.russian" = "Русский";
+"settings.language.english" = "English";
+"settings.share.subject" = "Попробуй это приложение";
+"settings.share.title" = "Поделиться с друзьями";
+"settings.rate.title" = "Оценить приложение";
+"settings.contact.title" = "Написать разработчикам";
+"settings.about.title" = "О приложении";
+"settings.mail.alert.title" = "На устройстве не настроена Почта";
+"settings.mail.alert.message" = "Добавь почтовый аккаунт в настройках iOS или напиши нам на %@.";
+"settings.mail.subject" = "Обратная связь — %@ %@";
+"settings.mail.body" = "Здравствуйте! Хочу оставить отзыв/вопрос:\n\n(Опишите вашу ситуацию здесь)\n\n--\nТехническая информация:\nПриложение: %@ %@\nУстройство: %@\niOS: %@ %@";
+
+"about.app_name" = "Моё Питание!";
+"about.description" = "Моё Питание! — это приложение-ассистент. Мы даём советы и помогаем отслеживать прогресс, но не ставим диагнозы и не назначаем лечение. Для медицинских вопросов обращайся к врачу.";
+
+"icloud.checking" = "Идёт проверка…";
+"icloud.title.checking" = "Проверяем iCloud…";
+"icloud.title.available" = "iCloud доступен";
+"icloud.title.no_account" = "Не выполнен вход в iCloud";
+"icloud.title.restricted" = "Доступ к iCloud ограничен";
+"icloud.title.temporarily_unavailable" = "iCloud временно недоступен";
+"icloud.title.unknown" = "Не удалось определить статус iCloud";
+"icloud.subtitle.available" = "Синхронизация CloudKit готова";
+"icloud.subtitle.no_account" = "Откройте «Настройки → Apple ID» и войдите";
+"icloud.subtitle.restricted" = "Проверьте Ограничения/Экранное время";
+"icloud.subtitle.unknown" = "Попробуйте позже или проверьте сеть";
+
+"search.title" = "Таблица калорийности продуктов питания";
+"search.subtitle" = "(данные указаны на 100 г продукта)";
+"search.category" = "Выберите категорию";
+"search.placeholder" = "Поиск еды...";
+"search.filter.all" = "Общие";
+"search.filter.favorites" = "Любимые";
+"search.filter.custom" = "Свои";
+"search.section.common_products" = "Общие продукты";
+"search.section.local_database" = "Локальная база";
+"search.section.custom_products" = "Свои продукты";
+"search.section.online" = "Онлайн";
+"search.status.barcode" = "Ищу штрихкод в Open Food Facts...";
+"search.status.usda" = "Ищу продукты в USDA...";
+"search.status.off" = "Проверяю Open Food Facts...";
+"search.status.source" = "Проверяю источник данных...";
+"search.nutrition.summary" = "На 100 г: %d ккал, Б %@ г., Ж %@ г., У %@ г.";
+
+"search.message.offline_local" = "Нет интернета. Показана локальная база.";
+"search.message.barcode_not_found" = "Штрихкод не найден в Open Food Facts.";
+"search.message.barcode_checked" = "Штрихкод проверен через Open Food Facts.";
+"search.message.usda_empty" = "USDA ничего не вернул. Остается локальная база.";
+"search.message.usda_then_local" = "Сначала показаны результаты USDA, ниже локальная база.";
+"search.message.local_first" = "Сначала показана локальная база.";
+"search.message.local_and_off_empty" = "Локальная база пуста, Open Food Facts тоже ничего не нашел.";
+"search.message.local_empty_off_results" = "Локальная база пуста, показаны результаты Open Food Facts.";
+
+"common.ok" = "OK";
+"common.save" = "Сохранить";
+"common.cancel" = "Отмена";
+"common.edit" = "Изменить";
+"common.date" = "Дата";
+"common.zero" = "0";
+"common.back" = "Назад";
+"common.next" = "Далее";
+"common.done" = "Готово";
+"common.today" = "Сегодня";
+"common.select_date" = "Выберите дату";
+"common.add" = "Добавить";
+"common.cannot_undo" = "Это действие нельзя отменить.";
+
+"data.not_found" = "Данные не найдены";
+"dashboard.no_user_data" = "Нет данных пользователя";
+"dashboard.profile_auto_created" = "Профиль будет создан автоматически при первом запуске.";
+
+"gender.male" = "Мужчина";
+"gender.female" = "Женщина";
+
+"profile.gender" = "Пол";
+"profile.parameters" = "Параметры";
+"profile.age" = "Возраст";
+"profile.weight" = "Вес";
+"profile.height" = "Рост";
+"profile.not_found" = "Профиль не найден";
+"profile.auto_create" = "Создам профиль автоматически.";
+
+"picker.select_weight" = "Выберите вес";
+"picker.select_height" = "Выберите рост";
+"picker.select_age" = "Выберите возраст";
+
+"stats.weight" = "ВЕС, КГ";
+"stats.height" = "РОСТ, СМ";
+"stats.age" = "ВОЗРАСТ";
+
+"activity.title" = "Физическая активность";
+"activity.none" = "Нет";
+"activity.light" = "1-3 раза";
+"activity.moderate" = "4-5 раза";
+"activity.pro" = "PRO";
+"activity.caption.none" = "Сидячий образ жизни";
+"activity.caption.light" = "Лёгкая активность";
+"activity.caption.moderate" = "Средняя активность";
+"activity.caption.pro" = "Интенсивно 6–7 раз в неделю";
+"activity.message.none" = "Ваша суточная потребность при сидячем образе жизни";
+"activity.message.light" = "Ваша суточная потребность при тренировках 1-2 раза в неделю";
+"activity.message.moderate" = "Ваша суточная потребность при тренировках 3-5 раза в неделю";
+"activity.message.pro" = "Ваша суточная потребность при PRO тренировках";
+
+"goal.title" = "Цель";
+"goal.lose" = "Снизить вес";
+"goal.maintain" = "Текущий вес";
+"goal.gain" = "Набрать вес";
+
+"unit.cm" = "см";
+"unit.kg" = "кг";
+"unit.years" = "лет";
+"unit.kcal.value" = "%d ккал";
+"unit.kcal.nbsp" = "%d ккал";
+"unit.grams.value" = "%d г";
+"unit.ml.value" = "%d мл";
+"unit.ml.value.int" = "%d мл";
+
+"macros.energy" = "Энергия:";
+"macros.remaining" = "Осталось:";
+"macros.entered_today" = "Сегодня уже ввели:";
+"macro.protein" = "Белки";
+"macro.fat" = "Жиры";
+"macro.carbs" = "Углеводы";
+"macro.protein.value" = "Б %@ г";
+"macro.fat.value" = "Ж %@ г";
+"macro.carbs.value" = "У %@ г";
+"macro.progress.value" = "%d / %d г";
+
+"measurements.title" = "Замеры тела";
+"measurements.empty" = "Ещё нет данных";
+"measurements.chest" = "Грудь";
+"measurements.waist" = "Талия (узкая)";
+"measurements.belly" = "Живот";
+"measurements.hips" = "Бёдра";
+
+"balance.title" = "Баланс";
+"balance.target" = "Цель";
+"balance.consumed" = "Съедено";
+"balance.remaining" = "Осталось";
+
+"meal.breakfast" = "Завтрак";
+"meal.lunch" = "Обед";
+"meal.dinner" = "Ужин";
+"meal.snacks" = "Перекусы";
+"meal.snack" = "Перекус";
+"meal.macros.summary" = "Б %d • Ж %d • У %d г";
+
+"product.default" = "Продукт";
+"product.delete.confirm" = "Удалить продукт?";
+"entry.will_be_kcal" = "Будет: %d ккал";
+
+"portion.grams" = "Порция, г";
+"portion.in_grams" = "Порция в граммах";
+
+"ration.title" = "Рацион";
+"ration.day_title" = "Рацион на день";
+"ration.total_day" = "Итого за день:";
+"ration.calories.value" = "Калорий: %d ккал";
+"ration.protein.value" = "Белки: %d г";
+"ration.fat.value" = "Жиры: %d г";
+"ration.carbs.value" = "Углеводы: %d г";
+"ration.entry.summary" = "Калории: %d ккал, Б: %@ г, Ж: %@ г, У: %@ г";
+"ration.add_food" = "+ добавить еду";
+
+"bmi.title" = "Индекс массы тела";
+"bmi.short" = "ИМТ";
+"bmi.your_index" = "Ваш индекс";
+"bmi.range.underweight" = "<18.5 — Дефицит массы тела";
+"bmi.range.normal" = "18.5 – 24.9 — Нормальная масса тела";
+"bmi.range.overweight" = "25 – 29.9 — Избыточная масса тела";
+"bmi.range.obesity" = ">30 — Ожирение";
+"bmi.message.underweight" = "У вас дефицит массы тела";
+"bmi.message.normal" = "Нормальная масса тела";
+"bmi.message.overweight" = "У вас избыточный вес";
+"bmi.message.obesity" = "Ожирение";
+"bmi.status.underweight" = "Дефицит массы тела";
+"bmi.status.normal" = "Нормальная масса";
+"bmi.status.overweight" = "Избыточный вес";
+"bmi.status.obesity" = "Ожирение";
+"bmi.status.fill_data" = "Заполните вес и рост";
+
+"water.tracker.title" = "Трекер воды";
+"water.temperature.title" = "Температура воды";
+"water.temperature.cold" = "Холодно";
+"water.temperature.warm" = "Тепло";
+"water.temperature.hot" = "Жарко";
+"water.progress.liters" = "%.2f л из %.2f л";
+"water.add" = "Добавить воду";
+"water.remind" = "Напомнить";
+"water.portion.ml" = "Порция %d мл";
+
+"notifications.title" = "Уведомления";
+"notifications.denied" = "Уведомления запрещены в настройках системы.";
+"notifications.open_settings" = "Открыть настройки системы";
+"notifications.schedule" = "Расписание";
+"notifications.start" = "Начало";
+"notifications.end" = "Конец";
+"notifications.interval" = "Интервал";
+"notifications.interval.30m" = "30 минут";
+"notifications.interval.1h" = "Час";
+"notifications.interval.1_5h" = "Полтора часа";
+"notifications.interval.2h" = "Два часа";
+"notifications.interval.2_5h" = "Два с половиной часа";
+"notifications.interval.3h" = "Три часа";
+"notifications.actions" = "Действия";
+"notifications.update" = "Обновить расписание";
+"notifications.disable_all" = "Отключить все напоминания";
+"notifications.invalid_range" = "Начало должно быть раньше конца";
+"notifications.reminder_title" = "Напоминание";
+"notifications.reminder_body" = "Пора выпить воды!";
+"notifications.today" = "Сегодня";
+
+"chart.no_data" = "Данные ещё не введены";
+
+"menu.title" = "Меню";
+"menu.choose" = "Выберите";
+"menu.program" = "Программу питания";
+"menu.plan.kcal" = "%d Ккалорий";
+"menu.weekdays" = "Дни недели";
+"weekday.monday" = "Понедельник";
+"weekday.tuesday" = "Вторник";
+"weekday.wednesday" = "Среда";
+"weekday.thursday" = "Четверг";
+"weekday.friday" = "Пятница";
+"weekday.saturday" = "Суббота";
+"weekday.sunday" = "Воскресенье";
+
+"onboarding.basics" = "Основные данные";
+"onboarding.age.value" = "%d лет";
+"onboarding.weight.value" = "%.1f кг";
+"onboarding.height.value" = "%d см";
+
+"custom_product.new" = "Новый продукт";
+"custom_product.subtitle" = "БЖУ указывайте на 100 г продукта";
+"custom_product.name" = "Наименование";
+"custom_product.calories" = "Энергия, ккал";
+"custom_product.protein" = "Белки, г.";
+"custom_product.fat" = "Жиры, г.";
+"custom_product.carbs" = "Углеводы, г.";

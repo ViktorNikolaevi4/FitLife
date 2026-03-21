@@ -18,7 +18,7 @@ struct MeasurementsCard: View {
     private var last: BodyMeasurements? { items.first }
 
     var body: some View {
-        SectionCard(title: "Замеры тела") {
+        SectionCard(title: AppLocalizer.string("measurements.title")) {
             HStack {
                 if let last {
                     Label(last.date.formatted(date: .abbreviated, time: .omitted),
@@ -26,10 +26,10 @@ struct MeasurementsCard: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
-                    Text("Ещё нет данных").font(.caption).foregroundStyle(.secondary)
+                    Text(AppLocalizer.string("measurements.empty")).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button(isEditing ? "Отменить" : "Изменить") {
+                Button(isEditing ? AppLocalizer.string("common.cancel") : AppLocalizer.string("common.edit")) {
                     withAnimation(.easeInOut(duration: 0.2)) { toggleEdit() }
                 }
                 .buttonStyle(.plain)
@@ -38,26 +38,26 @@ struct MeasurementsCard: View {
 
             if isEditing {
                 VStack(spacing: 10) {
-                    DatePicker("Дата", selection: $date, displayedComponents: .date)
+                    DatePicker(AppLocalizer.string("common.date"), selection: $date, displayedComponents: .date)
                         .labelsHidden()
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    fieldRow("Грудь",  text: $chestText)
-                    fieldRow("Талия (узкая)", text: $waistText)
-                    fieldRow("Живот", text: $bellyText)
-                    fieldRow("Бёдра", text: $hipsText)
+                    fieldRow(AppLocalizer.string("measurements.chest"),  text: $chestText)
+                    fieldRow(AppLocalizer.string("measurements.waist"), text: $waistText)
+                    fieldRow(AppLocalizer.string("measurements.belly"), text: $bellyText)
+                    fieldRow(AppLocalizer.string("measurements.hips"), text: $hipsText)
 
-                    Button("Сохранить") { save() }
+                    Button(AppLocalizer.string("common.save")) { save() }
                         .buttonStyle(.borderedProminent)
                         .tint(.blue)
                         .disabled(!isValid)
                 }
             } else {
                 VStack(spacing: 10) {
-                    valueRow("Грудь", last?.chest)
-                    valueRow("Талия (узкая)", last?.waist)
-                    valueRow("Живот", last?.belly)
-                    valueRow("Бёдра", last?.hips)
+                    valueRow(AppLocalizer.string("measurements.chest"), last?.chest)
+                    valueRow(AppLocalizer.string("measurements.waist"), last?.waist)
+                    valueRow(AppLocalizer.string("measurements.belly"), last?.belly)
+                    valueRow(AppLocalizer.string("measurements.hips"), last?.hips)
                 }
             }
         }
@@ -71,7 +71,7 @@ struct MeasurementsCard: View {
         HStack {
             Text(title)
             Spacer()
-            Text(value.map { formatted($0) + " см" } ?? "—")
+            Text(value.map { formatted($0) + " " + AppLocalizer.string("unit.cm") } ?? "—")
                 .foregroundStyle(.secondary)
         }
     }
@@ -81,7 +81,7 @@ struct MeasurementsCard: View {
         HStack(spacing: 10) {
             Text(title)
             Spacer()
-            TextField("0", text: text)
+            TextField(AppLocalizer.string("common.zero"), text: text)
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.trailing)
                 .frame(width: 90)
@@ -89,7 +89,7 @@ struct MeasurementsCard: View {
                 .onChange(of: text.wrappedValue) {
                     text.wrappedValue = sanitize(text.wrappedValue)
                 }
-            Text("см").foregroundStyle(.secondary)
+            Text(AppLocalizer.string("unit.cm")).foregroundStyle(.secondary)
         }
     }
 

@@ -3,6 +3,8 @@ import SwiftData
 
 @main
 struct FitLifeApp: App {
+    @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
+
     private let modelContainer: ModelContainer = {
         let schema = Schema([
             UserData.self,
@@ -45,7 +47,11 @@ struct FitLifeApp: App {
     }()
 
     var body: some Scene {
-        WindowGroup {  RootView() }
+        WindowGroup {
+            RootView()
+                .id(appLanguageRaw)
+                .environment(\.locale, AppLanguage.from(rawValue: appLanguageRaw).locale)
+        }
             .modelContainer(modelContainer)
     }
 }

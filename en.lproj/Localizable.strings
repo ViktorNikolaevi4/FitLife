@@ -1,0 +1,259 @@
+/* 
+  Localizable.strings
+  FitLife
+
+  Created by Виктор Корольков on 21.03.2026.
+  
+*/
+"tab.home" = "Home";
+"tab.profile" = "Profile";
+"tab.water" = "Water";
+"tab.settings" = "Settings";
+
+"common.close" = "Close";
+"common.create" = "Create";
+"common.delete" = "Delete";
+
+"settings.title" = "Settings";
+"settings.language.section" = "App Language";
+"settings.language.label" = "Language";
+"settings.language.russian" = "Русский";
+"settings.language.english" = "English";
+"settings.share.subject" = "Try this app";
+"settings.share.title" = "Share with Friends";
+"settings.rate.title" = "Rate the App";
+"settings.contact.title" = "Contact Developers";
+"settings.about.title" = "About";
+"settings.mail.alert.title" = "Mail is not configured on this device";
+"settings.mail.alert.message" = "Add a mail account in iOS Settings or write to us at %@.";
+"settings.mail.subject" = "Feedback — %@ %@";
+"settings.mail.body" = "Hello! I would like to leave feedback / ask a question:\n\n(Describe your situation here)\n\n--\nTechnical information:\nApp: %@ %@\nDevice: %@\niOS: %@ %@";
+
+"about.app_name" = "My Nutrition!";
+"about.description" = "My Nutrition! is an assistant app. We provide guidance and help track progress, but we do not diagnose or prescribe treatment. For medical questions, consult a doctor.";
+
+"icloud.checking" = "Checking…";
+"icloud.title.checking" = "Checking iCloud…";
+"icloud.title.available" = "iCloud Available";
+"icloud.title.no_account" = "Not Signed In to iCloud";
+"icloud.title.restricted" = "iCloud Access Restricted";
+"icloud.title.temporarily_unavailable" = "iCloud Temporarily Unavailable";
+"icloud.title.unknown" = "Could Not Determine iCloud Status";
+"icloud.subtitle.available" = "CloudKit sync is ready";
+"icloud.subtitle.no_account" = "Open Settings → Apple ID and sign in";
+"icloud.subtitle.restricted" = "Check Restrictions / Screen Time";
+"icloud.subtitle.unknown" = "Try again later or check your connection";
+
+"search.title" = "Food Nutrition Table";
+"search.subtitle" = "(values are per 100 g of product)";
+"search.category" = "Choose a category";
+"search.placeholder" = "Search food...";
+"search.filter.all" = "All";
+"search.filter.favorites" = "Favorites";
+"search.filter.custom" = "Custom";
+"search.section.common_products" = "Common Products";
+"search.section.local_database" = "Local Database";
+"search.section.custom_products" = "Custom Products";
+"search.section.online" = "Online";
+"search.status.barcode" = "Searching barcode in Open Food Facts...";
+"search.status.usda" = "Searching products in USDA...";
+"search.status.off" = "Checking Open Food Facts...";
+"search.status.source" = "Checking data source...";
+"search.nutrition.summary" = "Per 100 g: %d kcal, P %@ g, F %@ g, C %@ g";
+
+"search.message.offline_local" = "No internet connection. Showing the local database.";
+"search.message.barcode_not_found" = "Barcode was not found in Open Food Facts.";
+"search.message.barcode_checked" = "Barcode was checked via Open Food Facts.";
+"search.message.usda_empty" = "USDA returned no results. Falling back to the local database.";
+"search.message.usda_then_local" = "USDA results are shown first, followed by the local database.";
+"search.message.local_first" = "Showing the local database first.";
+"search.message.local_and_off_empty" = "The local database is empty and Open Food Facts found nothing either.";
+"search.message.local_empty_off_results" = "The local database is empty, showing Open Food Facts results.";
+
+"common.ok" = "OK";
+"common.save" = "Save";
+"common.cancel" = "Cancel";
+"common.edit" = "Edit";
+"common.date" = "Date";
+"common.zero" = "0";
+"common.back" = "Back";
+"common.next" = "Next";
+"common.done" = "Done";
+"common.today" = "Today";
+"common.select_date" = "Select Date";
+"common.add" = "Add";
+"common.cannot_undo" = "This action cannot be undone.";
+
+"data.not_found" = "Data not found";
+"dashboard.no_user_data" = "No user data";
+"dashboard.profile_auto_created" = "A profile will be created automatically on first launch.";
+
+"gender.male" = "Male";
+"gender.female" = "Female";
+
+"profile.gender" = "Gender";
+"profile.parameters" = "Parameters";
+"profile.age" = "Age";
+"profile.weight" = "Weight";
+"profile.height" = "Height";
+"profile.not_found" = "Profile not found";
+"profile.auto_create" = "I will create a profile automatically.";
+
+"picker.select_weight" = "Select Weight";
+"picker.select_height" = "Select Height";
+"picker.select_age" = "Select Age";
+
+"stats.weight" = "WEIGHT, KG";
+"stats.height" = "HEIGHT, CM";
+"stats.age" = "AGE";
+
+"activity.title" = "Physical Activity";
+"activity.none" = "None";
+"activity.light" = "1-3 times";
+"activity.moderate" = "4-5 times";
+"activity.pro" = "PRO";
+"activity.caption.none" = "Sedentary lifestyle";
+"activity.caption.light" = "Light activity";
+"activity.caption.moderate" = "Moderate activity";
+"activity.caption.pro" = "Intensive 6-7 times a week";
+"activity.message.none" = "Your daily requirement for a sedentary lifestyle";
+"activity.message.light" = "Your daily requirement for training 1-2 times a week";
+"activity.message.moderate" = "Your daily requirement for training 3-5 times a week";
+"activity.message.pro" = "Your daily requirement for PRO training";
+
+"goal.title" = "Goal";
+"goal.lose" = "Lose Weight";
+"goal.maintain" = "Maintain Weight";
+"goal.gain" = "Gain Weight";
+
+"unit.cm" = "cm";
+"unit.kg" = "kg";
+"unit.years" = "years";
+"unit.kcal.value" = "%d kcal";
+"unit.kcal.nbsp" = "%d kcal";
+"unit.grams.value" = "%d g";
+"unit.ml.value" = "%d ml";
+"unit.ml.value.int" = "%d ml";
+
+"macros.energy" = "Energy:";
+"macros.remaining" = "Remaining:";
+"macros.entered_today" = "Entered today:";
+"macro.protein" = "Protein";
+"macro.fat" = "Fat";
+"macro.carbs" = "Carbs";
+"macro.protein.value" = "P %@ g";
+"macro.fat.value" = "F %@ g";
+"macro.carbs.value" = "C %@ g";
+"macro.progress.value" = "%d / %d g";
+
+"measurements.title" = "Body Measurements";
+"measurements.empty" = "No data yet";
+"measurements.chest" = "Chest";
+"measurements.waist" = "Waist (narrow)";
+"measurements.belly" = "Belly";
+"measurements.hips" = "Hips";
+
+"balance.title" = "Balance";
+"balance.target" = "Target";
+"balance.consumed" = "Consumed";
+"balance.remaining" = "Remaining";
+
+"meal.breakfast" = "Breakfast";
+"meal.lunch" = "Lunch";
+"meal.dinner" = "Dinner";
+"meal.snacks" = "Snacks";
+"meal.snack" = "Snack";
+"meal.macros.summary" = "P %d • F %d • C %d g";
+
+"product.default" = "Product";
+"product.delete.confirm" = "Delete product?";
+"entry.will_be_kcal" = "Will be: %d kcal";
+
+"portion.grams" = "Portion, g";
+"portion.in_grams" = "Portion in grams";
+
+"ration.title" = "Ration";
+"ration.day_title" = "Daily Ration";
+"ration.total_day" = "Total for the day:";
+"ration.calories.value" = "Calories: %d kcal";
+"ration.protein.value" = "Protein: %d g";
+"ration.fat.value" = "Fat: %d g";
+"ration.carbs.value" = "Carbs: %d g";
+"ration.entry.summary" = "Calories: %d kcal, P: %@ g, F: %@ g, C: %@ g";
+"ration.add_food" = "+ add food";
+
+"bmi.title" = "Body Mass Index";
+"bmi.short" = "BMI";
+"bmi.your_index" = "Your index";
+"bmi.range.underweight" = "<18.5 — Underweight";
+"bmi.range.normal" = "18.5 – 24.9 — Normal weight";
+"bmi.range.overweight" = "25 – 29.9 — Overweight";
+"bmi.range.obesity" = ">30 — Obesity";
+"bmi.message.underweight" = "You are underweight";
+"bmi.message.normal" = "Normal weight";
+"bmi.message.overweight" = "You are overweight";
+"bmi.message.obesity" = "Obesity";
+"bmi.status.underweight" = "Underweight";
+"bmi.status.normal" = "Normal";
+"bmi.status.overweight" = "Overweight";
+"bmi.status.obesity" = "Obesity";
+"bmi.status.fill_data" = "Fill in weight and height";
+
+"water.tracker.title" = "Water Tracker";
+"water.temperature.title" = "Water Temperature";
+"water.temperature.cold" = "Cold";
+"water.temperature.warm" = "Warm";
+"water.temperature.hot" = "Hot";
+"water.progress.liters" = "%.2f L of %.2f L";
+"water.add" = "Add Water";
+"water.remind" = "Remind";
+"water.portion.ml" = "Portion %d ml";
+
+"notifications.title" = "Notifications";
+"notifications.denied" = "Notifications are disabled in system settings.";
+"notifications.open_settings" = "Open System Settings";
+"notifications.schedule" = "Schedule";
+"notifications.start" = "Start";
+"notifications.end" = "End";
+"notifications.interval" = "Interval";
+"notifications.interval.30m" = "30 minutes";
+"notifications.interval.1h" = "1 hour";
+"notifications.interval.1_5h" = "1.5 hours";
+"notifications.interval.2h" = "2 hours";
+"notifications.interval.2_5h" = "2.5 hours";
+"notifications.interval.3h" = "3 hours";
+"notifications.actions" = "Actions";
+"notifications.update" = "Update Schedule";
+"notifications.disable_all" = "Disable All Reminders";
+"notifications.invalid_range" = "Start time must be earlier than end time";
+"notifications.reminder_title" = "Reminder";
+"notifications.reminder_body" = "Time to drink water!";
+"notifications.today" = "Today";
+
+"chart.no_data" = "No data entered yet";
+
+"menu.title" = "Menu";
+"menu.choose" = "Choose";
+"menu.program" = "Nutrition Program";
+"menu.plan.kcal" = "%d Calories";
+"menu.weekdays" = "Days of the Week";
+"weekday.monday" = "Monday";
+"weekday.tuesday" = "Tuesday";
+"weekday.wednesday" = "Wednesday";
+"weekday.thursday" = "Thursday";
+"weekday.friday" = "Friday";
+"weekday.saturday" = "Saturday";
+"weekday.sunday" = "Sunday";
+
+"onboarding.basics" = "Basic Data";
+"onboarding.age.value" = "%d years";
+"onboarding.weight.value" = "%.1f kg";
+"onboarding.height.value" = "%d cm";
+
+"custom_product.new" = "New Product";
+"custom_product.subtitle" = "Enter nutrition values per 100 g of product";
+"custom_product.name" = "Name";
+"custom_product.calories" = "Energy, kcal";
+"custom_product.protein" = "Protein, g";
+"custom_product.fat" = "Fat, g";
+"custom_product.carbs" = "Carbs, g";

@@ -9,11 +9,16 @@ struct SettingsScreen: View {
     private let appStoreID = "1234567890"                                       // ← твой App Store ID
     private let shareURL   = URL(string: "https://apps.apple.com/app/id1234567890")!
     private let devEmail   = "87v87@mail.ru"
+    @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
 
     @State private var showAbout = false
     @State private var showMailView = false
     @State private var mailResult: MFMailComposeResult? = nil
     @State private var showMailErrorAlert = false
+
+    private var appLanguage: AppLanguage {
+        AppLanguage.from(rawValue: appLanguageRaw)
+    }
 
     var body: some View {
         NavigationStack {
@@ -23,18 +28,32 @@ struct SettingsScreen: View {
                     CloudStatusRow()
                 }
 
+                Section(appLanguage.localized("settings.language.section")) {
+                    Picker(
+                        appLanguage.localized("settings.language.label"),
+                        selection: $appLanguageRaw
+                    ) {
+                        ForEach(AppLanguage.allCases) { language in
+                            Text(language.displayName).tag(language.rawValue)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
                 Section {
                     // Поделиться
                     ShareLink(item: shareURL,
-                              subject: Text("Попробуй это приложение")) {
+                              subject: Text(appLanguage.localized("settings.share.subject"))) {
                         SettingsRow(icon: "square.and.arrow.up",
-                                    iconBg: .purple, title: "Поделиться с друзьями")
+                                    iconBg: .purple,
+                                    title: appLanguage.localized("settings.share.title"))
                     }
 
                     // Оценить приложение
                     Button { rateApp() } label: {
                         SettingsRow(icon: "star.fill",
-                                    iconBg: .yellow, title: "Оценить приложение")
+                                    iconBg: .yellow,
+                                    title: appLanguage.localized("settings.rate.title"))
                     }
 
                     // Написать разработчикам
@@ -43,7 +62,7 @@ struct SettingsScreen: View {
                             showMailView = true
                         } else {
                             // Fallback: попробуем открыть mailto:
-                            let subject = "Обратная связь — \(Bundle.main.appDisplayName) \(Bundle.main.appVersionBuild)".urlEncoded
+                            let subject = mailSubject.urlEncoded
                             let body = defaultMailBody().urlEncoded
                             if let url = URL(string: "mailto:\(devEmail)?subject=\(subject)&body=\(body)") {
                                 UIApplication.shared.open(url)
@@ -53,18 +72,20 @@ struct SettingsScreen: View {
                         }
                     } label: {
                         SettingsRow(icon: "envelope.fill",
-                                    iconBg: .green, title: "Написать разработчикам")
+                                    iconBg: .green,
+                                    title: appLanguage.localized("settings.contact.title"))
                     }
                 }
 
                 Section {
                     Button { showAbout = true } label: {
                         SettingsRow(icon: "info.circle.fill",
-                                    iconBg: .blue, title: "О приложении")
+                                    iconBg: .blue,
+                                    title: appLanguage.localized("settings.about.title"))
                     }
                 }
             }
-            .navigationTitle("Настройки")
+            .navigationTitle(appLanguage.localized("settings.title"))
         }
         .tint(.blue)
         .sheet(isPresented: $showMailView) {
@@ -72,18 +93,18 @@ struct SettingsScreen: View {
                 showMailView: $showMailView,
                 result: $mailResult,
                 to: [devEmail],
-                subject: "Обратная связь — \(Bundle.main.appDisplayName) \(Bundle.main.appVersionBuild)",
+                subject: mailSubject,
                 body: defaultMailBody()
             )
         }
         .sheet(isPresented: $showAbout) {
-            AboutAppView()
+            AboutAppView(language: appLanguage)
         }
-        .alert("На устройстве не настроена Почта",
+        .alert(appLanguage.localized("settings.mail.alert.title"),
                isPresented: $showMailErrorAlert) {
-            Button("OK", role: .cancel) {}
+            Button(AppLocalizer.string("common.ok"), role: .cancel) {}
         } message: {
-            Text("Добавь почтовый аккаунт в настройках iOS или напиши нам на \(devEmail).")
+            Text(String(format: appLanguage.localized("settings.mail.alert.message"), devEmail))
         }
     }
 
@@ -104,17 +125,22 @@ struct SettingsScreen: View {
 
     private func defaultMailBody() -> String {
         let dev = UIDevice.current
-        return """
-Здравствуйте! Хочу оставить отзыв/вопрос:
+        return String(
+            format: appLanguage.localized("settings.mail.body"),
+            Bundle.main.appDisplayName,
+            Bundle.main.appVersionBuild,
+            dev.model,
+            dev.systemName,
+            dev.systemVersion
+        )
+    }
 
-(Опишите вашу ситуацию здесь)
-
-— —
-Техническая информация:
-Приложение: \(Bundle.main.appDisplayName) \(Bundle.main.appVersionBuild)
-Устройство: \(dev.model)
-iOS: \(dev.systemName) \(dev.systemVersion)
-"""
+    private var mailSubject: String {
+        String(
+            format: appLanguage.localized("settings.mail.subject"),
+            Bundle.main.appDisplayName,
+            Bundle.main.appVersionBuild
+        )
     }
 }
 
@@ -144,25 +170,23 @@ private struct SettingsRow: View {
 
 private struct AboutAppView: View {
     @Environment(\.dismiss) private var dismiss
+    let language: AppLanguage
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Моё Питание!")
+                    Text(language.localized("about.app_name"))
                         .font(.title).bold()
-                    Text("""
-Моё Питание! — это приложение-ассистент. Мы даём советы и помогаем отслеживать прогресс, \
-но не ставим диагнозы и не назначаем лечение. Для медицинских вопросов обращайся к врачу.
-""")
+                    Text(language.localized("about.description"))
                     .foregroundStyle(.secondary)
                 }
                 .padding()
             }
-            .navigationTitle("О приложении")
+            .navigationTitle(language.localized("settings.about.title"))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Закрыть") { dismiss() }
+                    Button(language.localized("common.close")) { dismiss() }
                 }
             }
         }

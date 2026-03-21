@@ -27,7 +27,7 @@ struct UserStatsView: View {
                             togglePicker(&isWeightPickerVisible)
                         } label: {
                             VStack {
-                                Text("ВЕС, КГ")
+                                Text(AppLocalizer.string("stats.weight"))
                                 Text("\(Int(userData.weight))")
                             }
                             .foregroundStyle(.white)
@@ -38,7 +38,7 @@ struct UserStatsView: View {
                             togglePicker(&isHeightPickerVisible)
                         } label: {
                             VStack {
-                                Text("РОСТ, СМ")
+                                Text(AppLocalizer.string("stats.height"))
                                 Text("\(Int(userData.height))")
                             }
                             .foregroundStyle(.white)
@@ -49,7 +49,7 @@ struct UserStatsView: View {
                             togglePicker(&isAgePickerVisible)
                         } label: {
                             VStack {
-                                Text("ВОЗРАСТ")
+                                Text(AppLocalizer.string("stats.age"))
                                 Text("\(userData.age)")
                             }
                             .foregroundStyle(.white)
@@ -66,7 +66,7 @@ struct UserStatsView: View {
 
             // Отображение PickerView
             if isWeightPickerVisible {
-                PickerView(title: "Выберите вес",
+                PickerView(title: AppLocalizer.string("picker.select_weight"),
                            range: 30...200,
                            selectedValue: Binding(
                             get: { Int(userData.weight) },
@@ -82,7 +82,7 @@ struct UserStatsView: View {
             }
 
             if isHeightPickerVisible {
-                PickerView(title: "Выберите рост",
+                PickerView(title: AppLocalizer.string("picker.select_height"),
                            range: 100...250,
                            selectedValue: Binding(
                             get: { Int(userData.height) },
@@ -100,7 +100,7 @@ struct UserStatsView: View {
             // Отображение PickerView — возраст
             if isAgePickerVisible {
                 PickerView(
-                    title: "Выберите возраст",
+                    title: AppLocalizer.string("picker.select_age"),
                     range: 1...120,
                     selectedValue: Binding(
                         get: { userData.age },
@@ -192,7 +192,7 @@ struct PickerView: View {
                 .frame(width: 150, height: 150) // Размер Picker
                 .clipped() // Обрезка лишнего
                 // Кнопка "Готово"
-                Button("Готово") {
+                Button(AppLocalizer.string("common.done")) {
                     isVisible = false // Закрываем Picker
                 }
                 .padding()
@@ -218,13 +218,26 @@ enum ActivityLevel: String, CaseIterable, Codable {
     var message: String {
         switch self {
         case .none:
-            return "Ваша суточная потребность при сидячем образе жизни"
+            return AppLocalizer.string("activity.message.none")
         case .light:
-            return "Ваша суточная потребность при тренировках 1-2 раза в неделю"
+            return AppLocalizer.string("activity.message.light")
         case .moderate:
-            return "Ваша суточная потребность при тренировках 3-5 раза в неделю"
+            return AppLocalizer.string("activity.message.moderate")
         case .pro:
-            return "Ваша суточная потребность при PRO тренировках"
+            return AppLocalizer.string("activity.message.pro")
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .none:
+            return AppLocalizer.string("activity.none")
+        case .light:
+            return AppLocalizer.string("activity.light")
+        case .moderate:
+            return AppLocalizer.string("activity.moderate")
+        case .pro:
+            return AppLocalizer.string("activity.pro")
         }
     }
 }
@@ -236,9 +249,9 @@ struct ActivitySelectorView: View {
 
     var body: some View {
         VStack {
-            Picker("Физическая активность", selection: $userData.activityLevel) {
+            Picker(AppLocalizer.string("activity.title"), selection: $userData.activityLevel) {
                 ForEach(ActivityLevel.allCases, id: \.self) { activity in
-                    Text(activity.rawValue)
+                    Text(activity.displayName)
                 }
             }
             .pickerStyle(SegmentedPickerStyle())

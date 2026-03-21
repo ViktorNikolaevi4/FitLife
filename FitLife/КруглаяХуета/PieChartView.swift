@@ -8,7 +8,7 @@ struct PieChartView: View {
     var body: some View {
         if dataIsEmpty {
             VStack {
-                Text("Данные ещё не введены")
+                Text(AppLocalizer.string("chart.no_data"))
                     .font(.headline)
                     .foregroundStyle(.white)
                 Image(systemName: "chart.pie")
@@ -27,9 +27,9 @@ struct PieChartView: View {
                 .foregroundStyle(by: .value("Category", item.category)) // привязываем к масштабу
             }
             .chartForegroundStyleScale([
-                "Белки": .blue,
-                "Жиры": .red,
-                "Углеводы": .green  
+                AppLocalizer.string("macro.protein"): .blue,
+                AppLocalizer.string("macro.fat"): .red,
+                AppLocalizer.string("macro.carbs"): .green
             ])
             .frame(height: 125)
         }
@@ -45,9 +45,9 @@ struct PieChartView: View {
     private var data: [(category: String, value: Double)] {
         let macros = userData.macros
         return [
-            ("Белки", Double(macros.proteins)),
-            ("Жиры", Double(macros.fats)),
-            ("Углеводы", Double(macros.carbs))
+            (AppLocalizer.string("macro.protein"), Double(macros.proteins)),
+            (AppLocalizer.string("macro.fat"), Double(macros.fats)),
+            (AppLocalizer.string("macro.carbs"), Double(macros.carbs))
         ]
     }
 }

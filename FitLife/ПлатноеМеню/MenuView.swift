@@ -10,21 +10,31 @@ import SwiftUI
 struct MenuView: View {
     @Environment(\.dismiss) private var dismiss
 
+    private let weekDays = [
+        ("Понедельник", "weekday.monday"),
+        ("Вторник", "weekday.tuesday"),
+        ("Среда", "weekday.wednesday"),
+        ("Четверг", "weekday.thursday"),
+        ("Пятница", "weekday.friday"),
+        ("Суббота", "weekday.saturday"),
+        ("Воскресенье", "weekday.sunday")
+    ]
+
     var body: some View {
         ZStack {
             GradientView().ignoresSafeArea()
             VStack {
-                Text("Выберите").foregroundStyle(.white).font(.title)
-                Text("Программу питания").foregroundStyle(.white).font(.title).padding()
+                Text(AppLocalizer.string("menu.choose")).foregroundStyle(.white).font(.title)
+                Text(AppLocalizer.string("menu.program")).foregroundStyle(.white).font(.title).padding()
 
-                NavigationLink(destination: WeekView(calories: "1300 Ккалорий", dailyTexts: uniqueTextsFor1300)) {
-                    RoundedTextView(text: "1300 Ккалорий")
+                NavigationLink(destination: WeekView(calories: AppLocalizer.format("menu.plan.kcal", 1300), dailyTexts: uniqueTextsFor1300)) {
+                    RoundedTextView(text: AppLocalizer.format("menu.plan.kcal", 1300))
                 }
-                NavigationLink(destination: WeekView(calories: "1700 Ккалорий", dailyTexts: uniqueTextsFor1700)) {
-                    RoundedTextView(text: "1700 Ккалорий")
+                NavigationLink(destination: WeekView(calories: AppLocalizer.format("menu.plan.kcal", 1700), dailyTexts: uniqueTextsFor1700)) {
+                    RoundedTextView(text: AppLocalizer.format("menu.plan.kcal", 1700))
                 }
-                NavigationLink(destination: WeekView(calories: "2100 Ккалорий", dailyTexts: uniqueTextsFor2100)) {
-                    RoundedTextView(text: "2100 Ккалорий")
+                NavigationLink(destination: WeekView(calories: AppLocalizer.format("menu.plan.kcal", 2100), dailyTexts: uniqueTextsFor2100)) {
+                    RoundedTextView(text: AppLocalizer.format("menu.plan.kcal", 2100))
                 }
 
                 Spacer()
@@ -51,15 +61,25 @@ struct WeekView: View {
     var calories: String
     var dailyTexts: [String: String]
 
+    private let weekDays = [
+        ("Понедельник", "weekday.monday"),
+        ("Вторник", "weekday.tuesday"),
+        ("Среда", "weekday.wednesday"),
+        ("Четверг", "weekday.thursday"),
+        ("Пятница", "weekday.friday"),
+        ("Суббота", "weekday.saturday"),
+        ("Воскресенье", "weekday.sunday")
+    ]
+
     var body: some View {
         ZStack {
             GradientView().ignoresSafeArea()
             VStack {
                 List {
                     Section(header: Text("\(calories)").font(.headline)) {
-                        ForEach(["Понедельник","Вторник","Среда","Четверг","Пятница","Суббота","Воскресенье"], id: \.self) { day in
-                            NavigationLink(destination: DetailView(day: day, text: dailyTexts[day] ?? "Нет данных")) {
-                                Text(day).padding()
+                        ForEach(weekDays, id: \.0) { day in
+                            NavigationLink(destination: DetailView(day: AppLocalizer.string(day.1), text: dailyTexts[day.0] ?? AppLocalizer.string("data.not_found"))) {
+                                Text(AppLocalizer.string(day.1)).padding()
                             }
                         }
                     }
@@ -67,7 +87,7 @@ struct WeekView: View {
                 .scrollContentBackground(.hidden) // чтобы фон списка не был белым
             }
         }
-        .navigationTitle("Дни недели")
+        .navigationTitle(AppLocalizer.string("menu.weekdays"))
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar {

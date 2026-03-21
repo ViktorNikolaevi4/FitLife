@@ -5,9 +5,14 @@ import CloudKit
 struct CloudStatusRow: View {
     // поменяй на свой контейнер (как в Signing & Capabilities)
     private let containerID = "iCloud.Korolvoff.FitLife"
+    @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
 
     @State private var status: CKAccountStatus? = nil
     @State private var checking = true
+
+    private var appLanguage: AppLanguage {
+        AppLanguage.from(rawValue: appLanguageRaw)
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -21,7 +26,7 @@ struct CloudStatusRow: View {
                 Text(title)
                     .font(.headline)
                 if checking {
-                    Text("Идёт проверка…")
+                    Text(appLanguage.localized("icloud.checking"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else if let subtitle = subtitle {
@@ -51,14 +56,14 @@ struct CloudStatusRow: View {
     // MARK: - Presentation
 
     private var title: String {
-        guard let status else { return "Проверяем iCloud…" }
+        guard let status else { return appLanguage.localized("icloud.title.checking") }
         switch status {
-        case .available:                return "iCloud доступен"
-        case .noAccount:                return "Не выполнен вход в iCloud"
-        case .restricted:               return "Доступ к iCloud ограничен"
-        case .temporarilyUnavailable:   return "iCloud временно недоступен"
+        case .available:                return appLanguage.localized("icloud.title.available")
+        case .noAccount:                return appLanguage.localized("icloud.title.no_account")
+        case .restricted:               return appLanguage.localized("icloud.title.restricted")
+        case .temporarilyUnavailable:   return appLanguage.localized("icloud.title.temporarily_unavailable")
         case .couldNotDetermine:        fallthrough
-        @unknown default:               return "Не удалось определить статус iCloud"
+        @unknown default:               return appLanguage.localized("icloud.title.unknown")
         }
     }
 
@@ -66,13 +71,15 @@ struct CloudStatusRow: View {
         guard let status else { return nil }
         switch status {
         case .available:
-            return "Синхронизация CloudKit готова"
+            return appLanguage.localized("icloud.subtitle.available")
         case .noAccount:
-            return "Откройте «Настройки → Apple ID» и войдите"
+            return appLanguage.localized("icloud.subtitle.no_account")
         case .restricted:
-            return "Проверьте Ограничения/Экранное время"
+            return appLanguage.localized("icloud.subtitle.restricted")
+        case .temporarilyUnavailable:
+            return appLanguage.localized("icloud.subtitle.unknown")
         case .couldNotDetermine:
-            return "Попробуйте позже или проверьте сеть"
+            return appLanguage.localized("icloud.subtitle.unknown")
         @unknown default:
             return nil
         }

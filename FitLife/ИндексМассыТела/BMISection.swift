@@ -8,7 +8,7 @@ struct BMISection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Индекс массы тела")
+            Text(AppLocalizer.string("bmi.title"))
                 .font(.headline)
 
             Button { showBMISheet = true } label: {
@@ -33,7 +33,7 @@ private struct BMICardView: View {
 
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Label("ИМТ", systemImage: "figure.arms.open")
+                Label(AppLocalizer.string("bmi.short"), systemImage: "figure.arms.open")
                     .labelStyle(.titleAndIcon)
                 Spacer()
                 Text(value.isFinite ? String(format: "%.1f", value) : "—")
@@ -101,11 +101,11 @@ private func bmi(for user: UserData) -> Double {
 }
 private func bmiMessage(_ bmi: Double) -> String {
     switch bmi {
-    case ..<18.5: return "Дефицит массы тела"
-    case 18.5..<25: return "Нормальная масса"
-    case 25..<30: return "Избыточный вес"
-    case .infinity: return "Заполните вес и рост"
-    default: return "Ожирение"
+    case ..<18.5: return AppLocalizer.string("bmi.status.underweight")
+    case 18.5..<25: return AppLocalizer.string("bmi.status.normal")
+    case 25..<30: return AppLocalizer.string("bmi.status.overweight")
+    case .infinity: return AppLocalizer.string("bmi.status.fill_data")
+    default: return AppLocalizer.string("bmi.status.obesity")
     }
 }
 private func bmiColor(_ bmi: Double) -> Color {

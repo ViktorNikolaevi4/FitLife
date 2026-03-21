@@ -23,9 +23,9 @@ struct ProfileScreen: View {
             ScrollView {
                 VStack(spacing: 16) {
                     // Пол
-                    SectionCard(title: "Пол") {
+                    SectionCard(title: AppLocalizer.string("profile.gender")) {
                         Picker("", selection: $editingGender) {
-                            ForEach(Gender.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                            ForEach(Gender.allCases, id: \.self) { Text($0.displayName).tag($0) }
                         }
                         .pickerStyle(.segmented)
                     }
@@ -34,10 +34,10 @@ struct ProfileScreen: View {
                         @Bindable var u = user
 
                         // Параметры
-                        SectionCard(title: "Параметры") {
-                            ValueRowInt(title: "Возраст", value: $u.age,    range: 1...100,  unit: "лет")
-                            ValueRowDoubleAsInt(title: "Вес",   value: $u.weight, range: 30...200, unit: "кг")
-                            ValueRowDoubleAsInt(title: "Рост",  value: $u.height, range: 100...230, unit: "см")
+                        SectionCard(title: AppLocalizer.string("profile.parameters")) {
+                            ValueRowInt(title: AppLocalizer.string("profile.age"), value: $u.age, range: 1...100, unit: AppLocalizer.string("unit.years"))
+                            ValueRowDoubleAsInt(title: AppLocalizer.string("profile.weight"), value: $u.weight, range: 30...200, unit: AppLocalizer.string("unit.kg"))
+                            ValueRowDoubleAsInt(title: AppLocalizer.string("profile.height"), value: $u.height, range: 100...230, unit: AppLocalizer.string("unit.cm"))
                         }
 
                         .onChange(of: u.age)    { _,_ in recalc(u) }
@@ -45,18 +45,18 @@ struct ProfileScreen: View {
                         .onChange(of: u.height) { _,_ in recalc(u) }
 
                         // Активность
-                        SectionCard(title: "Физическая активность") {
+                        SectionCard(title: AppLocalizer.string("activity.title")) {
                             Picker("", selection: $u.activityLevel) {
-                                ForEach(ActivityLevel.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                                ForEach(ActivityLevel.allCases, id: \.self) { Text($0.displayName).tag($0) }
                             }
                             .pickerStyle(.segmented)
                         }
                         .onChange(of: u.activityLevel) { _,_ in recalc(u) }
 
                         // Цель
-                        SectionCard(title: "Цель") {
+                        SectionCard(title: AppLocalizer.string("goal.title")) {
                             Picker("", selection: $u.goal) {
-                                ForEach(WeightGoal.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                                ForEach(WeightGoal.allCases, id: \.self) { Text($0.displayName).tag($0) }
                             }
                             .pickerStyle(.segmented)
                         }
@@ -66,9 +66,9 @@ struct ProfileScreen: View {
                         BMISection(userData: u)
                     } else {
                         ContentUnavailableView(
-                            "Профиль не найден",
+                            AppLocalizer.string("profile.not_found"),
                             systemImage: "person.crop.circle.badge.questionmark",
-                            description: Text("Создам профиль автоматически.")
+                            description: Text(AppLocalizer.string("profile.auto_create"))
                         )
                         .task { ensureUserIfNeeded(for: editingGender) }
                     }
@@ -78,7 +78,7 @@ struct ProfileScreen: View {
               //  .background(Color(.systemGray6))
             }
             .background(bg)
-            .navigationTitle("Профиль")                   // теперь видно
+            .navigationTitle(AppLocalizer.string("tab.profile"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarBackground(bg, for: .navigationBar)
@@ -242,7 +242,7 @@ struct ProfileScreen: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button("Готово") {
+                        Button(AppLocalizer.string("common.done")) {
                             onDone?()
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
                             dismiss()
@@ -325,5 +325,4 @@ private struct SectionCard<Content: View>: View {
         .padding(.horizontal)
     }
 }
-
 

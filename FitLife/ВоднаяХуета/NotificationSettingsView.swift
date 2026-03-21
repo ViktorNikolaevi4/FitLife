@@ -16,10 +16,17 @@ struct NotificationSettingsView: View {
     private var selectedInterval: TimeInterval { TimeInterval(selectedIntervalSec) }
 
     let intervalOptionsSec: [Int] = [1800, 3600, 5400, 7200, 9000, 10800]
-    let intervalLabels: [Int: String] = [
-        1800: "30 минут", 3600: "Час", 5400: "Полтора часа",
-        7200: "Два часа", 9000: "Два с половиной часа", 10800: "Три часа"
-    ]
+
+    private var intervalLabels: [Int: String] {
+        [
+            1800: AppLocalizer.string("notifications.interval.30m"),
+            3600: AppLocalizer.string("notifications.interval.1h"),
+            5400: AppLocalizer.string("notifications.interval.1_5h"),
+            7200: AppLocalizer.string("notifications.interval.2h"),
+            9000: AppLocalizer.string("notifications.interval.2_5h"),
+            10800: AppLocalizer.string("notifications.interval.3h")
+        ]
+    }
 
     var body: some View {
         NavigationStack {
@@ -35,17 +42,17 @@ struct NotificationSettingsView: View {
                         }
 
                     if authorizationStatus == .denied {
-                        Text("Уведомления запрещены в настройках системы.")
+                        Text(AppLocalizer.string("notifications.denied"))
                             .foregroundStyle(.red)
-                        Button("Открыть настройки системы") { openSystemSettings() }
+                        Button(AppLocalizer.string("notifications.open_settings")) { openSystemSettings() }
                     }
                 }
 
                 if isNotificationEnabled {
-                    Section("Расписание") {
-                        DatePicker("Начало", selection: $selectedStartTime, displayedComponents: .hourAndMinute)
-                        DatePicker("Конец", selection: $selectedEndTime, displayedComponents: .hourAndMinute)
-                        Picker("Интервал", selection: $selectedIntervalSec) {
+                    Section(AppLocalizer.string("notifications.schedule")) {
+                        DatePicker(AppLocalizer.string("notifications.start"), selection: $selectedStartTime, displayedComponents: .hourAndMinute)
+                        DatePicker(AppLocalizer.string("notifications.end"), selection: $selectedEndTime, displayedComponents: .hourAndMinute)
+                        Picker(AppLocalizer.string("notifications.interval"), selection: $selectedIntervalSec) {
                             ForEach(intervalOptionsSec, id: \.self) { v in
                                 Text(intervalLabels[v] ?? "\(v/60) мин").tag(v)
                             }
@@ -57,19 +64,19 @@ struct NotificationSettingsView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    Section("Действия") {
-                        Button("Обновить расписание") { reschedule() }
-                        Button("Отключить все напоминания", role: .destructive) {
+                    Section(AppLocalizer.string("notifications.actions")) {
+                        Button(AppLocalizer.string("notifications.update")) { reschedule() }
+                        Button(AppLocalizer.string("notifications.disable_all"), role: .destructive) {
                             isNotificationEnabled = false
                             cancelWaterNotifications()
                         }
                     }
                 }
             }
-            .navigationTitle("Уведомления")
+            .navigationTitle(AppLocalizer.string("notifications.title"))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Закрыть") { dismiss() }
+                    Button(AppLocalizer.string("common.close")) { dismiss() }
                 }
             }
             .tint(.blue)
@@ -84,7 +91,7 @@ struct NotificationSettingsView: View {
             .onChange(of: selectedStartTime) { if isNotificationEnabled { reschedule() } }
             .onChange(of: selectedEndTime)   { if isNotificationEnabled { reschedule() } }
             .onChange(of: selectedIntervalSec) { if isNotificationEnabled { reschedule() } }
-            .alert("Начало должно быть раньше конца", isPresented: $showInvalidRangeAlert) { Button("OK", role: .cancel) {} }
+            .alert(AppLocalizer.string("notifications.invalid_range"), isPresented: $showInvalidRangeAlert) { Button(AppLocalizer.string("common.ok"), role: .cancel) {} }
         }
     }
 
@@ -125,8 +132,8 @@ struct NotificationSettingsView: View {
             let id = makeId(comps)
 
             let content = UNMutableNotificationContent()
-            content.title = "Напоминание"
-            content.body = "Пора выпить воды!"
+            content.title = AppLocalizer.string("notifications.reminder_title")
+            content.body = AppLocalizer.string("notifications.reminder_body")
             content.sound = .default
 
             let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: true)
@@ -170,6 +177,6 @@ struct NotificationSettingsView: View {
             t = Calendar.current.date(byAdding: .second, value: selectedIntervalSec, to: t) ?? t
             count += 1
         }
-        return arr.isEmpty ? "" : "Сегодня: " + arr.joined(separator: " • ")
+        return arr.isEmpty ? "" : AppLocalizer.string("notifications.today") + ": " + arr.joined(separator: " • ")
     }
 }

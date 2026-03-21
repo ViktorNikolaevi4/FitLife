@@ -10,7 +10,18 @@ enum MealType: String, CaseIterable, Identifiable {
     case snacks    = "Перекусы"
 
     var id: String { rawValue }
-    var displayName: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .breakfast:
+            return AppLocalizer.string("meal.breakfast")
+        case .lunch:
+            return AppLocalizer.string("meal.lunch")
+        case .dinner:
+            return AppLocalizer.string("meal.dinner")
+        case .snacks:
+            return AppLocalizer.string("meal.snacks")
+        }
+    }
 }
 
 struct RationPopupView: View {
@@ -134,14 +145,14 @@ struct RationPopupView: View {
         .onChange(of: selectedDate) { _ in loadData(for: selectedDate, gender: selectedGender) }
         .overlay(alignment: .topTrailing) {
             if preselectedMeal == nil && selectedMeal == nil && !showProductDetails {
-                Button("Закрыть") { dismiss() }
+                Button(AppLocalizer.string("common.close")) { dismiss() }
                     .font(.callout.weight(.semibold))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(.ultraThinMaterial, in: Capsule())
                     .padding(.top, 8)
                     .padding(.trailing, 16)
-                    .accessibilityLabel("Закрыть")
+                    .accessibilityLabel(AppLocalizer.string("common.close"))
             }
         }
     }
@@ -150,15 +161,15 @@ struct RationPopupView: View {
     @ViewBuilder
     private var mainContent: some View {
         VStack(spacing: 16) {
-            Text("Рацион на день").font(.title2).fontWeight(.bold)
+            Text(AppLocalizer.string("ration.day_title")).font(.title2).fontWeight(.bold)
 
             VStack {
-                Text("Итого за день:").font(.headline)
-                Text("Калорий: \(totalCalories) ккал")
+                Text(AppLocalizer.string("ration.total_day")).font(.headline)
+                Text(AppLocalizer.format("ration.calories.value", totalCalories))
                 HStack(spacing: 20) {
-                    Text("Белки: \(totalProteins) г")
-                    Text("Жиры: \(totalFats) г")
-                    Text("Углеводы: \(totalCarbs) г")
+                    Text(AppLocalizer.format("ration.protein.value", totalProteins))
+                    Text(AppLocalizer.format("ration.fat.value", totalFats))
+                    Text(AppLocalizer.format("ration.carbs.value", totalCarbs))
                 }
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -195,10 +206,13 @@ struct RationPopupView: View {
                         .font(.headline)
 
                     Text(
-                        "Калории: \((entry.product?.calories ?? 0)) ккал, " +
-                        "Б: \(String(format: "%.1f", entry.product?.protein ?? 0)) г, " +
-                        "Ж: \(String(format: "%.1f", entry.product?.fat ?? 0)) г, " +
-                        "У: \(String(format: "%.1f", entry.product?.carbs ?? 0)) г"
+                        AppLocalizer.format(
+                            "ration.entry.summary",
+                            entry.product?.calories ?? 0,
+                            String(format: "%.1f", entry.product?.protein ?? 0),
+                            String(format: "%.1f", entry.product?.fat ?? 0),
+                            String(format: "%.1f", entry.product?.carbs ?? 0)
+                        )
                     )
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -206,16 +220,16 @@ struct RationPopupView: View {
                 .swipeActions(edge: .trailing) {
                     Button(role: .destructive) {
                         deleteEntry(entry, for: meal)
-                    } label: { Label("Удалить", systemImage: "trash") }
+                    } label: { Label(AppLocalizer.string("common.delete"), systemImage: "trash") }
                 }
             }
         } header: {
             HStack {
                 Text(meal.displayName)
                 Spacer()
-                Text("\(entries.reduce(0) { $0 + ( $1.product?.calories ?? 0 ) }) ккал")
+                Text(AppLocalizer.format("unit.kcal.value", entries.reduce(0) { $0 + ( $1.product?.calories ?? 0 ) }))
                     .foregroundColor(.blue)
-                Button("+ добавить еду") { selectedMeal = meal }
+                Button(AppLocalizer.string("ration.add_food")) { selectedMeal = meal }
                     .font(.caption)
                     .foregroundStyle(.blue)
             }
@@ -228,28 +242,28 @@ struct RationPopupView: View {
         VStack(spacing: 16) {
             Text(prod.name).font(.headline)
 
-            Text("Энергия, ккал")
-            Text("\(calculateCalories(for: prod)) ккал").font(.largeTitle)
+            Text(AppLocalizer.string("macros.energy"))
+            Text(AppLocalizer.format("unit.kcal.value", calculateCalories(for: prod))).font(.largeTitle)
 
             let macros = calculateMacros(for: prod)
             HStack(spacing: 20) {
-                Text("Б: \(String(format: "%.1f", macros.protein)) г")
-                Text("Ж: \(String(format: "%.1f", macros.fat)) г")
-                Text("У: \(String(format: "%.1f", macros.carbs)) г")
+                Text(AppLocalizer.format("macro.protein.value", String(format: "%.1f", macros.protein)))
+                Text(AppLocalizer.format("macro.fat.value", String(format: "%.1f", macros.fat)))
+                Text(AppLocalizer.format("macro.carbs.value", String(format: "%.1f", macros.carbs)))
             }
             .font(.subheadline)
             .foregroundColor(.secondary)
 
-            TextField("Порция, г", text: $portionSize)
+            TextField(AppLocalizer.string("portion.grams"), text: $portionSize)
                 .keyboardType(.numberPad)
                 .textFieldStyle(.roundedBorder)
                 .padding(.horizontal)
                 .onChange(of: portionSize) { portionSize = portionSize.filter { $0.isNumber } }
 
-            Text("Порция в граммах").padding(.bottom, 8)
+            Text(AppLocalizer.string("portion.in_grams")).padding(.bottom, 8)
 
             HStack(spacing: 16) {
-                Button("Добавить") {
+                Button(AppLocalizer.string("common.add")) {
                     if let p = Double(portionSize) {
                         addGenericProductToMeal(prod, portion: p, gender: selectedGender)
                     }
@@ -260,7 +274,7 @@ struct RationPopupView: View {
                 .foregroundColor(.white)
                 .cornerRadius(10)
 
-                Button("Отмена") {
+                Button(AppLocalizer.string("common.cancel")) {
                     withAnimation {
                         showProductDetails = false
                         activeMeal = nil

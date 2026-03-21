@@ -40,17 +40,17 @@ struct HeaderView: View {
         .sheet(isPresented: $isDatePickerVisible) {
             VStack(spacing: 0) {
                 DatePicker(
-                    "Выберите дату",
+                    AppLocalizer.string("common.select_date"),
                     selection: $tempDate,
                     displayedComponents: .date
                 )
                 .datePickerStyle(.graphical)
                 .labelsHidden()
-                .environment(\.locale, Locale(identifier: "ru_RU"))
+                .environment(\.locale, AppLocalizer.currentLanguage.locale)
                 .tint(.blue)
                 .padding(.top, 20)
 
-                Button("OK") {
+                Button(AppLocalizer.string("common.ok")) {
                     selectedDate = tempDate
                     isDatePickerVisible = false
                 }
@@ -69,7 +69,7 @@ struct HeaderView: View {
 
     func formattedDate(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.locale = AppLocalizer.currentLanguage.locale
         formatter.setLocalizedDateFormatFromTemplate("d MMM yyyy")
         return formatter.string(from: date)
     }

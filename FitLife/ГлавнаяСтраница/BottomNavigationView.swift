@@ -22,7 +22,7 @@ struct BottomNavigationView: View {
                     }) {
                         VStack {
                             Image(systemName: "fork.knife")
-                            Text("Рацион")
+                            Text(AppLocalizer.string("ration.title"))
                         }.foregroundStyle(.white)
                     }
                     .sheet(isPresented: $rationPopupView) {
@@ -44,7 +44,7 @@ struct BottomNavigationView: View {
                     }) {
                         VStack {
                             Image(systemName: "drop")
-                            Text("Вода")
+                            Text(AppLocalizer.string("tab.water"))
                         }.foregroundStyle(.white)
                     }
                     .sheet(isPresented: $showWaterTracker) {
@@ -58,7 +58,7 @@ struct BottomNavigationView: View {
                     }) {
                         VStack {
                             Image(systemName: "scalemass")
-                            Text("ИМТ")
+                            Text(AppLocalizer.string("bmi.short"))
                         }
                         .foregroundStyle(.white)
                     }
@@ -71,7 +71,7 @@ struct BottomNavigationView: View {
                     NavigationLink(destination: MenuView()) { // Переход на новое представление
                                        VStack {
                                            Image(systemName: "book")
-                                           Text("Меню")
+                                           Text(AppLocalizer.string("menu.title"))
                                        }.foregroundStyle(.white)
                                    }
                     Spacer()

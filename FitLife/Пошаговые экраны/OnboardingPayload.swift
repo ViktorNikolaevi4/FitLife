@@ -18,47 +18,47 @@ private struct BasicsStep: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text("Основные данные")
+                Text(AppLocalizer.string("onboarding.basics"))
                     .font(.largeTitle).bold()
                     .padding(.top, 40)
 
                 // Пол
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Пол").font(.headline)
+                    Text(AppLocalizer.string("profile.gender")).font(.headline)
                     Picker("", selection: $gender) {
-                        Text("Мужчина").tag(Gender.male)
-                        Text("Женщина").tag(Gender.female)
+                        Text(Gender.male.displayName).tag(Gender.male)
+                        Text(Gender.female.displayName).tag(Gender.female)
                     }
                     .pickerStyle(.segmented)
                 }
 
                 // Возраст
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Возраст").font(.headline)
+                    Text(AppLocalizer.string("profile.age")).font(.headline)
                     HStack {
                         Stepper(value: $age, in: 14...90, step: 1) { EmptyView() }
                             .labelsHidden()
                         Spacer()
-                        Text("\(age) лет").font(.title3).monospacedDigit()
+                        Text(AppLocalizer.format("onboarding.age.value", age)).font(.title3).monospacedDigit()
                     }
                 }
 
                 // Вес
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Вес").font(.headline)
+                    Text(AppLocalizer.string("profile.weight")).font(.headline)
                     HStack {
                         Stepper(value: $weight, in: 35...250, step: 1) { EmptyView() }
                             .labelsHidden()
                         Spacer()
-                        Text("\(weight, specifier: "%.1f") кг")
+                        Text(AppLocalizer.format("onboarding.weight.value", weight))
                             .font(.title3).monospacedDigit()
                     }
                 }
                 // Рост
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Рост").font(.headline)
+                    Text(AppLocalizer.string("profile.height")).font(.headline)
                     Slider(value: $height, in: 120...230, step: 1)
-                    Text("\(Int(height)) см")
+                    Text(AppLocalizer.format("onboarding.height.value", Int(height)))
                         .font(.title3).monospacedDigit()
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
@@ -96,15 +96,15 @@ struct OnboardingView: View {
             .animation(.easeInOut, value: page)
 
             HStack(spacing: 12) {
-                Button("Назад") { page = max(0, page - 1) }
+                Button(AppLocalizer.string("common.back")) { page = max(0, page - 1) }
                     .buttonStyle(OnbSecondary())
                     .disabled(page == 0)
 
                 if page < pages - 1 {
-                    Button("Далее") { page = min(pages - 1, page + 1) }
+                    Button(AppLocalizer.string("common.next")) { page = min(pages - 1, page + 1) }
                         .buttonStyle(OnbPrimary())
                 } else {
-                    Button("Готово") { onFinish(data) }
+                    Button(AppLocalizer.string("common.done")) { onFinish(data) }
                         .buttonStyle(OnbPrimary())
                 }
             }
@@ -121,23 +121,23 @@ private struct ActivityStep: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Физическая активность")
+            Text(AppLocalizer.string("activity.title"))
                 .font(.largeTitle).bold()
                 .padding(.top, 40)
 
-            ActivityRow(title: "Нет", caption: "Сидячий образ жизни",
+            ActivityRow(title: AppLocalizer.string("activity.none"), caption: AppLocalizer.string("activity.caption.none"),
                         isOn: activity == .none)
                 .onTapGesture { activity = .none }
 
-            ActivityRow(title: "1–3 тренировки в месяц", caption: "Лёгкая активность",
+            ActivityRow(title: AppLocalizer.string("activity.light"), caption: AppLocalizer.string("activity.caption.light"),
                         isOn: activity == .light)
                 .onTapGesture { activity = .light }
 
-            ActivityRow(title: "4–5 тренировок в неделю", caption: "Средняя активность",
+            ActivityRow(title: AppLocalizer.string("activity.moderate"), caption: AppLocalizer.string("activity.caption.moderate"),
                         isOn: activity == .moderate)
                 .onTapGesture { activity = .moderate }
 
-            ActivityRow(title: "PRO активность", caption: "Интенсивно 6–7 раз в неделю",
+            ActivityRow(title: AppLocalizer.string("activity.pro"), caption: AppLocalizer.string("activity.caption.pro"),
                         isOn: activity == .pro)
                 .onTapGesture { activity = .pro }
 
@@ -152,13 +152,13 @@ private struct GoalStep: View {
     @Binding var goal: WeightGoal
     var body: some View {
         VStack(spacing: 24) {
-            Text("Цель").font(.largeTitle).bold().padding(.top, 40)
+            Text(AppLocalizer.string("goal.title")).font(.largeTitle).bold().padding(.top, 40)
             VStack(spacing: 12) {
-                GoalRow(title: "Снизить вес", isOn: goal == .loseWeight)
+                GoalRow(title: WeightGoal.loseWeight.displayName, isOn: goal == .loseWeight)
                     .onTapGesture { goal = .loseWeight }
-                GoalRow(title: "Текущий вес", isOn: goal == .currentWeight)
+                GoalRow(title: WeightGoal.currentWeight.displayName, isOn: goal == .currentWeight)
                     .onTapGesture { goal = .currentWeight }
-                GoalRow(title: "Набрать вес", isOn: goal == .gainWeight)
+                GoalRow(title: WeightGoal.gainWeight.displayName, isOn: goal == .gainWeight)
                     .onTapGesture { goal = .gainWeight }
             }
             .padding(.horizontal)

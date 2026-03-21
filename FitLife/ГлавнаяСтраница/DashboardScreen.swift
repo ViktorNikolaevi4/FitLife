@@ -10,19 +10,25 @@ extension Gender {
 // MARK: - Табы (для контекста)
 
 struct MainTabView: View {
+    @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
+
+    private var appLanguage: AppLanguage {
+        AppLanguage.from(rawValue: appLanguageRaw)
+    }
+
     var body: some View {
         TabView {
             DashboardScreen()
-                .tabItem { Label("Главная", systemImage: "house.fill") }
+                .tabItem { Label(appLanguage.localized("tab.home"), systemImage: "house.fill") }
 
             ProfileScreen()
-                .tabItem { Label("Профиль", systemImage: "person.fill") }
+                .tabItem { Label(appLanguage.localized("tab.profile"), systemImage: "person.fill") }
 
             WaterTrackerViewOne()
-                .tabItem { Label("Вода", systemImage: "drop.fill") }
+                .tabItem { Label(appLanguage.localized("tab.water"), systemImage: "drop.fill") }
 
             SettingsScreen()
-                .tabItem { Label("Настройки", systemImage: "gearshape.fill") }
+                .tabItem { Label(appLanguage.localized("tab.settings"), systemImage: "gearshape.fill") }
         }
     }
 }
@@ -150,9 +156,9 @@ struct DashboardScreen: View {
                         .padding(.horizontal)
                     } else {
                         ContentUnavailableView(
-                            "Нет данных пользователя",
+                            AppLocalizer.string("dashboard.no_user_data"),
                             systemImage: "person.crop.circle.badge.questionmark",
-                            description: Text("Профиль будет создан автоматически при первом запуске.")
+                            description: Text(AppLocalizer.string("dashboard.profile_auto_created"))
                         )
                         .frame(maxWidth: .infinity, minHeight: 280)
                     }
@@ -180,17 +186,17 @@ struct DashboardScreen: View {
                     DatePicker("", selection: $selectedDate, displayedComponents: .date)
                         .datePickerStyle(.graphical)
                         .labelsHidden()
-                        .environment(\.locale, Locale(identifier: "ru_RU"))
+                        .environment(\.locale, AppLocalizer.currentLanguage.locale)
                 }
                 .padding()
-                .navigationTitle("Выберите дату")
+                .navigationTitle(AppLocalizer.string("common.select_date"))
                 .toolbarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
-                        Button("Сегодня") { selectedDate = Date(); showCalendar = false }
+                        Button(AppLocalizer.string("common.today")) { selectedDate = Date(); showCalendar = false }
                     }
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button("Готово") { showCalendar = false }
+                        Button(AppLocalizer.string("common.done")) { showCalendar = false }
                     }
                 }
             }
@@ -233,7 +239,7 @@ struct DashboardScreen: View {
 
     private func formattedToday(_ date: Date) -> String {
         let df = DateFormatter()
-        df.locale = Locale(identifier: "ru_RU")
+        df.locale = AppLocalizer.currentLanguage.locale
         df.setLocalizedDateFormatFromTemplate("d MMMM")
         return df.string(from: date)
     }
@@ -371,13 +377,13 @@ struct BalanceCard: View {
     // Текст для правого верхнего переключателя
     private var modeTitle: String {
         switch mode {
-        case .target:    return "Цель"
-        case .consumed:  return "Съедено"
-        case .remaining: return "Осталось"
+        case .target:    return AppLocalizer.string("balance.target")
+        case .consumed:  return AppLocalizer.string("balance.consumed")
+        case .remaining: return AppLocalizer.string("balance.remaining")
         }
     }
     private var modeValueText: String {
-        "\(ringNumber.formatted(.number.grouping(.automatic))) ккал"
+        AppLocalizer.format("unit.kcal.value", ringNumber)
     }
     private func cycleMode() {
         switch mode {
@@ -391,7 +397,7 @@ struct BalanceCard: View {
         VStack(alignment: .leading, spacing: 12) {
             // Заголовок + переключатель режима справа
             HStack {
-                Text("Баланс").font(.headline)
+                Text(AppLocalizer.string("balance.title")).font(.headline)
                 Spacer()
                 Button(action: {
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) { cycleMode() }
@@ -449,13 +455,13 @@ struct BalanceCard: View {
             }
 
             VStack(spacing: 10) {
-                MacroProgressRow(title: "Белки",
+                MacroProgressRow(title: AppLocalizer.string("macro.protein"),
                                  current: proteins.current, target: proteins.target,
                                  tint: theme.protein, theme: theme, height: 8)
-                MacroProgressRow(title: "Жиры",
+                MacroProgressRow(title: AppLocalizer.string("macro.fat"),
                                  current: fats.current, target: fats.target,
                                  tint: theme.fat, theme: theme, height: 8)
-                MacroProgressRow(title: "Углеводы",
+                MacroProgressRow(title: AppLocalizer.string("macro.carbs"),
                                  current: carbs.current, target: carbs.target,
                                  tint: theme.carb, theme: theme, height: 8)
             }
@@ -516,7 +522,7 @@ struct MacroProgressRow: View {
                 }
                 Text(title)
                 Spacer()
-                Text("\(current) / \(target) г")
+                    Text(AppLocalizer.format("macro.progress.value", current, target))
                     .font(.subheadline)
                     .fontWeight(isOver ? .semibold : .regular)
                     .foregroundStyle(valueColor)
@@ -582,7 +588,7 @@ struct MealsSection: View {
         VStack(alignment: .leading, spacing: 12) {
             // Завтрак
             MealRow(
-                title: "Завтрак",
+                title: AppLocalizer.string("meal.breakfast"),
                 systemImage: "sunrise.fill",
                 kcal: calories.breakfast > 0 ? calories.breakfast : nil,
                 macros: calories.breakfast > 0 ? macros.breakfast : nil,
@@ -601,7 +607,7 @@ struct MealsSection: View {
 
             // Обед
             MealRow(
-                title: "Обед",
+                title: AppLocalizer.string("meal.lunch"),
                 systemImage: "fork.knife",
                 kcal: calories.lunch > 0 ? calories.lunch : nil,
                 macros: calories.lunch > 0 ? macros.lunch : nil,
@@ -620,7 +626,7 @@ struct MealsSection: View {
 
             // Ужин
             MealRow(
-                title: "Ужин",
+                title: AppLocalizer.string("meal.dinner"),
                 systemImage: "moon.stars.fill",
                 kcal: calories.dinner > 0 ? calories.dinner : nil,
                 macros: calories.dinner > 0 ? macros.dinner : nil,
@@ -639,7 +645,7 @@ struct MealsSection: View {
 
             // Перекус
             MealRow(
-                title: "Перекус",
+                title: AppLocalizer.string("meal.snack"),
                 systemImage: "takeoutbag.and.cup.and.straw.fill",
                 kcal: calories.snacks > 0 ? calories.snacks : nil,
                 macros: calories.snacks > 0 ? macros.snacks : nil,
@@ -688,7 +694,7 @@ struct MealRow: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text(title).font(.headline)
                 if let m = macros {
-                    Text("Б \(m.protein) • Ж \(m.fat) • У \(m.carb) г")
+                    Text(AppLocalizer.format("meal.macros.summary", m.protein, m.fat, m.carb))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.top, macrosTopInset)
@@ -698,7 +704,7 @@ struct MealRow: View {
             Spacer()
 
             HStack(spacing: 8) {
-                Text(kcal.map { "\($0)\u{00A0}ккал" } ?? "Добавить")
+                Text(kcal.map { AppLocalizer.format("unit.kcal.nbsp", $0) } ?? AppLocalizer.string("common.add"))
                     .foregroundStyle(.secondary)
 
                 if showChevron {
@@ -744,15 +750,15 @@ private struct ProductsList: View {
         VStack(spacing: 0) {
             ForEach(items) { entry in
                 HStack {
-                    Text(entry.product?.name ?? "Продукт")
+                    Text(entry.product?.name ?? AppLocalizer.string("product.default"))
                         .lineLimit(1)
                     Spacer()
                     HStack(spacing: 8) {
                         if entry.portion > 0 {
-                            Text("\(Int(entry.portion)) г")
+                            Text(AppLocalizer.format("unit.grams.value", Int(entry.portion)))
                                 .foregroundStyle(.secondary)
                         }
-                        Text("\(entry.product?.calories ?? 0) ккал")
+                        Text(AppLocalizer.format("unit.kcal.value", entry.product?.calories ?? 0))
                             .foregroundStyle(.secondary)
                     }
                     .font(.subheadline)
@@ -770,7 +776,7 @@ private struct ProductsList: View {
                     Button(role: .destructive) {
                         pendingDelete = entry
                     } label: {
-                        Label("Удалить", systemImage: "trash")
+                        Label(AppLocalizer.string("common.delete"), systemImage: "trash")
                     }
                 }
             }
@@ -794,19 +800,19 @@ private struct ProductsList: View {
             )
             .presentationDetents([.height(320), .medium])
         }
-        .alert("Удалить продукт?",
+        .alert(AppLocalizer.string("product.delete.confirm"),
                isPresented: Binding(
                    get: { pendingDelete != nil },
                    set: { if !$0 { pendingDelete = nil } }
                )
         ) {
-            Button("Удалить", role: .destructive) {
+            Button(AppLocalizer.string("common.delete"), role: .destructive) {
                 if let e = pendingDelete { onDelete(e) }
                 pendingDelete = nil
             }
-            Button("Отмена", role: .cancel) { pendingDelete = nil }
+            Button(AppLocalizer.string("common.cancel"), role: .cancel) { pendingDelete = nil }
         } message: {
-            Text("Это действие нельзя отменить.")
+            Text(AppLocalizer.string("common.cannot_undo"))
         }
     }
 
@@ -841,10 +847,10 @@ private struct EditEntrySheet: View {
                 .opacity(0.2)
                 .padding(.top, 8)
 
-            Text(entry.product?.name ?? "Продукт")
+            Text(entry.product?.name ?? AppLocalizer.string("product.default"))
                 .font(.headline)
 
-            TextField("Порция, г", text: $gramsText)
+            TextField(AppLocalizer.string("portion.grams"), text: $gramsText)
                 .keyboardType(.numberPad)
                 .textFieldStyle(.roundedBorder)
                 .padding(.horizontal)
@@ -854,24 +860,24 @@ private struct EditEntrySheet: View {
                 // коэффициент пересчёта относительно текущей порции
                 let k = max(1.0, p) / max(1.0, entry.portion)
                 VStack(spacing: 6) {
-                    Text("Будет: \(Int(Double(pr.calories) * k)) ккал")
+                    Text(AppLocalizer.format("entry.will_be_kcal", Int(Double(pr.calories) * k)))
                         .font(.title3).bold()
                     HStack(spacing: 16) {
-                        Text("Б \(String(format: "%.1f", pr.protein * k)) г")
-                        Text("Ж \(String(format: "%.1f", pr.fat * k)) г")
-                        Text("У \(String(format: "%.1f", pr.carbs * k)) г")
+                        Text(AppLocalizer.format("macro.protein.value", String(format: "%.1f", pr.protein * k)))
+                        Text(AppLocalizer.format("macro.fat.value", String(format: "%.1f", pr.fat * k)))
+                        Text(AppLocalizer.format("macro.carbs.value", String(format: "%.1f", pr.carbs * k)))
                     }
                     .foregroundStyle(.secondary)
                 }
             }
 
             HStack(spacing: 12) {
-                Button("Удалить", role: .destructive) { onDelete() }
+                Button(AppLocalizer.string("common.delete"), role: .destructive) { onDelete() }
                     .buttonStyle(.borderedProminent)
                     .tint(.red)
                     .frame(maxWidth: .infinity)
 
-                Button("Сохранить") {
+                Button(AppLocalizer.string("common.save")) {
                     if let v = Double(gramsText), v > 0 { onSave(v) }
                 }
                 .buttonStyle(.borderedProminent)
@@ -884,7 +890,7 @@ private struct EditEntrySheet: View {
         }
         // ← overlay ДОЛЖЕН быть модификатором у возвращаемого VStack
         .overlay(alignment: .topTrailing) {
-                        Button("Закрыть") { dismiss() }
+                        Button(AppLocalizer.string("common.close")) { dismiss() }
                             .buttonStyle(.plain)
                             .font(.callout.weight(.semibold))
                             .foregroundStyle(.secondary) 
@@ -892,7 +898,7 @@ private struct EditEntrySheet: View {
                             .padding(.vertical, 6)
                             .background(.ultraThinMaterial, in: Capsule())
                             .padding(8)
-                            .accessibilityLabel("Закрыть")
+                            .accessibilityLabel(AppLocalizer.string("common.close"))
                     }
     }
 }

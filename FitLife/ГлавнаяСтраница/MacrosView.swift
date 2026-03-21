@@ -6,6 +6,17 @@ enum WeightGoal: String, CaseIterable, Codable {
     case loseWeight = "Снизить вес"
     case currentWeight = "Текущий вес"
     case gainWeight = "Набрать вес"
+
+    var displayName: String {
+        switch self {
+        case .loseWeight:
+            return AppLocalizer.string("goal.lose")
+        case .currentWeight:
+            return AppLocalizer.string("goal.maintain")
+        case .gainWeight:
+            return AppLocalizer.string("goal.gain")
+        }
+    }
 }
 
 struct MacrosView: View {
@@ -30,14 +41,14 @@ struct MacrosView: View {
         VStack(spacing: 5) {
             HStack(spacing: 20) {
                 VStack {
-                    Text("Энергия:")
+                    Text(AppLocalizer.string("macros.energy"))
                         .font(.title3)
                         .fontWeight(.bold)
                     Text("\(userData.calories)")
                         .font(.title3)
                         .fontWeight(.bold)
                     VStack {
-                        Text("Осталось:")
+                        Text(AppLocalizer.string("macros.remaining"))
                             .font(.title3)
                             .fontWeight(.bold)
                         Text("\(remainingCalories > 0 ? remainingCalories : 0)")
@@ -52,23 +63,23 @@ struct MacrosView: View {
             .padding()
             HStack(spacing: 60) {
                 VStack {
-                    Text("Белки")
-                    Text("\(userData.macros.proteins) г")
+                    Text(AppLocalizer.string("macro.protein"))
+                    Text(AppLocalizer.format("unit.grams.value", userData.macros.proteins))
                 }
                 VStack {
-                    Text("Жиры")
-                    Text("\(userData.macros.fats) г")
+                    Text(AppLocalizer.string("macro.fat"))
+                    Text(AppLocalizer.format("unit.grams.value", userData.macros.fats))
                 }
                 VStack {
-                    Text("Углеводы")
-                    Text("\(userData.macros.carbs) г")
+                    Text(AppLocalizer.string("macro.carbs"))
+                    Text(AppLocalizer.format("unit.grams.value", userData.macros.carbs))
                 }
             }
             .font(.headline)
             HStack {
-                Text("Сегодня уже ввели:")
+                Text(AppLocalizer.string("macros.entered_today"))
                     .foregroundStyle(.primary)
-                Text("\(dailyConsumedCalories) ккал")
+                Text(AppLocalizer.format("unit.kcal.value", dailyConsumedCalories))
                     .font(.title3)
                     .fontWeight(.bold)
                     .foregroundStyle(.primary)
@@ -94,12 +105,12 @@ struct MacrosView: View {
 //            }
             // Пикер для выбора цели
             VStack(spacing: 10) {
-                Text("Цель")
+                Text(AppLocalizer.string("goal.title"))
                     .font(.headline)
 
-                Picker("Цель", selection: $userData.goal) {
+                Picker(AppLocalizer.string("goal.title"), selection: $userData.goal) {
                     ForEach(WeightGoal.allCases, id: \.self) { goal in
-                        Text(goal.rawValue)
+                        Text(goal.displayName)
                     }
                 }
                 .pickerStyle(SegmentedPickerStyle()) // Используем стиль сегментированного пикера
@@ -138,4 +149,3 @@ struct MacrosView: View {
         try? modelContext.save()
     }
 }
-

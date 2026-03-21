@@ -21,6 +21,15 @@ enum Gender: String, CaseIterable, Codable {
             return "ЖенскийПрофиль"
         }
     }
+
+    var displayName: String {
+        switch self {
+        case .male:
+            return AppLocalizer.string("gender.male")
+        case .female:
+            return AppLocalizer.string("gender.female")
+        }
+    }
 }
 
 //struct ContentView: View {

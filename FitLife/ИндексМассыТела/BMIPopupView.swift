@@ -10,7 +10,7 @@ struct BMIPopupView: View {
                 VStack(spacing: 16) {
                     // Заголовок теперь в navigation bar, поэтому здесь не дублируем
 
-                    Text("Ваш индекс")
+                    Text(AppLocalizer.string("bmi.your_index"))
                         .font(.headline)
                         .foregroundStyle(.secondary)
 
@@ -27,21 +27,21 @@ struct BMIPopupView: View {
                     Divider().padding(.vertical, 4)
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("<18.5 — Дефицит массы тела")
-                        Text("18.5 – 24.9 — Нормальная масса тела")
-                        Text("25 – 29.9 — Избыточная масса тела")
-                        Text(">30 — Ожирение")
+                        Text(AppLocalizer.string("bmi.range.underweight"))
+                        Text(AppLocalizer.string("bmi.range.normal"))
+                        Text(AppLocalizer.string("bmi.range.overweight"))
+                        Text(AppLocalizer.string("bmi.range.obesity"))
                     }
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 }
                 .padding(20)
             }
-            .navigationTitle("Индекс массы тела")
+            .navigationTitle(AppLocalizer.string("bmi.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Закрыть") { dismiss() }
+                    Button(AppLocalizer.string("common.close")) { dismiss() }
                 }
             }
         }
@@ -58,10 +58,10 @@ struct BMIPopupView: View {
 
     private func bmiMessage(for bmi: Double) -> String {
         switch bmi {
-        case ..<18.5: return "У вас дефицит массы тела"
-        case 18.5..<25: return "Нормальная масса тела"
-        case 25..<30: return "У вас избыточный вес"
-        default: return "Ожирение"
+        case ..<18.5: return AppLocalizer.string("bmi.message.underweight")
+        case 18.5..<25: return AppLocalizer.string("bmi.message.normal")
+        case 25..<30: return AppLocalizer.string("bmi.message.overweight")
+        default: return AppLocalizer.string("bmi.message.obesity")
         }
     }
 
@@ -74,6 +74,5 @@ struct BMIPopupView: View {
         }
     }
 }
-
 
 

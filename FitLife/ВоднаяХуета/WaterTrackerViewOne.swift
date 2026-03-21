@@ -32,8 +32,8 @@ struct WaterTrackerViewOne: View {
         NavigationStack {
             VStack(spacing: 16) {
 
-                Picker("Температура воды", selection: $selectedTemperature) {
-                    ForEach(WaterTemperature.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                Picker(AppLocalizer.string("water.temperature.title"), selection: $selectedTemperature) {
+                    ForEach(WaterTemperature.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
@@ -57,7 +57,7 @@ struct WaterTrackerViewOne: View {
                             Text("\(Int(waterPercentage))%")
                                 .font(.system(size: 44, weight: .semibold))
                                 .foregroundStyle(.blue)
-                            Text("\(waterIntake, specifier: "%.2f") л из \(dailyGoal, specifier: "%.2f") л")
+                            Text(AppLocalizer.format("water.progress.liters", waterIntake, dailyGoal))
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
@@ -72,12 +72,12 @@ struct WaterTrackerViewOne: View {
             .onAppear { ensureUserIfNeeded(); loadWaterIntake() }
             .onChange(of: activeGenderRaw) { _ in ensureUserIfNeeded(); loadWaterIntake() }
             .onChange(of: users) { _ in loadWaterIntake() }
-            .navigationTitle("Трекер воды")
+            .navigationTitle(AppLocalizer.string("water.tracker.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showNotificationSettings = true } label: {
-                        HStack(spacing: 6) { Image(systemName: "bell"); Text("Напомнить") }
+                        HStack(spacing: 6) { Image(systemName: "bell"); Text(AppLocalizer.string("water.remind")) }
                     }
                 }
             }
@@ -172,8 +172,8 @@ private struct WaterAddRow: View {
             .frame(width: 40, height: 40)
 
             VStack(alignment: .leading, spacing: 0) {
-                Text("Добавить воду").font(.headline)
-                Text("Порция \(portionML) мл")
+                Text(AppLocalizer.string("water.add")).font(.headline)
+                Text(AppLocalizer.format("water.portion.ml", portionML))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.top, 4)
@@ -187,14 +187,14 @@ private struct WaterAddRow: View {
                         portionML = ml
                     } label: {
                         HStack {
-                            Text("\(ml) мл")
+                            Text(AppLocalizer.format("unit.ml.value", ml))
                             if portionML == ml { Image(systemName: "checkmark") }
                         }
                     }
                 }
             } label: {
                 HStack(spacing: 6) {
-                    Text("\(portionML) мл").font(.subheadline.weight(.semibold))
+                    Text(AppLocalizer.format("unit.ml.value", portionML)).font(.subheadline.weight(.semibold))
                     Image(systemName: "chevron.down").font(.footnote)
                 }
                 .padding(.horizontal, 12)

@@ -3,6 +3,7 @@ import SwiftData
 
 struct ProductSelectionView: View {
     private static let favoriteNamesKey = "favoriteProductNames"
+    @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
 
     @State private var customProducts: [CustomProduct] = []
     let mealType: MealType
@@ -38,6 +39,10 @@ struct ProductSelectionView: View {
         case all = "Общие"
         case favorites = "Любимые"
         case custom = "Свои"
+    }
+
+    private var appLanguage: AppLanguage {
+        AppLanguage.from(rawValue: appLanguageRaw)
     }
 
     private var searchLanguage: FoodSearchLanguage {
@@ -81,11 +86,11 @@ struct ProductSelectionView: View {
     private var localSectionTitle: String {
         switch selectedFilter {
         case .all:
-            return shouldShowRemoteSection ? "Локальная база" : "Общие продукты"
+            return shouldShowRemoteSection ? appLanguage.localized("search.section.local_database") : appLanguage.localized("search.section.common_products")
         case .favorites:
-            return "Любимые"
+            return appLanguage.localized("search.filter.favorites")
         case .custom:
-            return "Свои продукты"
+            return appLanguage.localized("search.section.custom_products")
         }
     }
 
@@ -98,7 +103,7 @@ struct ProductSelectionView: View {
         case .russianLocalThenOpenFoodFacts:
             return "Open Food Facts"
         case .offlineLocal:
-            return "Онлайн"
+            return appLanguage.localized("search.section.online")
         }
     }
 
@@ -106,17 +111,17 @@ struct ProductSelectionView: View {
         if isSearchingRemotely {
             switch currentSearchRoute {
             case .barcodeOpenFoodFacts:
-                return "Ищу штрихкод в Open Food Facts..."
+                return appLanguage.localized("search.status.barcode")
             case .englishUSDAThenLocal:
-                return "Ищу продукты в USDA..."
+                return appLanguage.localized("search.status.usda")
             case .russianLocalThenOpenFoodFacts:
-                return "Проверяю Open Food Facts..."
+                return appLanguage.localized("search.status.off")
             case .offlineLocal:
-                return "Проверяю источник данных..."
+                return appLanguage.localized("search.status.source")
             }
         }
 
-        return remoteSearchMessage
+        return remoteSearchMessage.flatMap { appLanguage.localized($0) }
     }
 
     // MARK: - UI
@@ -125,21 +130,21 @@ struct ProductSelectionView: View {
         NavigationStack {
             VStack {
                 VStack {
-                    Text("Таблица калорийности продуктов питания")
+                    Text(appLanguage.localized("search.title"))
                         .foregroundStyle(.primary)
-                    Text("(данные указаны на 100 г продукта)")
+                    Text(appLanguage.localized("search.subtitle"))
                         .foregroundStyle(.secondary)
                 }
 
-                Picker("Выберите категорию", selection: $selectedFilter) {
+                Picker(appLanguage.localized("search.category"), selection: $selectedFilter) {
                     ForEach(FilterType.allCases, id: \.self) { filter in
-                        Text(filter.rawValue).tag(filter)
+                        Text(title(for: filter)).tag(filter)
                     }
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
 
-                TextField("Поиск еды...", text: $searchText)
+                TextField(appLanguage.localized("search.placeholder"), text: $searchText)
                     .textFieldStyle(.roundedBorder)
                     .padding()
                     .onSubmit {
@@ -178,14 +183,14 @@ struct ProductSelectionView: View {
                     }
 
                     if selectedFilter == .custom {
-                        Section(header: Text("Свои продукты")) {
+                        Section(header: Text(appLanguage.localized("search.section.custom_products"))) {
                             ForEach(filteredCustomProducts, id: \.id) { customProduct in
                                 customProductRow(customProduct: customProduct)
                                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                         Button(role: .destructive) {
                                             deleteCustomProduct(customProduct)
                                         } label: {
-                                            Label("Удалить", systemImage: "trash")
+                                            Label(appLanguage.localized("common.delete"), systemImage: "trash")
                                         }
                                     }
                             }
@@ -196,7 +201,7 @@ struct ProductSelectionView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Создать") { isCreatingProduct = true }
+                    Button(appLanguage.localized("common.create")) { isCreatingProduct = true }
                         .foregroundColor(.blue)
                 }
                 ToolbarItem(placement: .principal) {
@@ -210,7 +215,7 @@ struct ProductSelectionView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Закрыть") {
+                    Button(appLanguage.localized("common.close")) {
                         if let onClose { onClose() } else { dismiss() }
                     }
                     .foregroundColor(.blue)
@@ -247,7 +252,7 @@ struct ProductSelectionView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(product.displayName(preferredLanguageCode: searchLanguage.rawValue)).font(.headline)
-                    Text("На 100 г: \(product.calories) ккал, Б \(String(format: "%.1f", product.protein)) г., Ж \(String(format: "%.1f", product.fat)) г., У \(String(format: "%.1f", product.carbs)) г.")
+                    Text(nutritionSummary(for: product))
                         .font(.caption)
                 }
                 .foregroundColor(.primary)
@@ -282,10 +287,12 @@ struct ProductSelectionView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(customProduct.name).font(.headline)
-                    Text("На 100 г: \(customProduct.calories) ккал, " +
-                         "Б \(String(format: "%.1f", customProduct.protein)) г, " +
-                         "Ж \(String(format: "%.1f", customProduct.fat)) г, " +
-                         "У \(String(format: "%.1f", customProduct.carbs)) г")
+                    Text(nutritionSummary(
+                        calories: customProduct.calories,
+                        protein: customProduct.protein,
+                        fat: customProduct.fat,
+                        carbs: customProduct.carbs
+                    ))
                         .font(.caption)
                 }
                 .foregroundStyle(.primary)
@@ -425,11 +432,42 @@ struct ProductSelectionView: View {
 
             await MainActor.run {
                 remoteProducts = response.remoteProducts
-                remoteSearchMessage = response.message
+                remoteSearchMessage = response.messageKey
                 currentSearchRoute = response.route
                 isSearchingRemotely = false
             }
         }
+    }
+
+    private func title(for filter: FilterType) -> String {
+        switch filter {
+        case .all:
+            return appLanguage.localized("search.filter.all")
+        case .favorites:
+            return appLanguage.localized("search.filter.favorites")
+        case .custom:
+            return appLanguage.localized("search.filter.custom")
+        }
+    }
+
+    private func nutritionSummary(for product: Product) -> String {
+        nutritionSummary(
+            calories: product.calories,
+            protein: product.protein,
+            fat: product.fat,
+            carbs: product.carbs
+        )
+    }
+
+    private func nutritionSummary(calories: Int, protein: Double, fat: Double, carbs: Double) -> String {
+        String(
+            format: appLanguage.localized("search.nutrition.summary"),
+            locale: appLanguage.locale,
+            calories,
+            String(format: "%.1f", locale: appLanguage.locale, protein),
+            String(format: "%.1f", locale: appLanguage.locale, fat),
+            String(format: "%.1f", locale: appLanguage.locale, carbs)
+        )
     }
 
     private func sourceLabel(for source: ProductSource) -> String {
@@ -465,33 +503,33 @@ struct CustomProductCreationView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Новый продукт").font(.largeTitle.bold())
-                    Text("БЖУ указывайте на 100 г продукта")
+                    Text(AppLocalizer.string("custom_product.new")).font(.largeTitle.bold())
+                    Text(AppLocalizer.string("custom_product.subtitle"))
                         .font(.caption).foregroundStyle(.secondary)
 
-                    field("Наименование", text: $name, field: .name, kb: .default, submit: .next)
+                    field(AppLocalizer.string("custom_product.name"), text: $name, field: .name, kb: .default, submit: .next)
                         .onSubmit { focusedField = .calories }
 
-                    field("Энергия, ккал", text: $calories, field: .calories, kb: .decimalPad, submit: .next)
+                    field(AppLocalizer.string("custom_product.calories"), text: $calories, field: .calories, kb: .decimalPad, submit: .next)
                         .onSubmit { focusedField = .protein }
 
                     HStack(spacing: 12) {
-                        field("Белки, г.", text: $protein, field: .protein, kb: .decimalPad, submit: .next)
+                        field(AppLocalizer.string("custom_product.protein"), text: $protein, field: .protein, kb: .decimalPad, submit: .next)
                             .onSubmit { focusedField = .fat }
-                        field("Жиры, г.", text: $fat, field: .fat, kb: .decimalPad, submit: .next)
+                        field(AppLocalizer.string("custom_product.fat"), text: $fat, field: .fat, kb: .decimalPad, submit: .next)
                             .onSubmit { focusedField = .carbs }
-                        field("Углеводы, г.", text: $carbs, field: .carbs, kb: .decimalPad, submit: .done)
+                        field(AppLocalizer.string("custom_product.carbs"), text: $carbs, field: .carbs, kb: .decimalPad, submit: .done)
                             .onSubmit { focusedField = nil }
                     }
 
                     VStack(spacing: 10) {
-                        Button("Создать", action: submit)
+                        Button(AppLocalizer.string("common.create"), action: submit)
                             .buttonStyle(.borderedProminent)
                             .tint(.blue)
                             .disabled(!isValid)
                             .frame(maxWidth: .infinity)
 
-                        Button("Отмена", role: .destructive) { dismiss() }
+                        Button(AppLocalizer.string("common.cancel"), role: .destructive) { dismiss() }
                             .buttonStyle(.borderedProminent)
                             .tint(.red)
                             .frame(maxWidth: .infinity)
@@ -502,10 +540,10 @@ struct CustomProductCreationView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
-                    Button("Назад") { prev() }.disabled(focusedField == .name)
-                    Button("Далее") { next() }.disabled(focusedField == .carbs)
+                    Button(AppLocalizer.string("common.back")) { prev() }.disabled(focusedField == .name)
+                    Button(AppLocalizer.string("common.next")) { next() }.disabled(focusedField == .carbs)
                     Spacer()
-                    Button("Готово") { focusedField = nil }
+                    Button(AppLocalizer.string("common.done")) { focusedField = nil }
                 }
             }
             .onAppear { focusedField = .name }

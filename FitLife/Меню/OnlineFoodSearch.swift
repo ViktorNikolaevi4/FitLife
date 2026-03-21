@@ -22,7 +22,7 @@ enum ProductSearchRoute {
 struct ProductSearchResponse {
     let remoteProducts: [Product]
     let route: ProductSearchRoute
-    let message: String?
+    let messageKey: String?
 }
 
 @MainActor
@@ -61,14 +61,14 @@ actor ProductSearchCoordinator {
     ) async -> ProductSearchResponse {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedQuery.isEmpty else {
-            return ProductSearchResponse(remoteProducts: [], route: .offlineLocal, message: nil)
+            return ProductSearchResponse(remoteProducts: [], route: .offlineLocal, messageKey: nil)
         }
 
         if !hasInternet {
             return ProductSearchResponse(
                 remoteProducts: [],
                 route: .offlineLocal,
-                message: "Нет интернета. Показана локальная база."
+                messageKey: "search.message.offline_local"
             )
         }
 
@@ -77,9 +77,9 @@ actor ProductSearchCoordinator {
             return ProductSearchResponse(
                 remoteProducts: barcodeMatches,
                 route: .barcodeOpenFoodFacts,
-                message: barcodeMatches.isEmpty
-                    ? "Штрихкод не найден в Open Food Facts."
-                    : "Штрихкод проверен через Open Food Facts."
+                messageKey: barcodeMatches.isEmpty
+                    ? "search.message.barcode_not_found"
+                    : "search.message.barcode_checked"
             )
         }
 
@@ -89,9 +89,9 @@ actor ProductSearchCoordinator {
             return ProductSearchResponse(
                 remoteProducts: remoteProducts,
                 route: .englishUSDAThenLocal,
-                message: remoteProducts.isEmpty
-                    ? "USDA ничего не вернул. Остается локальная база."
-                    : "Сначала показаны результаты USDA, ниже локальная база."
+                messageKey: remoteProducts.isEmpty
+                    ? "search.message.usda_empty"
+                    : "search.message.usda_then_local"
             )
 
         case .ru:
@@ -100,7 +100,7 @@ actor ProductSearchCoordinator {
                 return ProductSearchResponse(
                     remoteProducts: [],
                     route: .russianLocalThenOpenFoodFacts,
-                    message: hasLocalMatches ? "Сначала показана локальная база." : nil
+                    messageKey: hasLocalMatches ? "search.message.local_first" : nil
                 )
             }
 
@@ -108,9 +108,9 @@ actor ProductSearchCoordinator {
             return ProductSearchResponse(
                 remoteProducts: remoteProducts,
                 route: .russianLocalThenOpenFoodFacts,
-                message: remoteProducts.isEmpty
-                    ? "Локальная база пуста, Open Food Facts тоже ничего не нашел."
-                    : "Локальная база пуста, показаны результаты Open Food Facts."
+                messageKey: remoteProducts.isEmpty
+                    ? "search.message.local_and_off_empty"
+                    : "search.message.local_empty_off_results"
             )
         }
     }

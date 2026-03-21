@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		B61FAE172D12FAD60034C54D /* SwiftCSV in Frameworks */ = {isa = PBXBuildFile; productRef = B61FAE162D12FAD60034C54D /* SwiftCSV */; };
+		B679E07E2F6EE7190033676D /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = B679E07C2F6EE7190033676D /* Localizable.strings */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXBuildRule section */
@@ -25,6 +26,8 @@
 /* End PBXBuildRule section */
 
 /* Begin PBXFileReference section */
+		B679E07D2F6EE7190033676D /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+		B679E07F2F6EE8550033676D /* ru */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ru; path = ru.lproj/Localizable.strings; sourceTree = "<group>"; };
 		B6B3C67F2D0480B900D0226C /* FitLife.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FitLife.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -64,6 +67,7 @@
 		B6B3C6762D0480B900D0226C = {
 			isa = PBXGroup;
 			children = (
+				B679E07C2F6EE7190033676D /* Localizable.strings */,
 				B6B3C6812D0480B900D0226C /* FitLife */,
 				B6B3C6802D0480B900D0226C /* Products */,
 			);
@@ -110,7 +114,7 @@
 		B6B3C6772D0480B900D0226C /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				BuildIndependentTargetsInParallel = 1;
+				BuildIndependentTargetsInParallel = NO;
 				LastSwiftUpdateCheck = 1610;
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
@@ -125,6 +129,7 @@
 			knownRegions = (
 				en,
 				Base,
+				ru,
 			);
 			mainGroup = B6B3C6762D0480B900D0226C;
 			minimizedProjectReferenceProxies = 1;
@@ -146,6 +151,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B679E07E2F6EE7190033676D /* Localizable.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -161,12 +167,25 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXVariantGroup section */
+		B679E07C2F6EE7190033676D /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				B679E07D2F6EE7190033676D /* en */,
+				B679E07F2F6EE8550033676D /* ru */,
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
 /* Begin XCBuildConfiguration section */
 		B6B3C68B2D0480BC00D0226C /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
@@ -232,6 +251,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";

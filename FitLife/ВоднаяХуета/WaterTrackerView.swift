@@ -18,7 +18,7 @@ struct WaterTrackerView: View {
     var body: some View {
         VStack(spacing: 20) {
             // Заголовок
-            Text("Трекер воды")
+            Text(AppLocalizer.string("water.tracker.title"))
                 .font(.headline)
                 .padding(.top, 20)
 
@@ -29,7 +29,7 @@ struct WaterTrackerView: View {
                 .font(.system(size: 48, weight: .semibold))
                 .foregroundStyle(.blue)
             Spacer()
-            Text("\(waterIntake, specifier: "%.2f") л из \(dailyGoal, specifier: "%.2f") л")
+            Text(AppLocalizer.format("water.progress.liters", waterIntake, dailyGoal))
                 .font(.title3)
                 .foregroundColor(.gray)
                 .padding(.bottom, 8)
@@ -49,9 +49,9 @@ struct WaterTrackerView: View {
 
     // Пикер температуры воды
     private var temperaturePicker: some View {
-        Picker("Температура воды", selection: $selectedTemperature) {
+        Picker(AppLocalizer.string("water.temperature.title"), selection: $selectedTemperature) {
             ForEach(WaterTemperature.allCases, id: \.self) { temp in
-                Text(temp.rawValue).tag(temp)
+                Text(temp.displayName).tag(temp)
             }
         }
         .pickerStyle(SegmentedPickerStyle())
@@ -72,7 +72,7 @@ struct WaterTrackerView: View {
         //    Spacer() // Добавлен дополнительный Spacer для увеличения разрыва
 
             // Количество выпитой воды
-            Text("\(waterIntake, specifier: "%.2f") л из \(dailyGoal, specifier: "%.2f") л")
+            Text(AppLocalizer.format("water.progress.liters", waterIntake, dailyGoal))
                 .font(.title3)
                 .foregroundColor(.gray)
         }
@@ -86,7 +86,7 @@ struct WaterTrackerView: View {
                 Button(action: { addWater(amount: stepLiters) }) {
                     VStack(spacing: 2) {
                         Image(systemName: "plus")
-                        Text("Добавить воду")
+                        Text(AppLocalizer.string("water.add"))
                     }
                     .font(.title3)
                 }
@@ -99,14 +99,14 @@ struct WaterTrackerView: View {
                             stepML = ml
                         } label: {
                             HStack {
-                                Text("\(Int(ml)) мл")
+                                Text(AppLocalizer.format("unit.ml.value.int", Int(ml)))
                                 if stepML == ml { Image(systemName: "checkmark") }
                             }
                         }
                     }
                 } label: {
                     HStack(spacing: 4) {
-                        Text("\(Int(stepML)) мл")
+                        Text(AppLocalizer.format("unit.ml.value.int", Int(stepML)))
                         Image(systemName: "chevron.down")
                     }
                     .font(.headline) // крупнее подпись
@@ -123,7 +123,7 @@ struct WaterTrackerView: View {
             Button(action: { showNotificationSettings = true }) {
                 VStack {
                     Image(systemName: "bell")
-                    Text("Напомнить")
+                    Text(AppLocalizer.string("water.remind"))
                 }.font(.title3)
             }
             .foregroundStyle(.black)
@@ -138,7 +138,7 @@ struct WaterTrackerView: View {
         Button(action: {
             dismiss() // Закрыть представление
         }) {
-            Text("Ок")
+            Text(AppLocalizer.string("common.ok"))
                 .font(.title3)
                 .padding()
                 .background(Color.blue)
@@ -215,4 +215,15 @@ enum WaterTemperature: String, CaseIterable {
     case cold = "Холодно"
     case warm = "Тепло"
     case hot = "Жарко"
+
+    var displayName: String {
+        switch self {
+        case .cold:
+            return AppLocalizer.string("water.temperature.cold")
+        case .warm:
+            return AppLocalizer.string("water.temperature.warm")
+        case .hot:
+            return AppLocalizer.string("water.temperature.hot")
+        }
+    }
 }

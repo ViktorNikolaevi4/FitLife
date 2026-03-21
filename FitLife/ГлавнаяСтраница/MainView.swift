@@ -41,7 +41,7 @@ import SwiftData
                                             loadDailyConsumedCalories: loadDailyConsumedCalories)
 
                     } else {
-                        Text("Данные не найдены")
+                        Text(AppLocalizer.string("data.not_found"))
                             .font(.headline)
 
                     }
