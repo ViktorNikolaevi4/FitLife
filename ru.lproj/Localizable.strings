@@ -12,6 +12,7 @@
 
 "common.close" = "Закрыть";
 "common.create" = "Создать";
+"common.scan" = "Сканировать";
 "common.delete" = "Удалить";
 
 "settings.title" = "Настройки";
@@ -70,6 +71,12 @@
 "search.message.local_first" = "Сначала показана локальная база.";
 "search.message.local_and_off_empty" = "Локальная база пуста, Open Food Facts тоже ничего не нашел.";
 "search.message.local_empty_off_results" = "Локальная база пуста, показаны результаты Open Food Facts.";
+"search.scan.title" = "Сканирование штрихкода";
+"search.scan.subtitle" = "Наведите камеру на штрихкод упаковки, чтобы найти продукт в Open Food Facts.";
+"search.scan.alert.title" = "Не удалось открыть сканер";
+"search.scan.error.unavailable" = "Камера недоступна на этом устройстве.";
+"search.scan.error.permission" = "Доступ к камере запрещён. Разрешите его в настройках iOS.";
+"search.scan.error.configuration" = "Не удалось настроить сканер штрихкодов.";
 
 "common.ok" = "OK";
 "common.save" = "Сохранить";

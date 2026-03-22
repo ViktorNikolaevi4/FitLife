@@ -406,10 +406,10 @@ private struct OpenFoodFactsProduct: Decodable {
         return Product(
             name: russianName,
             nameEN: englishName,
-            protein: nutriments?.proteins100g ?? 0,
-            fat: nutriments?.fat100g ?? 0,
-            carbs: nutriments?.carbohydrates100g ?? 0,
-            calories: Int((nutriments?.energyKcal100g ?? 0).rounded()),
+            protein: nutriments?.resolvedProtein ?? 0,
+            fat: nutriments?.resolvedFat ?? 0,
+            carbs: nutriments?.resolvedCarbohydrates ?? 0,
+            calories: Int((nutriments?.resolvedEnergyKcal ?? 0).rounded()),
             barcode: code,
             source: .openFoodFacts
         )
@@ -426,14 +426,64 @@ private struct OpenFoodFactsProduct: Decodable {
 
 private struct OpenFoodFactsNutriments: Decodable {
     let proteins100g: Double?
+    let proteins: Double?
+    let proteinsValue: Double?
     let fat100g: Double?
+    let fat: Double?
+    let fatValue: Double?
     let carbohydrates100g: Double?
+    let carbohydrates: Double?
+    let carbohydratesValue: Double?
     let energyKcal100g: Double?
+    let energyKcal: Double?
+    let energyKcalValue: Double?
+    let energyKj100g: Double?
+    let energyKj: Double?
 
     enum CodingKeys: String, CodingKey {
         case proteins100g = "proteins_100g"
+        case proteins
+        case proteinsValue = "proteins_value"
         case fat100g = "fat_100g"
+        case fat
+        case fatValue = "fat_value"
         case carbohydrates100g = "carbohydrates_100g"
+        case carbohydrates
+        case carbohydratesValue = "carbohydrates_value"
         case energyKcal100g = "energy-kcal_100g"
+        case energyKcal = "energy-kcal"
+        case energyKcalValue = "energy-kcal_value"
+        case energyKj100g = "energy_100g"
+        case energyKj = "energy"
+    }
+
+    var resolvedProtein: Double? {
+        firstMeaningfulValue([proteins100g, proteins, proteinsValue])
+    }
+
+    var resolvedFat: Double? {
+        firstMeaningfulValue([fat100g, fat, fatValue])
+    }
+
+    var resolvedCarbohydrates: Double? {
+        firstMeaningfulValue([carbohydrates100g, carbohydrates, carbohydratesValue])
+    }
+
+    var resolvedEnergyKcal: Double? {
+        if let kcal = firstMeaningfulValue([energyKcal100g, energyKcal, energyKcalValue]) {
+            return kcal
+        }
+
+        if let kj = firstMeaningfulValue([energyKj100g, energyKj]) {
+            return kj / 4.184
+        }
+
+        return nil
+    }
+
+    private func firstMeaningfulValue(_ values: [Double?]) -> Double? {
+        values
+            .compactMap { $0 }
+            .first(where: { $0 > 0 })
     }
 }

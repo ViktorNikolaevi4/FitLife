@@ -12,6 +12,7 @@
 
 "common.close" = "Close";
 "common.create" = "Create";
+"common.scan" = "Scan";
 "common.delete" = "Delete";
 
 "settings.title" = "Settings";
@@ -70,6 +71,12 @@
 "search.message.local_first" = "Showing the local database first.";
 "search.message.local_and_off_empty" = "The local database is empty and Open Food Facts found nothing either.";
 "search.message.local_empty_off_results" = "The local database is empty, showing Open Food Facts results.";
+"search.scan.title" = "Scan Barcode";
+"search.scan.subtitle" = "Point the camera at the package barcode to find the product in Open Food Facts.";
+"search.scan.alert.title" = "Unable to Open Scanner";
+"search.scan.error.unavailable" = "The camera is not available on this device.";
+"search.scan.error.permission" = "Camera access is denied. Allow it in iOS Settings.";
+"search.scan.error.configuration" = "The barcode scanner could not be configured.";
 
 "common.ok" = "OK";
 "common.save" = "Save";

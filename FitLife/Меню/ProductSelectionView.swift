@@ -23,6 +23,8 @@ struct ProductSelectionView: View {
     @State private var remoteSearchMessage: String?
     @State private var currentSearchRoute: ProductSearchRoute = .offlineLocal
     @State private var searchTask: Task<Void, Never>?
+    @State private var isShowingBarcodeScanner = false
+    @State private var scannerErrorMessage: String?
 
     // кэш «Любимых»
     @State private var cachedFilteredProducts: [Product] = []
@@ -179,8 +181,17 @@ struct ProductSelectionView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(appLanguage.localized("common.create")) { isCreatingProduct = true }
+                    HStack(spacing: 12) {
+                        Button {
+                            isShowingBarcodeScanner = true
+                        } label: {
+                            Label(appLanguage.localized("common.scan"), systemImage: "barcode.viewfinder")
+                        }
                         .foregroundColor(.blue)
+
+                        Button(appLanguage.localized("common.create")) { isCreatingProduct = true }
+                            .foregroundColor(.blue)
+                    }
                 }
                 ToolbarItem(placement: .principal) {
                     VStack {
@@ -224,6 +235,33 @@ struct ProductSelectionView: View {
                     refreshVisibleProducts()
                 }
             }
+            .sheet(isPresented: $isShowingBarcodeScanner) {
+                BarcodeScannerView(
+                    onScanned: { code in
+                        searchText = code
+                        scheduleHybridSearch(immediate: true)
+                    },
+                    onFailure: { error in
+                        scannerErrorMessage = error.localizedDescription
+                        isShowingBarcodeScanner = false
+                    }
+                )
+            }
+            .alert(
+                appLanguage.localized("search.scan.alert.title"),
+                isPresented: Binding(
+                    get: { scannerErrorMessage != nil },
+                    set: { if !$0 { scannerErrorMessage = nil } }
+                ),
+                actions: {
+                    Button(appLanguage.localized("common.ok"), role: .cancel) {
+                        scannerErrorMessage = nil
+                    }
+                },
+                message: {
+                    Text(scannerErrorMessage ?? "")
+                }
+            )
             .background(Color(.systemBackground).ignoresSafeArea())
         }
     }
