@@ -6,6 +6,8 @@
   
 */
 "tab.home" = "Главная";
+"tab.nutrition" = "Питание";
+"tab.workouts" = "Тренировки";
 "tab.profile" = "Профиль";
 "tab.water" = "Вода";
 "tab.settings" = "Настройки";
@@ -29,6 +31,11 @@
 "settings.mail.alert.message" = "Добавь почтовый аккаунт в настройках iOS или напиши нам на %@.";
 "settings.mail.subject" = "Обратная связь — %@ %@";
 "settings.mail.body" = "Здравствуйте! Хочу оставить отзыв/вопрос:\n\n(Опишите вашу ситуацию здесь)\n\n--\nТехническая информация:\nПриложение: %@ %@\nУстройство: %@\niOS: %@ %@";
+
+"nutrition.title" = "Калории";
+"nutrition.goal.value" = "/ %d ккал";
+"nutrition.remaining.value" = "Осталось: %d ккал";
+"nutrition.macro.value" = "%d / %d г";
 
 "about.app_name" = "Моё Питание!";
 "about.description" = "Моё Питание! — это приложение-ассистент. Мы даём советы и помогаем отслеживать прогресс, но не ставим диагнозы и не назначаем лечение. Для медицинских вопросов обращайся к врачу.";
@@ -94,6 +101,10 @@
 
 "data.not_found" = "Данные не найдены";
 "dashboard.no_user_data" = "Нет данных пользователя";
+"workouts.title" = "Тренировки";
+"workouts.placeholder" = "Экран тренировок пока в разработке.";
+"training.diary" = "Тренировочный дневник";
+"training.start" = "Начать";
 "dashboard.profile_auto_created" = "Профиль будет создан автоматически при первом запуске.";
 
 "gender.male" = "Мужчина";

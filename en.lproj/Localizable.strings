@@ -6,6 +6,8 @@
   
 */
 "tab.home" = "Home";
+"tab.nutrition" = "Nutrition";
+"tab.workouts" = "Workouts";
 "tab.profile" = "Profile";
 "tab.water" = "Water";
 "tab.settings" = "Settings";
@@ -29,6 +31,11 @@
 "settings.mail.alert.message" = "Add a mail account in iOS Settings or write to us at %@.";
 "settings.mail.subject" = "Feedback — %@ %@";
 "settings.mail.body" = "Hello! I would like to leave feedback / ask a question:\n\n(Describe your situation here)\n\n--\nTechnical information:\nApp: %@ %@\nDevice: %@\niOS: %@ %@";
+
+"nutrition.title" = "Calories";
+"nutrition.goal.value" = "/ %d kcal";
+"nutrition.remaining.value" = "Remaining: %d kcal";
+"nutrition.macro.value" = "%d / %d g";
 
 "about.app_name" = "My Nutrition!";
 "about.description" = "My Nutrition! is an assistant app. We provide guidance and help track progress, but we do not diagnose or prescribe treatment. For medical questions, consult a doctor.";
@@ -94,6 +101,10 @@
 
 "data.not_found" = "Data not found";
 "dashboard.no_user_data" = "No user data";
+"workouts.title" = "Workouts";
+"workouts.placeholder" = "The workouts screen is still under development.";
+"training.diary" = "Training diary";
+"training.start" = "Start";
 "dashboard.profile_auto_created" = "A profile will be created automatically on first launch.";
 
 "gender.male" = "Male";
