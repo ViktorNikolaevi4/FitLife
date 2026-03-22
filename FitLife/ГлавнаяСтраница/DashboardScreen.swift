@@ -11,24 +11,60 @@ extension Gender {
 
 struct MainTabView: View {
     @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
+    @AppStorage(Gender.appStorageKey) private var activeGenderRaw: String = Gender.male.rawValue
+    @State private var selectedDate: Date = Date()
+    @State private var sheet: RationSheet? = nil
+    @State private var refreshID = UUID()
 
     private var appLanguage: AppLanguage {
         AppLanguage.from(rawValue: appLanguageRaw)
     }
 
+    private var selectedGender: Gender {
+        Gender(rawValue: activeGenderRaw) ?? .male
+    }
+
     var body: some View {
-        TabView {
-            DashboardScreen()
-                .tabItem { Label(appLanguage.localized("tab.home"), systemImage: "house.fill") }
+        ZStack(alignment: .bottomTrailing) {
+            TabView {
+                DashboardScreen(selectedDate: $selectedDate)
+                    .id(refreshID)
+                    .tabItem { Label(appLanguage.localized("tab.home"), systemImage: "house.fill") }
 
-            ProfileScreen()
-                .tabItem { Label(appLanguage.localized("tab.profile"), systemImage: "person.fill") }
+                ProfileScreen()
+                    .tabItem { Label(appLanguage.localized("tab.profile"), systemImage: "person.fill") }
 
-            WaterTrackerViewOne()
-                .tabItem { Label(appLanguage.localized("tab.water"), systemImage: "drop.fill") }
+                WaterTrackerViewOne()
+                    .tabItem { Label(appLanguage.localized("tab.water"), systemImage: "drop.fill") }
 
-            SettingsScreen()
-                .tabItem { Label(appLanguage.localized("tab.settings"), systemImage: "gearshape.fill") }
+                SettingsScreen()
+                    .tabItem { Label(appLanguage.localized("tab.settings"), systemImage: "gearshape.fill") }
+            }
+
+            Button(action: { sheet = .ration }) {
+                ZStack {
+                    Circle()
+                        .fill(.black)
+                        .frame(width: 58, height: 58)
+                        .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
+
+                    Image(systemName: "plus")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 20)
+            .padding(.bottom, 74)
+        }
+        .sheet(item: $sheet) { key in
+            let preset: MealType? = { if case let .quick(m) = key { m } else { nil } }()
+            RationPopupView(
+                gender: selectedGender,
+                selectedDate: $selectedDate,
+                onMealAdded: { refreshID = UUID() },
+                preselectedMeal: preset
+            )
         }
     }
 }
@@ -79,7 +115,7 @@ private enum RationSheet: Identifiable {
 
 struct DashboardScreen: View {
     // Дата
-    @State private var selectedDate: Date = Date()
+    @Binding var selectedDate: Date
 
     // Данные
     @Environment(\.modelContext) private var modelContext
@@ -123,6 +159,10 @@ struct DashboardScreen: View {
 
     private var userData: UserData? {
         users.first(where: { $0.gender == selectedGender })
+    }
+
+    init(selectedDate: Binding<Date>) {
+        _selectedDate = selectedDate
     }
 
     var body: some View {
@@ -224,14 +264,6 @@ struct DashboardScreen: View {
             .buttonStyle(.plain)
 
             Spacer()
-
-            Button(action: { sheet = .ration }) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 34, weight: .semibold))
-                    .foregroundStyle(.blue)
-            }
-            .buttonStyle(.plain)
-            .tint(theme.carb)
         }
         .padding(.horizontal)
     }
@@ -388,7 +420,6 @@ struct BalanceCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Заголовок + переключатель режима справа
             HStack {
                 Text(AppLocalizer.string("balance.title")).font(.headline)
                 Spacer()
@@ -418,11 +449,9 @@ struct BalanceCard: View {
             .padding(.horizontal)
             .padding(.top, 12)
 
-            // Кольцо
-            HStack {
-                Spacer()
+            HStack(alignment: .center, spacing: 14) {
                 Donut(progress: progress, track: theme.ringTrack, gradient: theme.ringGradient)
-                    .frame(width: 120, height: 120)
+                    .frame(width: 124, height: 124)
                     .overlay(
                         VStack(spacing: 2) {
                             Text(ringNumber.formatted(.number.grouping(.automatic)))
@@ -444,21 +473,22 @@ struct BalanceCard: View {
                             mode = .remaining
                         }
                     }
-                Spacer()
-            }
 
-            VStack(spacing: 10) {
-                MacroProgressRow(title: AppLocalizer.string("macro.protein"),
-                                 current: proteins.current, target: proteins.target,
-                                 tint: theme.protein, theme: theme, height: 8)
-                MacroProgressRow(title: AppLocalizer.string("macro.fat"),
-                                 current: fats.current, target: fats.target,
-                                 tint: theme.fat, theme: theme, height: 8)
-                MacroProgressRow(title: AppLocalizer.string("macro.carbs"),
-                                 current: carbs.current, target: carbs.target,
-                                 tint: theme.carb, theme: theme, height: 8)
+                VStack(spacing: 10) {
+                    MacroProgressRow(title: AppLocalizer.string("macro.protein"),
+                                     current: proteins.current, target: proteins.target,
+                                     tint: theme.protein, theme: theme, height: 8, horizontalPadding: 0, compactTitle: true)
+                    MacroProgressRow(title: AppLocalizer.string("macro.fat"),
+                                     current: fats.current, target: fats.target,
+                                     tint: theme.fat, theme: theme, height: 8, horizontalPadding: 0, compactTitle: true)
+                    MacroProgressRow(title: AppLocalizer.string("macro.carbs"),
+                                     current: carbs.current, target: carbs.target,
+                                     tint: theme.carb, theme: theme, height: 8, horizontalPadding: 0, compactTitle: true)
+                }
+                .frame(maxWidth: 165)
+                .frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 12)
             .padding(.bottom, 8)
         }
         .background(RoundedRectangle(cornerRadius: 16).fill(theme.card))
@@ -493,6 +523,8 @@ struct MacroProgressRow: View {
     let theme: AppTheme
     var height: CGFloat = 8
     var warnEnabled: Bool = true
+    var horizontalPadding: CGFloat = 12
+    var compactTitle: Bool = false
 
     private var isOver: Bool {
         warnEnabled && target > 0 && current > target
@@ -514,8 +546,9 @@ struct MacroProgressRow: View {
                         .foregroundStyle(.red)
                 }
                 Text(title)
+                    .font(compactTitle ? .subheadline.weight(.semibold) : .body)
                 Spacer()
-                    Text(AppLocalizer.format("macro.progress.value", current, target))
+                Text(AppLocalizer.format("macro.progress.value", current, target))
                     .font(.subheadline)
                     .fontWeight(isOver ? .semibold : .regular)
                     .foregroundStyle(valueColor)
@@ -523,7 +556,7 @@ struct MacroProgressRow: View {
             ThickProgressBar(fraction: fraction, fill: fillColor, track: trackColor, height: height)
                 .animation(.easeInOut(duration: 0.25), value: fraction)
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, horizontalPadding)
         .padding(.bottom, 8)
     }
 }
