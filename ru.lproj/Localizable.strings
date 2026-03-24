@@ -103,6 +103,14 @@
 "dashboard.no_user_data" = "Нет данных пользователя";
 "workouts.title" = "Тренировки";
 "workouts.placeholder" = "Экран тренировок пока в разработке.";
+"workouts.diary.title" = "Дневник тренировок";
+"workouts.history" = "История прошлых занятий";
+"workouts.templates" = "Шаблоны тренировочных программ";
+"workouts.last" = "Прошлая тренировка";
+"workouts.last.subtitle" = "Посмотри последнее занятие и вернись к своим результатам.";
+"workouts.new" = "Новая тренировка";
+"workouts.new.subtitle" = "Собери новую сессию и начни дневник сегодняшней активности.";
+"workouts.weekly.activity" = "Активность за неделю";
 "training.diary" = "Тренировочный дневник";
 "training.start" = "Начать";
 "dashboard.profile_auto_created" = "Профиль будет создан автоматически при первом запуске.";

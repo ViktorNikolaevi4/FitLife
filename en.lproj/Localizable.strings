@@ -103,6 +103,14 @@
 "dashboard.no_user_data" = "No user data";
 "workouts.title" = "Workouts";
 "workouts.placeholder" = "The workouts screen is still under development.";
+"workouts.diary.title" = "Workout Diary";
+"workouts.history" = "Past Session History";
+"workouts.templates" = "Workout Program Templates";
+"workouts.last" = "Last Workout";
+"workouts.last.subtitle" = "Review your latest session and jump back into your results.";
+"workouts.new" = "New Workout";
+"workouts.new.subtitle" = "Build a fresh session and start today's training log.";
+"workouts.weekly.activity" = "Weekly Activity";
 "training.diary" = "Training diary";
 "training.start" = "Start";
 "dashboard.profile_auto_created" = "A profile will be created automatically on first launch.";

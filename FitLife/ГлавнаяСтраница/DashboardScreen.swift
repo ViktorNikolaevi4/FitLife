@@ -25,6 +25,10 @@ struct MainTabView: View {
         Gender(rawValue: activeGenderRaw) ?? .male
     }
 
+    private var showsFloatingAddButton: Bool {
+        selectedTab == .home || selectedTab == .nutrition
+    }
+
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             TabView(selection: $selectedTab) {
@@ -55,21 +59,23 @@ struct MainTabView: View {
                     .tabItem { Label(appLanguage.localized("tab.profile"), systemImage: "person.fill") }
             }
 
-            Button(action: { sheet = .ration }) {
-                ZStack {
-                    Circle()
-                        .fill(.black)
-                        .frame(width: 58, height: 58)
-                        .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
+            if showsFloatingAddButton {
+                Button(action: { sheet = .ration }) {
+                    ZStack {
+                        Circle()
+                            .fill(.black)
+                            .frame(width: 58, height: 58)
+                            .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
 
-                    Image(systemName: "plus")
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundStyle(.white)
+                        Image(systemName: "plus")
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
                 }
+                .buttonStyle(.plain)
+                .padding(.trailing, 20)
+                .padding(.bottom, 74)
             }
-            .buttonStyle(.plain)
-            .padding(.trailing, 20)
-            .padding(.bottom, 74)
         }
         .sheet(item: $sheet) { key in
             let preset: MealType? = { if case let .quick(m) = key { m } else { nil } }()
@@ -92,15 +98,144 @@ private enum MainTab: Hashable {
 }
 
 private struct WorkoutsScreen: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var theme: AppTheme { AppTheme(colorScheme) }
+
     var body: some View {
         NavigationStack {
-            ContentUnavailableView(
-                AppLocalizer.string("workouts.title"),
-                systemImage: "dumbbell.fill",
-                description: Text(AppLocalizer.string("workouts.placeholder"))
-            )
-            .navigationTitle(AppLocalizer.string("workouts.title"))
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(AppLocalizer.string("workouts.diary.title"))
+                        .font(.largeTitle.bold())
+                        .padding(.horizontal)
+
+                    HStack(spacing: 12) {
+                        WorkoutsShortcutCard(
+                            title: AppLocalizer.string("workouts.history"),
+                            systemImage: "clock.arrow.circlepath",
+                            theme: theme
+                        )
+
+                        WorkoutsShortcutCard(
+                            title: AppLocalizer.string("workouts.templates"),
+                            systemImage: "square.grid.2x2.fill",
+                            theme: theme
+                        )
+                    }
+                    .padding(.horizontal)
+
+                    WorkoutsFeatureCard(
+                        title: AppLocalizer.string("workouts.last"),
+                        subtitle: AppLocalizer.string("workouts.last.subtitle"),
+                        systemImage: "figure.strengthtraining.traditional",
+                        tint: .orange,
+                        theme: theme
+                    )
+
+                    WorkoutsFeatureCard(
+                        title: AppLocalizer.string("workouts.new"),
+                        subtitle: AppLocalizer.string("workouts.new.subtitle"),
+                        systemImage: "dumbbell.fill",
+                        tint: .blue,
+                        theme: theme
+                    )
+
+                    Button(action: {}) {
+                        HStack {
+                            Text(AppLocalizer.string("workouts.weekly.activity"))
+                                .font(.headline.weight(.semibold))
+                            Spacer()
+                            Image(systemName: "arrow.right")
+                                .font(.subheadline.weight(.semibold))
+                        }
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 18)
+                        .background(RoundedRectangle(cornerRadius: 18).fill(.black))
+                        .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal)
+                    .padding(.top, 6)
+                }
+                .padding(.vertical, 16)
+            }
+            .background(theme.bg.ignoresSafeArea())
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .navigationBar)
         }
+    }
+}
+
+private struct WorkoutsShortcutCard: View {
+    let title: String
+    let systemImage: String
+    let theme: AppTheme
+
+    var body: some View {
+        Button(action: {}) {
+            VStack(alignment: .leading, spacing: 18) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(theme.subtleFill))
+
+                Text(title)
+                    .font(.headline.weight(.semibold))
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, minHeight: 122, alignment: .topLeading)
+            .background(RoundedRectangle(cornerRadius: 18).fill(theme.card))
+            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(theme.border))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct WorkoutsFeatureCard: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let tint: Color
+    let theme: AppTheme
+
+    var body: some View {
+        Button(action: {}) {
+            HStack(spacing: 16) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 18)
+                        .fill(tint.opacity(0.14))
+
+                    Image(systemName: systemImage)
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundStyle(tint)
+                }
+                .frame(width: 84, height: 84)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(title)
+                        .font(.title3.weight(.semibold))
+                    Text(subtitle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(18)
+            .background(RoundedRectangle(cornerRadius: 20).fill(theme.card))
+            .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(theme.border))
+            .padding(.horizontal)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -183,23 +318,23 @@ private struct NutritionScreen: View {
     }
 
     private var caloriesCard: some View {
-        VStack(spacing: 18) {
-            Donut(progress: progress, lineWidth: 14, track: theme.ringTrack, gradient: theme.ringGradient)
-                .frame(width: 180, height: 180)
+        VStack(spacing: 14) {
+            Donut(progress: progress, lineWidth: 12, track: theme.ringTrack, gradient: theme.ringGradient)
+                .frame(width: 126, height: 126)
                 .overlay {
-                    VStack(spacing: 4) {
+                    VStack(spacing: 2) {
                         Text(consumedCalories.formatted(.number.grouping(.automatic)))
-                            .font(.system(size: 28, weight: .bold))
+                            .font(.system(size: 20, weight: .bold))
                         Text(AppLocalizer.format("nutrition.goal.value", userData?.calories ?? 0))
-                            .font(.subheadline)
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                         Text(AppLocalizer.format("nutrition.remaining.value", max((userData?.calories ?? 0) - consumedCalories, 0)))
-                            .font(.footnote)
+                            .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
                 }
 
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 NutritionMacroCard(
                     title: AppLocalizer.string("macro.protein"),
                     current: consumedProteins,
@@ -221,7 +356,7 @@ private struct NutritionScreen: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(20)
+        .padding(14)
         .background(RoundedRectangle(cornerRadius: 24).fill(theme.card))
         .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(theme.border))
         .padding(.horizontal)
@@ -313,18 +448,28 @@ private struct NutritionMacroCard: View {
     let target: Int
     let tint: Color
 
+    private var fraction: Double {
+        guard target > 0 else { return 0 }
+        return min(Double(current) / Double(target), 1)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 7) {
             Text(title)
-                .font(.caption.weight(.semibold))
+                .font(.caption2.weight(.semibold))
             Text(AppLocalizer.format("nutrition.macro.value", current, target))
-                .font(.subheadline.weight(.semibold))
-            RoundedRectangle(cornerRadius: 3)
-                .fill(tint)
-                .frame(width: 44, height: 5)
+                .font(.caption.weight(.semibold))
+            ThickProgressBar(
+                fraction: fraction,
+                fill: tint,
+                track: tint.opacity(0.16),
+                height: 4
+            )
+            .frame(height: 4)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
         .background(RoundedRectangle(cornerRadius: 16).fill(Color(.systemBackground)))
     }
 }
@@ -458,18 +603,6 @@ struct DashboardScreen: View {
                             title: AppLocalizer.string("training.diary"),
                             onOpen: onOpenWorkouts
                         )
-
-                        MealsSection(
-                            theme: theme,
-                            calories: (breakfastKcal, lunchKcal, dinnerKcal, snacksKcal),
-                            macros: (breakfastMacros, lunchMacros, dinnerMacros, snacksMacros),
-                            entries: (breakfastItems, lunchItems, dinnerItems, snacksItems),
-                            expanded: $expandedMeals,
-                            onTapMeal: { meal in sheet = .quick(meal) },
-                            onDeleteEntry: { entry in deleteEntry(entry) },
-                            onUpdateEntry: { _ in recalcFor(selectedDate) }
-                        )
-                        .padding(.horizontal)
                     } else {
                         ContentUnavailableView(
                             AppLocalizer.string("dashboard.no_user_data"),
@@ -764,20 +897,20 @@ struct TrainingDiaryCard: View {
 
     var body: some View {
         Button(action: onOpen) {
-            HStack(spacing: 14) {
+            HStack(spacing: 18) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 14)
                         .fill(theme.subtleFill)
 
                     Image(systemName: "dumbbell.fill")
-                        .font(.system(size: 28, weight: .medium))
+                        .font(.system(size: 36, weight: .medium))
                         .foregroundStyle(.secondary)
                 }
-                .frame(width: 72, height: 72)
+                .frame(width: 96, height: 96)
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(title)
-                        .font(.title3.weight(.semibold))
+                        .font(.title2.weight(.semibold))
                         .lineLimit(2)
                 }
 
@@ -786,7 +919,8 @@ struct TrainingDiaryCard: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .padding(16)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 24)
         .background(RoundedRectangle(cornerRadius: 16).fill(theme.card))
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(theme.border))
         .padding(.horizontal)
