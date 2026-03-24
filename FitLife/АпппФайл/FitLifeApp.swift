@@ -13,7 +13,11 @@ struct FitLifeApp: App {
             Product.self,
             CustomProduct.self,
             WaterIntake.self,
-            BodyMeasurements.self
+            BodyMeasurements.self,
+            WorkoutSession.self,
+            WorkoutExercise.self,
+            WorkoutSet.self,
+            CustomWorkoutExerciseTemplate.self
         ])
 
         #if DEBUG
