@@ -125,6 +125,7 @@
 "workout.select.exercise.library" = "Библиотека";
 "workout.select.exercise.saved" = "Мои упражнения";
 "workout.select.exercise.saved.subtitle" = "Сохранённый шаблон";
+"workout.select.exercise.search" = "Поиск упражнений";
 "workout.select.exercise.create.title" = "Создать упражнение";
 "workout.select.exercise.create.subtitle" = "Задай название, цвет и иконку.";
 "workout.select.exercise.custom.title" = "Свое упражнение";

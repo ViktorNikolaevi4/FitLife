@@ -125,6 +125,7 @@
 "workout.select.exercise.library" = "Library";
 "workout.select.exercise.saved" = "My Exercises";
 "workout.select.exercise.saved.subtitle" = "Saved template";
+"workout.select.exercise.search" = "Search exercises";
 "workout.select.exercise.create.title" = "Create Exercise";
 "workout.select.exercise.create.subtitle" = "Set a name, color, and icon.";
 "workout.select.exercise.custom.title" = "Custom exercise";
