@@ -505,6 +505,19 @@ private struct WorkoutExerciseSetupScreen: View {
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .navigationTitle(AppLocalizer.string("workout.setup.title"))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button(AppLocalizer.string("common.done")) {
+                    UIApplication.shared.sendAction(
+                        #selector(UIResponder.resignFirstResponder),
+                        to: nil,
+                        from: nil,
+                        for: nil
+                    )
+                }
+            }
+        }
     }
 
     private func addSet() {
@@ -534,6 +547,7 @@ private struct WorkoutDraftSetEditorRow: View {
 
     @State private var weightText: String
     @State private var repsText: String
+    @State private var activeEditor: Field?
     @FocusState private var focusedField: Field?
 
     init(
@@ -570,26 +584,34 @@ private struct WorkoutDraftSetEditorRow: View {
                 }
             }
 
-            HStack(spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
                 workoutValueEditor(
                     label: AppLocalizer.string("workout.setup.weight"),
-                    text: $weightText,
-                    suffix: "кг",
-                    keyboardType: .decimalPad,
                     field: .weight,
-                    onMinus: { updateWeight(by: -2.5) },
-                    onPlus: { updateWeight(by: 2.5) },
+                    displayValue: "\(weightText) кг",
+                    text: $weightText,
+                    keyboardType: .decimalPad,
+                    stepButtons: [
+                        (label: "-5", action: { updateWeight(by: -5) }),
+                        (label: "-2.5", action: { updateWeight(by: -2.5) }),
+                        (label: "+2.5", action: { updateWeight(by: 2.5) }),
+                        (label: "+5", action: { updateWeight(by: 5) })
+                    ],
                     onCommit: commitWeight
                 )
 
                 workoutValueEditor(
                     label: AppLocalizer.string("workout.setup.reps"),
-                    text: $repsText,
-                    suffix: nil,
-                    keyboardType: .numberPad,
                     field: .reps,
-                    onMinus: { updateReps(by: -1) },
-                    onPlus: { updateReps(by: 1) },
+                    displayValue: repsText,
+                    text: $repsText,
+                    keyboardType: .numberPad,
+                    stepButtons: [
+                        (label: "-2", action: { updateReps(by: -2) }),
+                        (label: "-1", action: { updateReps(by: -1) }),
+                        (label: "+1", action: { updateReps(by: 1) }),
+                        (label: "+2", action: { updateReps(by: 2) })
+                    ],
                     onCommit: commitReps
                 )
             }
@@ -604,25 +626,20 @@ private struct WorkoutDraftSetEditorRow: View {
                 repsText = "\(newValue.reps)"
             }
         }
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button(AppLocalizer.string("common.done")) {
-                    commitActiveField()
-                    focusedField = nil
-                }
-            }
+        .onChange(of: focusedField) { oldValue, newValue in
+            guard oldValue != newValue, let oldValue, newValue == nil else { return }
+            commit(field: oldValue)
         }
+        .animation(.easeInOut(duration: 0.18), value: activeEditor)
     }
 
     private func workoutValueEditor(
         label: String,
-        text: Binding<String>,
-        suffix: String?,
-        keyboardType: UIKeyboardType,
         field: Field,
-        onMinus: @escaping () -> Void,
-        onPlus: @escaping () -> Void,
+        displayValue: String,
+        text: Binding<String>,
+        keyboardType: UIKeyboardType,
+        stepButtons: [(label: String, action: () -> Void)],
         onCommit: @escaping () -> Void
     ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -630,46 +647,81 @@ private struct WorkoutDraftSetEditorRow: View {
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
 
-            HStack(spacing: 12) {
-                Button(action: onMinus) {
-                    Image(systemName: "minus")
-                        .font(.subheadline.weight(.bold))
-                        .frame(width: 32, height: 32)
-                        .background(Circle().fill(Color(.systemGray6)))
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    focusedField = nil
+                    activeEditor = activeEditor == field ? nil : field
                 }
-                .buttonStyle(.plain)
-
-                HStack(spacing: 4) {
-                    TextField("", text: text)
+            }) {
+                HStack(spacing: 8) {
+                    Text(displayValue)
                         .font(.headline.weight(.semibold))
-                        .keyboardType(keyboardType)
-                        .multilineTextAlignment(.center)
-                        .focused($focusedField, equals: field)
-                        .onSubmit(onCommit)
+                        .foregroundStyle(.primary)
 
-                    if let suffix {
-                        Text(suffix)
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
+
+                    Image(systemName: activeEditor == field ? "chevron.up" : "chevron.down")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(activeEditor == field ? Color.black.opacity(0.06) : Color(.systemGray6))
+                )
+            }
+            .buttonStyle(.plain)
+
+            if activeEditor == field {
+                VStack(spacing: 10) {
+                    HStack(spacing: 8) {
+                        ForEach(Array(stepButtons.enumerated()), id: \.offset) { _, button in
+                            Button(action: button.action) {
+                                Text(button.label)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.primary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color(.systemGray6))
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    HStack(spacing: 10) {
+                        TextField("", text: text)
+                            .font(.headline.weight(.semibold))
+                            .keyboardType(keyboardType)
+                            .multilineTextAlignment(.center)
+                            .focused($focusedField, equals: field)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(Color(.systemGray6))
+                            )
+                            .onSubmit(onCommit)
+
+                        Button(action: {
+                            focusedField = field
+                        }) {
+                            Image(systemName: "keyboard")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.primary)
+                                .frame(width: 44, height: 44)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .fill(Color(.systemGray6))
+                                )
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(.systemGray6))
-                )
-                .onTapGesture {
-                    focusedField = field
-                }
-
-                Button(action: onPlus) {
-                    Image(systemName: "plus")
-                        .font(.subheadline.weight(.bold))
-                        .frame(width: 32, height: 32)
-                        .background(Circle().fill(Color(.systemGray6)))
-                }
-                .buttonStyle(.plain)
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .frame(maxWidth: .infinity)
@@ -695,6 +747,15 @@ private struct WorkoutDraftSetEditorRow: View {
             commitReps()
         case nil:
             break
+        }
+    }
+
+    private func commit(field: Field) {
+        switch field {
+        case .weight:
+            commitWeight()
+        case .reps:
+            commitReps()
         }
     }
 
