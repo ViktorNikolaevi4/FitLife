@@ -6,6 +6,7 @@ import FirebaseCore
 @main
 struct FitLifeApp: App {
     @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
+    @StateObject private var sessionStore: AppSessionStore
 
     private let modelContainer: ModelContainer = {
         let schema = Schema([
@@ -56,6 +57,8 @@ struct FitLifeApp: App {
         if FirebaseApp.app() == nil {
             FirebaseApp.configure()
         }
+
+        _sessionStore = StateObject(wrappedValue: AppSessionStore())
     }
 
     var body: some Scene {
@@ -63,6 +66,7 @@ struct FitLifeApp: App {
             RootView()
                 .id(appLanguageRaw)
                 .environment(\.locale, AppLanguage.from(rawValue: appLanguageRaw).locale)
+                .environmentObject(sessionStore)
         }
             .modelContainer(modelContainer)
     }

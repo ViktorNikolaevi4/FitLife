@@ -98,6 +98,42 @@
 "common.select_date" = "Выберите дату";
 "common.add" = "Добавить";
 "common.cannot_undo" = "Это действие нельзя отменить.";
+"common.sign_out" = "Выйти";
+
+"auth.title" = "Вход в FitLife";
+"auth.subtitle" = "Войди или создай аккаунт, чтобы продолжить.";
+"auth.mode.sign_in" = "Вход";
+"auth.mode.sign_up" = "Регистрация";
+"auth.name" = "Имя";
+"auth.email" = "Email";
+"auth.password" = "Пароль";
+"auth.action.sign_in" = "Войти";
+"auth.action.sign_up" = "Создать аккаунт";
+
+"role.owner" = "Owner";
+"role.trainer" = "Тренер";
+"role.client" = "Клиент";
+
+"settings.account.section" = "Аккаунт";
+"settings.account.role" = "Роль";
+"settings.account.sign_out" = "Выйти";
+"settings.admin.section" = "Управление";
+"settings.admin.users" = "Пользователи";
+"settings.admin.links" = "Связи тренер-клиент";
+
+"admin.users.title" = "Пользователи";
+"admin.users.section" = "Все аккаунты";
+"admin.users.empty.title" = "Пока нет пользователей";
+"admin.users.empty.subtitle" = "Когда пользователи зарегистрируются, они появятся здесь.";
+"admin.users.current_user" = "Ты";
+"admin.links.title" = "Связи тренеров";
+"admin.links.section" = "Тренеры";
+"admin.links.empty.title" = "Пока нет тренеров";
+"admin.links.empty.subtitle" = "Назначь хотя бы одного пользователя тренером, чтобы управлять клиентами.";
+"admin.links.assigned_count" = "%d клиентов";
+"admin.links.clients_for" = "Клиенты для %@";
+"admin.links.clients.empty.title" = "Пока нет клиентов";
+"admin.links.clients.empty.subtitle" = "Когда клиенты зарегистрируются, они появятся здесь.";
 
 "data.not_found" = "Данные не найдены";
 "dashboard.no_user_data" = "Нет данных пользователя";

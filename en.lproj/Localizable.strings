@@ -98,6 +98,42 @@
 "common.select_date" = "Select Date";
 "common.add" = "Add";
 "common.cannot_undo" = "This action cannot be undone.";
+"common.sign_out" = "Sign Out";
+
+"auth.title" = "Sign In to FitLife";
+"auth.subtitle" = "Sign in or create an account to continue.";
+"auth.mode.sign_in" = "Sign In";
+"auth.mode.sign_up" = "Sign Up";
+"auth.name" = "Name";
+"auth.email" = "Email";
+"auth.password" = "Password";
+"auth.action.sign_in" = "Sign In";
+"auth.action.sign_up" = "Create Account";
+
+"role.owner" = "Owner";
+"role.trainer" = "Trainer";
+"role.client" = "Client";
+
+"settings.account.section" = "Account";
+"settings.account.role" = "Role";
+"settings.account.sign_out" = "Sign Out";
+"settings.admin.section" = "Admin";
+"settings.admin.users" = "Users";
+"settings.admin.links" = "Trainer-Client Links";
+
+"admin.users.title" = "Users";
+"admin.users.section" = "All Accounts";
+"admin.users.empty.title" = "No users yet";
+"admin.users.empty.subtitle" = "Users will appear here after registration.";
+"admin.users.current_user" = "You";
+"admin.links.title" = "Trainer Links";
+"admin.links.section" = "Trainers";
+"admin.links.empty.title" = "No trainers yet";
+"admin.links.empty.subtitle" = "Promote at least one user to trainer to manage clients.";
+"admin.links.assigned_count" = "%d clients";
+"admin.links.clients_for" = "Clients for %@";
+"admin.links.clients.empty.title" = "No clients yet";
+"admin.links.clients.empty.subtitle" = "Clients will appear here after registration.";
 
 "data.not_found" = "Data not found";
 "dashboard.no_user_data" = "No user data";

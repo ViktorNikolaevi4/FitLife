@@ -5,6 +5,8 @@ import StoreKit
 // MARK: - Settings
 
 struct SettingsScreen: View {
+    @EnvironmentObject private var sessionStore: AppSessionStore
+
     // заполни под себя
     private let appStoreID = "1234567890"                                       // ← твой App Store ID
     private let shareURL   = URL(string: "https://apps.apple.com/app/id1234567890")!
@@ -26,6 +28,57 @@ struct SettingsScreen: View {
 
                 Section {
                     CloudStatusRow()
+                }
+
+                if let firebaseUser = sessionStore.firebaseUser {
+                    Section(appLanguage.localized("settings.account.section")) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(sessionStore.profile?.displayName ?? firebaseUser.displayName ?? "FitLife User")
+                                .font(.headline)
+                            Text(sessionStore.profile?.email ?? firebaseUser.email ?? "")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        if let role = sessionStore.profile?.role {
+                            HStack {
+                                Text(appLanguage.localized("settings.account.role"))
+                                Spacer()
+                                Text(AppLocalizer.string(role.localizationKey))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        Button(role: .destructive) {
+                            sessionStore.signOut()
+                        } label: {
+                            Text(appLanguage.localized("settings.account.sign_out"))
+                        }
+                    }
+                }
+
+                if sessionStore.currentRole == .owner {
+                    Section(appLanguage.localized("settings.admin.section")) {
+                        NavigationLink {
+                            AdminUsersScreen()
+                        } label: {
+                            SettingsRow(
+                                icon: "person.3.fill",
+                                iconBg: .indigo,
+                                title: appLanguage.localized("settings.admin.users")
+                            )
+                        }
+
+                        NavigationLink {
+                            TrainerClientLinksScreen()
+                        } label: {
+                            SettingsRow(
+                                icon: "link",
+                                iconBg: .teal,
+                                title: appLanguage.localized("settings.admin.links")
+                            )
+                        }
+                    }
                 }
 
                 Section(appLanguage.localized("settings.language.section")) {
