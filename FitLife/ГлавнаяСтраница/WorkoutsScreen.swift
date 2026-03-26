@@ -8,6 +8,7 @@ struct WorkoutsScreen: View {
     @AppStorage(Gender.appStorageKey) private var activeGenderRaw: String = Gender.male.rawValue
 
     @State private var selectedWorkout: WorkoutSession?
+    @State private var selectedLastWorkout: LastWorkoutSelection?
 
     private var theme: AppTheme { AppTheme(colorScheme) }
     private var selectedGender: Gender { Gender(rawValue: activeGenderRaw) ?? .male }
@@ -58,7 +59,7 @@ struct WorkoutsScreen: View {
                         systemImage: "figure.strengthtraining.traditional",
                         tint: .orange,
                         theme: theme,
-                        action: {}
+                        action: openLastWorkout
                     )
 
                     WorkoutsFeatureCard(
@@ -97,6 +98,9 @@ struct WorkoutsScreen: View {
             .navigationDestination(item: $selectedWorkout) { workout in
                 ActiveWorkoutScreen(workout: workout)
             }
+            .navigationDestination(item: $selectedLastWorkout) { selection in
+                LastWorkoutScreen(workout: selection.workout)
+            }
         }
     }
 
@@ -121,6 +125,24 @@ struct WorkoutsScreen: View {
         modelContext.insert(workout)
         try? modelContext.save()
         selectedWorkout = workout
+    }
+
+    private func openLastWorkout() {
+        guard let lastWorkout else { return }
+        selectedLastWorkout = LastWorkoutSelection(workout: lastWorkout)
+    }
+}
+
+private struct LastWorkoutSelection: Identifiable, Hashable {
+    let workout: WorkoutSession
+    var id: UUID { workout.id }
+
+    static func == (lhs: LastWorkoutSelection, rhs: LastWorkoutSelection) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
     }
 }
 
@@ -195,5 +217,303 @@ private struct WorkoutsFeatureCard: View {
             .padding(.horizontal)
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct LastWorkoutScreen: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let workout: WorkoutSession
+    @State private var expandedExerciseIDs: Set<UUID> = []
+
+    private var sortedExercises: [WorkoutExercise] {
+        workout.exercises.sorted { $0.orderIndex < $1.orderIndex }
+    }
+
+    private var completedSets: Int {
+        sortedExercises.flatMap(\.sets).filter(\.isCompleted).count
+    }
+
+    private var totalSets: Int {
+        sortedExercises.flatMap(\.sets).count
+    }
+
+    private var formattedDate: String {
+        let formatter = DateFormatter()
+        formatter.locale = .current
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: workout.endedAt ?? workout.createdAt)
+    }
+
+    private var durationText: String {
+        let totalMinutes = workout.elapsedSeconds / 60
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+
+        if hours > 0 {
+            return "\(hours)ч \(minutes)м"
+        }
+        return "\(max(1, minutes)) мин"
+    }
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 16) {
+                header
+                summaryCard
+
+                if sortedExercises.isEmpty {
+                    emptyCard
+                } else {
+                    LazyVStack(spacing: 14) {
+                        ForEach(sortedExercises, id: \.id) { exercise in
+                            LastWorkoutExerciseCard(
+                                exercise: exercise,
+                                isExpanded: expandedExerciseIDs.contains(exercise.id),
+                                onToggleExpanded: { toggleExpanded(exercise.id) }
+                            )
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal)
+            .padding(.top, 16)
+            .padding(.bottom, 32)
+        }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
+        .toolbar(.hidden, for: .tabBar)
+        .navigationBarBackButtonHidden(true)
+    }
+
+    private var header: some View {
+        HStack {
+            Button(action: { dismiss() }) {
+                Image(systemName: "chevron.left")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(Color.white))
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            Text(AppLocalizer.string("workouts.last"))
+                .font(.headline.weight(.semibold))
+
+            Spacer()
+
+            Color.clear
+                .frame(width: 40, height: 40)
+        }
+    }
+
+    private var summaryCard: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .top, spacing: 16) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 28)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.orange.opacity(0.26),
+                                    Color.yellow.opacity(0.14),
+                                    Color.red.opacity(0.10)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+
+                    Image(systemName: "flame.fill")
+                        .font(.system(size: 30, weight: .semibold))
+                        .foregroundStyle(Color.orange)
+                }
+                .frame(width: 76, height: 88)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(AppLocalizer.string("workouts.last").uppercased())
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.secondary)
+                        .tracking(1.1)
+
+                    Text(formattedDate)
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary)
+
+                    Text(AppLocalizer.format("workouts.last.summary", sortedExercises.count, completedSets))
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                }
+
+                Spacer()
+            }
+
+            HStack(spacing: 12) {
+                workoutStatCard(
+                    title: AppLocalizer.string("workout.last.duration"),
+                    value: durationText
+                )
+                workoutStatCard(
+                    title: AppLocalizer.string("workout.last.exercises"),
+                    value: "\(sortedExercises.count)"
+                )
+                workoutStatCard(
+                    title: AppLocalizer.string("workout.last.completed"),
+                    value: "\(completedSets)/\(totalSets)"
+                )
+            }
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 28)
+                .fill(Color.white)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 28)
+                .strokeBorder(Color.black.opacity(0.05))
+        )
+    }
+
+    private func toggleExpanded(_ id: UUID) {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            if expandedExerciseIDs.contains(id) {
+                expandedExerciseIDs.remove(id)
+            } else {
+                expandedExerciseIDs.insert(id)
+            }
+        }
+    }
+
+    private func workoutStatCard(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+
+            Text(value)
+                .font(.title3.weight(.bold))
+                .foregroundStyle(.primary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 18).fill(Color(.systemGray6)))
+    }
+
+    private var emptyCard: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "dumbbell.fill")
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundStyle(.secondary)
+
+            Text(AppLocalizer.string("workout.last.empty.title"))
+                .font(.headline.weight(.semibold))
+
+            Text(AppLocalizer.string("workout.last.empty.subtitle"))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 32)
+        .background(RoundedRectangle(cornerRadius: 24).fill(Color.white))
+    }
+}
+
+private struct LastWorkoutExerciseCard: View {
+    let exercise: WorkoutExercise
+    let isExpanded: Bool
+    let onToggleExpanded: () -> Void
+
+    private var sortedSets: [WorkoutSet] {
+        exercise.sets.sorted { $0.orderIndex < $1.orderIndex }
+    }
+
+    private var completedCount: Int {
+        sortedSets.filter(\.isCompleted).count
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: onToggleExpanded) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(workoutAccentColor(exercise.accentName).opacity(0.14))
+
+                        Image(systemName: exercise.systemImage)
+                            .font(.system(size: 19, weight: .semibold))
+                            .foregroundStyle(workoutAccentColor(exercise.accentName))
+                    }
+                    .frame(width: 48, height: 48)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(exercise.name)
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                        Text(AppLocalizer.format("workout.exercise.summary", sortedSets.count, completedCount))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(16)
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded {
+                VStack(spacing: 10) {
+                    ForEach(sortedSets, id: \.id) { set in
+                        HStack(spacing: 12) {
+                            Text(AppLocalizer.format("workout.set.number", set.orderIndex + 1))
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 26, alignment: .leading)
+
+                            Text(AppLocalizer.format("workout.set.value", formattedWeight(set.weight), set.reps))
+                                .font(.body.weight(.medium))
+                                .foregroundStyle(.primary)
+
+                            Spacer()
+
+                            Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(set.isCompleted ? Color.green : .secondary)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(Color(.systemGray6))
+                        )
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .background(RoundedRectangle(cornerRadius: 22).fill(Color.white))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22)
+                .strokeBorder(Color.black.opacity(0.05))
+        )
+    }
+
+    private func formattedWeight(_ weight: Double) -> String {
+        if weight.rounded() == weight {
+            return String(Int(weight))
+        }
+        return String(format: "%.1f", weight)
     }
 }

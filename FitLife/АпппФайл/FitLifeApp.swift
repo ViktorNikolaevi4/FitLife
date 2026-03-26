@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import Foundation
+import FirebaseCore
 
 @main
 struct FitLifeApp: App {
@@ -50,6 +51,12 @@ struct FitLifeApp: App {
             return try! ModelContainer(for: schema, configurations: local)
         }
     }()
+
+    init() {
+        if FirebaseApp.app() == nil {
+            FirebaseApp.configure()
+        }
+    }
 
     var body: some Scene {
         WindowGroup {

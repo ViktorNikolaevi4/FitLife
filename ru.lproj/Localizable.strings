@@ -109,6 +109,11 @@
 "workouts.last" = "Прошлая тренировка";
 "workouts.last.subtitle" = "Посмотри последнее занятие и вернись к своим результатам.";
 "workouts.last.summary" = "%d упражнений • %d выполнено";
+"workout.last.duration" = "Длительность";
+"workout.last.exercises" = "Упражнения";
+"workout.last.completed" = "Подходы";
+"workout.last.empty.title" = "Нет завершённой тренировки";
+"workout.last.empty.subtitle" = "Заверши хотя бы одну тренировку, чтобы увидеть её здесь.";
 "workouts.new" = "Новая тренировка";
 "workouts.new.subtitle" = "Собери новую сессию и начни дневник сегодняшней активности.";
 "workouts.new.resume" = "Продолжить текущую тренировку";
