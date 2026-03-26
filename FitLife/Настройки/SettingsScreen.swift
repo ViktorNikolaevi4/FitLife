@@ -81,6 +81,56 @@ struct SettingsScreen: View {
                     }
                 }
 
+                if sessionStore.currentRole == .trainer,
+                   let trainerId = sessionStore.firebaseUser?.uid {
+                    Section(appLanguage.localized("settings.trainer.section")) {
+                        NavigationLink {
+                            TrainerAssignedClientsScreen(trainerId: trainerId)
+                        } label: {
+                            SettingsRow(
+                                icon: "person.2.fill",
+                                iconBg: .green,
+                                title: appLanguage.localized("settings.trainer.clients")
+                            )
+                        }
+
+                        NavigationLink {
+                            WorkoutTemplatesScreen(trainerId: trainerId)
+                        } label: {
+                            SettingsRow(
+                                icon: "doc.text.fill",
+                                iconBg: .orange,
+                                title: appLanguage.localized("settings.trainer.templates")
+                            )
+                        }
+
+                        NavigationLink {
+                            TrainerAssignmentsOverviewScreen(trainerId: trainerId)
+                        } label: {
+                            SettingsRow(
+                                icon: "list.bullet.clipboard",
+                                iconBg: .pink,
+                                title: appLanguage.localized("settings.trainer.assignments")
+                            )
+                        }
+                    }
+                }
+
+                if sessionStore.currentRole == .client,
+                   let clientId = sessionStore.firebaseUser?.uid {
+                    Section(appLanguage.localized("settings.client.section")) {
+                        NavigationLink {
+                            ClientAssignedWorkoutsScreen(clientId: clientId)
+                        } label: {
+                            SettingsRow(
+                                icon: "list.bullet.clipboard",
+                                iconBg: .pink,
+                                title: appLanguage.localized("settings.client.assignments")
+                            )
+                        }
+                    }
+                }
+
                 Section(appLanguage.localized("settings.language.section")) {
                     Picker(
                         appLanguage.localized("settings.language.label"),

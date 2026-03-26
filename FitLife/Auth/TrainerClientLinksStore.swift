@@ -140,3 +140,53 @@ final class TrainerClientsStore: ObservableObject {
         }
     }
 }
+
+@MainActor
+final class TrainerAssignedClientsStore: ObservableObject {
+    @Published private(set) var clients: [AppUserProfile] = []
+    @Published private(set) var isLoading = false
+    @Published var errorMessage: String?
+
+    private let trainerId: String
+    private let firestore: Firestore
+
+    init(trainerId: String, firestore: Firestore = .firestore()) {
+        self.trainerId = trainerId
+        self.firestore = firestore
+    }
+
+    func load() async {
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            let linksSnapshot = try await firestore
+                .collection("trainer_client_links")
+                .whereField("trainerId", isEqualTo: trainerId)
+                .whereField("status", isEqualTo: "active")
+                .getDocuments()
+
+            let clientIds = linksSnapshot.documents.compactMap { document in
+                TrainerClientLink(id: document.documentID, data: document.data())?.clientId
+            }
+
+            var loadedClients: [AppUserProfile] = []
+            for clientId in clientIds {
+                let snapshot = try await firestore.collection("users").document(clientId).getDocument()
+                guard let data = snapshot.data(),
+                      let profile = AppUserProfile(id: snapshot.documentID, data: data) else {
+                    continue
+                }
+                loadedClients.append(profile)
+            }
+
+            clients = loadedClients.sorted {
+                $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+            }
+            isLoading = false
+        } catch {
+            errorMessage = error.localizedDescription
+            isLoading = false
+        }
+    }
+}

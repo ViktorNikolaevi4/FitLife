@@ -10,16 +10,35 @@ final class WorkoutSession {
     var gender: Gender = FitLife.Gender.male
     var elapsedSeconds: Int = 0
     var isTimerRunning: Bool = false
+    var remoteAssignmentId: String?
+    var remoteTrainerId: String?
+    var remoteClientId: String?
+    var source: String?
 
     @Relationship(deleteRule: .cascade, inverse: \WorkoutExercise.session) var exercises: [WorkoutExercise] = []
 
-    init(createdAt: Date = .now, endedAt: Date? = nil, title: String, gender: Gender, elapsedSeconds: Int = 0, isTimerRunning: Bool = false) {
+    init(
+        createdAt: Date = .now,
+        endedAt: Date? = nil,
+        title: String,
+        gender: Gender,
+        elapsedSeconds: Int = 0,
+        isTimerRunning: Bool = false,
+        remoteAssignmentId: String? = nil,
+        remoteTrainerId: String? = nil,
+        remoteClientId: String? = nil,
+        source: String? = nil
+    ) {
         self.createdAt = createdAt
         self.endedAt = endedAt
         self.title = title
         self.gender = gender
         self.elapsedSeconds = elapsedSeconds
         self.isTimerRunning = isTimerRunning
+        self.remoteAssignmentId = remoteAssignmentId
+        self.remoteTrainerId = remoteTrainerId
+        self.remoteClientId = remoteClientId
+        self.source = source
     }
 }
 

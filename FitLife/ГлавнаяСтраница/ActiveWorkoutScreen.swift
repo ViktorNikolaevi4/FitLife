@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import FirebaseFirestore
 
 struct ActiveWorkoutScreen: View {
     @Environment(\.dismiss) private var dismiss
@@ -7,6 +8,7 @@ struct ActiveWorkoutScreen: View {
 
     let workout: WorkoutSession
     @State private var isShowingExercisePicker = false
+    private let firestore = Firestore.firestore()
 
     private var sortedExercises: [WorkoutExercise] {
         workout.exercises.sorted { $0.orderIndex < $1.orderIndex }
@@ -78,7 +80,7 @@ struct ActiveWorkoutScreen: View {
         }
         .sheet(isPresented: $isShowingExercisePicker) {
             AddWorkoutExerciseScreen(
-                templates: exerciseTemplates(),
+                templates: workoutTemplates(),
                 onAddExercise: { draft in
                     addExercise(draft: draft)
                     isShowingExercisePicker = false
@@ -242,47 +244,6 @@ struct ActiveWorkoutScreen: View {
         try? modelContext.save()
     }
 
-    private func exerciseTemplates() -> [WorkoutExerciseTemplate] {
-        [
-            WorkoutExerciseTemplate(
-                name: AppLocalizer.string("workout.exercise.bench"),
-                systemImage: "figure.strengthtraining.traditional",
-                accentName: "blue",
-                defaultSets: [(60, 12), (65, 10), (70, 8)]
-            ),
-            WorkoutExerciseTemplate(
-                name: AppLocalizer.string("workout.exercise.row"),
-                systemImage: "dumbbell.fill",
-                accentName: "orange",
-                defaultSets: [(40, 12), (45, 10), (50, 8)]
-            ),
-            WorkoutExerciseTemplate(
-                name: AppLocalizer.string("workout.exercise.press"),
-                systemImage: "figure.arms.open",
-                accentName: "purple",
-                defaultSets: [(18, 12), (18, 10), (20, 8)]
-            ),
-            WorkoutExerciseTemplate(
-                name: AppLocalizer.string("workout.exercise.lat"),
-                systemImage: "figure.mixed.cardio",
-                accentName: "green",
-                defaultSets: [(35, 12), (40, 10), (45, 8)]
-            ),
-            WorkoutExerciseTemplate(
-                name: AppLocalizer.string("workout.exercise.legs"),
-                systemImage: "figure.run.square.stack",
-                accentName: "orange",
-                defaultSets: [(80, 12), (90, 10), (100, 8)]
-            ),
-            WorkoutExerciseTemplate(
-                name: AppLocalizer.string("workout.exercise.core"),
-                systemImage: "figure.core.training",
-                accentName: "blue",
-                defaultSets: [(0, 20), (0, 18), (0, 15)]
-            )
-        ]
-    }
-
     private func toggleTimer() {
         workout.isTimerRunning.toggle()
         try? modelContext.save()
@@ -308,6 +269,18 @@ struct ActiveWorkoutScreen: View {
         workout.isTimerRunning = false
         workout.endedAt = Date()
         try? modelContext.save()
+        syncCompletedAssignmentIfNeeded()
         dismiss()
+    }
+
+    private func syncCompletedAssignmentIfNeeded() {
+        guard let assignmentId = workout.remoteAssignmentId else { return }
+
+        Task {
+            try? await firestore
+                .collection("workout_assignments")
+                .document(assignmentId)
+                .setData(["status": WorkoutAssignmentStatus.completed.rawValue], merge: true)
+        }
     }
 }
