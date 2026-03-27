@@ -189,6 +189,8 @@
 "workouts.placeholder" = "The workouts screen is still under development.";
 "workouts.diary.title" = "Workout Diary";
 "workouts.history" = "Past Session History";
+"workouts.history.empty.title" = "No completed workouts yet";
+"workouts.history.empty.subtitle" = "Finish at least one workout to see it in your history.";
 "workouts.templates" = "Workout Program Templates";
 "workouts.last" = "Last Workout";
 "workouts.last.subtitle" = "Review your latest session and jump back into your results.";
@@ -198,6 +200,7 @@
 "workout.last.completed" = "Sets";
 "workout.last.empty.title" = "No completed workout";
 "workout.last.empty.subtitle" = "Finish at least one workout to see it here.";
+"workout.detail.title" = "Workout Details";
 "workouts.new" = "New Workout";
 "workouts.new.subtitle" = "Build a fresh session and start today's training log.";
 "workouts.new.resume" = "Resume current workout";

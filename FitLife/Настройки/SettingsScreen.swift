@@ -116,21 +116,6 @@ struct SettingsScreen: View {
                     }
                 }
 
-                if sessionStore.currentRole == .client,
-                   let clientId = sessionStore.firebaseUser?.uid {
-                    Section(appLanguage.localized("settings.client.section")) {
-                        NavigationLink {
-                            ClientAssignedWorkoutsScreen(clientId: clientId)
-                        } label: {
-                            SettingsRow(
-                                icon: "list.bullet.clipboard",
-                                iconBg: .pink,
-                                title: appLanguage.localized("settings.client.assignments")
-                            )
-                        }
-                    }
-                }
-
                 Section(appLanguage.localized("settings.language.section")) {
                     Picker(
                         appLanguage.localized("settings.language.label"),

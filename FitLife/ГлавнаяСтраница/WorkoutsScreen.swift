@@ -11,6 +11,7 @@ struct WorkoutsScreen: View {
     @State private var selectedWorkout: WorkoutSession?
     @State private var selectedLastWorkout: LastWorkoutSelection?
     @State private var onlineAssignments: OnlineAssignmentsSelection?
+    @State private var historySelection: WorkoutHistorySelection?
 
     private var theme: AppTheme { AppTheme(colorScheme) }
     private var selectedGender: Gender { Gender(rawValue: activeGenderRaw) ?? .male }
@@ -43,7 +44,7 @@ struct WorkoutsScreen: View {
                             title: AppLocalizer.string("workouts.history"),
                             systemImage: "clock.arrow.circlepath",
                             theme: theme,
-                            action: {}
+                            action: openHistory
                         )
 
                         WorkoutsShortcutCard(
@@ -115,10 +116,13 @@ struct WorkoutsScreen: View {
                 ActiveWorkoutScreen(workout: workout)
             }
             .navigationDestination(item: $selectedLastWorkout) { selection in
-                LastWorkoutScreen(workout: selection.workout)
+                WorkoutDetailScreen(workout: selection.workout)
             }
             .navigationDestination(item: $onlineAssignments) { selection in
                 ClientAssignedWorkoutsScreen(clientId: selection.clientId)
+            }
+            .navigationDestination(item: $historySelection) { selection in
+                WorkoutHistoryScreen(gender: selection.gender)
             }
         }
     }
@@ -150,6 +154,10 @@ struct WorkoutsScreen: View {
         guard let lastWorkout else { return }
         selectedLastWorkout = LastWorkoutSelection(workout: lastWorkout)
     }
+
+    private func openHistory() {
+        historySelection = WorkoutHistorySelection(gender: selectedGender)
+    }
 }
 
 private struct LastWorkoutSelection: Identifiable, Hashable {
@@ -168,6 +176,11 @@ private struct LastWorkoutSelection: Identifiable, Hashable {
 private struct OnlineAssignmentsSelection: Identifiable, Hashable {
     let clientId: String
     var id: String { clientId }
+}
+
+private struct WorkoutHistorySelection: Identifiable, Hashable {
+    let gender: Gender
+    var id: String { gender.rawValue }
 }
 
 private struct WorkoutsShortcutCard: View {
@@ -244,7 +257,162 @@ private struct WorkoutsFeatureCard: View {
     }
 }
 
-private struct LastWorkoutScreen: View {
+private struct WorkoutHistoryScreen: View {
+    @Environment(\.dismiss) private var dismiss
+    @Query private var workouts: [WorkoutSession]
+
+    let gender: Gender
+
+    private var completedWorkouts: [WorkoutSession] {
+        workouts
+            .filter { $0.gender == gender && $0.endedAt != nil }
+            .sorted { ($0.endedAt ?? .distantPast) > ($1.endedAt ?? .distantPast) }
+    }
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 16) {
+                historyHeader
+
+                if completedWorkouts.isEmpty {
+                    ContentUnavailableView(
+                        AppLocalizer.string("workouts.history.empty.title"),
+                        systemImage: "clock.arrow.circlepath",
+                        description: Text(AppLocalizer.string("workouts.history.empty.subtitle"))
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 40)
+                } else {
+                    LazyVStack(spacing: 14) {
+                        ForEach(completedWorkouts, id: \.id) { workout in
+                            NavigationLink {
+                                WorkoutDetailScreen(workout: workout)
+                            } label: {
+                                WorkoutHistoryRow(workout: workout)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal)
+            .padding(.top, 16)
+            .padding(.bottom, 32)
+        }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
+        .toolbar(.hidden, for: .tabBar)
+        .navigationBarBackButtonHidden(true)
+    }
+
+    private var historyHeader: some View {
+        HStack {
+            Button(action: { dismiss() }) {
+                Image(systemName: "chevron.left")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(Color.white))
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            Text(AppLocalizer.string("workouts.history"))
+                .font(.headline.weight(.semibold))
+
+            Spacer()
+
+            Color.clear
+                .frame(width: 40, height: 40)
+        }
+    }
+}
+
+private struct WorkoutHistoryRow: View {
+    let workout: WorkoutSession
+
+    private var exerciseCount: Int {
+        workout.exercises.count
+    }
+
+    private var completedSets: Int {
+        workout.exercises.flatMap(\.sets).filter(\.isCompleted).count
+    }
+
+    private var formattedDate: String {
+        let formatter = DateFormatter()
+        formatter.locale = .current
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: workout.endedAt ?? workout.createdAt)
+    }
+
+    private var durationText: String {
+        let totalMinutes = workout.elapsedSeconds / 60
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+
+        if hours > 0 {
+            return "\(hours)ч \(minutes)м"
+        }
+        return "\(max(1, minutes)) мин"
+    }
+
+    var body: some View {
+        HStack(spacing: 16) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.blue.opacity(0.16),
+                                Color.cyan.opacity(0.10)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(Color.blue)
+            }
+            .frame(width: 64, height: 78)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(workout.title)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+
+                Text(formattedDate)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                Text(AppLocalizer.format("workouts.last.summary", exerciseCount, completedSets))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 6) {
+                Text(durationText)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(18)
+        .background(RoundedRectangle(cornerRadius: 20).fill(Color.white))
+        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Color.black.opacity(0.05)))
+    }
+}
+
+private struct WorkoutDetailScreen: View {
     @Environment(\.dismiss) private var dismiss
 
     let workout: WorkoutSession
@@ -324,7 +492,7 @@ private struct LastWorkoutScreen: View {
 
             Spacer()
 
-            Text(AppLocalizer.string("workouts.last"))
+            Text(AppLocalizer.string("workout.detail.title"))
                 .font(.headline.weight(.semibold))
 
             Spacer()
