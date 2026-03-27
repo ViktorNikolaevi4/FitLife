@@ -4,11 +4,13 @@ import SwiftData
 struct WorkoutsScreen: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
+    @EnvironmentObject private var sessionStore: AppSessionStore
     @Query private var workouts: [WorkoutSession]
     @AppStorage(Gender.appStorageKey) private var activeGenderRaw: String = Gender.male.rawValue
 
     @State private var selectedWorkout: WorkoutSession?
     @State private var selectedLastWorkout: LastWorkoutSelection?
+    @State private var onlineAssignments: OnlineAssignmentsSelection?
 
     private var theme: AppTheme { AppTheme(colorScheme) }
     private var selectedGender: Gender { Gender(rawValue: activeGenderRaw) ?? .male }
@@ -73,6 +75,20 @@ struct WorkoutsScreen: View {
                         action: openActiveWorkout
                     )
 
+                    if sessionStore.currentRole == .client,
+                       let clientId = sessionStore.firebaseUser?.uid {
+                        WorkoutsFeatureCard(
+                            title: AppLocalizer.string("workouts.online"),
+                            subtitle: AppLocalizer.string("workouts.online.subtitle"),
+                            systemImage: "list.bullet.clipboard.fill",
+                            tint: .pink,
+                            theme: theme,
+                            action: {
+                                onlineAssignments = OnlineAssignmentsSelection(clientId: clientId)
+                            }
+                        )
+                    }
+
                     Button(action: {}) {
                         HStack {
                             Text(AppLocalizer.string("workouts.weekly.activity"))
@@ -100,6 +116,9 @@ struct WorkoutsScreen: View {
             }
             .navigationDestination(item: $selectedLastWorkout) { selection in
                 LastWorkoutScreen(workout: selection.workout)
+            }
+            .navigationDestination(item: $onlineAssignments) { selection in
+                ClientAssignedWorkoutsScreen(clientId: selection.clientId)
             }
         }
     }
@@ -144,6 +163,11 @@ private struct LastWorkoutSelection: Identifiable, Hashable {
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }
+}
+
+private struct OnlineAssignmentsSelection: Identifiable, Hashable {
+    let clientId: String
+    var id: String { clientId }
 }
 
 private struct WorkoutsShortcutCard: View {
