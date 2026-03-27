@@ -262,10 +262,14 @@ private struct WorkoutHistoryScreen: View {
     @Query private var workouts: [WorkoutSession]
 
     let gender: Gender
+    @State private var selectedRange: WorkoutHistoryRange = .allTime
+    @State private var customStartDate = Calendar.current.date(byAdding: .month, value: -1, to: .now) ?? .now
+    @State private var customEndDate = Date()
 
     private var completedWorkouts: [WorkoutSession] {
         workouts
             .filter { $0.gender == gender && $0.endedAt != nil }
+            .filter(isWorkoutInSelectedRange)
             .sorted { ($0.endedAt ?? .distantPast) > ($1.endedAt ?? .distantPast) }
     }
 
@@ -273,6 +277,7 @@ private struct WorkoutHistoryScreen: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 16) {
                 historyHeader
+                historyFilters
 
                 if completedWorkouts.isEmpty {
                     ContentUnavailableView(
@@ -305,6 +310,87 @@ private struct WorkoutHistoryScreen: View {
         .navigationBarBackButtonHidden(true)
     }
 
+    private var historyFilters: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                ForEach(WorkoutHistoryRange.primaryCases) { range in
+                    Button {
+                        selectedRange = range
+                    } label: {
+                        Text(AppLocalizer.string(range.localizationKey))
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(
+                                Capsule()
+                                    .fill(selectedRange == range ? Color.blue : Color.white)
+                            )
+                            .foregroundStyle(selectedRange == range ? Color.white : Color.primary)
+                            .overlay(
+                                Capsule()
+                                    .strokeBorder(Color.black.opacity(selectedRange == range ? 0 : 0.08))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Menu {
+                    ForEach(WorkoutHistoryRange.secondaryCases) { range in
+                        Button {
+                            selectedRange = range
+                        } label: {
+                            if selectedRange == range {
+                                Label(AppLocalizer.string(range.localizationKey), systemImage: "checkmark")
+                            } else {
+                                Text(AppLocalizer.string(range.localizationKey))
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(AppLocalizer.string("workouts.history.range.more"))
+                            .font(.subheadline.weight(.semibold))
+                        Image(systemName: "chevron.down")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(
+                        Capsule()
+                            .fill(WorkoutHistoryRange.secondaryCases.contains(selectedRange) ? Color.blue : Color.white)
+                    )
+                    .foregroundStyle(WorkoutHistoryRange.secondaryCases.contains(selectedRange) ? Color.white : Color.primary)
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(Color.black.opacity(WorkoutHistoryRange.secondaryCases.contains(selectedRange) ? 0 : 0.08))
+                    )
+                }
+            }
+
+            if selectedRange == .custom {
+                VStack(spacing: 12) {
+                    DatePicker(
+                        AppLocalizer.string("workouts.history.custom.start"),
+                        selection: $customStartDate,
+                        in: ...customEndDate,
+                        displayedComponents: .date
+                    )
+
+                    DatePicker(
+                        AppLocalizer.string("workouts.history.custom.end"),
+                        selection: $customEndDate,
+                        in: customStartDate...Date(),
+                        displayedComponents: .date
+                    )
+                }
+                .font(.subheadline)
+                .padding(16)
+                .background(RoundedRectangle(cornerRadius: 18).fill(Color.white))
+                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Color.black.opacity(0.05)))
+            }
+        }
+    }
+
     private var historyHeader: some View {
         HStack {
             Button(action: { dismiss() }) {
@@ -325,6 +411,57 @@ private struct WorkoutHistoryScreen: View {
 
             Color.clear
                 .frame(width: 40, height: 40)
+        }
+    }
+
+    private func isWorkoutInSelectedRange(_ workout: WorkoutSession) -> Bool {
+        let referenceDate = workout.endedAt ?? workout.createdAt
+        let calendar = Calendar.current
+
+        switch selectedRange {
+        case .week:
+            return referenceDate >= (calendar.date(byAdding: .day, value: -7, to: .now) ?? .distantPast)
+        case .month:
+            return referenceDate >= (calendar.date(byAdding: .month, value: -1, to: .now) ?? .distantPast)
+        case .threeMonths:
+            return referenceDate >= (calendar.date(byAdding: .month, value: -3, to: .now) ?? .distantPast)
+        case .halfYear:
+            return referenceDate >= (calendar.date(byAdding: .month, value: -6, to: .now) ?? .distantPast)
+        case .year:
+            return referenceDate >= (calendar.date(byAdding: .year, value: -1, to: .now) ?? .distantPast)
+        case .allTime:
+            return true
+        case .custom:
+            let start = calendar.startOfDay(for: customStartDate)
+            let end = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: customEndDate) ?? customEndDate
+            return referenceDate >= start && referenceDate <= end
+        }
+    }
+}
+
+private enum WorkoutHistoryRange: String, CaseIterable, Identifiable {
+    case week
+    case month
+    case threeMonths
+    case halfYear
+    case year
+    case allTime
+    case custom
+
+    var id: String { rawValue }
+
+    static let primaryCases: [WorkoutHistoryRange] = [.week, .month, .threeMonths]
+    static let secondaryCases: [WorkoutHistoryRange] = [.halfYear, .year, .allTime, .custom]
+
+    var localizationKey: String {
+        switch self {
+        case .week: return "workouts.history.range.week"
+        case .month: return "workouts.history.range.month"
+        case .threeMonths: return "workouts.history.range.three_months"
+        case .halfYear: return "workouts.history.range.half_year"
+        case .year: return "workouts.history.range.year"
+        case .allTime: return "workouts.history.range.all_time"
+        case .custom: return "workouts.history.range.custom"
         }
     }
 }
@@ -414,9 +551,11 @@ private struct WorkoutHistoryRow: View {
 
 private struct WorkoutDetailScreen: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
 
     let workout: WorkoutSession
     @State private var expandedExerciseIDs: Set<UUID> = []
+    @State private var showDeleteConfirmation = false
 
     private var sortedExercises: [WorkoutExercise] {
         workout.exercises.sorted { $0.orderIndex < $1.orderIndex }
@@ -468,6 +607,26 @@ private struct WorkoutDetailScreen: View {
                         }
                     }
                 }
+
+                if workout.endedAt != nil {
+                    Button(role: .destructive) {
+                        showDeleteConfirmation = true
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Label(AppLocalizer.string("workouts.history.delete.button"), systemImage: "trash")
+                                .font(.headline.weight(.semibold))
+                            Spacer()
+                        }
+                        .padding(.vertical, 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(Color.red.opacity(0.10))
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 8)
+                }
             }
             .padding(.horizontal)
             .padding(.top, 16)
@@ -477,6 +636,14 @@ private struct WorkoutDetailScreen: View {
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
         .navigationBarBackButtonHidden(true)
+        .alert(AppLocalizer.string("workouts.history.delete.title"), isPresented: $showDeleteConfirmation) {
+            Button(AppLocalizer.string("common.cancel"), role: .cancel) {}
+            Button(AppLocalizer.string("common.delete"), role: .destructive) {
+                deleteWorkout()
+            }
+        } message: {
+            Text(AppLocalizer.string("workouts.history.delete.message"))
+        }
     }
 
     private var header: some View {
@@ -613,6 +780,12 @@ private struct WorkoutDetailScreen: View {
         .padding(.horizontal, 24)
         .padding(.vertical, 32)
         .background(RoundedRectangle(cornerRadius: 24).fill(Color.white))
+    }
+
+    private func deleteWorkout() {
+        modelContext.delete(workout)
+        try? modelContext.save()
+        dismiss()
     }
 }
 
