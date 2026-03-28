@@ -27,24 +27,28 @@ struct TrainerAssignedClientsScreen: View {
 
             Section(appLanguage.localized("trainer.clients.section")) {
                 ForEach(store.clients) { client in
-                    HStack(spacing: 12) {
-                        Circle()
-                            .fill(Color.green.opacity(0.14))
-                            .frame(width: 42, height: 42)
-                            .overlay {
-                                Image(systemName: "person.fill")
-                                    .foregroundStyle(.green)
-                            }
+                    NavigationLink {
+                        TrainerClientSupportScreen(trainerId: trainerId, client: client)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Circle()
+                                .fill(Color.green.opacity(0.14))
+                                .frame(width: 42, height: 42)
+                                .overlay {
+                                    Image(systemName: "person.fill")
+                                        .foregroundStyle(.green)
+                                }
 
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(client.displayName)
-                                .font(.headline)
-                            Text(client.email)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(client.displayName)
+                                    .font(.headline)
+                                Text(client.email)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
+                        .padding(.vertical, 4)
                     }
-                    .padding(.vertical, 4)
                 }
             }
         }

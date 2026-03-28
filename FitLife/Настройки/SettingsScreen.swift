@@ -78,11 +78,24 @@ struct SettingsScreen: View {
                                 title: appLanguage.localized("settings.admin.links")
                             )
                         }
+
+                        if let currentUser = sessionStore.profile {
+                            NavigationLink {
+                                CoachingRequestsReviewScreen(currentUser: currentUser)
+                            } label: {
+                                SettingsRow(
+                                    icon: "text.badge.checkmark",
+                                    iconBg: .mint,
+                                    title: appLanguage.localized("settings.admin.requests")
+                                )
+                            }
+                        }
                     }
                 }
 
                 if sessionStore.currentRole == .trainer,
-                   let trainerId = sessionStore.firebaseUser?.uid {
+                   let trainerId = sessionStore.firebaseUser?.uid,
+                   let currentUser = sessionStore.profile {
                     Section(appLanguage.localized("settings.trainer.section")) {
                         NavigationLink {
                             TrainerAssignedClientsScreen(trainerId: trainerId)
@@ -111,6 +124,16 @@ struct SettingsScreen: View {
                                 icon: "list.bullet.clipboard",
                                 iconBg: .pink,
                                 title: appLanguage.localized("settings.trainer.assignments")
+                            )
+                        }
+
+                        NavigationLink {
+                            CoachingRequestsReviewScreen(currentUser: currentUser)
+                        } label: {
+                            SettingsRow(
+                                icon: "text.badge.checkmark",
+                                iconBg: .mint,
+                                title: appLanguage.localized("settings.trainer.requests")
                             )
                         }
                     }

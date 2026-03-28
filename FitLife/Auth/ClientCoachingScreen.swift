@@ -19,7 +19,11 @@ struct ClientCoachingEntryScreen: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color(.systemGroupedBackground))
             } else if store.activeLink != nil {
-                ClientCoachingLinkedScreen(trainer: store.trainerProfile)
+                ClientCoachingLinkedScreen(
+                    clientId: clientId,
+                    trainerId: store.activeLink?.trainerId,
+                    trainer: store.trainerProfile
+                )
             } else if shouldShowForm {
                 ClientCoachingIntakeScreen(store: store)
             } else {
@@ -218,15 +222,27 @@ private struct ClientCoachingStatusScreen: View {
 
                 if let reviewComment = request?.reviewComment, reviewComment.isEmpty == false {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(AppLocalizer.string("coaching.status.comment"))
+                        Text(commentTitle)
                             .font(.headline)
                         Text(reviewComment)
+                            .foregroundStyle(.primary)
+                    }
+                    .padding(18)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(commentBackground, in: RoundedRectangle(cornerRadius: 18))
+                }
+
+                if request?.status == .needsClarification {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(AppLocalizer.string("coaching.status.next_step.title"))
+                            .font(.headline)
+                        Text(AppLocalizer.string("coaching.status.next_step.clarification"))
                             .foregroundStyle(.secondary)
                     }
                 }
 
                 if canEdit {
-                    Button(AppLocalizer.string("coaching.action.edit")) {
+                    Button(primaryActionTitle) {
                         onEdit()
                     }
                     .buttonStyle(.borderedProminent)
@@ -266,41 +282,63 @@ private struct ClientCoachingStatusScreen: View {
             return AppLocalizer.string("coaching.status.description.assigned")
         }
     }
+
+    private var primaryActionTitle: String {
+        if request?.status == .needsClarification {
+            return AppLocalizer.string("coaching.action.fix")
+        }
+
+        return AppLocalizer.string("coaching.action.edit")
+    }
+
+    private var commentTitle: String {
+        if request?.status == .needsClarification {
+            return AppLocalizer.string("coaching.status.comment.clarification")
+        }
+
+        return AppLocalizer.string("coaching.status.comment")
+    }
+
+    private var commentBackground: Color {
+        if request?.status == .needsClarification {
+            return .orange.opacity(0.14)
+        }
+
+        return Color(.secondarySystemGroupedBackground)
+    }
 }
 
 private struct ClientCoachingLinkedScreen: View {
+    let clientId: String
+    let trainerId: String?
     let trainer: AppUserProfile?
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 18) {
-                Text(AppLocalizer.string("coaching.linked.title"))
-                    .font(.largeTitle.bold())
+        Group {
+            if let trainerId {
+                ClientCoachingHomeScreen(
+                    clientId: clientId,
+                    trainerId: trainerId,
+                    trainer: trainer
+                )
+            } else {
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 18) {
+                        Text(AppLocalizer.string("coaching.linked.title"))
+                            .font(.largeTitle.bold())
 
-                Text(AppLocalizer.string("coaching.linked.subtitle"))
-                    .foregroundStyle(.secondary)
+                        Text(AppLocalizer.string("coaching.linked.subtitle"))
+                            .foregroundStyle(.secondary)
 
-                if let trainer {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(AppLocalizer.string("coaching.linked.trainer"))
-                            .font(.headline)
-                        Text(trainer.displayName)
-                            .font(.title3.weight(.semibold))
-                        Text(trainer.email)
+                        Text(AppLocalizer.string("coaching.linked.next_step"))
                             .foregroundStyle(.secondary)
                     }
-                    .padding(18)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: 18).fill(Color(.secondarySystemGroupedBackground)))
+                    .padding(24)
                 }
-
-                Text(AppLocalizer.string("coaching.linked.next_step"))
-                    .foregroundStyle(.secondary)
+                .background(Color(.systemGroupedBackground).ignoresSafeArea())
+                .navigationTitle(AppLocalizer.string("workouts.connection"))
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(24)
         }
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
-        .navigationTitle(AppLocalizer.string("workouts.connection"))
     }
 }

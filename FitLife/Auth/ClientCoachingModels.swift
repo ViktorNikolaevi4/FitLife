@@ -248,6 +248,7 @@ struct CoachingRequest: Identifiable, Hashable {
     var status: CoachingRequestStatus
     var reviewComment: String
     var assignedTrainerId: String?
+    var intakeSnapshot: ClientIntakeProfile?
     var updatedAt: Date
     var submittedAt: Date?
 
@@ -257,6 +258,7 @@ struct CoachingRequest: Identifiable, Hashable {
         status: CoachingRequestStatus = .draft,
         reviewComment: String = "",
         assignedTrainerId: String? = nil,
+        intakeSnapshot: ClientIntakeProfile? = nil,
         updatedAt: Date = .now,
         submittedAt: Date? = nil
     ) {
@@ -265,6 +267,7 @@ struct CoachingRequest: Identifiable, Hashable {
         self.status = status
         self.reviewComment = reviewComment
         self.assignedTrainerId = assignedTrainerId
+        self.intakeSnapshot = intakeSnapshot
         self.updatedAt = updatedAt
         self.submittedAt = submittedAt
     }
@@ -283,6 +286,11 @@ struct CoachingRequest: Identifiable, Hashable {
         self.status = status
         self.reviewComment = data["reviewComment"] as? String ?? ""
         self.assignedTrainerId = data["assignedTrainerId"] as? String
+        if let snapshotData = data["intakeSnapshot"] as? [String: Any] {
+            self.intakeSnapshot = ClientIntakeProfile(id: clientId, data: snapshotData)
+        } else {
+            self.intakeSnapshot = nil
+        }
         if let updatedAt = data["updatedAt"] as? Timestamp {
             self.updatedAt = updatedAt.dateValue()
         } else {
@@ -304,6 +312,18 @@ struct CoachingRequest: Identifiable, Hashable {
             "updatedAt": updatedAt,
             "submittedAt": submittedAt as Any,
             "intakeSnapshot": intake.snapshotData
+        ]
+    }
+
+    var firestoreData: [String: Any] {
+        [
+            "clientId": clientId,
+            "status": status.rawValue,
+            "reviewComment": reviewComment,
+            "assignedTrainerId": assignedTrainerId as Any,
+            "updatedAt": updatedAt,
+            "submittedAt": submittedAt as Any,
+            "intakeSnapshot": intakeSnapshot?.snapshotData as Any
         ]
     }
 }
