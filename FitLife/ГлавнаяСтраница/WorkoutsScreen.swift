@@ -11,6 +11,7 @@ struct WorkoutsScreen: View {
     @State private var selectedWorkout: WorkoutSession?
     @State private var selectedLastWorkout: LastWorkoutSelection?
     @State private var onlineAssignments: OnlineAssignmentsSelection?
+    @State private var coachingEntrySelection: ClientCoachingSelection?
     @State private var historySelection: WorkoutHistorySelection?
 
     private var theme: AppTheme { AppTheme(colorScheme) }
@@ -88,6 +89,17 @@ struct WorkoutsScreen: View {
                                 onlineAssignments = OnlineAssignmentsSelection(clientId: clientId)
                             }
                         )
+
+                        WorkoutsFeatureCard(
+                            title: AppLocalizer.string("workouts.connection"),
+                            subtitle: AppLocalizer.string("workouts.connection.subtitle"),
+                            systemImage: "person.2.wave.2.fill",
+                            tint: .green,
+                            theme: theme,
+                            action: {
+                                coachingEntrySelection = ClientCoachingSelection(clientId: clientId)
+                            }
+                        )
                     }
 
                     Button(action: {}) {
@@ -120,6 +132,9 @@ struct WorkoutsScreen: View {
             }
             .navigationDestination(item: $onlineAssignments) { selection in
                 ClientAssignedWorkoutsScreen(clientId: selection.clientId)
+            }
+            .navigationDestination(item: $coachingEntrySelection) { selection in
+                ClientCoachingEntryScreen(clientId: selection.clientId)
             }
             .navigationDestination(item: $historySelection) { selection in
                 WorkoutHistoryScreen(gender: selection.gender)
@@ -181,6 +196,11 @@ private struct OnlineAssignmentsSelection: Identifiable, Hashable {
 private struct WorkoutHistorySelection: Identifiable, Hashable {
     let gender: Gender
     var id: String { gender.rawValue }
+}
+
+private struct ClientCoachingSelection: Identifiable, Hashable {
+    let clientId: String
+    var id: String { clientId }
 }
 
 private struct WorkoutsShortcutCard: View {
