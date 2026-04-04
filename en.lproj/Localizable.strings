@@ -394,6 +394,9 @@
 "profile.age" = "Age";
 "profile.weight" = "Weight";
 "profile.height" = "Height";
+"profile.subtitle" = "Your core stats and progress in one place.";
+"profile.hero.parameters" = "Stats";
+"profile.hero.progress" = "Progress";
 "profile.not_found" = "Profile not found";
 "profile.auto_create" = "I will create a profile automatically.";
 
@@ -423,6 +426,10 @@
 "goal.lose" = "Lose Weight";
 "goal.maintain" = "Maintain Weight";
 "goal.gain" = "Gain Weight";
+"goal.maintain_short" = "Maintain";
+"goal.subtitle.lose" = "Focused on reducing weight with a calorie deficit.";
+"goal.subtitle.maintain" = "Keep your current shape without gaining or losing.";
+"goal.subtitle.gain" = "Focused on gaining mass with a calorie surplus.";
 
 "unit.cm" = "cm";
 "unit.kg" = "kg";
@@ -446,6 +453,11 @@
 
 "measurements.title" = "Body Measurements";
 "measurements.empty" = "No data yet";
+"measurements.empty.subtitle" = "Add your first measurements to track changes.";
+"measurements.empty.body" = "Your latest values and progress history will appear here after the first entry.";
+"measurements.latest" = "Latest values";
+"measurements.not_set" = "Not set";
+"measurements.add_button" = "Add measurements";
 "measurements.chest" = "Chest";
 "measurements.waist" = "Waist (narrow)";
 "measurements.belly" = "Belly";
@@ -482,6 +494,7 @@
 
 "bmi.title" = "Body Mass Index";
 "bmi.short" = "BMI";
+"bmi.caption" = "Current height-to-weight ratio";
 "bmi.your_index" = "Your index";
 "bmi.range.underweight" = "<18.5 — Underweight";
 "bmi.range.normal" = "18.5 – 24.9 — Normal weight";
@@ -496,6 +509,11 @@
 "bmi.status.overweight" = "Overweight";
 "bmi.status.obesity" = "Obesity";
 "bmi.status.fill_data" = "Fill in weight and height";
+"bmi.range.short.underweight" = "Below range";
+"bmi.range.short.normal" = "Optimal range";
+"bmi.range.short.overweight" = "Above range";
+"bmi.range.short.obesity" = "High range";
+"bmi.range.short.empty" = "No data";
 
 "water.tracker.title" = "Water Tracker";
 "water.temperature.title" = "Water Temperature";

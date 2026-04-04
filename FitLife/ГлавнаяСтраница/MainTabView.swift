@@ -16,6 +16,7 @@ struct MainTabView: View {
     @State private var sheet: RationSheet? = nil
     @State private var refreshID = UUID()
     @State private var selectedTab: MainTab = .home
+    @State private var showsHomeFloatingAddButton = true
 
     private var appLanguage: AppLanguage {
         AppLanguage.from(rawValue: appLanguageRaw)
@@ -26,7 +27,7 @@ struct MainTabView: View {
     }
 
     private var showsFloatingAddButton: Bool {
-        selectedTab == .home || selectedTab == .nutrition
+        (selectedTab == .home && showsHomeFloatingAddButton) || selectedTab == .nutrition
     }
 
     var body: some View {
@@ -34,6 +35,7 @@ struct MainTabView: View {
             TabView(selection: $selectedTab) {
                 DashboardScreen(
                     selectedDate: $selectedDate,
+                    showsFloatingAddButton: $showsHomeFloatingAddButton,
                     onOpenWorkouts: { selectedTab = .workouts }
                 )
                     .id(refreshID)
@@ -96,4 +98,3 @@ private enum MainTab: Hashable {
     case profile
     case water
 }
-

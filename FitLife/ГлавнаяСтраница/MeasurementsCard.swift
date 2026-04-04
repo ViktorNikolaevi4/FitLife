@@ -7,42 +7,64 @@ struct MeasurementsCard: View {
     @Query(sort: \BodyMeasurements.date, order: .reverse, animation: .snappy)
     private var items: [BodyMeasurements]
 
-    // ввод
     @State private var isEditing = false
     @State private var date = Date()
     @State private var chestText = ""
     @State private var waistText = ""
     @State private var bellyText = ""
-    @State private var hipsText  = ""
+    @State private var hipsText = ""
 
     private var last: BodyMeasurements? { items.first }
 
+    private var latestValues: [(String, Double?)] {
+        [
+            (AppLocalizer.string("measurements.chest"), last?.chest),
+            (AppLocalizer.string("measurements.waist"), last?.waist),
+            (AppLocalizer.string("measurements.belly"), last?.belly),
+            (AppLocalizer.string("measurements.hips"), last?.hips)
+        ]
+    }
+
     var body: some View {
         SectionCard(title: AppLocalizer.string("measurements.title")) {
-            HStack {
-                if let last {
-                    Label(last.date.formatted(date: .abbreviated, time: .omitted),
-                          systemImage: "calendar")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text(AppLocalizer.string("measurements.empty")).font(.caption).foregroundStyle(.secondary)
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 6) {
+                    if let last {
+                        Label(last.date.formatted(date: .abbreviated, time: .omitted), systemImage: "calendar")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Text(AppLocalizer.string("measurements.latest"))
+                            .font(.subheadline.weight(.medium))
+                    } else {
+                        Text(AppLocalizer.string("measurements.empty"))
+                            .font(.subheadline.weight(.medium))
+
+                        Text(AppLocalizer.string("measurements.empty.subtitle"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
+
                 Spacer()
-                Button(isEditing ? AppLocalizer.string("common.cancel") : AppLocalizer.string("common.edit")) {
+
+                Button(actionButtonTitle) {
                     withAnimation(.easeInOut(duration: 0.2)) { toggleEdit() }
                 }
                 .buttonStyle(.plain)
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.blue)
             }
 
             if isEditing {
-                VStack(spacing: 10) {
+                VStack(spacing: 12) {
                     DatePicker(AppLocalizer.string("common.date"), selection: $date, displayedComponents: .date)
                         .labelsHidden()
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.bottom, 2)
 
-                    fieldRow(AppLocalizer.string("measurements.chest"),  text: $chestText)
+                    fieldRow(AppLocalizer.string("measurements.chest"), text: $chestText)
                     fieldRow(AppLocalizer.string("measurements.waist"), text: $waistText)
                     fieldRow(AppLocalizer.string("measurements.belly"), text: $bellyText)
                     fieldRow(AppLocalizer.string("measurements.hips"), text: $hipsText)
@@ -50,46 +72,54 @@ struct MeasurementsCard: View {
                     Button(AppLocalizer.string("common.save")) { save() }
                         .buttonStyle(.borderedProminent)
                         .tint(.blue)
+                        .controlSize(.large)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                         .disabled(!isValid)
                 }
-            } else {
+            } else if last != nil {
                 VStack(spacing: 10) {
-                    valueRow(AppLocalizer.string("measurements.chest"), last?.chest)
-                    valueRow(AppLocalizer.string("measurements.waist"), last?.waist)
-                    valueRow(AppLocalizer.string("measurements.belly"), last?.belly)
-                    valueRow(AppLocalizer.string("measurements.hips"), last?.hips)
+                    ForEach(Array(latestValues.enumerated()), id: \.offset) { _, item in
+                        valueRow(item.0, item.1)
+                    }
+                }
+            } else {
+                EmptyMeasurementsState {
+                    withAnimation(.easeInOut(duration: 0.2)) { toggleEdit() }
                 }
             }
         }
         .onAppear { preloadFromLast() }
     }
 
-    // MARK: UI helpers
-
     @ViewBuilder
     private func valueRow(_ title: String, _ value: Double?) -> some View {
         HStack {
             Text(title)
+                .font(.body.weight(.medium))
             Spacer()
-            Text(value.map { formatted($0) + " " + AppLocalizer.string("unit.cm") } ?? "—")
-                .foregroundStyle(.secondary)
+            Text(value.map { formatted($0) + " " + AppLocalizer.string("unit.cm") } ?? AppLocalizer.string("measurements.not_set"))
+                .font(.body.weight(.semibold))
+                .foregroundStyle(value == nil ? .secondary : .primary)
         }
+        .padding(.vertical, 4)
     }
 
     @ViewBuilder
     private func fieldRow(_ title: String, text: Binding<String>) -> some View {
         HStack(spacing: 10) {
             Text(title)
+                .font(.body.weight(.medium))
             Spacer()
             TextField(AppLocalizer.string("common.zero"), text: text)
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.trailing)
-                .frame(width: 90)
+                .frame(width: 96)
                 .textFieldStyle(.roundedBorder)
                 .onChange(of: text.wrappedValue) {
                     text.wrappedValue = sanitize(text.wrappedValue)
                 }
-            Text(AppLocalizer.string("unit.cm")).foregroundStyle(.secondary)
+            Text(AppLocalizer.string("unit.cm"))
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -113,17 +143,30 @@ struct MeasurementsCard: View {
     }
 
     private func preloadFromLast() {
-        guard let last else { return }
+        guard let last else {
+            date = .now
+            chestText = ""
+            waistText = ""
+            bellyText = ""
+            hipsText = ""
+            return
+        }
         date = last.date
         chestText = formatted(last.chest)
         waistText = formatted(last.waist)
         bellyText = formatted(last.belly)
-        hipsText  = formatted(last.hips)
+        hipsText = formatted(last.hips)
     }
 
     private func toggleEdit() {
-        if isEditing { preloadFromLast() } else if last == nil {
-            date = .now; chestText = ""; waistText = ""; bellyText = ""; hipsText = ""
+        if isEditing {
+            preloadFromLast()
+        } else if last == nil {
+            date = .now
+            chestText = ""
+            waistText = ""
+            bellyText = ""
+            hipsText = ""
         }
         isEditing.toggle()
     }
@@ -133,7 +176,7 @@ struct MeasurementsCard: View {
             let chest = Double(chestText.replacingOccurrences(of: ",", with: ".")),
             let waist = Double(waistText.replacingOccurrences(of: ",", with: ".")),
             let belly = Double(bellyText.replacingOccurrences(of: ",", with: ".")),
-            let hips  = Double(hipsText .replacingOccurrences(of: ",", with: "."))
+            let hips = Double(hipsText.replacingOccurrences(of: ",", with: "."))
         else { return }
 
         let entry = BodyMeasurements(date: date, chest: chest, waist: waist, belly: belly, hips: hips)
@@ -141,24 +184,56 @@ struct MeasurementsCard: View {
         do { try modelContext.save() } catch {}
         isEditing = false
     }
+
+    private var actionButtonTitle: String {
+        if isEditing {
+            return AppLocalizer.string("common.cancel")
+        }
+        return last == nil ? AppLocalizer.string("common.add") : AppLocalizer.string("common.edit")
+    }
 }
-private struct SectionCard<Content: View>: View {
+
+private struct EmptyMeasurementsState: View {
+    let onAdd: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(AppLocalizer.string("measurements.empty.body"))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button(AppLocalizer.string("measurements.add_button"), action: onAdd)
+                .buttonStyle(.borderedProminent)
+                .tint(.blue)
+                .controlSize(.large)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 2)
+    }
+}
+
+struct SectionCard<Content: View>: View {
     let title: String?
     @ViewBuilder var content: Content
+
     init(title: String? = nil, @ViewBuilder content: () -> Content) {
-        self.title = title; self.content = content()
+        self.title = title
+        self.content = content()
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let title { Text(title).font(.headline) }
+            if let title {
+                Text(title)
+                    .font(.headline.weight(.semibold))
+            }
             content
         }
-        .padding(14)
-        // если хочешь ВСЕГДА белый (даже в тёмной теме) — поставь .white
+        .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(Color(.systemBackground))   // динамичный белый/чёрный
+                .fill(Color(.systemBackground))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14)

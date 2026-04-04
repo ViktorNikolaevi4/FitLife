@@ -4,7 +4,6 @@ import SwiftData
 struct ProfileScreen: View {
     @Query private var users: [UserData]
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.colorScheme) private var scheme
 
     @AppStorage(Gender.appStorageKey) private var activeGenderRaw: String = Gender.male.rawValue
     @State private var editingGender: Gender
@@ -19,10 +18,11 @@ struct ProfileScreen: View {
     var body: some View {
         let bg = Color(.systemGray6)
 
-        NavigationStack {                // ⬅️ добавили стек
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    // Пол
+                    ProfileHeroCard()
+
                     SectionCard(title: AppLocalizer.string("profile.gender")) {
                         Picker("", selection: $editingGender) {
                             ForEach(Gender.allCases, id: \.self) { Text($0.displayName).tag($0) }
@@ -33,36 +33,53 @@ struct ProfileScreen: View {
                     if let user {
                         @Bindable var u = user
 
-                        // Параметры
                         SectionCard(title: AppLocalizer.string("profile.parameters")) {
-                            ValueRowInt(title: AppLocalizer.string("profile.age"), value: $u.age, range: 1...100, unit: AppLocalizer.string("unit.years"))
-                            ValueRowDoubleAsInt(title: AppLocalizer.string("profile.weight"), value: $u.weight, range: 30...200, unit: AppLocalizer.string("unit.kg"))
-                            ValueRowDoubleAsInt(title: AppLocalizer.string("profile.height"), value: $u.height, range: 100...230, unit: AppLocalizer.string("unit.cm"))
+                            VStack(spacing: 16) {
+                                ProfileSummaryGrid(age: u.age, weight: u.weight, height: u.height)
+
+                                Divider()
+
+                                VStack(spacing: 14) {
+                                    ValueRowInt(title: AppLocalizer.string("profile.age"), value: $u.age, range: 1...100, unit: AppLocalizer.string("unit.years"))
+                                    ValueRowDoubleAsInt(title: AppLocalizer.string("profile.weight"), value: $u.weight, range: 30...200, unit: AppLocalizer.string("unit.kg"))
+                                    ValueRowDoubleAsInt(title: AppLocalizer.string("profile.height"), value: $u.height, range: 100...230, unit: AppLocalizer.string("unit.cm"))
+                                }
+                            }
                         }
+                        .onChange(of: u.age) { _, _ in recalc(u) }
+                        .onChange(of: u.weight) { _, _ in recalc(u) }
+                        .onChange(of: u.height) { _, _ in recalc(u) }
 
-                        .onChange(of: u.age)    { _,_ in recalc(u) }
-                        .onChange(of: u.weight) { _,_ in recalc(u) }
-                        .onChange(of: u.height) { _,_ in recalc(u) }
-
-                        // Активность
                         SectionCard(title: AppLocalizer.string("activity.title")) {
-                            Picker("", selection: $u.activityLevel) {
-                                ForEach(ActivityLevel.allCases, id: \.self) { Text($0.displayName).tag($0) }
-                            }
-                            .pickerStyle(.segmented)
-                        }
-                        .onChange(of: u.activityLevel) { _,_ in recalc(u) }
+                            VStack(alignment: .leading, spacing: 12) {
+                                Picker("", selection: $u.activityLevel) {
+                                    ForEach(ActivityLevel.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                                }
+                                .pickerStyle(.segmented)
 
-                        // Цель
+                                Text(u.activityLevel.message)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .onChange(of: u.activityLevel) { _, _ in recalc(u) }
+
                         SectionCard(title: AppLocalizer.string("goal.title")) {
-                            Picker("", selection: $u.goal) {
-                                ForEach(WeightGoal.allCases, id: \.self) { Text($0.displayName).tag($0) }
-                            }
-                            .pickerStyle(.segmented)
-                        }
-                        .onChange(of: u.goal) { _,_ in recalc(u) }
+                            VStack(alignment: .leading, spacing: 12) {
+                                Picker("", selection: $u.goal) {
+                                    ForEach(WeightGoal.allCases, id: \.self) { Text(goalDisplayName($0)).tag($0) }
+                                }
+                                .pickerStyle(.segmented)
 
-                        // ИМТ
+                                Text(goalSubtitle(for: u.goal))
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .onChange(of: u.goal) { _, _ in recalc(u) }
+
                         BMISection(userData: u)
                     } else {
                         ContentUnavailableView(
@@ -72,19 +89,16 @@ struct ProfileScreen: View {
                         )
                         .task { ensureUserIfNeeded(for: editingGender) }
                     }
+
                     MeasurementsCard()
                 }
                 .padding(.vertical, 16)
-              //  .background(Color(.systemGray6))
             }
             .background(bg)
             .navigationTitle(AppLocalizer.string("tab.profile"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarBackground(bg, for: .navigationBar)
-           // .toolbarBorderHidden(true, for: .navigationBar)
-// или .large если нужен большой заголовок
-            //.toolbarBackground(.visible, for: .navigationBar) // можно раскомментировать, если фон скрывается
         }
         .onChange(of: editingGender) { _, new in
             activeGenderRaw = new.rawValue
@@ -118,11 +132,30 @@ struct ProfileScreen: View {
         )
         let macros = MacrosCalculator.calculateMacros(calories: cals, goal: u.goal)
         u.calories = cals
-        u.macros   = macros
+        u.macros = macros
         try? modelContext.save()
     }
 
-    // Строка с числом (Int) — по тапу открывает шит с колесом
+    private func goalDisplayName(_ goal: WeightGoal) -> String {
+        switch goal {
+        case .currentWeight:
+            return AppLocalizer.string("goal.maintain_short")
+        default:
+            return goal.displayName
+        }
+    }
+
+    private func goalSubtitle(for goal: WeightGoal) -> String {
+        switch goal {
+        case .loseWeight:
+            return AppLocalizer.string("goal.subtitle.lose")
+        case .currentWeight:
+            return AppLocalizer.string("goal.subtitle.maintain")
+        case .gainWeight:
+            return AppLocalizer.string("goal.subtitle.gain")
+        }
+    }
+
     private struct ValueRowInt: View {
         let title: String
         @Binding var value: Int
@@ -138,8 +171,10 @@ struct ProfileScreen: View {
             } label: {
                 HStack {
                     Text(title)
+                        .font(.body.weight(.medium))
                     Spacer()
                     Text("\(value) \(unit)")
+                        .font(.body.weight(.semibold))
                         .foregroundStyle(.secondary)
                     Image(systemName: "chevron.right")
                         .font(.footnote)
@@ -160,8 +195,6 @@ struct ProfileScreen: View {
         }
     }
 
-    // Строка для Double, но колесо даёт целые (типичный кейс для кг/см)
-    // Внутри делает безопасное преобразование Int <-> Double
     private struct ValueRowDoubleAsInt: View {
         let title: String
         @Binding var value: Double
@@ -179,8 +212,10 @@ struct ProfileScreen: View {
             } label: {
                 HStack {
                     Text(title)
+                        .font(.body.weight(.medium))
                     Spacer()
                     Text("\(Int(value.rounded())) \(unit)")
+                        .font(.body.weight(.semibold))
                         .foregroundStyle(.secondary)
                     Image(systemName: "chevron.right")
                         .font(.footnote)
@@ -204,7 +239,6 @@ struct ProfileScreen: View {
         }
     }
 
-    // Сам шит с колесом выбора (Int)
     private struct NumberWheelPickerInt: View {
         let title: String
         @Binding var value: Int
@@ -232,7 +266,6 @@ struct ProfileScreen: View {
                     .frame(maxWidth: .infinity)
                     .padding(.top, 8)
 
-                    // Подпись текущего значения
                     Text("\(value) \(unit)")
                         .font(.title3.weight(.semibold))
                         .padding(.vertical, 12)
@@ -253,76 +286,100 @@ struct ProfileScreen: View {
             }
         }
     }
-
 }
 
-
-// — Вспомогательные мини-контролы без дженериков —
-
-private struct LabeledStepperI: View {
-    let title: String
-    @Binding var value: Int
-    let range: ClosedRange<Int>
-    let step: Int
-    var suffix: String = ""
-
+private struct ProfileHeroCard: View {
     var body: some View {
-        HStack {
-            Text(title)
-            Spacer()
-            Stepper(value: $value, in: range, step: step) {
-                Text("\(value) \(suffix)")
-                    .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 10) {
+            Text(AppLocalizer.string("tab.profile"))
+                .font(.system(size: 28, weight: .bold))
+
+            Text(AppLocalizer.string("profile.subtitle"))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 10) {
+                Label(AppLocalizer.string("profile.hero.parameters"), systemImage: "slider.horizontal.3")
+                Label(AppLocalizer.string("profile.hero.progress"), systemImage: "chart.line.uptrend.xyaxis")
             }
-          //  .labelsHidden()
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
         }
-    }
-}
-
-private struct LabeledStepperD: View {
-    let title: String
-    @Binding var value: Double
-    let range: ClosedRange<Double>
-    let step: Double
-    var suffix: String = ""
-
-    var body: some View {
-        HStack {
-            Text(title)
-            Spacer()
-            Stepper(value: $value, in: range, step: step) {
-                Text("\(Int(value)) \(suffix)")
-                    .foregroundStyle(.secondary)
-            }
-         //   .labelsHidden()
-        }
-    }
-}
-
-private struct SectionCard<Content: View>: View {
-    let title: String?
-    @ViewBuilder var content: Content
-    init(title: String? = nil, @ViewBuilder content: () -> Content) {
-        self.title = title; self.content = content()
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if let title { Text(title).font(.headline) }
-            content
-        }
-        .padding(14)
-        // если хочешь ВСЕГДА белый (даже в тёмной теме) — поставь .white
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(18)
         .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(Color(.systemBackground))   // динамичный белый/чёрный
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color(.systemBackground))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: 20)
                 .stroke(Color.black.opacity(0.06))
         )
-        .shadow(color: .black.opacity(0.03), radius: 6, x: 0, y: 2)
+        .shadow(color: .black.opacity(0.03), radius: 10, x: 0, y: 4)
         .padding(.horizontal)
     }
 }
 
+private struct ProfileSummaryGrid: View {
+    let age: Int
+    let weight: Double
+    let height: Double
+
+    var body: some View {
+        HStack(spacing: 10) {
+            SummaryMetricCard(
+                title: AppLocalizer.string("profile.age"),
+                value: "\(age)",
+                unit: AppLocalizer.string("unit.years"),
+                systemImage: "calendar"
+            )
+            SummaryMetricCard(
+                title: AppLocalizer.string("profile.weight"),
+                value: "\(Int(weight.rounded()))",
+                unit: AppLocalizer.string("unit.kg"),
+                systemImage: "scalemass"
+            )
+            SummaryMetricCard(
+                title: AppLocalizer.string("profile.height"),
+                value: "\(Int(height.rounded()))",
+                unit: AppLocalizer.string("unit.cm"),
+                systemImage: "ruler"
+            )
+        }
+    }
+}
+
+private struct SummaryMetricCard: View {
+    let title: String
+    let value: String
+    let unit: String
+    let systemImage: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: systemImage)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text(value)
+                    .font(.system(size: 24, weight: .bold))
+                Text(unit)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.secondarySystemBackground))
+        )
+    }
+}

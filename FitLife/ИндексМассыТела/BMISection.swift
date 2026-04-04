@@ -1,29 +1,22 @@
 import SwiftUI
-import Observation   // если ругается на @Bindable, добавьте этот импорт
+import Observation
 
-// Секция "Индекс массы тела" для профиля
 struct BMISection: View {
     @Bindable var userData: UserData
     @State private var showBMISheet = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(AppLocalizer.string("bmi.title"))
-                .font(.headline)
-
-            Button { showBMISheet = true } label: {
-                BMICardView(userData: userData)
-            }
-            .buttonStyle(.plain)
+        Button { showBMISheet = true } label: {
+            BMICardView(userData: userData)
         }
+        .buttonStyle(.plain)
         .padding(.horizontal)
         .sheet(isPresented: $showBMISheet) {
-            BMIPopupView(userData: userData)    // ваш поп-ап (ниже — как его слегка причесать)
+            BMIPopupView(userData: userData)
         }
     }
 }
 
-// Небольшая карточка со значением ИМТ
 private struct BMICardView: View {
     @Bindable var userData: UserData
 
@@ -31,37 +24,69 @@ private struct BMICardView: View {
         let value = bmi(for: userData)
         let color = bmiColor(value)
 
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Label(AppLocalizer.string("bmi.short"), systemImage: "figure.arms.open")
-                    .labelStyle(.titleAndIcon)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(AppLocalizer.string("bmi.title"))
+                        .font(.headline)
+
+                    Text(AppLocalizer.string("bmi.caption"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 Spacer()
-                Text(value.isFinite ? String(format: "%.1f", value) : "—")
-                    .font(.title2).bold()
-                    .foregroundStyle(color)
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(value.isFinite ? String(format: "%.1f", value) : "—")
+                        .font(.system(size: 30, weight: .bold))
+                        .foregroundStyle(color)
+
+                    Text(AppLocalizer.string("bmi.short"))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
             }
 
-            Text(bmiMessage(value))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline) {
+                Text(bmiMessage(value))
+                    .font(.subheadline.weight(.semibold))
 
-            BMIGauge(value: value, minValue: 12, maxValue: 40, tint: color)
-                .frame(height: 10)
-                .padding(.top, 2)
+                Spacer()
+
+                Text(bmiRangeText(value))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(spacing: 8) {
+                BMIGauge(value: value, minValue: 12, maxValue: 40, tint: color)
+                    .frame(height: 12)
+
+                HStack {
+                    Text("18.5")
+                    Spacer()
+                    Text("24.9")
+                    Spacer()
+                    Text("30")
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
         }
-        .padding(14)
+        .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: 18)
                 .fill(Color(.systemBackground))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: 18)
                 .stroke(Color.black.opacity(0.06))
         )
+        .shadow(color: .black.opacity(0.03), radius: 6, x: 0, y: 2)
     }
 }
 
-// Простейшая «линейка» с маркером
 private struct BMIGauge: View {
     let value: Double
     let minValue: Double
@@ -77,28 +102,36 @@ private struct BMIGauge: View {
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color(UIColor.systemGray5))
-                Capsule().fill(tint.opacity(0.25))
-                    .frame(width: w * fraction)
 
-                Circle().fill(tint)
-                    .frame(width: 12, height: 12)
-                    .offset(x: w * fraction - 6)
+            ZStack(alignment: .leading) {
+                HStack(spacing: 4) {
+                    Capsule().fill(Color.blue.opacity(0.18))
+                    Capsule().fill(Color.green.opacity(0.18))
+                    Capsule().fill(Color.orange.opacity(0.18))
+                    Capsule().fill(Color.red.opacity(0.18))
+                }
+
+                Circle()
+                    .fill(tint)
+                    .frame(width: 16, height: 16)
+                    .overlay(
+                        Circle()
+                            .stroke(Color(.systemBackground), lineWidth: 3)
+                    )
+                    .offset(x: max(8, min(w * fraction, w - 8)) - 8)
                     .shadow(radius: 1, y: 0.5)
             }
         }
-        .frame(height: 10)
+        .frame(height: 12)
     }
 }
 
-
-// Подсчёт и тексты такие же, как у вашего поп-апа
 private func bmi(for user: UserData) -> Double {
     guard user.height > 0, user.weight > 0 else { return .infinity }
     let h = user.height / 100
     return user.weight / (h * h)
 }
+
 private func bmiMessage(_ bmi: Double) -> String {
     switch bmi {
     case ..<18.5: return AppLocalizer.string("bmi.status.underweight")
@@ -108,11 +141,22 @@ private func bmiMessage(_ bmi: Double) -> String {
     default: return AppLocalizer.string("bmi.status.obesity")
     }
 }
+
 private func bmiColor(_ bmi: Double) -> Color {
     switch bmi {
     case ..<18.5: return .blue
     case 18.5..<25: return .green
     case 25..<30: return .orange
     default: return .red
+    }
+}
+
+private func bmiRangeText(_ bmi: Double) -> String {
+    switch bmi {
+    case ..<18.5: return AppLocalizer.string("bmi.range.short.underweight")
+    case 18.5..<25: return AppLocalizer.string("bmi.range.short.normal")
+    case 25..<30: return AppLocalizer.string("bmi.range.short.overweight")
+    case .infinity: return AppLocalizer.string("bmi.range.short.empty")
+    default: return AppLocalizer.string("bmi.range.short.obesity")
     }
 }

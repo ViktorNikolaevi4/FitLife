@@ -394,6 +394,9 @@
 "profile.age" = "Возраст";
 "profile.weight" = "Вес";
 "profile.height" = "Рост";
+"profile.subtitle" = "Ваши параметры и прогресс в одном месте.";
+"profile.hero.parameters" = "Параметры";
+"profile.hero.progress" = "Прогресс";
 "profile.not_found" = "Профиль не найден";
 "profile.auto_create" = "Создам профиль автоматически.";
 
@@ -423,6 +426,10 @@
 "goal.lose" = "Снизить вес";
 "goal.maintain" = "Текущий вес";
 "goal.gain" = "Набрать вес";
+"goal.maintain_short" = "Поддерживать";
+"goal.subtitle.lose" = "Фокус на снижении веса и дефиците калорий.";
+"goal.subtitle.maintain" = "Сохраняйте текущую форму без набора и снижения.";
+"goal.subtitle.gain" = "Фокус на наборе массы и профиците калорий.";
 
 "unit.cm" = "см";
 "unit.kg" = "кг";
@@ -446,6 +453,11 @@
 
 "measurements.title" = "Замеры тела";
 "measurements.empty" = "Ещё нет данных";
+"measurements.empty.subtitle" = "Добавьте первые параметры, чтобы отслеживать изменения.";
+"measurements.empty.body" = "После первого замера здесь появятся ваши актуальные значения и история прогресса.";
+"measurements.latest" = "Последние значения";
+"measurements.not_set" = "Не указано";
+"measurements.add_button" = "Добавить замеры";
 "measurements.chest" = "Грудь";
 "measurements.waist" = "Талия (узкая)";
 "measurements.belly" = "Живот";
@@ -482,6 +494,7 @@
 
 "bmi.title" = "Индекс массы тела";
 "bmi.short" = "ИМТ";
+"bmi.caption" = "Оценка текущего соотношения роста и веса";
 "bmi.your_index" = "Ваш индекс";
 "bmi.range.underweight" = "<18.5 — Дефицит массы тела";
 "bmi.range.normal" = "18.5 – 24.9 — Нормальная масса тела";
@@ -496,6 +509,11 @@
 "bmi.status.overweight" = "Избыточный вес";
 "bmi.status.obesity" = "Ожирение";
 "bmi.status.fill_data" = "Заполните вес и рост";
+"bmi.range.short.underweight" = "Ниже нормы";
+"bmi.range.short.normal" = "Оптимальный диапазон";
+"bmi.range.short.overweight" = "Выше нормы";
+"bmi.range.short.obesity" = "Высокий показатель";
+"bmi.range.short.empty" = "Нет данных";
 
 "water.tracker.title" = "Трекер воды";
 "water.temperature.title" = "Температура воды";

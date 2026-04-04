@@ -4,6 +4,7 @@ import SwiftData
 struct DashboardScreen: View {
     // Дата
     @Binding var selectedDate: Date
+    @Binding var showsFloatingAddButton: Bool
     let onOpenWorkouts: () -> Void
 
     // Данные
@@ -51,8 +52,9 @@ struct DashboardScreen: View {
         users.first(where: { $0.gender == selectedGender })
     }
 
-    init(selectedDate: Binding<Date>, onOpenWorkouts: @escaping () -> Void) {
+    init(selectedDate: Binding<Date>, showsFloatingAddButton: Binding<Bool>, onOpenWorkouts: @escaping () -> Void) {
         _selectedDate = selectedDate
+        _showsFloatingAddButton = showsFloatingAddButton
         self.onOpenWorkouts = onOpenWorkouts
     }
 
@@ -163,7 +165,7 @@ struct DashboardScreen: View {
 
             Spacer()
 
-            NavigationLink(destination: SettingsScreen()) {
+            NavigationLink(destination: SettingsScreenContainer(showsFloatingAddButton: $showsFloatingAddButton)) {
                 ZStack {
                     Circle()
                         .fill(theme.card)
@@ -174,6 +176,9 @@ struct DashboardScreen: View {
                         .foregroundStyle(.primary)
                 }
             }
+            .simultaneousGesture(TapGesture().onEnded {
+                showsFloatingAddButton = false
+            })
             .buttonStyle(.plain)
         }
         .padding(.horizontal)
@@ -320,5 +325,15 @@ struct DashboardScreen: View {
             }
             if isEmpty { expandedMeals.remove(meal) }
         }
+    }
+}
+
+private struct SettingsScreenContainer: View {
+    @Binding var showsFloatingAddButton: Bool
+
+    var body: some View {
+        SettingsScreen()
+            .onAppear { showsFloatingAddButton = false }
+            .onDisappear { showsFloatingAddButton = true }
     }
 }
