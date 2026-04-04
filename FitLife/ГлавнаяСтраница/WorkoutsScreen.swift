@@ -17,7 +17,7 @@ struct WorkoutsScreen: View {
     private var theme: AppTheme { AppTheme(colorScheme) }
     private var selectedGender: Gender { Gender(rawValue: activeGenderRaw) ?? .male }
     private var relevantWorkouts: [WorkoutSession] {
-        workouts.filter { $0.gender == selectedGender }
+        workouts.filter { $0.gender == selectedGender && $0.ownerId == sessionStore.firebaseUser?.uid }
     }
     private var activeWorkout: WorkoutSession? {
         relevantWorkouts
@@ -156,6 +156,7 @@ struct WorkoutsScreen: View {
         }
 
         let workout = WorkoutSession(
+            ownerId: sessionStore.firebaseUser?.uid ?? "",
             title: AppLocalizer.string("workout.active.title"),
             gender: selectedGender
         )
@@ -279,6 +280,7 @@ private struct WorkoutsFeatureCard: View {
 
 private struct WorkoutHistoryScreen: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var sessionStore: AppSessionStore
     @Query private var workouts: [WorkoutSession]
 
     let gender: Gender
@@ -288,7 +290,7 @@ private struct WorkoutHistoryScreen: View {
 
     private var completedWorkouts: [WorkoutSession] {
         workouts
-            .filter { $0.gender == gender && $0.endedAt != nil }
+            .filter { $0.gender == gender && $0.endedAt != nil && $0.ownerId == sessionStore.firebaseUser?.uid }
             .filter(isWorkoutInSelectedRange)
             .sorted { ($0.endedAt ?? .distantPast) > ($1.endedAt ?? .distantPast) }
     }

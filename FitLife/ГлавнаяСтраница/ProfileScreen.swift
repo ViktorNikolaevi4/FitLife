@@ -4,6 +4,7 @@ import SwiftData
 struct ProfileScreen: View {
     @Query private var users: [UserData]
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var sessionStore: AppSessionStore
 
     @AppStorage(Gender.appStorageKey) private var activeGenderRaw: String = Gender.male.rawValue
     @State private var editingGender: Gender
@@ -13,7 +14,11 @@ struct ProfileScreen: View {
         _editingGender = State(initialValue: Gender(rawValue: raw) ?? .male)
     }
 
-    private var user: UserData? { users.first(where: { $0.gender == editingGender }) }
+    private var currentOwnerId: String? { sessionStore.firebaseUser?.uid }
+    private var user: UserData? {
+        guard let currentOwnerId else { return nil }
+        return users.first(where: { $0.gender == editingGender && $0.ownerId == currentOwnerId })
+    }
 
     var body: some View {
         let bg = Color(.systemGray6)
@@ -103,7 +108,8 @@ struct ProfileScreen: View {
         .onChange(of: editingGender) { _, new in
             activeGenderRaw = new.rawValue
             ensureUserIfNeeded(for: new)
-            if let u = users.first(where: { $0.gender == new }) {
+            if let currentOwnerId,
+               let u = users.first(where: { $0.gender == new && $0.ownerId == currentOwnerId }) {
                 u.gender = new
                 try? modelContext.save()
                 recalc(u)
@@ -116,8 +122,10 @@ struct ProfileScreen: View {
     }
 
     private func ensureUserIfNeeded(for gender: Gender) {
-        if users.first(where: { $0.gender == gender }) == nil {
+        guard let currentOwnerId else { return }
+        if users.first(where: { $0.gender == gender && $0.ownerId == currentOwnerId }) == nil {
             let u = UserData(weight: 70, height: 170, age: 25,
+                             ownerId: currentOwnerId,
                              activityLevel: .none, goal: .currentWeight, gender: gender)
             modelContext.insert(u)
             try? modelContext.save()

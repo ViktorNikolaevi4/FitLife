@@ -4,6 +4,7 @@ import Foundation
 @Model
 class FoodEntry {
     var id: UUID = UUID()
+    var ownerId: String = ""
     var date: Date = Foundation.Date.now
     var mealType: String = ""
     var portion: Double = 0
@@ -12,7 +13,8 @@ class FoodEntry {
 
     var product: Product?
 
-    init(date: Date, mealType: String, product: Product, portion: Double, gender: Gender, isFavorite: Bool = false) {
+    init(date: Date, mealType: String, product: Product, portion: Double, gender: Gender, ownerId: String = "", isFavorite: Bool = false) {
+        self.ownerId = ownerId
         self.date = date
         self.mealType = mealType
         self.product = product

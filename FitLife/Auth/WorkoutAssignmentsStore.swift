@@ -206,6 +206,7 @@ final class ClientAssignedWorkoutsStore: ObservableObject {
             }
 
             let workout = WorkoutSession(
+                ownerId: assignment.clientId,
                 title: assignment.titleSnapshot,
                 gender: gender,
                 remoteAssignmentId: assignment.id,
@@ -278,7 +279,11 @@ final class ClientAssignedWorkoutsStore: ObservableObject {
     ) -> WorkoutSession? {
         let descriptor = FetchDescriptor<WorkoutSession>()
         let workouts = (try? modelContext.fetch(descriptor)) ?? []
-        return activeWorkout(for: assignment.id, workouts: workouts)
+        return workouts.first(where: {
+            $0.ownerId == assignment.clientId &&
+            $0.remoteAssignmentId == assignment.id &&
+            $0.endedAt == nil
+        })
     }
 }
 

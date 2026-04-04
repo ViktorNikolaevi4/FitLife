@@ -3,9 +3,10 @@ import SwiftData
 
 struct MeasurementsCard: View {
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var sessionStore: AppSessionStore
 
     @Query(sort: \BodyMeasurements.date, order: .reverse, animation: .snappy)
-    private var items: [BodyMeasurements]
+    private var allItems: [BodyMeasurements]
 
     @State private var isEditing = false
     @State private var date = Date()
@@ -14,6 +15,11 @@ struct MeasurementsCard: View {
     @State private var bellyText = ""
     @State private var hipsText = ""
 
+    private var currentOwnerId: String? { sessionStore.firebaseUser?.uid }
+    private var items: [BodyMeasurements] {
+        guard let currentOwnerId else { return [] }
+        return allItems.filter { $0.ownerId == currentOwnerId }
+    }
     private var last: BodyMeasurements? { items.first }
 
     private var latestValues: [(String, Double?)] {
@@ -179,7 +185,7 @@ struct MeasurementsCard: View {
             let hips = Double(hipsText.replacingOccurrences(of: ",", with: "."))
         else { return }
 
-        let entry = BodyMeasurements(date: date, chest: chest, waist: waist, belly: belly, hips: hips)
+        let entry = BodyMeasurements(ownerId: currentOwnerId ?? "", date: date, chest: chest, waist: waist, belly: belly, hips: hips)
         modelContext.insert(entry)
         do { try modelContext.save() } catch {}
         isEditing = false

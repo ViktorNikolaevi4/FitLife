@@ -5,6 +5,7 @@ import Observation
 
 @Model
 class UserData {
+    var ownerId: String = ""
     @Relationship(deleteRule: .cascade, inverse: \WaterIntake.user) var waterEntries: [WaterIntake]? = []
 
     var weight: Double = 0
@@ -22,6 +23,7 @@ class UserData {
     init(weight: Double = 0,
          height: Double = 0,
          age: Int = 0,
+         ownerId: String = "",
          activityLevel: ActivityLevel = FitLife.ActivityLevel.none,
          goal: WeightGoal = FitLife.WeightGoal.currentWeight,
          gender: Gender = FitLife.Gender.male,
@@ -30,6 +32,7 @@ class UserData {
          fats: Int = 0,
          carbs: Int = 0) {
 
+        self.ownerId = ownerId
         self.weight = weight
         self.height = height
         self.age = age

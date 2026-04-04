@@ -4,6 +4,7 @@ import SwiftData
 
 struct WaterTrackerViewOne: View {
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var sessionStore: AppSessionStore
     @Query private var users: [UserData]
 
     @AppStorage(Gender.appStorageKey) private var activeGenderRaw: String = Gender.male.rawValue
@@ -20,7 +21,11 @@ struct WaterTrackerViewOne: View {
     @Environment(\.colorScheme) private var colorScheme
     private var theme: AppTheme { AppTheme(colorScheme) }
 
-    private var userData: UserData? { users.first(where: { $0.gender == selectedGender }) }
+    private var currentOwnerId: String? { sessionStore.firebaseUser?.uid }
+    private var userData: UserData? {
+        guard let currentOwnerId else { return nil }
+        return users.first(where: { $0.gender == selectedGender && $0.ownerId == currentOwnerId })
+    }
 
     // прогресс для кольца 0...1
     private var ringProgress: Double {
@@ -120,7 +125,7 @@ struct WaterTrackerViewOne: View {
 
     private func ensureUserIfNeeded() {
         if userData == nil {
-            let u = UserData(weight: 0, height: 0, age: 0, activityLevel: .none, goal: .currentWeight, gender: selectedGender)
+            let u = UserData(weight: 0, height: 0, age: 0, ownerId: currentOwnerId ?? "", activityLevel: .none, goal: .currentWeight, gender: selectedGender)
             modelContext.insert(u); try? modelContext.save()
         }
     }
@@ -135,7 +140,7 @@ struct WaterTrackerViewOne: View {
             }) {
                 existing.intake = waterIntake
             } else {
-                let entry = WaterIntake(date: today, intake: waterIntake, gender: user.gender)
+                let entry = WaterIntake(date: today, intake: waterIntake, gender: user.gender, ownerId: user.ownerId)
                 entry.user = user; modelContext.insert(entry)
             }
             try? modelContext.save()

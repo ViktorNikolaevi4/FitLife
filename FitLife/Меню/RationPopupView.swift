@@ -47,6 +47,7 @@ struct RationPopupView: View {
     // MARK: — Окружение
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var sessionStore: AppSessionStore
 
     init(
         breakfastProducts: [Product] = [],
@@ -338,7 +339,9 @@ struct RationPopupView: View {
         let req = FetchDescriptor<FoodEntry>()
         do {
             let all = try modelContext.fetch(req).filter {
-                Calendar.current.isDate($0.date, inSameDayAs: date) && $0.gender == gender
+                Calendar.current.isDate($0.date, inSameDayAs: date)
+                    && $0.gender == gender
+                    && $0.ownerId == sessionStore.firebaseUser?.uid
             }
             breakfastEntries = all.filter { $0.mealType == MealType.breakfast.rawValue }
             lunchEntries     = all.filter { $0.mealType == MealType.lunch.rawValue }
@@ -367,6 +370,7 @@ struct RationPopupView: View {
             product:   adjusted,
             portion:   portion,
             gender:    gender,
+            ownerId:   sessionStore.firebaseUser?.uid ?? "",
             isFavorite: product.isFavorite
         )
 

@@ -4,6 +4,7 @@ import SwiftData
 @Model
 final class WorkoutSession {
     var id: UUID = UUID()
+    var ownerId: String = ""
     var createdAt: Date = Foundation.Date.now
     var endedAt: Date?
     var title: String = ""
@@ -18,6 +19,7 @@ final class WorkoutSession {
     @Relationship(deleteRule: .cascade, inverse: \WorkoutExercise.session) var exercises: [WorkoutExercise] = []
 
     init(
+        ownerId: String = "",
         createdAt: Date = .now,
         endedAt: Date? = nil,
         title: String,
@@ -29,6 +31,7 @@ final class WorkoutSession {
         remoteClientId: String? = nil,
         source: String? = nil
     ) {
+        self.ownerId = ownerId
         self.createdAt = createdAt
         self.endedAt = endedAt
         self.title = title

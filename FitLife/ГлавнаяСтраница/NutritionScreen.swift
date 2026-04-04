@@ -5,6 +5,7 @@ struct NutritionScreen: View {
     @Binding var selectedDate: Date
 
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var sessionStore: AppSessionStore
     @Query private var users: [UserData]
     @AppStorage(Gender.appStorageKey) private var activeGenderRaw: String = Gender.male.rawValue
     @Environment(\.colorScheme) private var colorScheme
@@ -30,7 +31,11 @@ struct NutritionScreen: View {
 
     private var selectedGender: Gender { Gender(rawValue: activeGenderRaw) ?? .male }
     private var theme: AppTheme { AppTheme(colorScheme) }
-    private var userData: UserData? { users.first(where: { $0.gender == selectedGender }) }
+    private var currentOwnerId: String? { sessionStore.firebaseUser?.uid }
+    private var userData: UserData? {
+        guard let currentOwnerId else { return nil }
+        return users.first(where: { $0.gender == selectedGender && $0.ownerId == currentOwnerId })
+    }
 
     private var progress: Double {
         guard let target = userData?.calories, target > 0 else { return 0 }
@@ -138,7 +143,9 @@ struct NutritionScreen: View {
         do {
             let all = try modelContext.fetch(FetchDescriptor<FoodEntry>())
             let items = all.filter {
-                Calendar.current.isDate($0.date, inSameDayAs: date) && $0.gender == selectedGender
+                Calendar.current.isDate($0.date, inSameDayAs: date)
+                    && $0.gender == selectedGender
+                    && $0.ownerId == currentOwnerId
             }
 
             let breakfast = items.filter { $0.mealType == MealType.breakfast.rawValue }

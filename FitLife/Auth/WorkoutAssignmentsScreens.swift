@@ -178,6 +178,7 @@ struct ClientAssignedWorkoutsScreen: View {
 
 struct ClientAssignmentDetailScreen: View {
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var sessionStore: AppSessionStore
 
     let assignment: WorkoutAssignment
     let trainerName: String?
@@ -207,7 +208,11 @@ struct ClientAssignmentDetailScreen: View {
 
     private var activeWorkout: WorkoutSession? {
         workouts
-            .filter { $0.remoteAssignmentId == assignment.id && $0.endedAt == nil }
+            .filter {
+                $0.remoteAssignmentId == assignment.id &&
+                $0.endedAt == nil &&
+                $0.ownerId == sessionStore.firebaseUser?.uid
+            }
             .sorted { $0.createdAt > $1.createdAt }
             .first
     }

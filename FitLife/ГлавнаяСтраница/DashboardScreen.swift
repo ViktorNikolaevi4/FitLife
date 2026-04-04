@@ -9,6 +9,7 @@ struct DashboardScreen: View {
 
     // Данные
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var sessionStore: AppSessionStore
     @Query private var users: [UserData]
 
     @AppStorage(Gender.appStorageKey) private var activeGenderRaw: String = Gender.male.rawValue
@@ -49,7 +50,8 @@ struct DashboardScreen: View {
     @State private var snacksItems: [FoodEntry] = []
 
     private var userData: UserData? {
-        users.first(where: { $0.gender == selectedGender })
+        guard let currentOwnerId = sessionStore.firebaseUser?.uid else { return nil }
+        return users.first(where: { $0.gender == selectedGender && $0.ownerId == currentOwnerId })
     }
 
     init(selectedDate: Binding<Date>, showsFloatingAddButton: Binding<Bool>, onOpenWorkouts: @escaping () -> Void) {
@@ -198,6 +200,7 @@ struct DashboardScreen: View {
         if userData == nil {
             let newUser = UserData(
                 weight: 0, height: 0, age: 0,
+                ownerId: sessionStore.firebaseUser?.uid ?? "",
                 activityLevel: .none, goal: .currentWeight,
                 gender: selectedGender
             )
@@ -224,7 +227,8 @@ struct DashboardScreen: View {
             let all = try modelContext.fetch(descriptor)
             let items = all.filter {
                 Calendar.current.isDate($0.date, inSameDayAs: date) &&
-                $0.gender == selectedGender
+                $0.gender == selectedGender &&
+                $0.ownerId == sessionStore.firebaseUser?.uid
             }
 
             let b = items.filter { $0.mealType == MealType.breakfast.rawValue }
@@ -281,7 +285,7 @@ struct DashboardScreen: View {
             }) {
                 existing.intake = waterIntake
             } else {
-                let entry = WaterIntake(date: day, intake: waterIntake, gender: user.gender)
+                let entry = WaterIntake(date: day, intake: waterIntake, gender: user.gender, ownerId: user.ownerId)
                 entry.user = user
                 modelContext.insert(entry)
             }
@@ -298,7 +302,7 @@ struct DashboardScreen: View {
         do {
             let all = try modelContext.fetch(FetchDescriptor<WaterIntake>())
             if let existing = all.first(where: {
-                Calendar.current.isDate($0.date, inSameDayAs: day) && $0.user?.id == user.id
+                Calendar.current.isDate($0.date, inSameDayAs: day) && $0.user?.id == user.id && $0.ownerId == user.ownerId
             }) {
                 waterIntake = existing.intake
             } else {
