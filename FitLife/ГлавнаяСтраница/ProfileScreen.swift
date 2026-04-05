@@ -8,6 +8,7 @@ struct ProfileScreen: View {
 
     @AppStorage(Gender.appStorageKey) private var activeGenderRaw: String = Gender.male.rawValue
     @State private var editingGender: Gender
+    @State private var isShowingNutritionGoalsEditor = false
 
     init() {
         let raw = UserDefaults.standard.string(forKey: Gender.appStorageKey) ?? Gender.male.rawValue
@@ -85,6 +86,62 @@ struct ProfileScreen: View {
                         }
                         .onChange(of: u.goal) { _, _ in recalc(u) }
 
+                        SectionCard(title: AppLocalizer.string("profile.nutrition_goals")) {
+                            VStack(alignment: .leading, spacing: 14) {
+                                Picker("", selection: $u.nutritionGoalMode) {
+                                    ForEach(NutritionGoalMode.allCases, id: \.self) {
+                                        Text(AppLocalizer.string($0.titleKey)).tag($0)
+                                    }
+                                }
+                                .pickerStyle(.segmented)
+
+                                if u.nutritionGoalMode == .automatic {
+                                    Text(AppLocalizer.string("profile.nutrition_goals.auto_hint"))
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                } else {
+                                    VStack(spacing: 12) {
+                                        GoalMetricRow(
+                                            title: AppLocalizer.string("nutrition.calories"),
+                                            value: "\(u.calories)",
+                                            unit: AppLocalizer.string("unit.kcal")
+                                        )
+                                        GoalMetricRow(
+                                            title: AppLocalizer.string("macro.protein"),
+                                            value: "\(u.proteins)",
+                                            unit: AppLocalizer.string("unit.grams.short")
+                                        )
+                                        GoalMetricRow(
+                                            title: AppLocalizer.string("macro.fat"),
+                                            value: "\(u.fats)",
+                                            unit: AppLocalizer.string("unit.grams.short")
+                                        )
+                                        GoalMetricRow(
+                                            title: AppLocalizer.string("macro.carbs"),
+                                            value: "\(u.carbs)",
+                                            unit: AppLocalizer.string("unit.grams.short")
+                                        )
+                                    }
+
+                                    Button(AppLocalizer.string("profile.nutrition_goals.edit")) {
+                                        isShowingNutritionGoalsEditor = true
+                                    }
+                                    .font(.body.weight(.semibold))
+                                }
+                            }
+                        }
+                        .onChange(of: u.nutritionGoalMode) { _, newValue in
+                            if newValue == .automatic {
+                                recalc(u, force: true)
+                            } else {
+                                try? modelContext.save()
+                            }
+                        }
+                        .sheet(isPresented: $isShowingNutritionGoalsEditor) {
+                            ManualNutritionGoalsEditor(userData: u)
+                        }
+
                         BMISection(userData: u)
                     } else {
                         ContentUnavailableView(
@@ -133,7 +190,12 @@ struct ProfileScreen: View {
         }
     }
 
-    private func recalc(_ u: UserData) {
+    private func recalc(_ u: UserData, force: Bool = false) {
+        guard force || u.nutritionGoalMode == .automatic else {
+            try? modelContext.save()
+            return
+        }
+
         let cals = MacrosCalculator.calculateCaloriesMifflin(
             gender: u.gender, weight: u.weight, height: u.height, age: u.age,
             activityLevel: u.activityLevel, goal: u.goal
@@ -293,6 +355,127 @@ struct ProfileScreen: View {
                 .presentationDetents([.medium, .large])
             }
         }
+    }
+}
+
+private struct GoalMetricRow: View {
+    let title: String
+    let value: String
+    let unit: String
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.body.weight(.medium))
+            Spacer()
+            Text("\(value) \(unit)")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct ManualNutritionGoalsEditor: View {
+    @Bindable var userData: UserData
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+
+    @State private var proteins: String
+    @State private var fats: String
+    @State private var carbs: String
+
+    init(userData: UserData) {
+        self.userData = userData
+        _proteins = State(initialValue: "\(userData.proteins)")
+        _fats = State(initialValue: "\(userData.fats)")
+        _carbs = State(initialValue: "\(userData.carbs)")
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(AppLocalizer.string("profile.nutrition_goals.manual_section")) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text(AppLocalizer.string("nutrition.calories"))
+                            Spacer()
+                            Text("\(calculatedCalories)")
+                            Text(AppLocalizer.string("unit.kcal"))
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Text(AppLocalizer.string("profile.nutrition_goals.calories_hint"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    numericField(AppLocalizer.string("macro.protein"), text: $proteins, unit: AppLocalizer.string("unit.grams.short"))
+                    numericField(AppLocalizer.string("macro.fat"), text: $fats, unit: AppLocalizer.string("unit.grams.short"))
+                    numericField(AppLocalizer.string("macro.carbs"), text: $carbs, unit: AppLocalizer.string("unit.grams.short"))
+                }
+            }
+            .navigationTitle(AppLocalizer.string("profile.nutrition_goals.edit"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(AppLocalizer.string("common.cancel")) {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(AppLocalizer.string("common.save")) {
+                        save()
+                    }
+                    .disabled(!isValid)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private var isValid: Bool {
+        parsedValue(proteins) != nil &&
+        parsedValue(fats) != nil &&
+        parsedValue(carbs) != nil
+    }
+
+    private var calculatedCalories: Int {
+        let proteinsValue = parsedValue(proteins) ?? 0
+        let fatsValue = parsedValue(fats) ?? 0
+        let carbsValue = parsedValue(carbs) ?? 0
+        return (proteinsValue * 4) + (fatsValue * 9) + (carbsValue * 4)
+    }
+
+    private func numericField(_ title: String, text: Binding<String>, unit: String) -> some View {
+        HStack {
+            TextField(title, text: text)
+                .keyboardType(.numberPad)
+            Text(unit)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func parsedValue(_ text: String) -> Int? {
+        guard let value = Int(text.trimmingCharacters(in: .whitespacesAndNewlines)), value >= 0 else {
+            return nil
+        }
+        return value
+    }
+
+    private func save() {
+        guard
+            let proteinsValue = parsedValue(proteins),
+            let fatsValue = parsedValue(fats),
+            let carbsValue = parsedValue(carbs)
+        else { return }
+
+        userData.nutritionGoalMode = .manual
+        userData.calories = (proteinsValue * 4) + (fatsValue * 9) + (carbsValue * 4)
+        userData.proteins = proteinsValue
+        userData.fats = fatsValue
+        userData.carbs = carbsValue
+        try? modelContext.save()
+        dismiss()
     }
 }
 

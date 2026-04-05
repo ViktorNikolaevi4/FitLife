@@ -573,3 +573,13 @@
 "custom_product.protein" = "Protein, g";
 "custom_product.fat" = "Fat, g";
 "custom_product.carbs" = "Carbs, g";
+"nutrition.calories" = "Calories";
+"unit.kcal" = "kcal";
+"unit.grams.short" = "g";
+"nutrition.goal_mode.auto" = "Auto";
+"nutrition.goal_mode.manual" = "Manual";
+"profile.nutrition_goals" = "Nutrition Goals";
+"profile.nutrition_goals.auto_hint" = "Daily calories and macros are calculated automatically from your body data, activity, and goal.";
+"profile.nutrition_goals.edit" = "Set Manually";
+"profile.nutrition_goals.manual_section" = "Daily targets";
+"profile.nutrition_goals.calories_hint" = "Calories are calculated automatically from macros.";

@@ -573,3 +573,13 @@
 "custom_product.protein" = "Белки, г.";
 "custom_product.fat" = "Жиры, г.";
 "custom_product.carbs" = "Углеводы, г.";
+"nutrition.calories" = "Калории";
+"unit.kcal" = "ккал";
+"unit.grams.short" = "г";
+"nutrition.goal_mode.auto" = "Авто";
+"nutrition.goal_mode.manual" = "Вручную";
+"profile.nutrition_goals" = "Цели питания";
+"profile.nutrition_goals.auto_hint" = "Суточные калории и БЖУ рассчитываются автоматически на основе ваших параметров, активности и цели.";
+"profile.nutrition_goals.edit" = "Задать вручную";
+"profile.nutrition_goals.manual_section" = "Суточные значения";
+"profile.nutrition_goals.calories_hint" = "Калории рассчитываются автоматически по БЖУ.";

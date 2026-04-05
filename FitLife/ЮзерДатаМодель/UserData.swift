@@ -3,6 +3,20 @@ import SwiftData
 import Foundation
 import Observation
 
+enum NutritionGoalMode: String, CaseIterable, Codable {
+    case automatic
+    case manual
+
+    var titleKey: String {
+        switch self {
+        case .automatic:
+            return "nutrition.goal_mode.auto"
+        case .manual:
+            return "nutrition.goal_mode.manual"
+        }
+    }
+}
+
 @Model
 class UserData {
     var ownerId: String = ""
@@ -19,6 +33,7 @@ class UserData {
     var proteins: Int = 0
     var fats: Int = 0
     var carbs: Int = 0
+    var nutritionGoalMode: NutritionGoalMode = FitLife.NutritionGoalMode.automatic
 
     init(weight: Double = 0,
          height: Double = 0,
@@ -30,7 +45,8 @@ class UserData {
          calories: Int = 0,
          proteins: Int = 0,
          fats: Int = 0,
-         carbs: Int = 0) {
+         carbs: Int = 0,
+         nutritionGoalMode: NutritionGoalMode = FitLife.NutritionGoalMode.automatic) {
 
         self.ownerId = ownerId
         self.weight = weight
@@ -43,6 +59,7 @@ class UserData {
         self.proteins = proteins
         self.fats = fats
         self.carbs = carbs
+        self.nutritionGoalMode = nutritionGoalMode
     }
 }
 

@@ -131,6 +131,11 @@ struct MacrosView: View {
   //  @Environment(\.modelContext) private var modelContext
 
     private func recalcAndSave() {
+        guard userData.nutritionGoalMode == .automatic else {
+            try? modelContext.save()
+            return
+        }
+
         let newCalories = MacrosCalculator.calculateCaloriesMifflin(
             gender: userData.gender,
             weight: userData.weight,

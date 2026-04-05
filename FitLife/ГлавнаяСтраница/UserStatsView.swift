@@ -137,6 +137,11 @@ struct UserStatsView: View {
 
         // Если что-то реально поменялось, пересчитаем и сохраним
         if dataChanged {
+            guard userData.nutritionGoalMode == .automatic else {
+                try? modelContext.save()
+                return
+            }
+
             // Пересчёт калорий и БЖУ
             let newCalories = MacrosCalculator.calculateCaloriesMifflin(
                 gender: userData.gender,
@@ -270,6 +275,11 @@ struct ActivitySelectorView: View {
         }
     }
     private func recalcAndSave() {
+         guard userData.nutritionGoalMode == .automatic else {
+             try? modelContext.save()
+             return
+         }
+
          let newCalories = MacrosCalculator.calculateCaloriesMifflin(
              gender: userData.gender,
              weight: userData.weight,
