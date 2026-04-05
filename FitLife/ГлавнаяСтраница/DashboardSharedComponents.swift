@@ -48,6 +48,7 @@ struct WaterSummaryCard: View {
     let goal: Double
     let quickAddML: Int
     let theme: AppTheme
+    let onSubtract: () -> Void
     let onAdd: () -> Void
 
     private var progress: Double {
@@ -68,15 +69,25 @@ struct WaterSummaryCard: View {
                 Spacer()
 
                 HStack(spacing: 10) {
+                    Button(action: onSubtract) {
+                        Image(systemName: "minus")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .frame(width: 44, height: 44)
+                            .background(Circle().fill(theme.subtleFill))
+                    }
+                    .buttonStyle(.plain)
+
                     Text(AppLocalizer.format("unit.ml.value", quickAddML))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
+                        .frame(minWidth: 56)
 
                     Button(action: onAdd) {
                         Image(systemName: "plus")
                             .font(.system(size: 22, weight: .semibold))
                             .foregroundStyle(.primary)
-                            .frame(width: 54, height: 54)
+                            .frame(width: 44, height: 44)
                             .background(Circle().fill(theme.subtleFill))
                     }
                     .buttonStyle(.plain)

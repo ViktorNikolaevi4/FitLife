@@ -40,7 +40,7 @@ struct SettingsScreen: View {
                                 .foregroundStyle(.secondary)
                         }
 
-                        if let role = sessionStore.profile?.role {
+                        if let role = sessionStore.profile?.role, role != .client {
                             HStack {
                                 Text(appLanguage.localized("settings.account.role"))
                                 Spacer()

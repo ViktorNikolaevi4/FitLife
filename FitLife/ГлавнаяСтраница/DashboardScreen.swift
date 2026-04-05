@@ -84,6 +84,7 @@ struct DashboardScreen: View {
                             goal: dailyWaterGoal(for: user),
                             quickAddML: waterQuickAddML,
                             theme: theme,
+                            onSubtract: { subtractWater(amount: Double(waterQuickAddML) / 1000.0) },
                             onAdd: { addWater(amount: Double(waterQuickAddML) / 1000.0) }
                         )
 
@@ -274,6 +275,11 @@ struct DashboardScreen: View {
 
     private func addWater(amount: Double) {
         waterIntake += amount
+        saveWaterIntake(for: selectedDate)
+    }
+
+    private func subtractWater(amount: Double) {
+        waterIntake = max(0, waterIntake - amount)
         saveWaterIntake(for: selectedDate)
     }
 
