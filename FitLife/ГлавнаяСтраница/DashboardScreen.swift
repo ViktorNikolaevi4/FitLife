@@ -82,6 +82,7 @@ struct DashboardScreen: View {
                         WaterSummaryCard(
                             intake: waterIntake,
                             goal: dailyWaterGoal(for: user),
+                            quickAddML: waterQuickAddML,
                             theme: theme,
                             onAdd: { addWater(amount: Double(waterQuickAddML) / 1000.0) }
                         )

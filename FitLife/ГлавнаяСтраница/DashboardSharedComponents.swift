@@ -46,6 +46,7 @@ enum RationSheet: Identifiable {
 struct WaterSummaryCard: View {
     let intake: Double
     let goal: Double
+    let quickAddML: Int
     let theme: AppTheme
     let onAdd: () -> Void
 
@@ -66,14 +67,20 @@ struct WaterSummaryCard: View {
 
                 Spacer()
 
-                Button(action: onAdd) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(.primary)
-                        .frame(width: 54, height: 54)
-                        .background(Circle().fill(theme.subtleFill))
+                HStack(spacing: 10) {
+                    Text(AppLocalizer.format("unit.ml.value", quickAddML))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
+                    Button(action: onAdd) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 22, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .frame(width: 54, height: 54)
+                            .background(Circle().fill(theme.subtleFill))
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
 
             Text(AppLocalizer.format("water.progress.liters", intake, goal))
