@@ -25,6 +25,7 @@ struct ProductSelectionView: View {
     @State private var searchTask: Task<Void, Never>?
     @State private var isShowingBarcodeScanner = false
     @State private var scannerErrorMessage: String?
+    @FocusState private var isSearchFocused: Bool
 
     // кэш «Любимых»
     @State private var cachedFilteredProducts: [Product] = []
@@ -108,62 +109,123 @@ struct ProductSelectionView: View {
 
     var body: some View {
         NavigationStack {
-            VStack {
-                VStack {
-                    Text(appLanguage.localized("search.title"))
-                        .foregroundStyle(.primary)
-                    Text(appLanguage.localized("search.subtitle"))
-                        .foregroundStyle(.secondary)
-                }
+            VStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(appLanguage.localized("search.prompt"))
+                            .font(.headline)
+                            .foregroundStyle(.primary)
 
-                Picker(appLanguage.localized("search.category"), selection: $selectedFilter) {
-                    ForEach(FilterType.allCases, id: \.self) { filter in
-                        Text(title(for: filter)).tag(filter)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-
-                TextField(appLanguage.localized("search.placeholder"), text: $searchText)
-                    .textFieldStyle(.roundedBorder)
-                    .padding()
-                    .onSubmit {
-                        scheduleHybridSearch(immediate: true)
-                    }
-
-                if let searchStatusText {
-                    HStack(spacing: 8) {
-                        if isSearchingRemotely {
-                            ProgressView()
-                                .controlSize(.small)
-                        }
-                        Text(searchStatusText)
-                            .font(.caption)
+                        Text(appLanguage.localized("search.subtitle"))
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal)
+
+                    Picker(appLanguage.localized("search.category"), selection: $selectedFilter) {
+                        ForEach(FilterType.allCases, id: \.self) { filter in
+                            Text(title(for: filter)).tag(filter)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    HStack(spacing: 10) {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundStyle(.secondary)
+
+                        TextField(appLanguage.localized("search.placeholder"), text: $searchText)
+                            .textInputAutocapitalization(.never)
+                            .focused($isSearchFocused)
+                            .onSubmit {
+                                scheduleHybridSearch(immediate: true)
+                            }
+
+                        if !searchText.isEmpty {
+                            Button {
+                                searchText = ""
+                                scheduleHybridSearch(immediate: true)
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.black.opacity(0.06))
+                    )
+
+                    HStack(spacing: 10) {
+                        actionPill(
+                            title: appLanguage.localized("common.scan"),
+                            systemImage: "barcode.viewfinder"
+                        ) {
+                            isShowingBarcodeScanner = true
+                        }
+
+                        actionPill(
+                            title: appLanguage.localized("common.create"),
+                            systemImage: "plus"
+                        ) {
+                            isCreatingProduct = true
+                        }
+                    }
+
+                    if let searchStatusText {
+                        HStack(spacing: 8) {
+                            if isSearchingRemotely {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                            Text(searchStatusText)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
 
                 List {
                     if shouldShowRemoteSection {
-                        Section(header: Text(remoteSectionTitle)) {
+                        sectionHeader(remoteSectionTitle)
+
+                        if remoteProducts.isEmpty {
+                            emptyStateRow(message: appLanguage.localized("search.empty.all"))
+                        } else {
                             ForEach(remoteProducts, id: \.id) { product in
                                 productRow(product: product)
+                                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                                    .listRowSeparator(.hidden)
+                                    .listRowBackground(Color.clear)
                             }
                         }
                     }
 
                     if selectedFilter != .custom {
-                        Section(header: Text(localSectionTitle)) {
+                        sectionHeader(localSectionTitle)
+
+                        if filteredProducts.isEmpty {
+                            emptyStateRow(message: emptyMessageForCurrentFilter)
+                        } else {
                             ForEach(filteredProducts, id: \.id) { product in
                                 productRow(product: product)
+                                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                                    .listRowSeparator(.hidden)
+                                    .listRowBackground(Color.clear)
                             }
                         }
                     }
 
                     if selectedFilter == .custom {
-                        Section(header: Text(appLanguage.localized("search.section.custom_products"))) {
+                        sectionHeader(appLanguage.localized("search.section.custom_products"))
+
+                        if filteredCustomProducts.isEmpty {
+                            emptyStateRow(message: emptyMessageForCurrentFilter)
+                        } else {
                             ForEach(filteredCustomProducts, id: \.id) { customProduct in
                                 customProductRow(customProduct: customProduct)
                                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -173,25 +235,23 @@ struct ProductSelectionView: View {
                                             Label(appLanguage.localized("common.delete"), systemImage: "trash")
                                         }
                                     }
+                                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                                    .listRowSeparator(.hidden)
+                                    .listRowBackground(Color.clear)
                             }
                         }
                     }
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    HStack(spacing: 12) {
-                        Button {
-                            isShowingBarcodeScanner = true
-                        } label: {
-                            Label(appLanguage.localized("common.scan"), systemImage: "barcode.viewfinder")
-                        }
-                        .foregroundColor(.blue)
-
-                        Button(appLanguage.localized("common.create")) { isCreatingProduct = true }
-                            .foregroundColor(.blue)
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(appLanguage.localized("common.close")) {
+                        if let onClose { onClose() } else { dismiss() }
                     }
+                    .foregroundColor(.blue)
                 }
                 ToolbarItem(placement: .principal) {
                     VStack {
@@ -203,12 +263,6 @@ struct ProductSelectionView: View {
                             .foregroundColor(.secondary)
                     }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(appLanguage.localized("common.close")) {
-                        if let onClose { onClose() } else { dismiss() }
-                    }
-                    .foregroundColor(.blue)
-                }
             }
             .onAppear {
                 loadFavorites()
@@ -217,6 +271,9 @@ struct ProductSelectionView: View {
                 loadUsageCounts() // ← важно: посчитать частоты
                 refreshVisibleProducts()
                 scheduleHybridSearch()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    isSearchFocused = true
+                }
             }
             .onChange(of: searchText) { _, _ in
                 refreshVisibleProducts()
@@ -262,7 +319,7 @@ struct ProductSelectionView: View {
                     Text(scannerErrorMessage ?? "")
                 }
             )
-            .background(Color(.systemBackground).ignoresSafeArea())
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
         }
     }
 
@@ -272,14 +329,27 @@ struct ProductSelectionView: View {
         Button(action: {
             onProductSelected(product)   // ⬅️ НЕ dismiss — поверх откроется оверлей граммов
         }) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(product.displayName(preferredLanguageCode: searchLanguage.rawValue)).font(.headline)
-                    Text(nutritionSummary(for: product))
-                        .font(.caption)
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(product.displayName(preferredLanguageCode: searchLanguage.rawValue))
+                        .font(.body.weight(.semibold))
+                        .multilineTextAlignment(.leading)
+
+                    Text(appLanguage.localized("search.per_100g"))
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
+                    HStack(spacing: 10) {
+                        metricTag(text: "\(product.calories) \(appLanguage.localized("unit.kcal"))")
+                        metricTag(text: macroShort("macro.protein.short", value: product.protein))
+                        metricTag(text: macroShort("macro.fat.short", value: product.fat))
+                        metricTag(text: macroShort("macro.carbs.short", value: product.carbs))
+                    }
                 }
                 .foregroundColor(.primary)
+
                 Spacer()
+
                 if let index = productLoader.products.firstIndex(where: { $0.id == product.id }) {
                     Button(action: {
                         productLoader.products[index].isFavorite.toggle()
@@ -289,9 +359,10 @@ struct ProductSelectionView: View {
                     }) {
                         Image(systemName: product.isFavorite ? "star.fill" : "star")
                             .foregroundColor(product.isFavorite ? .yellow : .gray)
+                            .frame(width: 36, height: 36)
+                            .background(Color(.secondarySystemBackground), in: Circle())
                     }
                     .buttonStyle(.borderless)
-                    .padding(.vertical, 4)
                 } else {
                     Text(sourceLabel(for: product.source))
                         .font(.caption2.weight(.semibold))
@@ -301,28 +372,48 @@ struct ProductSelectionView: View {
                         .background(Color(.secondarySystemBackground), in: Capsule())
                 }
             }
+            .padding(14)
+            .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 18))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18)
+                    .stroke(Color.black.opacity(0.06))
+            )
         }
+        .buttonStyle(.plain)
     }
 
     private func customProductRow(customProduct: CustomProduct) -> some View {
         Button(action: {
             onCustomProductSelected(customProduct) // по тапу выбираем продукт
         }) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(customProduct.name).font(.headline)
-                    Text(nutritionSummary(
-                        calories: customProduct.calories,
-                        protein: customProduct.protein,
-                        fat: customProduct.fat,
-                        carbs: customProduct.carbs
-                    ))
-                        .font(.caption)
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(customProduct.name)
+                        .font(.body.weight(.semibold))
+                        .multilineTextAlignment(.leading)
+
+                    Text(appLanguage.localized("search.per_100g"))
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
+                    HStack(spacing: 10) {
+                        metricTag(text: "\(customProduct.calories) \(appLanguage.localized("unit.kcal"))")
+                        metricTag(text: macroShort("macro.protein.short", value: customProduct.protein))
+                        metricTag(text: macroShort("macro.fat.short", value: customProduct.fat))
+                        metricTag(text: macroShort("macro.carbs.short", value: customProduct.carbs))
+                    }
                 }
                 .foregroundStyle(.primary)
                 Spacer()
             }
+            .padding(14)
+            .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 18))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18)
+                    .stroke(Color.black.opacity(0.06))
+            )
         }
+        .buttonStyle(.plain)
     }
 
 
@@ -545,6 +636,87 @@ struct ProductSelectionView: View {
         case .openFoodFacts:
             return "OFF"
         }
+    }
+
+    private var emptyMessageForCurrentFilter: String {
+        switch selectedFilter {
+        case .all:
+            return appLanguage.localized("search.empty.all")
+        case .favorites:
+            return appLanguage.localized("search.empty.favorites")
+        case .custom:
+            return appLanguage.localized("search.empty.custom")
+        }
+    }
+
+    @ViewBuilder
+    private func sectionHeader(_ title: String) -> some View {
+        Section {
+            EmptyView()
+        } header: {
+            Text(title)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .textCase(nil)
+                .padding(.top, 8)
+        }
+        .listRowInsets(EdgeInsets())
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
+    }
+
+    private func emptyStateRow(message: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            if selectedFilter == .custom {
+                Button(appLanguage.localized("common.create")) {
+                    isCreatingProduct = true
+                }
+                .font(.subheadline.weight(.semibold))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(18)
+        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 18))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(Color.black.opacity(0.06))
+        )
+        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
+    }
+
+    private func metricTag(text: String) -> some View {
+        Text(text)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(Color(.secondarySystemBackground), in: Capsule())
+    }
+
+    private func macroShort(_ key: String, value: Double) -> String {
+        let formatted = String(format: "%.1f", locale: appLanguage.locale, value)
+        return "\(appLanguage.localized(key)) \(formatted)"
+    }
+
+    private func actionPill(title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.caption.weight(.semibold))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 9)
+                .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.black.opacity(0.06))
+                )
+        }
+        .buttonStyle(.plain)
     }
 }
 

@@ -84,6 +84,11 @@
 "search.scan.error.unavailable" = "Камера недоступна на этом устройстве.";
 "search.scan.error.permission" = "Доступ к камере запрещён. Разрешите его в настройках iOS.";
 "search.scan.error.configuration" = "Не удалось настроить сканер штрихкодов.";
+"search.prompt" = "Найдите продукт или добавьте свой";
+"search.per_100g" = "На 100 г";
+"search.empty.all" = "Ничего не найдено. Попробуйте другой запрос.";
+"search.empty.favorites" = "В избранном пока ничего нет.";
+"search.empty.custom" = "У вас пока нет своих продуктов.";
 
 "common.ok" = "OK";
 "common.save" = "Сохранить";
@@ -474,6 +479,9 @@
 "meal.snacks" = "Перекусы";
 "meal.snack" = "Перекус";
 "meal.macros.summary" = "Б %d • Ж %d • У %d г";
+"macro.protein.short" = "Б";
+"macro.fat.short" = "Ж";
+"macro.carbs.short" = "У";
 
 "product.default" = "Продукт";
 "product.delete.confirm" = "Удалить продукт?";
@@ -582,4 +590,5 @@
 "profile.nutrition_goals.auto_hint" = "Суточные калории и БЖУ рассчитываются автоматически на основе ваших параметров, активности и цели.";
 "profile.nutrition_goals.edit" = "Задать вручную";
 "profile.nutrition_goals.manual_section" = "Суточные значения";
+"profile.nutrition_goals.sheet_subtitle" = "Укажите белки, жиры и углеводы, а калории посчитаются автоматически.";
 "profile.nutrition_goals.calories_hint" = "Калории рассчитываются автоматически по БЖУ.";

@@ -394,39 +394,73 @@ private struct ManualNutritionGoalsEditor: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section(AppLocalizer.string("profile.nutrition_goals.manual_section")) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text(AppLocalizer.string("nutrition.calories"))
-                            Spacer()
-                            Text("\(calculatedCalories)")
-                            Text(AppLocalizer.string("unit.kcal"))
+            VStack(spacing: 0) {
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 20) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(AppLocalizer.string("profile.nutrition_goals.manual_section"))
+                                .font(.headline)
+
+                            Text(AppLocalizer.string("profile.nutrition_goals.sheet_subtitle"))
+                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
 
-                        Text(AppLocalizer.string("profile.nutrition_goals.calories_hint"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(AppLocalizer.string("nutrition.calories"))
+                                .font(.subheadline.weight(.semibold))
+
+                            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                Text("\(calculatedCalories)")
+                                    .font(.system(size: 34, weight: .bold))
+                                Text(AppLocalizer.string("unit.kcal"))
+                                    .font(.headline)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Text(AppLocalizer.string("profile.nutrition_goals.calories_hint"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(18)
+                        .background(
+                            RoundedRectangle(cornerRadius: 18)
+                                .fill(Color(.secondarySystemBackground))
+                        )
+
+                        VStack(spacing: 12) {
+                            macroField(title: AppLocalizer.string("macro.protein"), text: $proteins, unit: AppLocalizer.string("unit.grams.short"))
+                            macroField(title: AppLocalizer.string("macro.fat"), text: $fats, unit: AppLocalizer.string("unit.grams.short"))
+                            macroField(title: AppLocalizer.string("macro.carbs"), text: $carbs, unit: AppLocalizer.string("unit.grams.short"))
+                        }
                     }
-                    numericField(AppLocalizer.string("macro.protein"), text: $proteins, unit: AppLocalizer.string("unit.grams.short"))
-                    numericField(AppLocalizer.string("macro.fat"), text: $fats, unit: AppLocalizer.string("unit.grams.short"))
-                    numericField(AppLocalizer.string("macro.carbs"), text: $carbs, unit: AppLocalizer.string("unit.grams.short"))
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
+                    .padding(.bottom, 28)
                 }
+
+                VStack(spacing: 0) {
+                    Divider()
+
+                    Button(AppLocalizer.string("common.save")) {
+                        save()
+                    }
+                    .font(.body.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .disabled(!isValid)
+                }
+                .background(Color(.systemBackground))
             }
             .navigationTitle(AppLocalizer.string("profile.nutrition_goals.edit"))
             .navigationBarTitleDisplayMode(.inline)
+            .background(Color(.systemGroupedBackground))
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(AppLocalizer.string("common.cancel")) {
                         dismiss()
                     }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(AppLocalizer.string("common.save")) {
-                        save()
-                    }
-                    .disabled(!isValid)
                 }
             }
         }
@@ -446,13 +480,33 @@ private struct ManualNutritionGoalsEditor: View {
         return (proteinsValue * 4) + (fatsValue * 9) + (carbsValue * 4)
     }
 
-    private func numericField(_ title: String, text: Binding<String>, unit: String) -> some View {
-        HStack {
-            TextField(title, text: text)
+    private func macroField(title: String, text: Binding<String>, unit: String) -> some View {
+        HStack(spacing: 14) {
+            Text(title)
+                .font(.body.weight(.medium))
+
+            Spacer()
+
+            TextField("0", text: text)
                 .keyboardType(.numberPad)
+                .multilineTextAlignment(.trailing)
+                .frame(width: 88)
+                .font(.body.weight(.semibold))
+
             Text(unit)
                 .foregroundStyle(.secondary)
+                .frame(width: 18, alignment: .trailing)
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 15)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.systemBackground))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.black.opacity(0.06))
+        )
     }
 
     private func parsedValue(_ text: String) -> Int? {

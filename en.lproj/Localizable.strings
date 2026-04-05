@@ -84,6 +84,11 @@
 "search.scan.error.unavailable" = "The camera is not available on this device.";
 "search.scan.error.permission" = "Camera access is denied. Allow it in iOS Settings.";
 "search.scan.error.configuration" = "The barcode scanner could not be configured.";
+"search.prompt" = "Find a product or add your own";
+"search.per_100g" = "Per 100 g";
+"search.empty.all" = "Nothing found. Try a different search.";
+"search.empty.favorites" = "No favorite products yet.";
+"search.empty.custom" = "You have no custom products yet.";
 
 "common.ok" = "OK";
 "common.save" = "Save";
@@ -474,6 +479,9 @@
 "meal.snacks" = "Snacks";
 "meal.snack" = "Snack";
 "meal.macros.summary" = "P %d • F %d • C %d g";
+"macro.protein.short" = "P";
+"macro.fat.short" = "F";
+"macro.carbs.short" = "C";
 
 "product.default" = "Product";
 "product.delete.confirm" = "Delete product?";
@@ -582,4 +590,5 @@
 "profile.nutrition_goals.auto_hint" = "Daily calories and macros are calculated automatically from your body data, activity, and goal.";
 "profile.nutrition_goals.edit" = "Set Manually";
 "profile.nutrition_goals.manual_section" = "Daily targets";
+"profile.nutrition_goals.sheet_subtitle" = "Enter protein, fat, and carbs, and calories will be calculated automatically.";
 "profile.nutrition_goals.calories_hint" = "Calories are calculated automatically from macros.";
