@@ -13,6 +13,7 @@ struct DashboardScreen: View {
     @Query private var users: [UserData]
 
     @AppStorage(Gender.appStorageKey) private var activeGenderRaw: String = Gender.male.rawValue
+    @AppStorage(WaterPortionPreference.appStorageKey) private var waterQuickAddML: Int = WaterPortionPreference.defaultML
     private var selectedGender: Gender { Gender(rawValue: activeGenderRaw) ?? .male }
 
     @Environment(\.colorScheme) private var colorScheme
@@ -82,7 +83,7 @@ struct DashboardScreen: View {
                             intake: waterIntake,
                             goal: dailyWaterGoal(for: user),
                             theme: theme,
-                            onAdd: { addWater(amount: 0.25) }
+                            onAdd: { addWater(amount: Double(waterQuickAddML) / 1000.0) }
                         )
 
                         TrainingDiaryCard(

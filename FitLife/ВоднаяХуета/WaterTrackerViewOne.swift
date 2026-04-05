@@ -8,10 +8,10 @@ struct WaterTrackerViewOne: View {
     @Query private var users: [UserData]
 
     @AppStorage(Gender.appStorageKey) private var activeGenderRaw: String = Gender.male.rawValue
+    @AppStorage(WaterPortionPreference.appStorageKey) private var stepML: Int = WaterPortionPreference.defaultML
     private var selectedGender: Gender { Gender(rawValue: activeGenderRaw) ?? .male }
 
     @State private var showNotificationSettings = false
-    @State private var stepML: Int = 250
     private var stepLiters: Double { Double(stepML) / 1000.0 }
     private let portionOptions: [Int] = [200, 250, 300, 400, 500]
 

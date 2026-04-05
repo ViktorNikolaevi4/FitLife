@@ -526,8 +526,7 @@ private struct ProductsList: View {
     var onUpdate: (FoodEntry) -> Void
 
     @State private var pendingDelete: FoodEntry?
-    @State private var editing: FoodEntry?
-    @State private var gramsText: String = ""
+    @State private var editingSelection: FoodEntryEditorSelection?
 
     @Environment(\.modelContext) private var modelContext
 
@@ -541,56 +540,52 @@ private struct ProductsList: View {
     var body: some View {
         VStack(spacing: 0) {
             ForEach(items) { entry in
-                HStack {
-                    Text(entry.product?.name ?? AppLocalizer.string("product.default"))
-                        .lineLimit(1)
-                    Spacer()
-                    HStack(spacing: 8) {
-                        if entry.portion > 0 {
-                            Text(AppLocalizer.format("unit.grams.value", Int(entry.portion)))
+                VStack(spacing: 0) {
+                    HStack {
+                        Text(entry.product?.name ?? AppLocalizer.string("product.default"))
+                            .lineLimit(2)
+                        Spacer()
+                        HStack(spacing: 8) {
+                            if entry.portion > 0 {
+                                Text(AppLocalizer.format("unit.grams.value", Int(entry.portion)))
+                                    .foregroundStyle(.secondary)
+                            }
+                            Text(AppLocalizer.format("unit.kcal.value", entry.product?.calories ?? 0))
                                 .foregroundStyle(.secondary)
                         }
-                        Text(AppLocalizer.format("unit.kcal.value", entry.product?.calories ?? 0))
-                            .foregroundStyle(.secondary)
+                        .font(.subheadline)
                     }
                     .font(.subheadline)
-                }
-                .font(.subheadline)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .overlay(alignment: .bottom) { Divider().opacity(0.35) }
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    editing = entry
-                    gramsText = String(Int(max(1, entry.portion)))
-                }
-                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                    Button(role: .destructive) {
-                        pendingDelete = entry
-                    } label: {
-                        Label(AppLocalizer.string("common.delete"), systemImage: "trash")
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        editingSelection = FoodEntryEditorSelection(entry: entry)
+                    }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            pendingDelete = entry
+                        } label: {
+                            Label(AppLocalizer.string("common.delete"), systemImage: "trash")
+                        }
                     }
                 }
+                .overlay(alignment: .bottom) { Divider().opacity(0.35) }
             }
         }
         .padding(.leading, 52)
         .padding(.trailing, 2)
-        .sheet(item: $editing) { entry in
-            EditEntrySheet(
-                entry: entry,
-                gramsText: $gramsText,
+        .navigationDestination(item: $editingSelection) { selection in
+            PortionEditorScreen(
+                entry: selection.entry,
                 onSave: { newPortion in
-                    applyNewPortion(entry, newPortion: newPortion)
-                    onUpdate(entry)
-                    editing = nil
+                    applyNewPortion(selection.entry, newPortion: newPortion)
+                    onUpdate(selection.entry)
                 },
                 onDelete: {
-                    let e = entry
-                    editing = nil
-                    onDelete(e)
+                    onDelete(selection.entry)
                 }
             )
-            .presentationDetents([.height(320), .medium])
         }
         .alert(AppLocalizer.string("product.delete.confirm"),
                isPresented: Binding(
@@ -622,75 +617,160 @@ private struct ProductsList: View {
     }
 }
 
-// MARK: - Малый лист редактирования продукта
-
-private struct EditEntrySheet: View {
+private struct FoodEntryEditorSelection: Identifiable, Hashable {
     let entry: FoodEntry
-    @Binding var gramsText: String
+    var id: UUID { entry.id }
+
+    static func == (lhs: FoodEntryEditorSelection, rhs: FoodEntryEditorSelection) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+}
+
+// MARK: - Portion Editor
+
+private struct PortionEditorScreen: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let entry: FoodEntry
     var onSave: (Double) -> Void
     var onDelete: () -> Void
 
-    @Environment(\.dismiss) private var dismiss
+    @State private var gramsText: String
+
+    init(entry: FoodEntry, onSave: @escaping (Double) -> Void, onDelete: @escaping () -> Void) {
+        self.entry = entry
+        self.onSave = onSave
+        self.onDelete = onDelete
+        _gramsText = State(initialValue: String(Int(max(1, entry.portion))))
+    }
+
+    private var previewScale: Double {
+        guard entry.portion > 0 else { return 1 }
+        return gramsValue / max(1.0, entry.portion)
+    }
+
+    private var gramsValue: Double {
+        max(1, Double(gramsText) ?? entry.portion)
+    }
 
     var body: some View {
-        VStack(spacing: 16) {
-            RoundedRectangle(cornerRadius: 2)
-                .frame(width: 36, height: 4)
-                .opacity(0.2)
-                .padding(.top, 8)
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(entry.product?.name ?? AppLocalizer.string("product.default"))
+                        .font(.title3.weight(.semibold))
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(2)
 
-            Text(entry.product?.name ?? AppLocalizer.string("product.default"))
-                .font(.headline)
-
-            TextField(AppLocalizer.string("portion.grams"), text: $gramsText)
-                .keyboardType(.numberPad)
-                .textFieldStyle(.roundedBorder)
-                .padding(.horizontal)
-                .onChange(of: gramsText) { gramsText = gramsText.filter(\.isNumber) }
-
-            if let p = Double(gramsText), let pr = entry.product {
-                // коэффициент пересчёта относительно текущей порции
-                let k = max(1.0, p) / max(1.0, entry.portion)
-                VStack(spacing: 6) {
-                    Text(AppLocalizer.format("entry.will_be_kcal", Int(Double(pr.calories) * k)))
-                        .font(.title3).bold()
-                    HStack(spacing: 16) {
-                        Text(AppLocalizer.format("macro.protein.value", String(format: "%.1f", pr.protein * k)))
-                        Text(AppLocalizer.format("macro.fat.value", String(format: "%.1f", pr.fat * k)))
-                        Text(AppLocalizer.format("macro.carbs.value", String(format: "%.1f", pr.carbs * k)))
-                    }
-                    .foregroundStyle(.secondary)
+                    Text(AppLocalizer.string("search.per_100g"))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
-            }
 
-            HStack(spacing: 12) {
-                Button(AppLocalizer.string("common.delete"), role: .destructive) { onDelete() }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.red)
-                    .frame(maxWidth: .infinity)
+                VStack(spacing: 16) {
+                    HStack(spacing: 14) {
+                        stepperButton(systemImage: "minus") {
+                            updateGrams(by: -10)
+                        }
+
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            TextField("100", text: $gramsText)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.center)
+                                .font(.system(size: 36, weight: .bold, design: .rounded))
+                                .onChange(of: gramsText) { gramsText = gramsText.filter(\.isNumber) }
+
+                            Text(AppLocalizer.string("unit.grams.short"))
+                                .font(.headline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+
+                        stepperButton(systemImage: "plus") {
+                            updateGrams(by: 10)
+                        }
+                    }
+                }
+                .padding(18)
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24))
+
+                if let pr = entry.product {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text(AppLocalizer.format("entry.will_be_kcal", Int(Double(pr.calories) * previewScale)))
+                            .font(.system(size: 30, weight: .bold))
+
+                        VStack(spacing: 10) {
+                            PortionMetricRow(title: AppLocalizer.string("macro.protein"), value: pr.protein * previewScale)
+                            PortionMetricRow(title: AppLocalizer.string("macro.fat"), value: pr.fat * previewScale)
+                            PortionMetricRow(title: AppLocalizer.string("macro.carbs"), value: pr.carbs * previewScale)
+                        }
+                    }
+                    .padding(18)
+                    .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 24))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 24)
+                            .stroke(Color.black.opacity(0.06))
+                    )
+                }
 
                 Button(AppLocalizer.string("common.save")) {
-                    if let v = Double(gramsText), v > 0 { onSave(v) }
+                    onSave(gramsValue)
+                    dismiss()
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.blue)
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
-            }
-            .padding(.horizontal)
+                .padding(.vertical, 18)
+                .background(RoundedRectangle(cornerRadius: 20).fill(.black))
 
-            Spacer(minLength: 8)
+                Button(AppLocalizer.string("common.delete"), role: .destructive) {
+                    onDelete()
+                    dismiss()
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.red)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+            }
+            .padding(20)
         }
-        // ← overlay ДОЛЖЕН быть модификатором у возвращаемого VStack
-        .overlay(alignment: .topTrailing) {
-                        Button(AppLocalizer.string("common.close")) { dismiss() }
-                            .buttonStyle(.plain)
-                            .font(.callout.weight(.semibold))
-                            .foregroundStyle(.secondary) 
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(.ultraThinMaterial, in: Capsule())
-                            .padding(8)
-                            .accessibilityLabel(AppLocalizer.string("common.close"))
-                    }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .navigationTitle(AppLocalizer.string("entry.portion.title"))
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func updateGrams(by delta: Int) {
+        let next = max(1, Int(gramsValue) + delta)
+        gramsText = String(next)
+    }
+
+    private func stepperButton(systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.headline.weight(.semibold))
+                .frame(width: 42, height: 42)
+                .background(Color(.secondarySystemBackground), in: Circle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct PortionMetricRow: View {
+    let title: String
+    let value: Double
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.body.weight(.medium))
+            Spacer()
+            Text(String(format: "%.1f %@", value, AppLocalizer.string("unit.grams.short")))
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
     }
 }

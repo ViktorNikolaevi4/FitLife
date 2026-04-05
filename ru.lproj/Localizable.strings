@@ -499,6 +499,8 @@
 "ration.carbs.value" = "Углеводы: %d г";
 "ration.entry.summary" = "Калории: %d ккал, Б: %@ г, Ж: %@ г, У: %@ г";
 "ration.add_food" = "+ добавить еду";
+"ration.empty.title" = "Пока ничего не добавлено";
+"ration.empty.subtitle" = "Добавьте продукт, чтобы заполнить этот приём пищи.";
 
 "bmi.title" = "Индекс массы тела";
 "bmi.short" = "ИМТ";
@@ -592,3 +594,5 @@
 "profile.nutrition_goals.manual_section" = "Суточные значения";
 "profile.nutrition_goals.sheet_subtitle" = "Укажите белки, жиры и углеводы, а калории посчитаются автоматически.";
 "profile.nutrition_goals.calories_hint" = "Калории рассчитываются автоматически по БЖУ.";
+"entry.portion.title" = "Порция";
+"entry.preview.title" = "Итог";

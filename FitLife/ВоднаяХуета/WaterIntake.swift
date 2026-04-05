@@ -1,6 +1,11 @@
 import SwiftData
 import Foundation
 
+enum WaterPortionPreference {
+    static let appStorageKey = "water.selectedPortionML"
+    static let defaultML = 250
+}
+
 @Model
 class WaterIntake {
     var id: UUID = UUID()

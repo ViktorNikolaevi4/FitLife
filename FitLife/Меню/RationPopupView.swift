@@ -24,6 +24,32 @@ enum MealType: String, CaseIterable, Identifiable {
     }
 }
 
+private struct RationMacroCard: View {
+    let title: String
+    let current: Int
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(title)
+                .font(.caption2.weight(.semibold))
+            Text(AppLocalizer.format("unit.grams.value", current))
+                .font(.caption.weight(.semibold))
+            ThickProgressBar(
+                fraction: current > 0 ? 1 : 0,
+                fill: tint,
+                track: tint.opacity(0.16),
+                height: 4
+            )
+            .frame(height: 4)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
+        .background(RoundedRectangle(cornerRadius: 16).fill(Color(.systemBackground)))
+    }
+}
+
 struct RationPopupView: View {
     // MARK: — Храним записи FoodEntry
     @State private var breakfastEntries: [FoodEntry] = []
@@ -37,6 +63,7 @@ struct RationPopupView: View {
     @State private var showProductDetails = false
     @State private var portionSize: String = "100"
     @State private var activeMeal: MealType? = nil
+    @State private var expandedMeals: Set<MealType> = []
 
     // MARK: — Параметры
     @Binding var selectedDate: Date
@@ -47,7 +74,10 @@ struct RationPopupView: View {
     // MARK: — Окружение
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var sessionStore: AppSessionStore
+
+    private var theme: AppTheme { AppTheme(colorScheme) }
 
     init(
         breakfastProducts: [Product] = [],
@@ -161,79 +191,132 @@ struct RationPopupView: View {
     // MARK: — Основной контент
     @ViewBuilder
     private var mainContent: some View {
-        VStack(spacing: 16) {
-            Text(AppLocalizer.string("ration.day_title")).font(.title2).fontWeight(.bold)
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 16) {
+                Text(AppLocalizer.string("ration.day_title"))
+                    .font(.title2.weight(.bold))
 
-            VStack {
-                Text(AppLocalizer.string("ration.total_day")).font(.headline)
-                Text(AppLocalizer.format("ration.calories.value", totalCalories))
-                HStack(spacing: 20) {
-                    Text(AppLocalizer.format("ration.protein.value", totalProteins))
-                    Text(AppLocalizer.format("ration.fat.value", totalFats))
-                    Text(AppLocalizer.format("ration.carbs.value", totalCarbs))
+                rationSummaryCard
+
+                VStack(spacing: 12) {
+                    mealBlock(.breakfast, entries: breakfastEntries, systemImage: "sunrise.fill", badgeFill: .pinkovo)
+                    mealBlock(.lunch, entries: lunchEntries, systemImage: "fork.knife", badgeFill: .zeleneko)
+                    mealBlock(.dinner, entries: dinnerEntries, systemImage: "moon.stars.fill", badgeFill: .sinenko)
+                    mealBlock(.snacks, entries: snacksEntries, systemImage: "takeoutbag.and.cup.and.straw.fill", badgeFill: .zheltenko)
                 }
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
             }
-
-            Divider()
-
-            List {
-                mealSection(.breakfast, entries: breakfastEntries)
-                mealSection(.lunch,     entries: lunchEntries)
-                mealSection(.dinner,    entries: dinnerEntries)
-                mealSection(.snacks,    entries: snacksEntries)
-            }
-            .listStyle(.insetGrouped)
-//
-//            Spacer(minLength: 8)
-//
-//            Button("OK") { dismiss() }
-//                .font(.headline)
-//                .padding()
-//                .background(Color.blue)
-//                .foregroundColor(.white)
-//                .cornerRadius(10)
+            .padding(.bottom, 20)
         }
     }
 
-    // MARK: — Секция приёма пищи
-    @ViewBuilder
-    private func mealSection(_ meal: MealType, entries: [FoodEntry]) -> some View {
-        Section {
-            ForEach(entries) { entry in
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(entry.product?.name ?? "—")
-                        .font(.headline)
+    private var rationSummaryCard: some View {
+        VStack(spacing: 14) {
+            VStack(spacing: 4) {
+                Text(totalCalories.formatted(.number.grouping(.automatic)))
+                    .font(.system(size: 32, weight: .bold))
+                Text(AppLocalizer.string("nutrition.calories"))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
 
-                    Text(
-                        AppLocalizer.format(
-                            "ration.entry.summary",
-                            entry.product?.calories ?? 0,
-                            String(format: "%.1f", entry.product?.protein ?? 0),
-                            String(format: "%.1f", entry.product?.fat ?? 0),
-                            String(format: "%.1f", entry.product?.carbs ?? 0)
-                        )
-                    )
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                }
-                .swipeActions(edge: .trailing) {
-                    Button(role: .destructive) {
-                        deleteEntry(entry, for: meal)
-                    } label: { Label(AppLocalizer.string("common.delete"), systemImage: "trash") }
+            HStack(spacing: 8) {
+                RationMacroCard(
+                    title: AppLocalizer.string("macro.protein"),
+                    current: totalProteins,
+                    tint: theme.protein
+                )
+                RationMacroCard(
+                    title: AppLocalizer.string("macro.fat"),
+                    current: totalFats,
+                    tint: theme.fat
+                )
+                RationMacroCard(
+                    title: AppLocalizer.string("macro.carbs"),
+                    current: totalCarbs,
+                    tint: theme.carb
+                )
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 24).fill(theme.card))
+        .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(theme.border))
+    }
+
+    private func isExpanded(_ meal: MealType) -> Bool {
+        expandedMeals.contains(meal)
+    }
+
+    private func toggleMeal(_ meal: MealType) {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            if expandedMeals.contains(meal) {
+                expandedMeals.remove(meal)
+            } else {
+                expandedMeals.insert(meal)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func mealBlock(_ meal: MealType, entries: [FoodEntry], systemImage: String, badgeFill: Color) -> some View {
+        let kcal = entries.reduce(0) { $0 + ($1.product?.calories ?? 0) }
+        let protein = Int(entries.reduce(0.0) { $0 + ($1.product?.protein ?? 0) })
+        let fat = Int(entries.reduce(0.0) { $0 + ($1.product?.fat ?? 0) })
+        let carb = Int(entries.reduce(0.0) { $0 + ($1.product?.carbs ?? 0) })
+
+        MealRow(
+            title: meal == .snacks ? AppLocalizer.string("meal.snack") : meal.displayName,
+            systemImage: systemImage,
+            kcal: kcal > 0 ? kcal : nil,
+            macros: kcal > 0 ? (protein: protein, fat: fat, carb: carb) : nil,
+            theme: theme,
+            badgeFill: badgeFill,
+            showChevron: !entries.isEmpty,
+            chevronExpanded: isExpanded(meal),
+            onChevronTap: { toggleMeal(meal) }
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { selectedMeal = meal }
+
+        if !entries.isEmpty && isExpanded(meal) {
+            VStack(spacing: 0) {
+                ForEach(entries) { entry in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(entry.product?.name ?? "—")
+                            .font(.subheadline.weight(.semibold))
+
+                        HStack(spacing: 8) {
+                            if entry.portion > 0 {
+                                Text(AppLocalizer.format("unit.grams.value", Int(entry.portion)))
+                            }
+                            Text(AppLocalizer.format("unit.kcal.value", entry.product?.calories ?? 0))
+                            Text(
+                                AppLocalizer.format(
+                                    "meal.macros.summary",
+                                    Int(entry.product?.protein ?? 0),
+                                    Int(entry.product?.fat ?? 0),
+                                    Int(entry.product?.carbs ?? 0)
+                                )
+                            )
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .overlay(alignment: .bottom) { Divider().opacity(0.35) }
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            deleteEntry(entry, for: meal)
+                        } label: {
+                            Label(AppLocalizer.string("common.delete"), systemImage: "trash")
+                        }
+                    }
                 }
             }
-        } header: {
-            HStack {
-                Text(meal.displayName)
-                Spacer()
-                Text(AppLocalizer.format("unit.kcal.value", entries.reduce(0) { $0 + ( $1.product?.calories ?? 0 ) }))
-                    .foregroundColor(.blue)
-                Button(AppLocalizer.string("ration.add_food")) { selectedMeal = meal }
-                    .font(.caption)
-                    .foregroundStyle(.blue)
-            }
+            .padding(.leading, 52)
+            .padding(.trailing, 2)
         }
     }
 

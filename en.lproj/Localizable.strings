@@ -499,6 +499,8 @@
 "ration.carbs.value" = "Carbs: %d g";
 "ration.entry.summary" = "Calories: %d kcal, P: %@ g, F: %@ g, C: %@ g";
 "ration.add_food" = "+ add food";
+"ration.empty.title" = "Nothing added yet";
+"ration.empty.subtitle" = "Add a product to fill this meal.";
 
 "bmi.title" = "Body Mass Index";
 "bmi.short" = "BMI";
@@ -592,3 +594,5 @@
 "profile.nutrition_goals.manual_section" = "Daily targets";
 "profile.nutrition_goals.sheet_subtitle" = "Enter protein, fat, and carbs, and calories will be calculated automatically.";
 "profile.nutrition_goals.calories_hint" = "Calories are calculated automatically from macros.";
+"entry.portion.title" = "Portion";
+"entry.preview.title" = "Preview";
