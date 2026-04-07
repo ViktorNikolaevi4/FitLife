@@ -419,13 +419,19 @@ struct RationPopupView: View {
 
     // MARK: — Загрузка из SwiftData
     private func loadData(for date: Date, gender: Gender) {
-        let req = FetchDescriptor<FoodEntry>()
+        let calendar = Calendar.current
+        let dayStart = calendar.startOfDay(for: date)
+        guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return }
+        let ownerId = sessionStore.firebaseUser?.uid ?? ""
+        let predicate = #Predicate<FoodEntry> {
+            $0.date >= dayStart &&
+            $0.date < dayEnd &&
+            $0.ownerId == ownerId
+        }
+        let req = FetchDescriptor<FoodEntry>(predicate: predicate)
+
         do {
-            let all = try modelContext.fetch(req).filter {
-                Calendar.current.isDate($0.date, inSameDayAs: date)
-                    && $0.gender == gender
-                    && $0.ownerId == sessionStore.firebaseUser?.uid
-            }
+            let all = try modelContext.fetch(req).filter { $0.gender == gender }
             breakfastEntries = all.filter { $0.mealType == MealType.breakfast.rawValue }
             lunchEntries     = all.filter { $0.mealType == MealType.lunch.rawValue }
             dinnerEntries    = all.filter { $0.mealType == MealType.dinner.rawValue }
@@ -461,6 +467,13 @@ struct RationPopupView: View {
             modelContext.insert(entry)
             try modelContext.save()
 
+            let ownerId = sessionStore.firebaseUser?.uid ?? ""
+            if !ownerId.isEmpty {
+                Task {
+                    await ProductUsageCache.shared.increment(productName: product.name, for: ownerId)
+                }
+            }
+
             switch meal {
             case .breakfast: breakfastEntries.append(entry)
             case .lunch:     lunchEntries.append(entry)
@@ -476,6 +489,7 @@ struct RationPopupView: View {
 
     // MARK: — Удаление
     private func deleteEntry(_ entry: FoodEntry, for meal: MealType) {
+        let removedProductName = entry.product?.name ?? ""
         modelContext.delete(entry)
         do {
             try modelContext.save()
@@ -484,6 +498,12 @@ struct RationPopupView: View {
             case .lunch:     lunchEntries.removeAll     { $0.id == entry.id }
             case .dinner:    dinnerEntries.removeAll    { $0.id == entry.id }
             case .snacks:    snacksEntries.removeAll    { $0.id == entry.id }
+            }
+            let ownerId = sessionStore.firebaseUser?.uid ?? ""
+            if !ownerId.isEmpty && !removedProductName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Task {
+                    await ProductUsageCache.shared.decrement(productName: removedProductName, for: ownerId)
+                }
             }
             onMealAdded()
         } catch {}

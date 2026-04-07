@@ -121,7 +121,7 @@ struct DashboardScreen: View {
             RationPopupView(
                 gender: selectedGender,
                 selectedDate: $selectedDate,
-                onMealAdded: { recalcFor(selectedDate) },
+                onMealAdded: { loadEntries(for: selectedDate) },
                 preselectedMeal: preset
             )
         }
@@ -214,58 +214,34 @@ struct DashboardScreen: View {
     }
 
     private func recalcFor(_ date: Date) {
-        func sumCalories(_ entries: [FoodEntry]) -> Int {
-            entries.reduce(0) { $0 + ($1.product?.calories ?? 0) }
-        }
-        func sumMacros(_ entries: [FoodEntry]) -> (Int, Int, Int) {
-            let p = entries.reduce(0.0) { $0 + ($1.product?.protein ?? 0) }
-            let f = entries.reduce(0.0) { $0 + ($1.product?.fat ?? 0) }
-            let c = entries.reduce(0.0) { $0 + ($1.product?.carbs ?? 0) }
-            return (Int(p), Int(f), Int(c))
+        loadEntries(for: date)
+    }
+
+    private func loadEntries(for date: Date) {
+        let calendar = Calendar.current
+        let dayStart = calendar.startOfDay(for: date)
+        guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else {
+            resetFoodState()
+            return
         }
 
-        let descriptor = FetchDescriptor<FoodEntry>()
+        guard let currentOwnerId = sessionStore.firebaseUser?.uid else {
+            resetFoodState()
+            return
+        }
+
+        let predicate = #Predicate<FoodEntry> {
+            $0.date >= dayStart &&
+            $0.date < dayEnd &&
+            $0.ownerId == currentOwnerId
+        }
 
         do {
-            let all = try modelContext.fetch(descriptor)
-            let items = all.filter {
-                Calendar.current.isDate($0.date, inSameDayAs: date) &&
-                $0.gender == selectedGender &&
-                $0.ownerId == sessionStore.firebaseUser?.uid
-            }
-
-            let b = items.filter { $0.mealType == MealType.breakfast.rawValue }
-            let l = items.filter { $0.mealType == MealType.lunch.rawValue }
-            let d = items.filter { $0.mealType == MealType.dinner.rawValue }
-            let s = items.filter { $0.mealType == MealType.snacks.rawValue }
-
-            breakfastItems = b
-            lunchItems     = l
-            dinnerItems    = d
-            snacksItems    = s
-
-            breakfastKcal = sumCalories(b)
-            lunchKcal     = sumCalories(l)
-            dinnerKcal    = sumCalories(d)
-            snacksKcal    = sumCalories(s)
-
-            let bm = sumMacros(b); breakfastMacros = (bm.0, bm.1, bm.2)
-            let lm = sumMacros(l); lunchMacros     = (lm.0, lm.1, lm.2)
-            let dm = sumMacros(d); dinnerMacros    = (dm.0, dm.1, dm.2)
-            let sm = sumMacros(s); snacksMacros    = (sm.0, sm.1, sm.2)
-
-            dailyConsumedCalories = sumCalories(items)
-            let total = sumMacros(items)
-            consumedProteins = total.0
-            consumedFats     = total.1
-            consumedCarbs    = total.2
-
+            let descriptor = FetchDescriptor<FoodEntry>(predicate: predicate)
+            let items = try modelContext.fetch(descriptor).filter { $0.gender == selectedGender }
+            apply(snapshot: FoodDaySnapshot.from(entries: items))
         } catch {
-            dailyConsumedCalories = 0
-            consumedProteins = 0
-            consumedFats = 0
-            consumedCarbs = 0
-            breakfastKcal = 0; lunchKcal = 0; dinnerKcal = 0; snacksKcal = 0
+            resetFoodState()
         }
     }
 
@@ -325,7 +301,19 @@ struct DashboardScreen: View {
     private func deleteEntry(_ entry: FoodEntry) {
         modelContext.delete(entry)
         do { try modelContext.save() } catch {}
-        recalcFor(selectedDate)
+        switch MealType(rawValue: entry.mealType) {
+        case .breakfast:
+            breakfastItems.removeAll { $0.id == entry.id }
+        case .lunch:
+            lunchItems.removeAll { $0.id == entry.id }
+        case .dinner:
+            dinnerItems.removeAll { $0.id == entry.id }
+        case .snacks:
+            snacksItems.removeAll { $0.id == entry.id }
+        case nil:
+            break
+        }
+        refreshDerivedFoodState()
 
         if let meal = MealType(rawValue: entry.mealType) {
             let isEmpty: Bool
@@ -337,6 +325,39 @@ struct DashboardScreen: View {
             }
             if isEmpty { expandedMeals.remove(meal) }
         }
+    }
+
+    private func refreshDerivedFoodState() {
+        apply(snapshot: FoodDaySnapshot.from(entries: breakfastItems + lunchItems + dinnerItems + snacksItems))
+    }
+
+    private func apply(snapshot: FoodDaySnapshot) {
+        breakfastItems = snapshot.breakfast
+        lunchItems = snapshot.lunch
+        dinnerItems = snapshot.dinner
+        snacksItems = snapshot.snacks
+
+        let calories = snapshot.mealCalories
+        breakfastKcal = calories.breakfast
+        lunchKcal = calories.lunch
+        dinnerKcal = calories.dinner
+        snacksKcal = calories.snacks
+
+        let macros = snapshot.mealMacros
+        breakfastMacros = macros.breakfast
+        lunchMacros = macros.lunch
+        dinnerMacros = macros.dinner
+        snacksMacros = macros.snacks
+
+        dailyConsumedCalories = snapshot.totalCalories
+        let totalMacros = snapshot.totalMacros
+        consumedProteins = totalMacros.protein
+        consumedFats = totalMacros.fat
+        consumedCarbs = totalMacros.carb
+    }
+
+    private func resetFoodState() {
+        apply(snapshot: FoodDaySnapshot.from(entries: []))
     }
 }
 

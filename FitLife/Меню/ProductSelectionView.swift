@@ -1,6 +1,40 @@
 import SwiftUI
 import SwiftData
 
+actor ProductUsageCache {
+    static let shared = ProductUsageCache()
+
+    private var countsByOwnerId: [String: [String: Int]] = [:]
+
+    func counts(for ownerId: String) -> [String: Int]? {
+        countsByOwnerId[ownerId]
+    }
+
+    func store(_ counts: [String: Int], for ownerId: String) {
+        countsByOwnerId[ownerId] = counts
+    }
+
+    func increment(productName: String, for ownerId: String) {
+        let key = productName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return }
+        countsByOwnerId[ownerId, default: [:]][key, default: 0] += 1
+    }
+
+    func decrement(productName: String, for ownerId: String) {
+        let key = productName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return }
+
+        var counts = countsByOwnerId[ownerId, default: [:]]
+        let nextValue = max(0, (counts[key] ?? 0) - 1)
+        if nextValue == 0 {
+            counts.removeValue(forKey: key)
+        } else {
+            counts[key] = nextValue
+        }
+        countsByOwnerId[ownerId] = counts
+    }
+}
+
 struct ProductSelectionView: View {
     private static let favoriteNamesKey = "favoriteProductNames"
     @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
@@ -8,11 +42,12 @@ struct ProductSelectionView: View {
     @State private var customProducts: [CustomProduct] = []
     let mealType: MealType
     let date: Date
-    @State var productLoader = ProductLoader()
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var productCatalogStore: ProductCatalogStore
+    @EnvironmentObject private var sessionStore: AppSessionStore
 
     @State private var searchText: String = ""
     @State private var selectedFilter: FilterType = .all
@@ -34,6 +69,9 @@ struct ProductSelectionView: View {
 
     // частоты использования по имени продукта
     @State private var usageCounts: [String: Int] = [:]
+    @State private var usageCountsTask: Task<Void, Never>?
+    @State private var expandsResultsTask: Task<Void, Never>?
+    @State private var showsExpandedResults = false
 
     var onProductSelected: (Product) -> Void
     var onCustomProductSelected: (CustomProduct) -> Void
@@ -59,6 +97,30 @@ struct ProductSelectionView: View {
     var filteredProducts: [Product] { filteredProductsCache }
 
     var filteredCustomProducts: [CustomProduct] { filteredCustomProductsCache }
+
+    private var initialLocalRenderLimit: Int { 30 }
+    private var initialRemoteRenderLimit: Int { 12 }
+
+    private var visibleRemoteProducts: [Product] {
+        if showsExpandedResults || !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return remoteProducts
+        }
+        return Array(remoteProducts.prefix(initialRemoteRenderLimit))
+    }
+
+    private var visibleFilteredProducts: [Product] {
+        if showsExpandedResults || !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return filteredProducts
+        }
+        return Array(filteredProducts.prefix(initialLocalRenderLimit))
+    }
+
+    private var visibleFilteredCustomProducts: [CustomProduct] {
+        if showsExpandedResults || !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return filteredCustomProducts
+        }
+        return Array(filteredCustomProducts.prefix(initialLocalRenderLimit))
+    }
 
     private var shouldShowRemoteSection: Bool {
         selectedFilter == .all && !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !remoteProducts.isEmpty
@@ -189,61 +251,55 @@ struct ProductSelectionView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
 
-                List {
-                    if shouldShowRemoteSection {
-                        sectionHeader(remoteSectionTitle)
+                ScrollView(showsIndicators: false) {
+                    LazyVStack(alignment: .leading, spacing: 10) {
+                        if shouldShowRemoteSection {
+                            sectionHeader(remoteSectionTitle)
 
-                        if remoteProducts.isEmpty {
-                            emptyStateRow(message: appLanguage.localized("search.empty.all"))
-                        } else {
-                            ForEach(remoteProducts, id: \.id) { product in
-                                productRow(product: product)
-                                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                                    .listRowSeparator(.hidden)
-                                    .listRowBackground(Color.clear)
+                            if remoteProducts.isEmpty {
+                                emptyStateRow(message: appLanguage.localized("search.empty.all"))
+                            } else {
+                                ForEach(visibleRemoteProducts, id: \.id) { product in
+                                    productRow(product: product)
+                                }
                             }
                         }
-                    }
 
-                    if selectedFilter != .custom {
-                        sectionHeader(localSectionTitle)
+                        if selectedFilter != .custom {
+                            sectionHeader(localSectionTitle)
 
-                        if filteredProducts.isEmpty {
-                            emptyStateRow(message: emptyMessageForCurrentFilter)
-                        } else {
-                            ForEach(filteredProducts, id: \.id) { product in
-                                productRow(product: product)
-                                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                                    .listRowSeparator(.hidden)
-                                    .listRowBackground(Color.clear)
+                            if filteredProducts.isEmpty {
+                                emptyStateRow(message: emptyMessageForCurrentFilter)
+                            } else {
+                                ForEach(visibleFilteredProducts, id: \.id) { product in
+                                    productRow(product: product)
+                                }
                             }
                         }
-                    }
 
-                    if selectedFilter == .custom {
-                        sectionHeader(appLanguage.localized("search.section.custom_products"))
+                        if selectedFilter == .custom {
+                            sectionHeader(appLanguage.localized("search.section.custom_products"))
 
-                        if filteredCustomProducts.isEmpty {
-                            emptyStateRow(message: emptyMessageForCurrentFilter)
-                        } else {
-                            ForEach(filteredCustomProducts, id: \.id) { customProduct in
-                                customProductRow(customProduct: customProduct)
-                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                        Button(role: .destructive) {
-                                            deleteCustomProduct(customProduct)
-                                        } label: {
-                                            Label(appLanguage.localized("common.delete"), systemImage: "trash")
+                            if filteredCustomProducts.isEmpty {
+                                emptyStateRow(message: emptyMessageForCurrentFilter)
+                            } else {
+                                ForEach(visibleFilteredCustomProducts, id: \.id) { customProduct in
+                                    customProductRow(customProduct: customProduct)
+                                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                            Button(role: .destructive) {
+                                                deleteCustomProduct(customProduct)
+                                            } label: {
+                                                Label(appLanguage.localized("common.delete"), systemImage: "trash")
+                                            }
                                         }
-                                    }
-                                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                                    .listRowSeparator(.hidden)
-                                    .listRowBackground(Color.clear)
+                                }
                             }
                         }
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, 16)
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -265,22 +321,35 @@ struct ProductSelectionView: View {
                 }
             }
             .onAppear {
+                productCatalogStore.preloadIfNeeded()
                 loadFavorites()
                 loadCustomProducts()
-                cachedFilteredProducts = productLoader.products.filter { $0.isFavorite }
-                loadUsageCounts() // ← важно: посчитать частоты
+                cachedFilteredProducts = productCatalogStore.products.filter { $0.isFavorite }
                 refreshVisibleProducts()
+                scheduleExpandedResults()
                 scheduleHybridSearch()
+                loadUsageCountsIfNeeded()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                     isSearchFocused = true
                 }
             }
+            .onChange(of: productCatalogStore.products.count) { _, _ in
+                loadFavorites()
+                refreshVisibleProducts()
+                scheduleHybridSearch(immediate: true)
+            }
+            .onDisappear {
+                usageCountsTask?.cancel()
+                expandsResultsTask?.cancel()
+            }
             .onChange(of: searchText) { _, _ in
                 refreshVisibleProducts()
+                scheduleExpandedResults()
                 scheduleHybridSearch()
             }
             .onChange(of: selectedFilter) { _, _ in
                 refreshVisibleProducts()
+                scheduleExpandedResults()
                 scheduleHybridSearch(immediate: true)
             }
             .onChange(of: networkMonitor.isConnected) { _, _ in
@@ -350,11 +419,11 @@ struct ProductSelectionView: View {
 
                 Spacer()
 
-                if let index = productLoader.products.firstIndex(where: { $0.id == product.id }) {
+                if let index = productCatalogStore.products.firstIndex(where: { $0.id == product.id }) {
                     Button(action: {
-                        productLoader.products[index].isFavorite.toggle()
+                        productCatalogStore.products[index].isFavorite.toggle()
                         persistFavorites()
-                        cachedFilteredProducts = productLoader.products.filter { $0.isFavorite }
+                        cachedFilteredProducts = productCatalogStore.products.filter { $0.isFavorite }
                         refreshVisibleProducts()
                     }) {
                         Image(systemName: product.isFavorite ? "star.fill" : "star")
@@ -373,6 +442,7 @@ struct ProductSelectionView: View {
                 }
             }
             .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 18))
             .overlay(
                 RoundedRectangle(cornerRadius: 18)
@@ -407,6 +477,7 @@ struct ProductSelectionView: View {
                 Spacer()
             }
             .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 18))
             .overlay(
                 RoundedRectangle(cornerRadius: 18)
@@ -428,7 +499,7 @@ struct ProductSelectionView: View {
     private func refreshVisibleProducts() {
         let trimmedSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        let baseProducts = selectedFilter == .favorites ? cachedFilteredProducts : productLoader.products
+        let baseProducts = selectedFilter == .favorites ? cachedFilteredProducts : productCatalogStore.products
         let localMatches = trimmedSearch.isEmpty
             ? baseProducts
             : baseProducts.filter { $0.matches(trimmedSearch) }
@@ -440,6 +511,24 @@ struct ProductSelectionView: View {
             : customProducts.filter { $0.name.localizedCaseInsensitiveContains(trimmedSearch) }
 
         filteredCustomProductsCache = sortedCustomProducts(customMatches)
+    }
+
+    private func scheduleExpandedResults() {
+        expandsResultsTask?.cancel()
+        showsExpandedResults = false
+
+        guard searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            showsExpandedResults = true
+            return
+        }
+
+        expandsResultsTask = Task {
+            try? await Task.sleep(nanoseconds: 180_000_000)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                showsExpandedResults = true
+            }
+        }
     }
 
     private func sortedProducts(_ products: [Product]) -> [Product] {
@@ -461,21 +550,53 @@ struct ProductSelectionView: View {
     }
 
     // Частоты использования по FoodEntry (по имени продукта)
-    private func loadUsageCounts() {
-        let fd = FetchDescriptor<FoodEntry>()
-        do {
-            let entries = try modelContext.fetch(fd)
-            var map: [String: Int] = [:]
-            for e in entries {
-                let key = (e.product?.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !key.isEmpty else { continue }
-                map[key, default: 0] += 1
-            }
-            usageCounts = map
-            refreshVisibleProducts()
-        } catch {
+    private func loadUsageCountsIfNeeded() {
+        guard let ownerId = sessionStore.firebaseUser?.uid, !ownerId.isEmpty else {
             usageCounts = [:]
             refreshVisibleProducts()
+            return
+        }
+
+        usageCountsTask?.cancel()
+
+        usageCountsTask = Task {
+            if let cachedCounts = await ProductUsageCache.shared.counts(for: ownerId) {
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    usageCounts = cachedCounts
+                    refreshVisibleProducts()
+                }
+                return
+            }
+
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+
+            let predicate = #Predicate<FoodEntry> {
+                $0.ownerId == ownerId
+            }
+
+            let counts: [String: Int]
+            do {
+                let entries = try modelContext.fetch(FetchDescriptor<FoodEntry>(predicate: predicate))
+                var map: [String: Int] = [:]
+                for entry in entries {
+                    let key = (entry.product?.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !key.isEmpty else { continue }
+                    map[key, default: 0] += 1
+                }
+                counts = map
+            } catch {
+                counts = [:]
+            }
+
+            await ProductUsageCache.shared.store(counts, for: ownerId)
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                usageCounts = counts
+                refreshVisibleProducts()
+            }
         }
     }
 
@@ -504,16 +625,16 @@ struct ProductSelectionView: View {
 
     private func loadFavorites() {
         let names = favoriteProductNames()
-        for i in productLoader.products.indices {
-            productLoader.products[i].isFavorite = names.contains(productLoader.products[i].name)
+        for i in productCatalogStore.products.indices {
+            productCatalogStore.products[i].isFavorite = names.contains(productCatalogStore.products[i].name)
         }
-        cachedFilteredProducts = productLoader.products.filter { $0.isFavorite }
+        cachedFilteredProducts = productCatalogStore.products.filter { $0.isFavorite }
         refreshVisibleProducts()
     }
 
     private func persistFavorites() {
         let names = Set(
-            productLoader.products
+            productCatalogStore.products
                 .filter(\.isFavorite)
                 .map(\.name)
         )
@@ -557,7 +678,7 @@ struct ProductSelectionView: View {
         }
 
         let language = searchLanguage
-        let localProducts = productLoader.products
+        let localProducts = productCatalogStore.products
         let hasInternet = networkMonitor.isConnected
 
         searchTask = Task {
@@ -651,18 +772,11 @@ struct ProductSelectionView: View {
 
     @ViewBuilder
     private func sectionHeader(_ title: String) -> some View {
-        Section {
-            EmptyView()
-        } header: {
-            Text(title)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .textCase(nil)
-                .padding(.top, 8)
-        }
-        .listRowInsets(EdgeInsets())
-        .listRowSeparator(.hidden)
-        .listRowBackground(Color.clear)
+        Text(title)
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .textCase(nil)
+            .padding(.top, 8)
     }
 
     private func emptyStateRow(message: String) -> some View {
@@ -685,9 +799,6 @@ struct ProductSelectionView: View {
             RoundedRectangle(cornerRadius: 18)
                 .stroke(Color.black.opacity(0.06))
         )
-        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-        .listRowSeparator(.hidden)
-        .listRowBackground(Color.clear)
     }
 
     private func metricTag(text: String) -> some View {

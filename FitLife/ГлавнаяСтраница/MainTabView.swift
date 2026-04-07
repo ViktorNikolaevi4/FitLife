@@ -12,6 +12,7 @@ extension Gender {
 struct MainTabView: View {
     @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
     @AppStorage(Gender.appStorageKey) private var activeGenderRaw: String = Gender.male.rawValue
+    @EnvironmentObject private var productCatalogStore: ProductCatalogStore
     @State private var selectedDate: Date = Date()
     @State private var sheet: RationSheet? = nil
     @State private var refreshID = UUID()
@@ -78,6 +79,9 @@ struct MainTabView: View {
                 .padding(.trailing, 20)
                 .padding(.bottom, 74)
             }
+        }
+        .onAppear {
+            productCatalogStore.preloadIfNeeded()
         }
         .sheet(item: $sheet) { key in
             let preset: MealType? = { if case let .quick(m) = key { m } else { nil } }()

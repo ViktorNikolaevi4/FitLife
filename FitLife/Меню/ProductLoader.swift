@@ -1,64 +1,121 @@
-
 import SwiftUI
 import Foundation
 import SwiftCSV
 
-@Observable
-class ProductLoader {
-     var products: [Product] = []
+struct ProductCatalogRow: Sendable {
+    let name: String
+    let nameEN: String?
+    let protein: Double
+    let fat: Double
+    let carbs: Double
+    let calories: Int
+}
+
+actor ProductCatalogCache {
+    static let shared = ProductCatalogCache()
+
+    private var cachedRows: [ProductCatalogRow]?
+    private var loadingTask: Task<[ProductCatalogRow], Never>?
+
+    func rows() async -> [ProductCatalogRow] {
+        if let cachedRows {
+            return cachedRows
+        }
+
+        if let loadingTask {
+            return await loadingTask.value
+        }
+
+        let task = Task { ProductCatalogStore.loadRowsFromCSV() }
+        loadingTask = task
+
+        let rows = await task.value
+        cachedRows = rows
+        loadingTask = nil
+        return rows
+    }
+}
+
+@MainActor
+final class ProductCatalogStore: ObservableObject {
+    @Published var products: [Product] = []
+    @Published private(set) var isLoaded = false
+
+    private var preloadTask: Task<Void, Never>?
 
     init() {
-        loadCSV()
+        preloadIfNeeded()
     }
 
-    func loadCSV() {
+    func preloadIfNeeded() {
+        guard !isLoaded, preloadTask == nil else { return }
+
+        preloadTask = Task { [weak self] in
+            let rows = await ProductCatalogCache.shared.rows()
+            guard let self, !Task.isCancelled else { return }
+
+            self.products = rows.map {
+                Product(
+                    name: $0.name,
+                    nameEN: $0.nameEN,
+                    protein: $0.protein,
+                    fat: $0.fat,
+                    carbs: $0.carbs,
+                    calories: $0.calories
+                )
+            }
+            self.isLoaded = true
+            self.preloadTask = nil
+        }
+    }
+
+    nonisolated static func loadRowsFromCSV() -> [ProductCatalogRow] {
         let bundle = Bundle.main
         let path =
             bundle.url(forResource: "Products_template_en", withExtension: "csv") ??
             bundle.url(forResource: "Продукты", withExtension: "csv")
 
-        guard let path else { return }
+        guard let path else { return [] }
 
         do {
             let csv = try CSV<Named>(url: path)
-            products.removeAll()
+            var rows: [ProductCatalogRow] = []
+            rows.reserveCapacity(csv.rows.count)
 
-            // Создаём словарь с очищенными заголовками для ключей
-            var cleanedRows: [[String: String]] = []
             for row in csv.rows {
-                var cleanedRow: [String: String] = [:]
-                for (key, value) in row {
-                    let cleanedKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
-                    let cleanedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
-                    cleanedRow[cleanedKey] = cleanedValue
-                }
-                cleanedRows.append(cleanedRow)
-            }
+                let name = (row["Name_RU"] ?? row["Продукты"] ?? "Неизвестно")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let nameEN = row["Name_EN"]?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let proteinText = (row["Protein"] ?? row["Белки"] ?? "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let fatText = (row["Fat"] ?? row["Жиры"] ?? "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let carbsText = (row["Carbs"] ?? row["Углеводы"] ?? "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let caloriesText = (row["Calories"] ?? row["Калории"] ?? "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
 
-            // Обрабатываем очищенные строки
-            for row in cleanedRows {
-                let cleanedName = row["Name_RU"] ?? row["Продукты"] ?? "Неизвестно"
-                let cleanedEnglishName = row["Name_EN"]
-                let cleanedProtein = row["Protein"] ?? row["Белки"] ?? "Неизвестно"
-                let cleanedFat = row["Fat"] ?? row["Жиры"] ?? "Неизвестно"
-                let cleanedCarbs = row["Carbs"] ?? row["Углеводы"] ?? "Неизвестно"
-                let cleanedCalories = row["Calories"] ?? row["Калории"] ?? "Неизвестно"
-
-                if let protein = Double(cleanedProtein),
-                   let fat = Double(cleanedFat),
-                   let carbs = Double(cleanedCarbs),
-                   let calories = Int(cleanedCalories) {
-                    let product = Product(
-                        name: cleanedName,
-                        nameEN: cleanedEnglishName?.isEmpty == false ? cleanedEnglishName : nil,
-                        protein: protein,
-                        fat: fat,
-                        carbs: carbs,
-                        calories: calories
+                if let protein = Double(proteinText),
+                   let fat = Double(fatText),
+                   let carbs = Double(carbsText),
+                   let calories = Int(caloriesText) {
+                    rows.append(
+                        ProductCatalogRow(
+                            name: name,
+                            nameEN: nameEN?.isEmpty == false ? nameEN : nil,
+                            protein: protein,
+                            fat: fat,
+                            carbs: carbs,
+                            calories: calories
+                        )
                     )
-                    self.products.append(product)
                 }
             }
-        } catch {}
+
+            return rows
+        } catch {
+            return []
+        }
     }
 }

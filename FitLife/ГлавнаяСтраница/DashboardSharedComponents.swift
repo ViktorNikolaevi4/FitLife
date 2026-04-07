@@ -366,6 +366,68 @@ struct ThickProgressBar: View {
 
 // MARK: - Приёмы пищи
 
+struct FoodDaySnapshot {
+    let breakfast: [FoodEntry]
+    let lunch: [FoodEntry]
+    let dinner: [FoodEntry]
+    let snacks: [FoodEntry]
+
+    var allEntries: [FoodEntry] {
+        breakfast + lunch + dinner + snacks
+    }
+
+    var mealCalories: (breakfast: Int, lunch: Int, dinner: Int, snacks: Int) {
+        (
+            calories(for: breakfast),
+            calories(for: lunch),
+            calories(for: dinner),
+            calories(for: snacks)
+        )
+    }
+
+    var mealMacros: (
+        breakfast: (protein: Int, fat: Int, carb: Int),
+        lunch: (protein: Int, fat: Int, carb: Int),
+        dinner: (protein: Int, fat: Int, carb: Int),
+        snacks: (protein: Int, fat: Int, carb: Int)
+    ) {
+        (
+            macros(for: breakfast),
+            macros(for: lunch),
+            macros(for: dinner),
+            macros(for: snacks)
+        )
+    }
+
+    var totalCalories: Int {
+        calories(for: allEntries)
+    }
+
+    var totalMacros: (protein: Int, fat: Int, carb: Int) {
+        macros(for: allEntries)
+    }
+
+    static func from(entries: [FoodEntry]) -> FoodDaySnapshot {
+        FoodDaySnapshot(
+            breakfast: entries.filter { $0.mealType == MealType.breakfast.rawValue },
+            lunch: entries.filter { $0.mealType == MealType.lunch.rawValue },
+            dinner: entries.filter { $0.mealType == MealType.dinner.rawValue },
+            snacks: entries.filter { $0.mealType == MealType.snacks.rawValue }
+        )
+    }
+
+    private func calories(for entries: [FoodEntry]) -> Int {
+        entries.reduce(0) { $0 + ($1.product?.calories ?? 0) }
+    }
+
+    private func macros(for entries: [FoodEntry]) -> (protein: Int, fat: Int, carb: Int) {
+        let protein = entries.reduce(0.0) { $0 + ($1.product?.protein ?? 0) }
+        let fat = entries.reduce(0.0) { $0 + ($1.product?.fat ?? 0) }
+        let carbs = entries.reduce(0.0) { $0 + ($1.product?.carbs ?? 0) }
+        return (Int(protein), Int(fat), Int(carbs))
+    }
+}
+
 struct MealsSection: View {
     let theme: AppTheme
     let calories: (breakfast: Int, lunch: Int, dinner: Int, snacks: Int)
