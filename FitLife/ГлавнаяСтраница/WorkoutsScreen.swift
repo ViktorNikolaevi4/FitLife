@@ -867,7 +867,14 @@ private struct LastWorkoutExerciseCard: View {
                                 .foregroundStyle(.secondary)
                                 .frame(width: 26, alignment: .leading)
 
-                            Text(AppLocalizer.format("workout.set.value", formattedWeight(set.weight), set.reps))
+                            Text(
+                                formattedWorkoutSetValue(
+                                    weight: set.weight,
+                                    reps: set.reps,
+                                    durationSeconds: set.durationSeconds,
+                                    metricType: set.metricType
+                                )
+                            )
                                 .font(.body.weight(.medium))
                                 .foregroundStyle(.primary)
 
@@ -897,10 +904,4 @@ private struct LastWorkoutExerciseCard: View {
         )
     }
 
-    private func formattedWeight(_ weight: Double) -> String {
-        if weight.rounded() == weight {
-            return String(Int(weight))
-        }
-        return String(format: "%.1f", weight)
-    }
 }

@@ -228,7 +228,9 @@ final class ClientAssignedWorkoutsStore: ObservableObject {
                     let set = WorkoutSet(
                         orderIndex: index,
                         weight: remoteSet.weight,
-                        reps: remoteSet.reps
+                        reps: remoteSet.reps,
+                        durationSeconds: remoteSet.durationSeconds,
+                        metricType: remoteSet.metricType
                     )
                     set.exercise = exercise
                     exercise.sets.append(set)

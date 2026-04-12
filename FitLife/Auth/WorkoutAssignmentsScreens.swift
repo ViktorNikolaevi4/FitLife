@@ -255,7 +255,14 @@ struct ClientAssignmentDetailScreen: View {
                             HStack {
                                 Text("\(index + 1).")
                                     .foregroundStyle(.secondary)
-                                Text(AppLocalizer.format("workout.set.value", formattedWeight(set.weight), set.reps))
+                                Text(
+                                    formattedWorkoutSetValue(
+                                        weight: set.weight,
+                                        reps: set.reps,
+                                        durationSeconds: set.durationSeconds,
+                                        metricType: set.metricType
+                                    )
+                                )
                                 Spacer()
                             }
                             .font(.subheadline)
@@ -302,12 +309,5 @@ struct ClientAssignmentDetailScreen: View {
         .refreshable {
             await store.load()
         }
-    }
-
-    private func formattedWeight(_ weight: Double) -> String {
-        if weight.rounded() == weight {
-            return String(Int(weight))
-        }
-        return String(format: "%.1f", weight)
     }
 }

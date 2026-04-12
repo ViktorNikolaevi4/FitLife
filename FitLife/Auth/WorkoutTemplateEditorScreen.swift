@@ -80,7 +80,14 @@ struct WorkoutTemplateEditorScreen: View {
                                             .foregroundStyle(.secondary)
                                             .frame(width: 24, alignment: .leading)
 
-                                        Text(AppLocalizer.format("workout.set.value", formattedWeight(set.weight), set.reps))
+                                        Text(
+                                            formattedWorkoutSetValue(
+                                                weight: set.weight,
+                                                reps: set.reps,
+                                                durationSeconds: set.durationSeconds,
+                                                metricType: set.metricType
+                                            )
+                                        )
                                             .font(.subheadline.weight(.medium))
 
                                         Spacer()
@@ -154,12 +161,5 @@ struct WorkoutTemplateEditorScreen: View {
                 )
             }
         }
-    }
-
-    private func formattedWeight(_ weight: Double) -> String {
-        if weight.rounded() == weight {
-            return String(Int(weight))
-        }
-        return String(format: "%.1f", weight)
     }
 }

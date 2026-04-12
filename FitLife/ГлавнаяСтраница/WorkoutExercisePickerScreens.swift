@@ -6,7 +6,7 @@ struct WorkoutExerciseTemplate: Identifiable {
     let name: String
     let systemImage: String
     let accentName: String
-    let defaultSets: [(weight: Double, reps: Int)]
+    let defaultSets: [WorkoutDraftSet]
 }
 
 struct WorkoutExerciseDraft: Identifiable, Hashable {
@@ -27,7 +27,7 @@ struct WorkoutExerciseDraft: Identifiable, Hashable {
         self.name = template.name
         self.systemImage = template.systemImage
         self.accentName = template.accentName
-        self.sets = template.defaultSets.map { WorkoutDraftSet(weight: $0.weight, reps: $0.reps) }
+        self.sets = template.defaultSets
     }
 
     init(customTemplate: CustomWorkoutExerciseTemplate) {
@@ -35,8 +35,6 @@ struct WorkoutExerciseDraft: Identifiable, Hashable {
         self.systemImage = customTemplate.systemImage
         self.accentName = customTemplate.accentName
         self.sets = [
-            WorkoutDraftSet(weight: 20, reps: 10),
-            WorkoutDraftSet(weight: 20, reps: 10),
             WorkoutDraftSet(weight: 20, reps: 10)
         ]
     }
@@ -46,6 +44,25 @@ struct WorkoutDraftSet: Identifiable, Hashable {
     let id = UUID()
     var weight: Double
     var reps: Int
+    var durationSeconds: Int
+    var metricTypeRaw: String
+
+    var metricType: WorkoutSetMetricType {
+        get { WorkoutSetMetricType(rawValue: metricTypeRaw) ?? .reps }
+        set { metricTypeRaw = newValue.rawValue }
+    }
+
+    init(
+        weight: Double,
+        reps: Int = 10,
+        durationSeconds: Int = 30,
+        metricType: WorkoutSetMetricType = .reps
+    ) {
+        self.weight = weight
+        self.reps = reps
+        self.durationSeconds = durationSeconds
+        self.metricTypeRaw = metricType.rawValue
+    }
 }
 
 struct AddWorkoutExerciseScreen: View {
@@ -526,17 +543,25 @@ private struct WorkoutExerciseSetupScreen: View {
     }
 
     private func save() {
-        var configuredDraft = draft
-        configuredDraft.sets = sets
-        onSave(configuredDraft)
-        dismiss()
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
+        DispatchQueue.main.async {
+            var configuredDraft = draft
+            configuredDraft.sets = sets
+            onSave(configuredDraft)
+            dismiss()
+        }
     }
 }
 
-private struct WorkoutDraftSetEditorRow: View {
+struct WorkoutDraftSetEditorRow: View {
     private enum Field: Hashable {
         case weight
-        case reps
+        case value
     }
 
     let title: String
@@ -546,7 +571,7 @@ private struct WorkoutDraftSetEditorRow: View {
     let canDelete: Bool
 
     @State private var weightText: String
-    @State private var repsText: String
+    @State private var valueText: String
     @State private var activeEditor: Field?
     @FocusState private var focusedField: Field?
 
@@ -563,7 +588,7 @@ private struct WorkoutDraftSetEditorRow: View {
         self.onDelete = onDelete
         self.canDelete = canDelete
         _weightText = State(initialValue: Self.weightText(from: set.weight))
-        _repsText = State(initialValue: "\(set.reps)")
+        _valueText = State(initialValue: Self.valueText(from: set))
     }
 
     var body: some View {
@@ -601,18 +626,28 @@ private struct WorkoutDraftSetEditorRow: View {
                 )
 
                 workoutValueEditor(
-                    label: AppLocalizer.string("workout.setup.reps"),
-                    field: .reps,
-                    displayValue: repsText,
-                    text: $repsText,
+                    label: set.metricType == .reps
+                        ? AppLocalizer.string("workout.setup.reps")
+                        : AppLocalizer.string("workout.setup.time"),
+                    field: .value,
+                    displayValue: set.metricType == .reps
+                        ? valueText
+                        : formattedWorkoutMetricValue(
+                            reps: set.reps,
+                            durationSeconds: set.durationSeconds,
+                            metricType: set.metricType
+                        ),
+                    text: $valueText,
                     keyboardType: .numberPad,
-                    stepButtons: [
-                        (label: "-2", action: { updateReps(by: -2) }),
-                        (label: "-1", action: { updateReps(by: -1) }),
-                        (label: "+1", action: { updateReps(by: 1) }),
-                        (label: "+2", action: { updateReps(by: 2) })
-                    ],
-                    onCommit: commitReps
+                    header: {
+                        Picker("", selection: metricTypeBinding) {
+                            Text(AppLocalizer.string("workout.setup.metric.reps")).tag(WorkoutSetMetricType.reps)
+                            Text(AppLocalizer.string("workout.setup.metric.time")).tag(WorkoutSetMetricType.duration)
+                        }
+                        .pickerStyle(.segmented)
+                    },
+                    stepButtons: metricStepButtons,
+                    onCommit: commitValue
                 )
             }
         }
@@ -622,8 +657,8 @@ private struct WorkoutDraftSetEditorRow: View {
             if focusedField != .weight {
                 weightText = Self.weightText(from: newValue.weight)
             }
-            if focusedField != .reps {
-                repsText = "\(newValue.reps)"
+            if focusedField != .value {
+                valueText = Self.valueText(from: newValue)
             }
         }
         .onChange(of: focusedField) { oldValue, newValue in
@@ -633,12 +668,13 @@ private struct WorkoutDraftSetEditorRow: View {
         .animation(.easeInOut(duration: 0.18), value: activeEditor)
     }
 
-    private func workoutValueEditor(
+    private func workoutValueEditor<Header: View>(
         label: String,
         field: Field,
         displayValue: String,
         text: Binding<String>,
         keyboardType: UIKeyboardType,
+        @ViewBuilder header: () -> Header = { EmptyView() },
         stepButtons: [(label: String, action: () -> Void)],
         onCommit: @escaping () -> Void
     ) -> some View {
@@ -647,7 +683,14 @@ private struct WorkoutDraftSetEditorRow: View {
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
 
+            header()
+
             Button(action: {
+                if activeEditor == field {
+                    commit(field: field)
+                } else if let activeEditor {
+                    commit(field: activeEditor)
+                }
                 withAnimation(.easeInOut(duration: 0.18)) {
                     focusedField = nil
                     activeEditor = activeEditor == field ? nil : field
@@ -705,20 +748,6 @@ private struct WorkoutDraftSetEditorRow: View {
                                     .fill(Color(.systemGray6))
                             )
                             .onSubmit(onCommit)
-
-                        Button(action: {
-                            focusedField = field
-                        }) {
-                            Image(systemName: "keyboard")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.primary)
-                                .frame(width: 44, height: 44)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .fill(Color(.systemGray6))
-                                )
-                        }
-                        .buttonStyle(.plain)
                     }
                 }
                 .transition(.move(edge: .top).combined(with: .opacity))
@@ -730,21 +759,22 @@ private struct WorkoutDraftSetEditorRow: View {
     private func updateWeight(by delta: Double) {
         let next = max(0, set.weight + delta)
         weightText = Self.weightText(from: next)
-        onChange(WorkoutDraftSet(weight: next, reps: set.reps))
-    }
-
-    private func updateReps(by delta: Int) {
-        let next = max(1, set.reps + delta)
-        repsText = "\(next)"
-        onChange(WorkoutDraftSet(weight: set.weight, reps: next))
+        onChange(
+            WorkoutDraftSet(
+                weight: next,
+                reps: set.reps,
+                durationSeconds: set.durationSeconds,
+                metricType: set.metricType
+            )
+        )
     }
 
     private func commitActiveField() {
         switch focusedField {
         case .weight:
             commitWeight()
-        case .reps:
-            commitReps()
+        case .value:
+            commitValue()
         case nil:
             break
         }
@@ -754,8 +784,8 @@ private struct WorkoutDraftSetEditorRow: View {
         switch field {
         case .weight:
             commitWeight()
-        case .reps:
-            commitReps()
+        case .value:
+            commitValue()
         }
     }
 
@@ -766,15 +796,108 @@ private struct WorkoutDraftSetEditorRow: View {
         let parsed = Double(normalized) ?? set.weight
         let clamped = max(0, parsed)
         weightText = Self.weightText(from: clamped)
-        onChange(WorkoutDraftSet(weight: clamped, reps: set.reps))
+        onChange(
+            WorkoutDraftSet(
+                weight: clamped,
+                reps: set.reps,
+                durationSeconds: set.durationSeconds,
+                metricType: set.metricType
+            )
+        )
     }
 
-    private func commitReps() {
-        let digits = repsText.filter(\.isNumber)
-        let parsed = Int(digits) ?? set.reps
-        let clamped = max(1, parsed)
-        repsText = "\(clamped)"
-        onChange(WorkoutDraftSet(weight: set.weight, reps: clamped))
+    private var metricTypeBinding: Binding<WorkoutSetMetricType> {
+        Binding(
+            get: { set.metricType },
+            set: updateMetricType(to:)
+        )
+    }
+
+    private var metricStepButtons: [(label: String, action: () -> Void)] {
+        switch set.metricType {
+        case .reps:
+            [
+                (label: "-2", action: { updateReps(by: -2) }),
+                (label: "-1", action: { updateReps(by: -1) }),
+                (label: "+1", action: { updateReps(by: 1) }),
+                (label: "+2", action: { updateReps(by: 2) })
+            ]
+        case .duration:
+            [
+                (label: "-10s", action: { updateDuration(by: -10) }),
+                (label: "-5s", action: { updateDuration(by: -5) }),
+                (label: "+5s", action: { updateDuration(by: 5) }),
+                (label: "+10s", action: { updateDuration(by: 10) })
+            ]
+        }
+    }
+
+    private func updateMetricType(to metricType: WorkoutSetMetricType) {
+        var updated = set
+        updated.metricType = metricType
+        if metricType == .reps {
+            updated.reps = max(1, updated.reps)
+        } else {
+            updated.durationSeconds = max(5, updated.durationSeconds)
+        }
+        valueText = Self.valueText(from: updated)
+        onChange(updated)
+    }
+
+    private func updateReps(by delta: Int) {
+        let next = max(1, set.reps + delta)
+        valueText = "\(next)"
+        onChange(
+            WorkoutDraftSet(
+                weight: set.weight,
+                reps: next,
+                durationSeconds: set.durationSeconds,
+                metricType: .reps
+            )
+        )
+    }
+
+    private func updateDuration(by delta: Int) {
+        let next = max(5, set.durationSeconds + delta)
+        valueText = "\(next)"
+        onChange(
+            WorkoutDraftSet(
+                weight: set.weight,
+                reps: set.reps,
+                durationSeconds: next,
+                metricType: .duration
+            )
+        )
+    }
+
+    private func commitValue() {
+        let digits = valueText.filter(\.isNumber)
+        switch set.metricType {
+        case .reps:
+            let parsed = Int(digits) ?? set.reps
+            let clamped = max(1, parsed)
+            valueText = "\(clamped)"
+            onChange(
+                WorkoutDraftSet(
+                    weight: set.weight,
+                    reps: clamped,
+                    durationSeconds: set.durationSeconds,
+                    metricType: .reps
+                )
+            )
+        case .duration:
+            let parsed = Int(digits) ?? set.durationSeconds
+            let clamped = max(5, parsed)
+            valueText = "\(clamped)"
+            onChange(
+                WorkoutDraftSet(
+                    weight: set.weight,
+                    reps: set.reps,
+                    durationSeconds: clamped,
+                    metricType: .duration
+                )
+            )
+        }
     }
 
     private static func weightText(from weight: Double) -> String {
@@ -782,5 +905,14 @@ private struct WorkoutDraftSetEditorRow: View {
             return "\(Int(weight))"
         }
         return String(format: "%.1f", weight)
+    }
+
+    private static func valueText(from set: WorkoutDraftSet) -> String {
+        switch set.metricType {
+        case .reps:
+            return "\(set.reps)"
+        case .duration:
+            return "\(set.durationSeconds)"
+        }
     }
 }

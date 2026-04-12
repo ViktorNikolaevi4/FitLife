@@ -48,7 +48,9 @@ struct WorkoutTemplateExerciseItem: Identifiable, Hashable {
         self.sets = rawSets.map { raw in
             WorkoutDraftSet(
                 weight: raw["weight"] as? Double ?? 0,
-                reps: raw["reps"] as? Int ?? 0
+                reps: raw["reps"] as? Int ?? 0,
+                durationSeconds: raw["durationSeconds"] as? Int ?? 30,
+                metricType: WorkoutSetMetricType(rawValue: raw["metricType"] as? String ?? "") ?? .reps
             )
         }
     }
@@ -59,7 +61,14 @@ struct WorkoutTemplateExerciseItem: Identifiable, Hashable {
             "systemImage": systemImage,
             "accentName": accentName,
             "orderIndex": orderIndex,
-            "sets": sets.map { ["weight": $0.weight, "reps": $0.reps] }
+            "sets": sets.map {
+                [
+                    "weight": $0.weight,
+                    "reps": $0.reps,
+                    "durationSeconds": $0.durationSeconds,
+                    "metricType": $0.metricType.rawValue
+                ]
+            }
         ]
     }
 }

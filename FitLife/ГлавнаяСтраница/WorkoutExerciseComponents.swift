@@ -3,7 +3,9 @@ import SwiftUI
 struct WorkoutExerciseCard: View {
     let exercise: WorkoutExercise
     let onToggleExpanded: () -> Void
+    let onEditNote: () -> Void
     let onToggleSet: (WorkoutSet) -> Void
+    let onEditSet: (WorkoutSet) -> Void
     let onAddSet: () -> Void
     let onDeleteSet: (WorkoutSet) -> Void
     let onDeleteExercise: () -> Void
@@ -14,6 +16,10 @@ struct WorkoutExerciseCard: View {
 
     private var completedCount: Int {
         sortedSets.filter(\.isCompleted).count
+    }
+
+    private var trimmedNote: String {
+        exercise.note.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var body: some View {
@@ -39,6 +45,14 @@ struct WorkoutExerciseCard: View {
                             Text(AppLocalizer.format("workout.exercise.summary", sortedSets.count, completedCount))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
+
+                            if trimmedNote.isEmpty == false {
+                                Text(trimmedNote)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
                         }
 
                         Spacer()
@@ -57,9 +71,43 @@ struct WorkoutExerciseCard: View {
 
                 if exercise.isExpanded {
                     VStack(spacing: 0) {
+                        Button(action: onEditNote) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "note.text")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+
+                                Text(
+                                    trimmedNote.isEmpty
+                                    ? AppLocalizer.string("workout.exercise.note.add")
+                                    : trimmedNote
+                                )
+                                .font(.subheadline)
+                                .foregroundStyle(
+                                    trimmedNote.isEmpty
+                                    ? .secondary
+                                    : .primary
+                                )
+                                .multilineTextAlignment(.leading)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+
+                                Spacer()
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 2)
+                            .padding(.bottom, 14)
+                        }
+                        .buttonStyle(.plain)
+
+                        Divider()
+                            .padding(.leading, 16)
+
                         ForEach(sortedSets, id: \.id) { set in
                             WorkoutSetRow(
                                 set: set,
+                                onEdit: { onEditSet(set) },
                                 onToggle: { onToggleSet(set) },
                                 onDelete: { onDeleteSet(set) }
                             )
@@ -70,11 +118,8 @@ struct WorkoutExerciseCard: View {
                         }
 
                         Button(action: onAddSet) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "plus")
-                                Text(AppLocalizer.string("workout.add.set"))
-                                    .fontWeight(.semibold)
-                            }
+                            Text(AppLocalizer.string("workout.add.set"))
+                                .fontWeight(.semibold)
                             .font(.subheadline)
                             .foregroundStyle(.primary)
                             .padding(.top, 14)
@@ -94,41 +139,49 @@ struct WorkoutExerciseCard: View {
 
 struct WorkoutSetRow: View {
     let set: WorkoutSet
+    let onEdit: () -> Void
     let onToggle: () -> Void
     let onDelete: () -> Void
 
     var body: some View {
         SwipeRevealDeleteContainer(cornerRadius: 0, onDelete: onDelete) {
-            HStack(spacing: 12) {
-                Text(AppLocalizer.format("workout.set.number", set.orderIndex + 1))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 26, alignment: .leading)
+            Button(action: onEdit) {
+                HStack(spacing: 12) {
+                    Text(AppLocalizer.format("workout.set.number", set.orderIndex + 1))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 26, alignment: .leading)
 
-                Text(AppLocalizer.format("workout.set.value", formattedWeight(set.weight), set.reps))
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(.primary)
+                    Text(
+                        formattedWorkoutSetValue(
+                            weight: set.weight,
+                            reps: set.reps,
+                            durationSeconds: set.durationSeconds,
+                            metricType: set.metricType
+                        )
+                    )
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(.primary)
 
-                Spacer()
+                    Spacer()
 
-                Button(action: onToggle) {
-                    Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(set.isCompleted ? Color.green : .secondary)
+                    Button(action: onToggle) {
+                        Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(set.isCompleted ? Color.green : .secondary)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
-    private func formattedWeight(_ weight: Double) -> String {
-        if weight.rounded() == weight {
-            return String(Int(weight))
-        }
-        return String(format: "%.1f", weight)
-    }
 }
 
 struct SwipeRevealDeleteContainer<Content: View>: View {

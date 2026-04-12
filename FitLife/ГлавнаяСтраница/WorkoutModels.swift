@@ -1,6 +1,11 @@
 import Foundation
 import SwiftData
 
+enum WorkoutSetMetricType: String, Codable {
+    case reps
+    case duration
+}
+
 @Model
 final class WorkoutSession {
     var id: UUID = UUID()
@@ -11,6 +16,7 @@ final class WorkoutSession {
     var gender: Gender = FitLife.Gender.male
     var elapsedSeconds: Int = 0
     var isTimerRunning: Bool = false
+    var note: String = ""
     var remoteAssignmentId: String?
     var remoteTrainerId: String?
     var remoteClientId: String?
@@ -26,6 +32,7 @@ final class WorkoutSession {
         gender: Gender,
         elapsedSeconds: Int = 0,
         isTimerRunning: Bool = false,
+        note: String = "",
         remoteAssignmentId: String? = nil,
         remoteTrainerId: String? = nil,
         remoteClientId: String? = nil,
@@ -38,6 +45,7 @@ final class WorkoutSession {
         self.gender = gender
         self.elapsedSeconds = elapsedSeconds
         self.isTimerRunning = isTimerRunning
+        self.note = note
         self.remoteAssignmentId = remoteAssignmentId
         self.remoteTrainerId = remoteTrainerId
         self.remoteClientId = remoteClientId
@@ -52,18 +60,27 @@ final class WorkoutExercise {
     var systemImage: String = ""
     var accentName: String = ""
     var orderIndex: Int = 0
-    var isExpanded: Bool = true
+    var isExpanded: Bool = false
+    var note: String = ""
 
     var session: WorkoutSession?
 
     @Relationship(deleteRule: .cascade, inverse: \WorkoutSet.exercise) var sets: [WorkoutSet] = []
 
-    init(name: String, systemImage: String, accentName: String, orderIndex: Int, isExpanded: Bool = true) {
+    init(
+        name: String,
+        systemImage: String,
+        accentName: String,
+        orderIndex: Int,
+        isExpanded: Bool = false,
+        note: String = ""
+    ) {
         self.name = name
         self.systemImage = systemImage
         self.accentName = accentName
         self.orderIndex = orderIndex
         self.isExpanded = isExpanded
+        self.note = note
     }
 }
 
@@ -72,15 +89,31 @@ final class WorkoutSet {
     var id: UUID = UUID()
     var orderIndex: Int = 0
     var weight: Double = 0
+    var metricTypeRaw: String = WorkoutSetMetricType.reps.rawValue
     var reps: Int = 0
+    var durationSeconds: Int = 30
     var isCompleted: Bool = false
 
     var exercise: WorkoutExercise?
 
-    init(orderIndex: Int, weight: Double, reps: Int, isCompleted: Bool = false) {
+    var metricType: WorkoutSetMetricType {
+        get { WorkoutSetMetricType(rawValue: metricTypeRaw) ?? .reps }
+        set { metricTypeRaw = newValue.rawValue }
+    }
+
+    init(
+        orderIndex: Int,
+        weight: Double,
+        reps: Int,
+        durationSeconds: Int = 30,
+        metricType: WorkoutSetMetricType = .reps,
+        isCompleted: Bool = false
+    ) {
         self.orderIndex = orderIndex
         self.weight = weight
+        self.metricTypeRaw = metricType.rawValue
         self.reps = reps
+        self.durationSeconds = durationSeconds
         self.isCompleted = isCompleted
     }
 }
@@ -99,4 +132,35 @@ final class CustomWorkoutExerciseTemplate {
         self.accentName = accentName
         self.createdAt = createdAt
     }
+}
+
+func formattedWorkoutWeight(_ weight: Double) -> String {
+    if weight.rounded() == weight {
+        return String(Int(weight))
+    }
+    return String(format: "%.1f", weight)
+}
+
+func formattedWorkoutMetricValue(
+    reps: Int,
+    durationSeconds: Int,
+    metricType: WorkoutSetMetricType
+) -> String {
+    switch metricType {
+    case .reps:
+        return "\(reps)"
+    case .duration:
+        let minutes = durationSeconds / 60
+        let seconds = durationSeconds % 60
+        return String(format: "%02d:%02d", minutes, seconds)
+    }
+}
+
+func formattedWorkoutSetValue(
+    weight: Double,
+    reps: Int,
+    durationSeconds: Int,
+    metricType: WorkoutSetMetricType
+) -> String {
+    "\(formattedWorkoutWeight(weight)) kg × \(formattedWorkoutMetricValue(reps: reps, durationSeconds: durationSeconds, metricType: metricType))"
 }
