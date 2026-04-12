@@ -40,17 +40,7 @@ struct ProfileScreen: View {
                         @Bindable var u = user
 
                         SectionCard(title: AppLocalizer.string("profile.parameters")) {
-                            VStack(spacing: 16) {
-                                ProfileSummaryGrid(age: u.age, weight: u.weight, height: u.height)
-
-                                Divider()
-
-                                VStack(spacing: 14) {
-                                    ValueRowInt(title: AppLocalizer.string("profile.age"), value: $u.age, range: 1...100, unit: AppLocalizer.string("unit.years"))
-                                    ValueRowDoubleAsInt(title: AppLocalizer.string("profile.weight"), value: $u.weight, range: 30...200, unit: AppLocalizer.string("unit.kg"))
-                                    ValueRowDoubleAsInt(title: AppLocalizer.string("profile.height"), value: $u.height, range: 100...230, unit: AppLocalizer.string("unit.cm"))
-                                }
-                            }
+                            ProfileSummaryGrid(age: $u.age, weight: $u.weight, height: $u.height)
                         }
                         .onChange(of: u.age) { _, _ in recalc(u) }
                         .onChange(of: u.weight) { _, _ in recalc(u) }
@@ -309,7 +299,7 @@ struct ProfileScreen: View {
         }
     }
 
-    private struct NumberWheelPickerInt: View {
+    struct NumberWheelPickerInt: View {
         let title: String
         @Binding var value: Int
         let range: ClosedRange<Int>
@@ -566,65 +556,156 @@ private struct ProfileHeroCard: View {
 }
 
 private struct ProfileSummaryGrid: View {
-    let age: Int
-    let weight: Double
-    let height: Double
+    @Binding var age: Int
+    @Binding var weight: Double
+    @Binding var height: Double
 
     var body: some View {
         HStack(spacing: 10) {
-            SummaryMetricCard(
+            EditableSummaryMetricCardInt(
                 title: AppLocalizer.string("profile.age"),
-                value: "\(age)",
+                value: $age,
                 unit: AppLocalizer.string("unit.years"),
-                systemImage: "calendar"
+                systemImage: "calendar",
+                range: 1...100
             )
-            SummaryMetricCard(
+            EditableSummaryMetricCardDoubleAsInt(
                 title: AppLocalizer.string("profile.weight"),
-                value: "\(Int(weight.rounded()))",
+                value: $weight,
                 unit: AppLocalizer.string("unit.kg"),
-                systemImage: "scalemass"
+                systemImage: "scalemass",
+                range: 30...200
             )
-            SummaryMetricCard(
+            EditableSummaryMetricCardDoubleAsInt(
                 title: AppLocalizer.string("profile.height"),
-                value: "\(Int(height.rounded()))",
+                value: $height,
                 unit: AppLocalizer.string("unit.cm"),
-                systemImage: "ruler"
+                systemImage: "ruler",
+                range: 100...230
             )
         }
     }
 }
 
-private struct SummaryMetricCard: View {
+private struct EditableSummaryMetricCardInt: View {
     let title: String
-    let value: String
+    @Binding var value: Int
     let unit: String
     let systemImage: String
+    let range: ClosedRange<Int>
+
+    @State private var showSheet = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: systemImage)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.secondary)
-
-            HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text(value)
-                    .font(.system(size: 24, weight: .bold))
-                Text(unit)
-                    .font(.caption.weight(.medium))
+        Button {
+            showSheet = true
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(.secondary)
-            }
 
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text("\(value)")
+                        .font(.system(size: 24, weight: .bold))
+                    Text(unit)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack(spacing: 6) {
+                    Text(title)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+
+                    Spacer(minLength: 0)
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color(.secondarySystemBackground))
+            )
         }
-        .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.secondarySystemBackground))
-        )
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showSheet) {
+            ProfileScreen.NumberWheelPickerInt(
+                title: title,
+                value: $value,
+                range: range,
+                unit: unit
+            )
+        }
+    }
+}
+
+private struct EditableSummaryMetricCardDoubleAsInt: View {
+    let title: String
+    @Binding var value: Double
+    let unit: String
+    let systemImage: String
+    let range: ClosedRange<Int>
+
+    @State private var showSheet = false
+    @State private var temp = 0
+
+    var body: some View {
+        Button {
+            temp = min(max(Int(value.rounded()), range.lowerBound), range.upperBound)
+            showSheet = true
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text("\(Int(value.rounded()))")
+                        .font(.system(size: 24, weight: .bold))
+                    Text(unit)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack(spacing: 6) {
+                    Text(title)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+
+                    Spacer(minLength: 0)
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color(.secondarySystemBackground))
+            )
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showSheet) {
+            ProfileScreen.NumberWheelPickerInt(
+                title: title,
+                value: $temp,
+                range: range,
+                unit: unit,
+                onDone: {
+                    value = Double(temp)
+                }
+            )
+        }
     }
 }
