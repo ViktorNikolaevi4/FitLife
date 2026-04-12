@@ -229,29 +229,49 @@ struct ActiveWorkoutScreen: View {
 
     private var workoutNoteCard: some View {
         Button(action: { isEditingWorkoutNote = true }) {
-            HStack(spacing: 10) {
-                Image(systemName: "note.text")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color(.systemGray6))
 
-                Text(
-                    workout.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    ? AppLocalizer.string("workout.note.add")
-                    : workout.note.trimmingCharacters(in: .whitespacesAndNewlines)
-                )
-                .font(.subheadline)
-                .foregroundStyle(
-                    workout.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    ? .secondary
-                    : .primary
-                )
-                .lineLimit(1)
-                .truncationMode(.tail)
+                    Image(systemName: "note.text")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(width: 52, height: 52)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(AppLocalizer.string("workout.note.title"))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
+                    Text(
+                        workout.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ? AppLocalizer.string("workout.note.add")
+                        : workout.note.trimmingCharacters(in: .whitespacesAndNewlines)
+                    )
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(
+                        workout.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ? .secondary
+                        : .primary
+                    )
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                }
 
                 Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.bold))
+                    .foregroundStyle(.secondary)
             }
             .padding(16)
             .background(RoundedRectangle(cornerRadius: 20).fill(Color.white))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20)
+                    .strokeBorder(Color.black.opacity(0.05))
+            )
         }
         .buttonStyle(.plain)
     }

@@ -518,6 +518,10 @@ private struct WorkoutHistoryRow: View {
         return "\(max(1, minutes)) мин"
     }
 
+    private var trimmedNote: String {
+        workout.note.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var body: some View {
         HStack(spacing: 16) {
             ZStack {
@@ -551,6 +555,14 @@ private struct WorkoutHistoryRow: View {
                 Text(AppLocalizer.format("workouts.last.summary", exerciseCount, completedSets))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                if trimmedNote.isEmpty == false {
+                    Text(trimmedNote)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
             }
 
             Spacer()
@@ -608,6 +620,10 @@ private struct WorkoutDetailScreen: View {
             return "\(hours)ч \(minutes)м"
         }
         return "\(max(1, minutes)) мин"
+    }
+
+    private var trimmedWorkoutNote: String {
+        workout.note.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var body: some View {
@@ -747,6 +763,24 @@ private struct WorkoutDetailScreen: View {
                     value: "\(completedSets)/\(totalSets)"
                 )
             }
+
+            if trimmedWorkoutNote.isEmpty == false {
+                HStack(spacing: 10) {
+                    Image(systemName: "note.text")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
+                    Text(trimmedWorkoutNote)
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+
+                    Spacer()
+                }
+                .padding(14)
+                .background(RoundedRectangle(cornerRadius: 18).fill(Color(.systemGray6)))
+            }
         }
         .padding(20)
         .background(
@@ -824,6 +858,10 @@ private struct LastWorkoutExerciseCard: View {
         sortedSets.filter(\.isCompleted).count
     }
 
+    private var trimmedNote: String {
+        exercise.note.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button(action: onToggleExpanded) {
@@ -845,6 +883,13 @@ private struct LastWorkoutExerciseCard: View {
                         Text(AppLocalizer.format("workout.exercise.summary", sortedSets.count, completedCount))
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        if trimmedNote.isEmpty == false {
+                            Text(trimmedNote)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
                     }
 
                     Spacer()
@@ -860,6 +905,28 @@ private struct LastWorkoutExerciseCard: View {
 
             if isExpanded {
                 VStack(spacing: 10) {
+                    if trimmedNote.isEmpty == false {
+                        HStack(spacing: 8) {
+                            Image(systemName: "note.text")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+
+                            Text(trimmedNote)
+                                .font(.subheadline)
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+
+                            Spacer()
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(Color(.systemGray6))
+                        )
+                    }
+
                     ForEach(sortedSets, id: \.id) { set in
                         HStack(spacing: 12) {
                             Text(AppLocalizer.format("workout.set.number", set.orderIndex + 1))
