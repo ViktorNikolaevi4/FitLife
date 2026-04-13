@@ -590,6 +590,9 @@ private struct WorkoutDetailScreen: View {
     let workout: WorkoutSession
     @State private var expandedExerciseIDs: Set<UUID> = []
     @State private var showDeleteConfirmation = false
+    @State private var editingSet: WorkoutSet?
+    @State private var editingExerciseNote: WorkoutExercise?
+    @State private var isEditingWorkoutNote = false
 
     private var sortedExercises: [WorkoutExercise] {
         workout.exercises.sorted { $0.orderIndex < $1.orderIndex }
@@ -640,7 +643,10 @@ private struct WorkoutDetailScreen: View {
                             LastWorkoutExerciseCard(
                                 exercise: exercise,
                                 isExpanded: expandedExerciseIDs.contains(exercise.id),
-                                onToggleExpanded: { toggleExpanded(exercise.id) }
+                                onToggleExpanded: { toggleExpanded(exercise.id) },
+                                onEditNote: { editingExerciseNote = exercise },
+                                onEditSet: { set in editingSet = set },
+                                onToggleSet: { set in toggleSet(set) }
                             )
                         }
                     }
@@ -681,6 +687,42 @@ private struct WorkoutDetailScreen: View {
             }
         } message: {
             Text(AppLocalizer.string("workouts.history.delete.message"))
+        }
+        .sheet(item: $editingSet) { set in
+            EditCompletedWorkoutSetScreen(
+                set: set,
+                onSave: { weight, reps, durationSeconds, metricType in
+                    updateSet(
+                        set,
+                        weight: weight,
+                        reps: reps,
+                        durationSeconds: durationSeconds,
+                        metricType: metricType
+                    )
+                }
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $editingExerciseNote) { exercise in
+            EditCompletedWorkoutExerciseNoteScreen(
+                exercise: exercise,
+                onSave: { note in
+                    updateExerciseNote(exercise, note: note)
+                }
+            )
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $isEditingWorkoutNote) {
+            EditCompletedWorkoutSessionNoteScreen(
+                workout: workout,
+                onSave: { note in
+                    updateWorkoutNote(note)
+                }
+            )
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
         }
     }
 
@@ -764,23 +806,28 @@ private struct WorkoutDetailScreen: View {
                 )
             }
 
-            if trimmedWorkoutNote.isEmpty == false {
+            Button(action: { isEditingWorkoutNote = true }) {
                 HStack(spacing: 10) {
                     Image(systemName: "note.text")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
 
-                    Text(trimmedWorkoutNote)
-                        .font(.subheadline)
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
-                        .truncationMode(.tail)
+                    Text(
+                        trimmedWorkoutNote.isEmpty
+                        ? AppLocalizer.string("workout.note.add")
+                        : trimmedWorkoutNote
+                    )
+                    .font(.subheadline)
+                    .foregroundStyle(trimmedWorkoutNote.isEmpty ? .secondary : .primary)
+                    .lineLimit(2)
+                    .truncationMode(.tail)
 
                     Spacer()
                 }
                 .padding(14)
                 .background(RoundedRectangle(cornerRadius: 18).fill(Color(.systemGray6)))
             }
+            .buttonStyle(.plain)
         }
         .padding(20)
         .background(
@@ -801,6 +848,35 @@ private struct WorkoutDetailScreen: View {
                 expandedExerciseIDs.insert(id)
             }
         }
+    }
+
+    private func toggleSet(_ set: WorkoutSet) {
+        set.isCompleted.toggle()
+        try? modelContext.save()
+    }
+
+    private func updateSet(
+        _ set: WorkoutSet,
+        weight: Double,
+        reps: Int,
+        durationSeconds: Int,
+        metricType: WorkoutSetMetricType
+    ) {
+        set.weight = weight
+        set.metricType = metricType
+        set.reps = reps
+        set.durationSeconds = durationSeconds
+        try? modelContext.save()
+    }
+
+    private func updateExerciseNote(_ exercise: WorkoutExercise, note: String) {
+        exercise.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        try? modelContext.save()
+    }
+
+    private func updateWorkoutNote(_ note: String) {
+        workout.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        try? modelContext.save()
     }
 
     private func workoutStatCard(title: String, value: String) -> some View {
@@ -849,6 +925,9 @@ private struct LastWorkoutExerciseCard: View {
     let exercise: WorkoutExercise
     let isExpanded: Bool
     let onToggleExpanded: () -> Void
+    let onEditNote: () -> Void
+    let onEditSet: (WorkoutSet) -> Void
+    let onToggleSet: (WorkoutSet) -> Void
 
     private var sortedSets: [WorkoutSet] {
         exercise.sets.sorted { $0.orderIndex < $1.orderIndex }
@@ -905,15 +984,19 @@ private struct LastWorkoutExerciseCard: View {
 
             if isExpanded {
                 VStack(spacing: 10) {
-                    if trimmedNote.isEmpty == false {
+                    Button(action: onEditNote) {
                         HStack(spacing: 8) {
                             Image(systemName: "note.text")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
 
-                            Text(trimmedNote)
+                            Text(
+                                trimmedNote.isEmpty
+                                ? AppLocalizer.string("workout.exercise.note.add")
+                                : trimmedNote
+                            )
                                 .font(.subheadline)
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(trimmedNote.isEmpty ? .secondary : .primary)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
 
@@ -926,37 +1009,46 @@ private struct LastWorkoutExerciseCard: View {
                                 .fill(Color(.systemGray6))
                         )
                     }
+                    .buttonStyle(.plain)
 
                     ForEach(sortedSets, id: \.id) { set in
-                        HStack(spacing: 12) {
-                            Text(AppLocalizer.format("workout.set.number", set.orderIndex + 1))
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                                .frame(width: 26, alignment: .leading)
+                        Button(action: { onEditSet(set) }) {
+                            HStack(spacing: 12) {
+                                Text(AppLocalizer.format("workout.set.number", set.orderIndex + 1))
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 26, alignment: .leading)
 
-                            Text(
-                                formattedWorkoutSetValue(
-                                    weight: set.weight,
-                                    reps: set.reps,
-                                    durationSeconds: set.durationSeconds,
-                                    metricType: set.metricType
+                                Text(
+                                    formattedWorkoutSetValue(
+                                        weight: set.weight,
+                                        reps: set.reps,
+                                        durationSeconds: set.durationSeconds,
+                                        metricType: set.metricType
+                                    )
                                 )
+                                    .font(.body.weight(.medium))
+                                    .foregroundStyle(.primary)
+
+                                Spacer()
+
+                                Button(action: { onToggleSet(set) }) {
+                                    Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
+                                        .font(.title3.weight(.semibold))
+                                        .foregroundStyle(set.isCompleted ? Color.green : .secondary)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
+                            .contentShape(Rectangle())
+                            .background(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(Color(.systemGray6))
                             )
-                                .font(.body.weight(.medium))
-                                .foregroundStyle(.primary)
-
-                            Spacer()
-
-                            Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
-                                .font(.title3.weight(.semibold))
-                                .foregroundStyle(set.isCompleted ? Color.green : .secondary)
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14)
-                                .fill(Color(.systemGray6))
-                        )
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -971,4 +1063,252 @@ private struct LastWorkoutExerciseCard: View {
         )
     }
 
+}
+
+private struct EditCompletedWorkoutExerciseNoteScreen: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let exercise: WorkoutExercise
+    let onSave: (String) -> Void
+
+    @State private var note: String
+    @FocusState private var isNoteFocused: Bool
+
+    init(exercise: WorkoutExercise, onSave: @escaping (String) -> Void) {
+        self.exercise = exercise
+        self.onSave = onSave
+        _note = State(initialValue: exercise.note)
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(AppLocalizer.string("workout.exercise.note.title"))
+                    .font(.title3.weight(.semibold))
+
+                TextField(
+                    AppLocalizer.string("workout.exercise.note.placeholder"),
+                    text: $note,
+                    axis: .vertical
+                )
+                .lineLimit(4...8)
+                .focused($isNoteFocused)
+                .padding(14)
+                .background(RoundedRectangle(cornerRadius: 18).fill(Color(.systemGray6)))
+
+                Button(action: save) {
+                    Text(AppLocalizer.string("workout.exercise.note.save"))
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(RoundedRectangle(cornerRadius: 18).fill(.black))
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.top, 20)
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(AppLocalizer.string("common.cancel")) {
+                        dismiss()
+                    }
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button(AppLocalizer.string("common.done")) {
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil,
+                            from: nil,
+                            for: nil
+                        )
+                    }
+                }
+            }
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    isNoteFocused = true
+                }
+            }
+        }
+    }
+
+    private func save() {
+        onSave(note)
+        dismiss()
+    }
+}
+
+private struct EditCompletedWorkoutSessionNoteScreen: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let workout: WorkoutSession
+    let onSave: (String) -> Void
+
+    @State private var note: String
+    @FocusState private var isNoteFocused: Bool
+
+    init(workout: WorkoutSession, onSave: @escaping (String) -> Void) {
+        self.workout = workout
+        self.onSave = onSave
+        _note = State(initialValue: workout.note)
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(AppLocalizer.string("workout.note.title"))
+                    .font(.title3.weight(.semibold))
+
+                TextField(
+                    AppLocalizer.string("workout.note.placeholder"),
+                    text: $note,
+                    axis: .vertical
+                )
+                .lineLimit(4...8)
+                .focused($isNoteFocused)
+                .padding(14)
+                .background(RoundedRectangle(cornerRadius: 18).fill(Color(.systemGray6)))
+
+                Button(action: save) {
+                    Text(AppLocalizer.string("workout.note.save"))
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(RoundedRectangle(cornerRadius: 18).fill(.black))
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.top, 20)
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(AppLocalizer.string("common.cancel")) {
+                        dismiss()
+                    }
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button(AppLocalizer.string("common.done")) {
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil,
+                            from: nil,
+                            for: nil
+                        )
+                    }
+                }
+            }
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    isNoteFocused = true
+                }
+            }
+        }
+    }
+
+    private func save() {
+        onSave(note)
+        dismiss()
+    }
+}
+
+private struct EditCompletedWorkoutSetScreen: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let set: WorkoutSet
+    let onSave: (Double, Int, Int, WorkoutSetMetricType) -> Void
+
+    @State private var draftSet: WorkoutDraftSet
+
+    init(set: WorkoutSet, onSave: @escaping (Double, Int, Int, WorkoutSetMetricType) -> Void) {
+        self.set = set
+        self.onSave = onSave
+        _draftSet = State(
+            initialValue: WorkoutDraftSet(
+                weight: set.weight,
+                reps: set.reps,
+                durationSeconds: set.durationSeconds,
+                metricType: set.metricType
+            )
+        )
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(AppLocalizer.string("workout.set.edit.title"))
+                            .font(.title3.weight(.semibold))
+                        Text(AppLocalizer.string("workout.set.edit.subtitle"))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    WorkoutDraftSetEditorRow(
+                        title: AppLocalizer.format("workout.setup.set.title", set.orderIndex + 1),
+                        set: draftSet,
+                        onChange: { draftSet = $0 },
+                        onDelete: {},
+                        canDelete: false
+                    )
+
+                    Button(action: save) {
+                        Text(AppLocalizer.string("workout.set.edit.save"))
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(RoundedRectangle(cornerRadius: 18).fill(.black))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal)
+                .padding(.top, 20)
+                .padding(.bottom, 32)
+            }
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(AppLocalizer.string("common.cancel")) {
+                        dismiss()
+                    }
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button(AppLocalizer.string("common.done")) {
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil,
+                            from: nil,
+                            for: nil
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private func save() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
+        DispatchQueue.main.async {
+            onSave(draftSet.weight, draftSet.reps, draftSet.durationSeconds, draftSet.metricType)
+            dismiss()
+        }
+    }
 }

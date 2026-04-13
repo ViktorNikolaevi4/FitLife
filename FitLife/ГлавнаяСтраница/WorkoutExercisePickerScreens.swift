@@ -685,36 +685,53 @@ struct WorkoutDraftSetEditorRow: View {
 
             header()
 
-            Button(action: {
-                if activeEditor == field {
-                    commit(field: field)
-                } else if let activeEditor {
-                    commit(field: activeEditor)
-                }
-                withAnimation(.easeInOut(duration: 0.18)) {
-                    focusedField = nil
-                    activeEditor = activeEditor == field ? nil : field
-                }
-            }) {
-                HStack(spacing: 8) {
-                    Text(displayValue)
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(.primary)
+            HStack(spacing: 8) {
+                Button(action: {
+                    guard activeEditor != field else { return }
+                    if let activeEditor {
+                        commit(field: activeEditor)
+                    }
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        focusedField = nil
+                        self.activeEditor = field
+                    }
+                }) {
+                    HStack(spacing: 8) {
+                        Text(displayValue)
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(.primary)
 
-                    Spacer(minLength: 0)
+                        Spacer(minLength: 0)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
 
+                Button(action: {
+                    if activeEditor == field {
+                        commit(field: field)
+                    } else if let activeEditor {
+                        commit(field: activeEditor)
+                    }
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        focusedField = nil
+                        activeEditor = activeEditor == field ? nil : field
+                    }
+                }) {
                     Image(systemName: activeEditor == field ? "chevron.up" : "chevron.down")
                         .font(.caption.weight(.bold))
                         .foregroundStyle(.secondary)
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(Color.white.opacity(activeEditor == field ? 0.9 : 0.7)))
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(activeEditor == field ? Color.black.opacity(0.06) : Color(.systemGray6))
-                )
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(activeEditor == field ? Color.black.opacity(0.06) : Color(.systemGray6))
+            )
 
             if activeEditor == field {
                 VStack(spacing: 10) {
