@@ -111,6 +111,7 @@ struct RationPopupView: View {
                 ProductSelectionView(
                     mealType: meal,
                     date: selectedDate,
+                    selectedGender: selectedGender,
                     onProductSelected: { product in
                         selectedProduct = product
                         activeMeal = meal
@@ -135,6 +136,10 @@ struct RationPopupView: View {
                             showProductDetails = true
                             portionSize = "100"
                         }
+                    },
+                    onRecognizedMealSaved: {
+                        loadData(for: selectedDate, gender: selectedGender)
+                        onMealAdded()
                     },
                     onClose: {
                         // Если открыто в «быстром» режиме — закрываем весь лист, иначе сворачиваем список

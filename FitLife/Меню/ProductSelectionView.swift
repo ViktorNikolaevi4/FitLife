@@ -42,6 +42,7 @@ struct ProductSelectionView: View {
     @State private var customProducts: [CustomProduct] = []
     let mealType: MealType
     let date: Date
+    let selectedGender: Gender
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
@@ -59,6 +60,7 @@ struct ProductSelectionView: View {
     @State private var currentSearchRoute: ProductSearchRoute = .offlineLocal
     @State private var searchTask: Task<Void, Never>?
     @State private var isShowingBarcodeScanner = false
+    @State private var isShowingAIMealRecognition = false
     @State private var scannerErrorMessage: String?
     @FocusState private var isSearchFocused: Bool
 
@@ -75,6 +77,7 @@ struct ProductSelectionView: View {
 
     var onProductSelected: (Product) -> Void
     var onCustomProductSelected: (CustomProduct) -> Void
+    var onRecognizedMealSaved: (() -> Void)? = nil
     /// Если экран встроен в уже открытый лист — передайте onClose, чтобы свернуть список (а не dismiss всего листа).
     var onClose: (() -> Void)? = nil
 
@@ -221,6 +224,13 @@ struct ProductSelectionView: View {
                     )
 
                     HStack(spacing: 10) {
+                        actionPill(
+                            title: AppLocalizer.string("ai.meal.action"),
+                            systemImage: "camera.viewfinder"
+                        ) {
+                            isShowingAIMealRecognition = true
+                        }
+
                         actionPill(
                             title: appLanguage.localized("common.scan"),
                             systemImage: "barcode.viewfinder"
@@ -373,6 +383,17 @@ struct ProductSelectionView: View {
                     }
                 )
             }
+            .sheet(isPresented: $isShowingAIMealRecognition) {
+                AIMealRecognitionFlowView(
+                    selectedDate: date,
+                    selectedGender: selectedGender,
+                    preselectedMeal: mealType,
+                    onSaved: {
+                        isShowingAIMealRecognition = false
+                        onRecognizedMealSaved?()
+                    }
+                )
+            }
             .alert(
                 appLanguage.localized("search.scan.alert.title"),
                 isPresented: Binding(
@@ -458,9 +479,20 @@ struct ProductSelectionView: View {
         }) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(customProduct.name)
-                        .font(.body.weight(.semibold))
-                        .multilineTextAlignment(.leading)
+                    HStack(alignment: .center, spacing: 8) {
+                        Text(customProduct.name)
+                            .font(.body.weight(.semibold))
+                            .multilineTextAlignment(.leading)
+
+                        if customProduct.isAIGenerated {
+                            Text(AppLocalizer.string("ai.meal.badge"))
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(.blue)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.blue.opacity(0.12), in: Capsule())
+                        }
+                    }
 
                     Text(appLanguage.localized("search.per_100g"))
                         .font(.caption2.weight(.semibold))

@@ -1,0 +1,3 @@
+OPENAI_API_KEY =
+#include? "OpenAI.xcconfig"
+INFOPLIST_KEY_OpenAIAPIKey = $(OPENAI_API_KEY)

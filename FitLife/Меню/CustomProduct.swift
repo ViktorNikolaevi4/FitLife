@@ -10,14 +10,23 @@ class CustomProduct {
     var carbs: Double = 0
     var calories: Int = 0
     var isFavorite: Bool = false
+    var isAIGenerated: Bool = false
 
-    init(name: String, protein: Double, fat: Double, carbs: Double, calories: Int, isFavorite: Bool = false) {
+    init(
+        name: String,
+        protein: Double,
+        fat: Double,
+        carbs: Double,
+        calories: Int,
+        isFavorite: Bool = false,
+        isAIGenerated: Bool = false
+    ) {
         self.name = name
         self.protein = protein
         self.fat = fat
         self.carbs = carbs
         self.calories = calories
         self.isFavorite = isFavorite
+        self.isAIGenerated = isAIGenerated
     }
 }
-

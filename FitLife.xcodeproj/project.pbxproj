@@ -29,6 +29,7 @@
 /* End PBXBuildRule section */
 
 /* Begin PBXFileReference section */
+		B64A3B572FAAAAAA00F0A1C1 /* FitLife/Config/AppConfig.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = FitLife/Config/AppConfig.xcconfig; sourceTree = "<group>"; };
 		B679E07D2F6EE7190033676D /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		B679E07F2F6EE8550033676D /* ru */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ru; path = ru.lproj/Localizable.strings; sourceTree = "<group>"; };
 		B6B3C67F2D0480B900D0226C /* FitLife.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FitLife.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -70,12 +71,21 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		B60633822F8E29290007ACA7 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				B64A3B572FAAAAAA00F0A1C1 /* FitLife/Config/AppConfig.xcconfig */,
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
 		B6B3C6762D0480B900D0226C = {
 			isa = PBXGroup;
 			children = (
 				B679E07C2F6EE7190033676D /* Localizable.strings */,
 				B6B3C6812D0480B900D0226C /* FitLife */,
 				B6B3C6802D0480B900D0226C /* Products */,
+				B60633822F8E29290007ACA7 /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -317,6 +327,7 @@
 		};
 		B6B3C68E2D0480BC00D0226C /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = B64A3B572FAAAAAA00F0A1C1 /* FitLife/Config/AppConfig.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -351,6 +362,7 @@
 		};
 		B6B3C68F2D0480BC00D0226C /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = B64A3B572FAAAAAA00F0A1C1 /* FitLife/Config/AppConfig.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;

@@ -29,6 +29,7 @@ struct NutritionScreen: View {
     @State private var expandedMeals: Set<MealType> = []
     @State private var sheet: RationSheet? = nil
     @State private var selectedMacroDetail: MacroDetailKind?
+    @State private var isShowingAIMealRecognition = false
 
     private var selectedGender: Gender { Gender(rawValue: activeGenderRaw) ?? .male }
     private var theme: AppTheme { AppTheme(colorScheme) }
@@ -51,6 +52,17 @@ struct NutritionScreen: View {
                     .padding(.horizontal)
 
                 caloriesCard
+
+                Button {
+                    isShowingAIMealRecognition = true
+                } label: {
+                    Label(AppLocalizer.string("ai.meal.action"), systemImage: "camera.viewfinder")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                }
+                .buttonStyle(.borderedProminent)
+                .padding(.horizontal)
 
                 VStack(spacing: 12) {
                     MealsSection(
@@ -103,6 +115,13 @@ struct NutritionScreen: View {
                     carbs: userData?.carbs ?? 0
                 ),
                 selectedDate: selectedDate
+            )
+        }
+        .sheet(isPresented: $isShowingAIMealRecognition) {
+            AIMealRecognitionFlowView(
+                selectedDate: selectedDate,
+                selectedGender: selectedGender,
+                onSaved: { loadEntries(for: selectedDate) }
             )
         }
     }
