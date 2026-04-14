@@ -159,6 +159,9 @@ struct BalanceCard: View {
     var fats:     (current: Int, target: Int)
     var carbs:    (current: Int, target: Int)
     let theme: AppTheme
+    var onTapProtein: () -> Void = {}
+    var onTapFat: () -> Void = {}
+    var onTapCarbs: () -> Void = {}
 
     @State private var mode: RingDisplayMode = .target
 
@@ -259,15 +262,24 @@ struct BalanceCard: View {
                     }
 
                 VStack(spacing: 10) {
-                    MacroProgressRow(title: AppLocalizer.string("macro.protein"),
-                                     current: proteins.current, target: proteins.target,
-                                     tint: theme.protein, theme: theme, height: 8, horizontalPadding: 0, compactTitle: true)
-                    MacroProgressRow(title: AppLocalizer.string("macro.fat"),
-                                     current: fats.current, target: fats.target,
-                                     tint: theme.fat, theme: theme, height: 8, horizontalPadding: 0, compactTitle: true)
-                    MacroProgressRow(title: AppLocalizer.string("macro.carbs"),
-                                     current: carbs.current, target: carbs.target,
-                                     tint: theme.carb, theme: theme, height: 8, horizontalPadding: 0, compactTitle: true)
+                    Button(action: onTapProtein) {
+                        MacroProgressRow(title: AppLocalizer.string("macro.protein"),
+                                         current: proteins.current, target: proteins.target,
+                                         tint: theme.protein, theme: theme, height: 8, horizontalPadding: 0, compactTitle: true)
+                    }
+                    .buttonStyle(.plain)
+                    Button(action: onTapFat) {
+                        MacroProgressRow(title: AppLocalizer.string("macro.fat"),
+                                         current: fats.current, target: fats.target,
+                                         tint: theme.fat, theme: theme, height: 8, horizontalPadding: 0, compactTitle: true)
+                    }
+                    .buttonStyle(.plain)
+                    Button(action: onTapCarbs) {
+                        MacroProgressRow(title: AppLocalizer.string("macro.carbs"),
+                                         current: carbs.current, target: carbs.target,
+                                         tint: theme.carb, theme: theme, height: 8, horizontalPadding: 0, compactTitle: true)
+                    }
+                    .buttonStyle(.plain)
                 }
                 .frame(maxWidth: 165)
                 .frame(maxWidth: .infinity)

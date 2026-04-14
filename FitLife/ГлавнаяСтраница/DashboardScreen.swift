@@ -43,6 +43,7 @@ struct DashboardScreen: View {
 
     // Состояние разворота
     @State private var expandedMeals: Set<MealType> = []
+    @State private var selectedMacroDetail: MacroDetailKind?
 
     // Элементы по приёмам
     @State private var breakfastItems: [FoodEntry] = []
@@ -76,7 +77,10 @@ struct DashboardScreen: View {
                             proteins: (consumedProteins, user.proteins),
                             fats:     (consumedFats,     user.fats),
                             carbs:    (consumedCarbs,    user.carbs),
-                            theme: theme
+                            theme: theme,
+                            onTapProtein: { selectedMacroDetail = .protein },
+                            onTapFat: { selectedMacroDetail = .fat },
+                            onTapCarbs: { selectedMacroDetail = .carbs }
                         )
 
                         WaterSummaryCard(
@@ -124,6 +128,30 @@ struct DashboardScreen: View {
                 onMealAdded: { loadEntries(for: selectedDate) },
                 preselectedMeal: preset
             )
+        }
+        .sheet(item: $selectedMacroDetail) { macro in
+            if let user = userData {
+                MacroNutrientDetailScreen(
+                    macro: macro,
+                    entriesByMeal: [
+                        .breakfast: breakfastItems,
+                        .lunch: lunchItems,
+                        .dinner: dinnerItems,
+                        .snacks: snacksItems
+                    ],
+                    current: macro.currentValue(
+                        protein: consumedProteins,
+                        fat: consumedFats,
+                        carbs: consumedCarbs
+                    ),
+                    target: macro.targetValue(
+                        protein: user.proteins,
+                        fat: user.fats,
+                        carbs: user.carbs
+                    ),
+                    selectedDate: selectedDate
+                )
+            }
         }
         .sheet(isPresented: $showCalendar) {
             NavigationStack {

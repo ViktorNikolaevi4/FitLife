@@ -36,6 +36,10 @@
 "nutrition.goal.value" = "/ %d kcal";
 "nutrition.remaining.value" = "Remaining: %d kcal";
 "nutrition.macro.value" = "%d / %d g";
+"nutrition.macro.detail.remaining" = "Remaining: %d g";
+"nutrition.macro.detail.exceeded" = "Exceeded by: %d g";
+"nutrition.macro.detail.empty.title" = "No products yet";
+"nutrition.macro.detail.empty.subtitle" = "There are no added products with this macronutrient for the selected day.";
 
 "about.app_name" = "My Nutrition!";
 "about.description" = "My Nutrition! is an assistant app. We provide guidance and help track progress, but we do not diagnose or prescribe treatment. For medical questions, consult a doctor.";

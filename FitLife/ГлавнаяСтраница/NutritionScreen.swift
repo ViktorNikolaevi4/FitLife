@@ -28,6 +28,7 @@ struct NutritionScreen: View {
     @State private var snacksItems: [FoodEntry] = []
     @State private var expandedMeals: Set<MealType> = []
     @State private var sheet: RationSheet? = nil
+    @State private var selectedMacroDetail: MacroDetailKind?
 
     private var selectedGender: Gender { Gender(rawValue: activeGenderRaw) ?? .male }
     private var theme: AppTheme { AppTheme(colorScheme) }
@@ -82,6 +83,28 @@ struct NutritionScreen: View {
                 preselectedMeal: preset
             )
         }
+        .sheet(item: $selectedMacroDetail) { macro in
+            MacroNutrientDetailScreen(
+                macro: macro,
+                entriesByMeal: [
+                    .breakfast: breakfastItems,
+                    .lunch: lunchItems,
+                    .dinner: dinnerItems,
+                    .snacks: snacksItems
+                ],
+                current: macro.currentValue(
+                    protein: consumedProteins,
+                    fat: consumedFats,
+                    carbs: consumedCarbs
+                ),
+                target: macro.targetValue(
+                    protein: userData?.proteins ?? 0,
+                    fat: userData?.fats ?? 0,
+                    carbs: userData?.carbs ?? 0
+                ),
+                selectedDate: selectedDate
+            )
+        }
     }
 
     private var caloriesCard: some View {
@@ -102,24 +125,35 @@ struct NutritionScreen: View {
                 }
 
             HStack(spacing: 8) {
-                NutritionMacroCard(
-                    title: AppLocalizer.string("macro.protein"),
-                    current: consumedProteins,
-                    target: userData?.proteins ?? 0,
-                    tint: theme.protein
-                )
-                NutritionMacroCard(
-                    title: AppLocalizer.string("macro.fat"),
-                    current: consumedFats,
-                    target: userData?.fats ?? 0,
-                    tint: theme.fat
-                )
-                NutritionMacroCard(
-                    title: AppLocalizer.string("macro.carbs"),
-                    current: consumedCarbs,
-                    target: userData?.carbs ?? 0,
-                    tint: theme.carb
-                )
+                Button(action: { selectedMacroDetail = .protein }) {
+                    NutritionMacroCard(
+                        title: AppLocalizer.string("macro.protein"),
+                        current: consumedProteins,
+                        target: userData?.proteins ?? 0,
+                        tint: theme.protein
+                    )
+                }
+                .buttonStyle(.plain)
+
+                Button(action: { selectedMacroDetail = .fat }) {
+                    NutritionMacroCard(
+                        title: AppLocalizer.string("macro.fat"),
+                        current: consumedFats,
+                        target: userData?.fats ?? 0,
+                        tint: theme.fat
+                    )
+                }
+                .buttonStyle(.plain)
+
+                Button(action: { selectedMacroDetail = .carbs }) {
+                    NutritionMacroCard(
+                        title: AppLocalizer.string("macro.carbs"),
+                        current: consumedCarbs,
+                        target: userData?.carbs ?? 0,
+                        tint: theme.carb
+                    )
+                }
+                .buttonStyle(.plain)
             }
         }
         .frame(maxWidth: .infinity)
@@ -254,5 +288,238 @@ private struct NutritionMacroCard: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 9)
         .background(RoundedRectangle(cornerRadius: 16).fill(Color(.systemBackground)))
+    }
+}
+
+enum MacroDetailKind: String, Identifiable {
+    case protein
+    case fat
+    case carbs
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .protein:
+            return AppLocalizer.string("macro.protein")
+        case .fat:
+            return AppLocalizer.string("macro.fat")
+        case .carbs:
+            return AppLocalizer.string("macro.carbs")
+        }
+    }
+
+    func tint(theme: AppTheme) -> Color {
+        switch self {
+        case .protein:
+            return theme.protein
+        case .fat:
+            return theme.fat
+        case .carbs:
+            return theme.carb
+        }
+    }
+
+    func value(for entry: FoodEntry) -> Double {
+        switch self {
+        case .protein:
+            return entry.proteinSafe
+        case .fat:
+            return entry.fatSafe
+        case .carbs:
+            return entry.carbsSafe
+        }
+    }
+
+    func currentValue(protein: Int, fat: Int, carbs: Int) -> Int {
+        switch self {
+        case .protein: return protein
+        case .fat: return fat
+        case .carbs: return carbs
+        }
+    }
+
+    func targetValue(protein: Int, fat: Int, carbs: Int) -> Int {
+        switch self {
+        case .protein: return protein
+        case .fat: return fat
+        case .carbs: return carbs
+        }
+    }
+}
+
+struct MacroNutrientDetailScreen: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+
+    let macro: MacroDetailKind
+    let entriesByMeal: [MealType: [FoodEntry]]
+    let current: Int
+    let target: Int
+    let selectedDate: Date
+
+    private var theme: AppTheme { AppTheme(colorScheme) }
+
+    private var filteredMeals: [(MealType, [FoodEntry])] {
+        MealType.allCases.compactMap { meal in
+            let entries = (entriesByMeal[meal] ?? []).filter { macro.value(for: $0) > 0 }
+            return entries.isEmpty ? nil : (meal, entries)
+        }
+    }
+
+    private var progress: Double {
+        guard target > 0 else { return 0 }
+        return min(Double(current) / Double(target), 1)
+    }
+
+    private var statusText: String {
+        let delta = target - current
+        if delta >= 0 {
+            return AppLocalizer.format("nutrition.macro.detail.remaining", delta)
+        }
+        return AppLocalizer.format("nutrition.macro.detail.exceeded", abs(delta))
+    }
+
+    private var statusColor: Color {
+        current > target && target > 0 ? .red : macro.tint(theme: theme)
+    }
+
+    private var formattedDate: String {
+        let formatter = DateFormatter()
+        formatter.locale = .current
+        formatter.dateStyle = .medium
+        return formatter.string(from: selectedDate)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 18) {
+                    headerCard
+
+                    if filteredMeals.isEmpty {
+                        ContentUnavailableView(
+                            AppLocalizer.string("nutrition.macro.detail.empty.title"),
+                            systemImage: "fork.knife.circle",
+                            description: Text(AppLocalizer.string("nutrition.macro.detail.empty.subtitle"))
+                        )
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 24)
+                    } else {
+                        ForEach(filteredMeals, id: \.0) { meal, entries in
+                            mealSection(meal: meal, entries: entries)
+                        }
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.top, 20)
+                .padding(.bottom, 32)
+            }
+            .background(theme.bg.ignoresSafeArea())
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "chevron.left")
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                    }
+                }
+                ToolbarItem(placement: .principal) {
+                    Text(macro.title)
+                        .font(.headline.weight(.semibold))
+                }
+            }
+        }
+    }
+
+    private var headerCard: some View {
+        HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(macro.title)
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(.primary)
+
+                Text("\(current) / \(target) \(AppLocalizer.string("unit.grams.short"))")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(.primary)
+
+                Text(statusText)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(statusColor)
+
+                Text(formattedDate)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            ZStack {
+                Circle()
+                    .stroke(macro.tint(theme: theme).opacity(0.18), lineWidth: 9)
+
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(
+                        macro.tint(theme: theme),
+                        style: StrokeStyle(lineWidth: 9, lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(-90))
+            }
+            .frame(width: 58, height: 58)
+        }
+        .padding(18)
+        .background(RoundedRectangle(cornerRadius: 24).fill(Color.white))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24)
+                .strokeBorder(macro.tint(theme: theme).opacity(0.18))
+        )
+    }
+
+    private func mealSection(meal: MealType, entries: [FoodEntry]) -> some View {
+        let total = Int(entries.reduce(0.0) { $0 + macro.value(for: $1) })
+
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(meal.displayName)
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.primary)
+
+                Spacer()
+
+                Text("\(total) \(AppLocalizer.string("unit.grams.short"))")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(macro.tint(theme: theme))
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(entries, id: \.id) { entry in
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(macro.tint(theme: theme).opacity(0.7))
+                            .frame(width: 6, height: 6)
+
+                        Text(entry.product?.name ?? AppLocalizer.string("common.zero"))
+                            .font(.subheadline)
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+
+                        Spacer()
+
+                        Text("\(Int(macro.value(for: entry))) \(AppLocalizer.string("unit.grams.short"))")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 20).fill(Color.white))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20)
+                    .strokeBorder(Color.black.opacity(0.04))
+            )
+        }
     }
 }

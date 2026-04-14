@@ -36,6 +36,10 @@
 "nutrition.goal.value" = "/ %d ккал";
 "nutrition.remaining.value" = "Осталось: %d ккал";
 "nutrition.macro.value" = "%d / %d г";
+"nutrition.macro.detail.remaining" = "Осталось: %d г";
+"nutrition.macro.detail.exceeded" = "Превышено на: %d г";
+"nutrition.macro.detail.empty.title" = "Пока нет продуктов";
+"nutrition.macro.detail.empty.subtitle" = "За выбранный день нет добавленных продуктов с этим макронутриентом.";
 
 "about.app_name" = "Моё Питание!";
 "about.description" = "Моё Питание! — это приложение-ассистент. Мы даём советы и помогаем отслеживать прогресс, но не ставим диагнозы и не назначаем лечение. Для медицинских вопросов обращайся к врачу.";
