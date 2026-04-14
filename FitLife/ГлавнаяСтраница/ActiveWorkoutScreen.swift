@@ -2,6 +2,10 @@ import SwiftUI
 import SwiftData
 import FirebaseFirestore
 
+private let activeWorkoutCardBackground = Color(.secondarySystemBackground)
+private let activeWorkoutInsetBackground = Color(.tertiarySystemBackground)
+private let activeWorkoutCardBorder = Color(.separator).opacity(0.22)
+
 struct ActiveWorkoutScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -66,10 +70,10 @@ struct ActiveWorkoutScreen: View {
                 Text(AppLocalizer.string("workout.add.exercise"))
                     .fontWeight(.semibold)
                 .font(.headline)
-                .foregroundStyle(.white)
+                .foregroundStyle(Color(.systemBackground))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 18)
-                .background(RoundedRectangle(cornerRadius: 20).fill(.black))
+                .background(RoundedRectangle(cornerRadius: 20).fill(Color.primary))
                 .padding(.horizontal)
                 .padding(.bottom, 8)
                 .background(Color(.systemGroupedBackground))
@@ -138,7 +142,7 @@ struct ActiveWorkoutScreen: View {
         VStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 22)
-                    .fill(Color(.systemGray6))
+                    .fill(activeWorkoutInsetBackground)
 
                 Image(systemName: "dumbbell.fill")
                     .font(.system(size: 28, weight: .semibold))
@@ -158,7 +162,11 @@ struct ActiveWorkoutScreen: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 24)
         .padding(.vertical, 36)
-        .background(RoundedRectangle(cornerRadius: 28).fill(Color.white))
+        .background(RoundedRectangle(cornerRadius: 28).fill(activeWorkoutCardBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: 28)
+                .strokeBorder(activeWorkoutCardBorder)
+        )
     }
 
     private var activeWorkoutHeader: some View {
@@ -168,7 +176,7 @@ struct ActiveWorkoutScreen: View {
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(.primary)
                     .frame(width: 40, height: 40)
-                    .background(Circle().fill(Color.white))
+                    .background(Circle().fill(activeWorkoutCardBackground))
             }
             .buttonStyle(.plain)
 
@@ -185,7 +193,7 @@ struct ActiveWorkoutScreen: View {
                     .foregroundStyle(.primary)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(Capsule().fill(Color.white))
+                    .background(Capsule().fill(activeWorkoutCardBackground))
             }
             .buttonStyle(.plain)
         }
@@ -195,7 +203,7 @@ struct ActiveWorkoutScreen: View {
         HStack(spacing: 14) {
             ZStack {
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(Color(.systemGray6))
+                    .fill(activeWorkoutInsetBackground)
 
                 Image(systemName: "clock.fill")
                     .font(.system(size: 26, weight: .semibold))
@@ -219,12 +227,16 @@ struct ActiveWorkoutScreen: View {
                     .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(.primary)
                     .frame(width: 48, height: 48)
-                    .background(Circle().fill(Color(.systemGray6)))
+                    .background(Circle().fill(Color(.tertiarySystemFill)))
             }
             .buttonStyle(.plain)
         }
         .padding(18)
-        .background(RoundedRectangle(cornerRadius: 24).fill(Color.white))
+        .background(RoundedRectangle(cornerRadius: 24).fill(activeWorkoutCardBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24)
+                .strokeBorder(activeWorkoutCardBorder)
+        )
     }
 
     private var workoutNoteCard: some View {
@@ -232,7 +244,7 @@ struct ActiveWorkoutScreen: View {
             HStack(spacing: 14) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 16)
-                        .fill(Color(.systemGray6))
+                        .fill(activeWorkoutInsetBackground)
 
                     Image(systemName: "note.text")
                         .font(.system(size: 20, weight: .semibold))
@@ -267,10 +279,10 @@ struct ActiveWorkoutScreen: View {
                     .foregroundStyle(.secondary)
             }
             .padding(16)
-            .background(RoundedRectangle(cornerRadius: 20).fill(Color.white))
+            .background(RoundedRectangle(cornerRadius: 20).fill(activeWorkoutCardBackground))
             .overlay(
                 RoundedRectangle(cornerRadius: 20)
-                    .strokeBorder(Color.black.opacity(0.05))
+                    .strokeBorder(activeWorkoutCardBorder)
             )
         }
         .buttonStyle(.plain)
@@ -448,15 +460,15 @@ private struct EditWorkoutExerciseNoteScreen: View {
                 .lineLimit(4...8)
                 .focused($isNoteFocused)
                 .padding(14)
-                .background(RoundedRectangle(cornerRadius: 18).fill(Color(.systemGray6)))
+                .background(RoundedRectangle(cornerRadius: 18).fill(activeWorkoutInsetBackground))
 
                 Button(action: save) {
                     Text(AppLocalizer.string("workout.exercise.note.save"))
                         .font(.headline.weight(.semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color(.systemBackground))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(RoundedRectangle(cornerRadius: 18).fill(.black))
+                        .background(RoundedRectangle(cornerRadius: 18).fill(Color.primary))
                 }
                 .buttonStyle(.plain)
 
@@ -526,15 +538,15 @@ private struct EditWorkoutSessionNoteScreen: View {
                 .lineLimit(4...8)
                 .focused($isNoteFocused)
                 .padding(14)
-                .background(RoundedRectangle(cornerRadius: 18).fill(Color(.systemGray6)))
+                .background(RoundedRectangle(cornerRadius: 18).fill(activeWorkoutInsetBackground))
 
                 Button(action: save) {
                     Text(AppLocalizer.string("workout.note.save"))
                         .font(.headline.weight(.semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color(.systemBackground))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(RoundedRectangle(cornerRadius: 18).fill(.black))
+                        .background(RoundedRectangle(cornerRadius: 18).fill(Color.primary))
                 }
                 .buttonStyle(.plain)
 
@@ -619,10 +631,10 @@ private struct EditWorkoutSetScreen: View {
                     Button(action: save) {
                         Text(AppLocalizer.string("workout.set.edit.save"))
                             .font(.headline.weight(.semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Color(.systemBackground))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
-                            .background(RoundedRectangle(cornerRadius: 18).fill(.black))
+                            .background(RoundedRectangle(cornerRadius: 18).fill(Color.primary))
                     }
                     .buttonStyle(.plain)
                 }

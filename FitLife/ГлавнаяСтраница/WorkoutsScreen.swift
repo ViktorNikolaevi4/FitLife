@@ -1,6 +1,10 @@
 import SwiftUI
 import SwiftData
 
+private let workoutsCardBackground = Color(.secondarySystemBackground)
+private let workoutsInsetBackground = Color(.tertiarySystemBackground)
+private let workoutsCardBorder = Color(.separator).opacity(0.22)
+
 struct WorkoutsScreen: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
@@ -112,8 +116,8 @@ struct WorkoutsScreen: View {
                         }
                         .padding(.horizontal, 18)
                         .padding(.vertical, 18)
-                        .background(RoundedRectangle(cornerRadius: 18).fill(.black))
-                        .foregroundStyle(.white)
+                        .background(RoundedRectangle(cornerRadius: 18).fill(Color.primary))
+                        .foregroundStyle(Color(.systemBackground))
                     }
                     .buttonStyle(.plain)
                     .padding(.horizontal)
@@ -345,12 +349,12 @@ private struct WorkoutHistoryScreen: View {
                             .padding(.vertical, 10)
                             .background(
                                 Capsule()
-                                    .fill(selectedRange == range ? Color.blue : Color.white)
+                                    .fill(selectedRange == range ? Color.blue : workoutsCardBackground)
                             )
                             .foregroundStyle(selectedRange == range ? Color.white : Color.primary)
                             .overlay(
                                 Capsule()
-                                    .strokeBorder(Color.black.opacity(selectedRange == range ? 0 : 0.08))
+                                    .strokeBorder(selectedRange == range ? .clear : workoutsCardBorder)
                             )
                     }
                     .buttonStyle(.plain)
@@ -379,12 +383,12 @@ private struct WorkoutHistoryScreen: View {
                     .padding(.vertical, 10)
                     .background(
                         Capsule()
-                            .fill(WorkoutHistoryRange.secondaryCases.contains(selectedRange) ? Color.blue : Color.white)
+                            .fill(WorkoutHistoryRange.secondaryCases.contains(selectedRange) ? Color.blue : workoutsCardBackground)
                     )
                     .foregroundStyle(WorkoutHistoryRange.secondaryCases.contains(selectedRange) ? Color.white : Color.primary)
                     .overlay(
                         Capsule()
-                            .strokeBorder(Color.black.opacity(WorkoutHistoryRange.secondaryCases.contains(selectedRange) ? 0 : 0.08))
+                            .strokeBorder(WorkoutHistoryRange.secondaryCases.contains(selectedRange) ? .clear : workoutsCardBorder)
                     )
                 }
             }
@@ -407,8 +411,8 @@ private struct WorkoutHistoryScreen: View {
                 }
                 .font(.subheadline)
                 .padding(16)
-                .background(RoundedRectangle(cornerRadius: 18).fill(Color.white))
-                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Color.black.opacity(0.05)))
+                .background(RoundedRectangle(cornerRadius: 18).fill(workoutsCardBackground))
+                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(workoutsCardBorder))
             }
         }
     }
@@ -420,7 +424,7 @@ private struct WorkoutHistoryScreen: View {
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(.primary)
                     .frame(width: 40, height: 40)
-                    .background(Circle().fill(Color.white))
+                    .background(Circle().fill(workoutsCardBackground))
             }
             .buttonStyle(.plain)
 
@@ -578,8 +582,8 @@ private struct WorkoutHistoryRow: View {
             }
         }
         .padding(18)
-        .background(RoundedRectangle(cornerRadius: 20).fill(Color.white))
-        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Color.black.opacity(0.05)))
+        .background(RoundedRectangle(cornerRadius: 20).fill(workoutsCardBackground))
+        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(workoutsCardBorder))
     }
 }
 
@@ -733,7 +737,7 @@ private struct WorkoutDetailScreen: View {
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(.primary)
                     .frame(width: 40, height: 40)
-                    .background(Circle().fill(Color.white))
+                    .background(Circle().fill(workoutsCardBackground))
             }
             .buttonStyle(.plain)
 
@@ -825,18 +829,18 @@ private struct WorkoutDetailScreen: View {
                     Spacer()
                 }
                 .padding(14)
-                .background(RoundedRectangle(cornerRadius: 18).fill(Color(.systemGray6)))
+                .background(RoundedRectangle(cornerRadius: 18).fill(workoutsInsetBackground))
             }
             .buttonStyle(.plain)
         }
         .padding(20)
         .background(
             RoundedRectangle(cornerRadius: 28)
-                .fill(Color.white)
+                .fill(workoutsCardBackground)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 28)
-                .strokeBorder(Color.black.opacity(0.05))
+                .strokeBorder(workoutsCardBorder)
         )
     }
 
@@ -891,7 +895,7 @@ private struct WorkoutDetailScreen: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 18).fill(Color(.systemGray6)))
+        .background(RoundedRectangle(cornerRadius: 18).fill(workoutsInsetBackground))
     }
 
     private var emptyCard: some View {
@@ -911,7 +915,11 @@ private struct WorkoutDetailScreen: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 24)
         .padding(.vertical, 32)
-        .background(RoundedRectangle(cornerRadius: 24).fill(Color.white))
+        .background(RoundedRectangle(cornerRadius: 24).fill(workoutsCardBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24)
+                .strokeBorder(workoutsCardBorder)
+        )
     }
 
     private func deleteWorkout() {
@@ -949,9 +957,11 @@ private struct LastWorkoutExerciseCard: View {
                         RoundedRectangle(cornerRadius: 16)
                             .fill(workoutAccentColor(exercise.accentName).opacity(0.14))
 
-                        Image(systemName: exercise.systemImage)
-                            .font(.system(size: 19, weight: .semibold))
-                            .foregroundStyle(workoutAccentColor(exercise.accentName))
+                        workoutIconImage(
+                            named: exercise.systemImage,
+                            accentName: exercise.accentName,
+                            size: 19
+                        )
                     }
                     .frame(width: 48, height: 48)
 
@@ -1006,7 +1016,7 @@ private struct LastWorkoutExerciseCard: View {
                         .padding(.vertical, 12)
                         .background(
                             RoundedRectangle(cornerRadius: 14)
-                                .fill(Color(.systemGray6))
+                                .fill(workoutsInsetBackground)
                         )
                     }
                     .buttonStyle(.plain)
@@ -1045,7 +1055,7 @@ private struct LastWorkoutExerciseCard: View {
                             .contentShape(Rectangle())
                             .background(
                                 RoundedRectangle(cornerRadius: 14)
-                                    .fill(Color(.systemGray6))
+                                    .fill(workoutsInsetBackground)
                             )
                         }
                         .buttonStyle(.plain)
@@ -1056,10 +1066,10 @@ private struct LastWorkoutExerciseCard: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .background(RoundedRectangle(cornerRadius: 22).fill(Color.white))
+        .background(RoundedRectangle(cornerRadius: 22).fill(workoutsCardBackground))
         .overlay(
             RoundedRectangle(cornerRadius: 22)
-                .strokeBorder(Color.black.opacity(0.05))
+                .strokeBorder(workoutsCardBorder)
         )
     }
 
@@ -1094,15 +1104,15 @@ private struct EditCompletedWorkoutExerciseNoteScreen: View {
                 .lineLimit(4...8)
                 .focused($isNoteFocused)
                 .padding(14)
-                .background(RoundedRectangle(cornerRadius: 18).fill(Color(.systemGray6)))
+                .background(RoundedRectangle(cornerRadius: 18).fill(workoutsInsetBackground))
 
                 Button(action: save) {
                     Text(AppLocalizer.string("workout.exercise.note.save"))
                         .font(.headline.weight(.semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color(.systemBackground))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(RoundedRectangle(cornerRadius: 18).fill(.black))
+                        .background(RoundedRectangle(cornerRadius: 18).fill(Color.primary))
                 }
                 .buttonStyle(.plain)
 
@@ -1172,15 +1182,15 @@ private struct EditCompletedWorkoutSessionNoteScreen: View {
                 .lineLimit(4...8)
                 .focused($isNoteFocused)
                 .padding(14)
-                .background(RoundedRectangle(cornerRadius: 18).fill(Color(.systemGray6)))
+                .background(RoundedRectangle(cornerRadius: 18).fill(workoutsInsetBackground))
 
                 Button(action: save) {
                     Text(AppLocalizer.string("workout.note.save"))
                         .font(.headline.weight(.semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color(.systemBackground))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(RoundedRectangle(cornerRadius: 18).fill(.black))
+                        .background(RoundedRectangle(cornerRadius: 18).fill(Color.primary))
                 }
                 .buttonStyle(.plain)
 
@@ -1265,10 +1275,10 @@ private struct EditCompletedWorkoutSetScreen: View {
                     Button(action: save) {
                         Text(AppLocalizer.string("workout.set.edit.save"))
                             .font(.headline.weight(.semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Color(.systemBackground))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
-                            .background(RoundedRectangle(cornerRadius: 18).fill(.black))
+                            .background(RoundedRectangle(cornerRadius: 18).fill(Color.primary))
                     }
                     .buttonStyle(.plain)
                 }

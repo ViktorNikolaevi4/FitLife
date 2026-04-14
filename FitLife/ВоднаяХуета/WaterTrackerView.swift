@@ -2,6 +2,8 @@
 import SwiftUI
 import SwiftData
 
+private let waterLegacyInsetBackground = Color(.tertiarySystemBackground)
+
 // Представление для трекера воды
 struct WaterTrackerView: View {
     @Environment(\.modelContext) private var modelContext
@@ -90,7 +92,7 @@ struct WaterTrackerView: View {
                     }
                     .font(.title3)
                 }
-                .foregroundStyle(.black)
+                .foregroundStyle(.primary)
 
                 // ВЫПАДАЮЩЕЕ МЕНЮ ПО НАЖАТИЮ
                 Menu {
@@ -113,7 +115,7 @@ struct WaterTrackerView: View {
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(Capsule().fill(Color(.systemGray6)))
+                    .background(Capsule().fill(waterLegacyInsetBackground))
                 }
             }
 
@@ -126,7 +128,7 @@ struct WaterTrackerView: View {
                     Text(AppLocalizer.string("water.remind"))
                 }.font(.title3)
             }
-            .foregroundStyle(.black)
+            .foregroundStyle(.primary)
             .fullScreenCover(isPresented: $showNotificationSettings) {
                 NotificationSettingsView()
             }

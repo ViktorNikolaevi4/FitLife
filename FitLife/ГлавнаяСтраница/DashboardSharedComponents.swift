@@ -10,17 +10,17 @@ struct AppTheme {
         if scheme == .dark {
             bg = Color(UIColor.systemGroupedBackground)
             card = Color(UIColor.secondarySystemBackground)
-            border = Color.white.opacity(0.06)
-            subtleFill = Color.white.opacity(0.07)
-            ringTrack = Color.white.opacity(0.10)
+            border = Color(.separator).opacity(0.28)
+            subtleFill = Color(UIColor.tertiarySystemBackground)
+            ringTrack = Color(.separator).opacity(0.22)
             protein = .blue; fat = .red.opacity(0.8); carb = .green
             ringGradient = .init(colors: [.blue.opacity(0.95), .cyan.opacity(0.9), .blue.opacity(0.95)])
         } else {
-            bg = Color(UIColor.systemGray5)
+            bg = Color(UIColor.systemGroupedBackground)
             card = Color(UIColor.secondarySystemBackground)
-            border = Color.black.opacity(0.06)
-            subtleFill = Color.black.opacity(0.06)
-            ringTrack = Color.black.opacity(0.10)
+            border = Color(.separator).opacity(0.18)
+            subtleFill = Color(UIColor.tertiarySystemBackground)
+            ringTrack = Color(.separator).opacity(0.12)
             protein = .blue; fat = .red.opacity(0.8); carb = .green
             ringGradient = .init(colors: [.blue, .cyan, .blue])
         }
@@ -802,10 +802,10 @@ private struct PortionEditorScreen: View {
                         }
                     }
                     .padding(18)
-                    .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 24))
+                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24))
                     .overlay(
                         RoundedRectangle(cornerRadius: 24)
-                            .stroke(Color.black.opacity(0.06))
+                            .stroke(Color(.separator).opacity(0.22))
                     )
                 }
 
@@ -814,10 +814,10 @@ private struct PortionEditorScreen: View {
                     dismiss()
                 }
                 .font(.headline.weight(.semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(Color(.systemBackground))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 18)
-                .background(RoundedRectangle(cornerRadius: 20).fill(.black))
+                .background(RoundedRectangle(cornerRadius: 20).fill(Color.primary))
 
                 Button(AppLocalizer.string("common.delete"), role: .destructive) {
                     onDelete()

@@ -1,5 +1,8 @@
 import SwiftUI
 
+private let authCardBackground = Color(.secondarySystemBackground)
+private let authCardBorder = Color(.separator).opacity(0.22)
+
 struct AuthScreen: View {
     @EnvironmentObject private var sessionStore: AppSessionStore
 
@@ -50,7 +53,11 @@ struct AuthScreen: View {
                         .textContentType(mode == .signIn ? .password : .newPassword)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 16)
-                        .background(RoundedRectangle(cornerRadius: 18).fill(Color.white))
+                        .background(RoundedRectangle(cornerRadius: 18).fill(authCardBackground))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18)
+                                .strokeBorder(authCardBorder)
+                        )
                 }
 
                 if let authErrorMessage = sessionStore.authErrorMessage, authErrorMessage.isEmpty == false {
@@ -64,17 +71,17 @@ struct AuthScreen: View {
                     HStack {
                         if sessionStore.isLoading {
                             ProgressView()
-                                .tint(.white)
+                                .tint(Color(.systemBackground))
                         } else {
                             Text(mode == .signIn ? AppLocalizer.string("auth.action.sign_in") : AppLocalizer.string("auth.action.sign_up"))
                                 .fontWeight(.semibold)
                         }
                     }
                     .font(.headline)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color(.systemBackground))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(RoundedRectangle(cornerRadius: 18).fill(.black))
+                    .background(RoundedRectangle(cornerRadius: 18).fill(Color.primary))
                 }
                 .buttonStyle(.plain)
                 .disabled(isSubmitDisabled || sessionStore.isLoading)
@@ -131,7 +138,11 @@ struct AuthScreen: View {
             .autocorrectionDisabled()
             .padding(.horizontal, 16)
             .padding(.vertical, 16)
-            .background(RoundedRectangle(cornerRadius: 18).fill(Color.white))
+            .background(RoundedRectangle(cornerRadius: 18).fill(authCardBackground))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18)
+                    .strokeBorder(authCardBorder)
+            )
     }
 }
 

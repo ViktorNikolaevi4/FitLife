@@ -439,6 +439,12 @@
 "workout.exercise.lat" = "Lat Pulldown";
 "workout.exercise.legs" = "Leg Press";
 "workout.exercise.core" = "Core";
+"workout.exercise.biceps" = "Biceps Curl";
+"workout.exercise.pullups" = "Pull-Ups";
+"workout.exercise.lunges" = "Lunges";
+"workout.exercise.side_plank" = "Side Plank";
+"workout.exercise.battle_ropes" = "Battle Ropes";
+"workout.exercise.jump_rope" = "Jump Rope";
 "workout.exercise.custom" = "New Exercise";
 "training.diary" = "Training diary";
 "training.start" = "Start";

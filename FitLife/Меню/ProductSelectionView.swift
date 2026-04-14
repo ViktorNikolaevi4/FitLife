@@ -1,6 +1,10 @@
 import SwiftUI
 import SwiftData
 
+private let productSelectionCardBackground = Color(.secondarySystemBackground)
+private let productSelectionInsetBackground = Color(.tertiarySystemBackground)
+private let productSelectionCardBorder = Color(.separator).opacity(0.22)
+
 actor ProductUsageCache {
     static let shared = ProductUsageCache()
 
@@ -217,10 +221,10 @@ struct ProductSelectionView: View {
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
-                    .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 16))
+                    .background(productSelectionCardBackground, in: RoundedRectangle(cornerRadius: 16))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.black.opacity(0.06))
+                            .stroke(productSelectionCardBorder)
                     )
 
                     HStack(spacing: 10) {
@@ -295,13 +299,6 @@ struct ProductSelectionView: View {
                             } else {
                                 ForEach(visibleFilteredCustomProducts, id: \.id) { customProduct in
                                     customProductRow(customProduct: customProduct)
-                                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                            Button(role: .destructive) {
-                                                deleteCustomProduct(customProduct)
-                                            } label: {
-                                                Label(appLanguage.localized("common.delete"), systemImage: "trash")
-                                            }
-                                        }
                                 }
                             }
                         }
@@ -416,29 +413,38 @@ struct ProductSelectionView: View {
     // MARK: - Rows
 
     private func productRow(product: Product) -> some View {
-        Button(action: {
-            onProductSelected(product)   // ⬅️ НЕ dismiss — поверх откроется оверлей граммов
-        }) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(product.displayName(preferredLanguageCode: searchLanguage.rawValue))
-                        .font(.body.weight(.semibold))
-                        .multilineTextAlignment(.leading)
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(product.displayName(preferredLanguageCode: searchLanguage.rawValue))
+                    .font(.body.weight(.semibold))
+                    .multilineTextAlignment(.leading)
 
-                    Text(appLanguage.localized("search.per_100g"))
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                Text(appLanguage.localized("search.per_100g"))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
 
-                    HStack(spacing: 10) {
-                        metricTag(text: "\(product.calories) \(appLanguage.localized("unit.kcal"))")
-                        metricTag(text: macroShort("macro.protein.short", value: product.protein))
-                        metricTag(text: macroShort("macro.fat.short", value: product.fat))
-                        metricTag(text: macroShort("macro.carbs.short", value: product.carbs))
-                    }
+                HStack(spacing: 10) {
+                    metricTag(text: "\(product.calories) \(appLanguage.localized("unit.kcal"))")
+                    metricTag(text: macroShort("macro.protein.short", value: product.protein))
+                    metricTag(text: macroShort("macro.fat.short", value: product.fat))
+                    metricTag(text: macroShort("macro.carbs.short", value: product.carbs))
                 }
-                .foregroundColor(.primary)
+            }
+            .foregroundColor(.primary)
 
-                Spacer()
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 10) {
+                Button(action: {
+                    onProductSelected(product)
+                }) {
+                    Image(systemName: "plus")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.blue)
+                        .frame(width: 36, height: 36)
+                        .background(Color.blue.opacity(0.1), in: Circle())
+                }
+                .buttonStyle(.plain)
 
                 if let index = productCatalogStore.products.firstIndex(where: { $0.id == product.id }) {
                     Button(action: {
@@ -462,61 +468,79 @@ struct ProductSelectionView: View {
                         .background(Color(.secondarySystemBackground), in: Capsule())
                 }
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 18))
-            .overlay(
-                RoundedRectangle(cornerRadius: 18)
-                    .stroke(Color.black.opacity(0.06))
-            )
         }
-        .buttonStyle(.plain)
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(productSelectionCardBackground, in: RoundedRectangle(cornerRadius: 18))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(productSelectionCardBorder)
+        )
     }
 
     private func customProductRow(customProduct: CustomProduct) -> some View {
-        Button(action: {
-            onCustomProductSelected(customProduct) // по тапу выбираем продукт
-        }) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .center, spacing: 8) {
-                        Text(customProduct.name)
-                            .font(.body.weight(.semibold))
-                            .multilineTextAlignment(.leading)
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .center, spacing: 8) {
+                    Text(customProduct.name)
+                        .font(.body.weight(.semibold))
+                        .multilineTextAlignment(.leading)
 
-                        if customProduct.isAIGenerated {
-                            Text(AppLocalizer.string("ai.meal.badge"))
-                                .font(.caption2.weight(.bold))
-                                .foregroundStyle(.blue)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.blue.opacity(0.12), in: Capsule())
-                        }
-                    }
-
-                    Text(appLanguage.localized("search.per_100g"))
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
-
-                    HStack(spacing: 10) {
-                        metricTag(text: "\(customProduct.calories) \(appLanguage.localized("unit.kcal"))")
-                        metricTag(text: macroShort("macro.protein.short", value: customProduct.protein))
-                        metricTag(text: macroShort("macro.fat.short", value: customProduct.fat))
-                        metricTag(text: macroShort("macro.carbs.short", value: customProduct.carbs))
+                    if customProduct.isAIGenerated {
+                        Text(AppLocalizer.string("ai.meal.badge"))
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.blue)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.blue.opacity(0.12), in: Capsule())
                     }
                 }
-                .foregroundStyle(.primary)
-                Spacer()
+
+                Text(appLanguage.localized("search.per_100g"))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 10) {
+                    metricTag(text: "\(customProduct.calories) \(appLanguage.localized("unit.kcal"))")
+                    metricTag(text: macroShort("macro.protein.short", value: customProduct.protein))
+                    metricTag(text: macroShort("macro.fat.short", value: customProduct.fat))
+                    metricTag(text: macroShort("macro.carbs.short", value: customProduct.carbs))
+                }
             }
-            .padding(14)
+            .foregroundStyle(.primary)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 18))
-            .overlay(
-                RoundedRectangle(cornerRadius: 18)
-                    .stroke(Color.black.opacity(0.06))
-            )
+
+            VStack(alignment: .trailing, spacing: 10) {
+                Button(action: {
+                    onCustomProductSelected(customProduct)
+                }) {
+                    Image(systemName: "plus")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.blue)
+                        .frame(width: 36, height: 36)
+                        .background(Color.blue.opacity(0.1), in: Circle())
+                }
+                .buttonStyle(.plain)
+
+                Button(role: .destructive) {
+                    deleteCustomProduct(customProduct)
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.red)
+                        .frame(width: 36, height: 36)
+                        .background(Color.red.opacity(0.1), in: Circle())
+                }
+                .buttonStyle(.plain)
+            }
         }
-        .buttonStyle(.plain)
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(productSelectionCardBackground, in: RoundedRectangle(cornerRadius: 18))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(productSelectionCardBorder)
+        )
     }
 
 
@@ -826,10 +850,10 @@ struct ProductSelectionView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)
-        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 18))
+        .background(productSelectionCardBackground, in: RoundedRectangle(cornerRadius: 18))
         .overlay(
             RoundedRectangle(cornerRadius: 18)
-                .stroke(Color.black.opacity(0.06))
+                .stroke(productSelectionCardBorder)
         )
     }
 
@@ -839,7 +863,7 @@ struct ProductSelectionView: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
-            .background(Color(.secondarySystemBackground), in: Capsule())
+            .background(productSelectionInsetBackground, in: Capsule())
     }
 
     private func macroShort(_ key: String, value: Double) -> String {
@@ -853,10 +877,10 @@ struct ProductSelectionView: View {
                 .font(.caption.weight(.semibold))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 9)
-                .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 14))
+                .background(productSelectionCardBackground, in: RoundedRectangle(cornerRadius: 14))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(Color.black.opacity(0.06))
+                        .stroke(productSelectionCardBorder)
                 )
         }
         .buttonStyle(.plain)
@@ -939,10 +963,10 @@ struct CustomProductCreationView: View {
             .focused($focusedField, equals: field)
             .submitLabel(submit)
             .padding(12)
-            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+            .background(productSelectionCardBackground, in: RoundedRectangle(cornerRadius: 10))
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(focusedField == field ? Color.blue : Color.gray.opacity(0.35),
+                    .stroke(focusedField == field ? Color.blue : productSelectionCardBorder,
                             lineWidth: focusedField == field ? 2 : 1)
             )
             .animation(.easeInOut(duration: 0.15), value: focusedField == field)

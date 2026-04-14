@@ -439,6 +439,12 @@
 "workout.exercise.lat" = "Тяга сверху";
 "workout.exercise.legs" = "Жим ногами";
 "workout.exercise.core" = "Пресс";
+"workout.exercise.biceps" = "Бицепс";
+"workout.exercise.pullups" = "Подтягивания";
+"workout.exercise.lunges" = "Выпады";
+"workout.exercise.side_plank" = "Боковая планка";
+"workout.exercise.battle_ropes" = "Канат";
+"workout.exercise.jump_rope" = "Скакалка";
 "workout.exercise.custom" = "Новое упражнение";
 "training.diary" = "Тренировочный дневник";
 "training.start" = "Начать";

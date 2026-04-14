@@ -239,11 +239,11 @@ struct SectionCard<Content: View>: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(Color(.systemBackground))
+                .fill(Color(.secondarySystemBackground))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14)
-                .stroke(Color.black.opacity(0.06))
+                .stroke(Color(.separator).opacity(0.22))
         )
         .shadow(color: .black.opacity(0.03), radius: 6, x: 0, y: 2)
         .padding(.horizontal)

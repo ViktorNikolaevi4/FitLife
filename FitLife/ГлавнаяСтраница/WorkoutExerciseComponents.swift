@@ -1,5 +1,9 @@
 import SwiftUI
 
+private let workoutCardBackground = Color(.secondarySystemBackground)
+private let workoutCardInsetBackground = Color(.tertiarySystemBackground)
+private let workoutCardBorder = Color(.separator).opacity(0.22)
+
 struct WorkoutExerciseCard: View {
     let exercise: WorkoutExercise
     let onToggleExpanded: () -> Void
@@ -31,9 +35,11 @@ struct WorkoutExerciseCard: View {
                             Circle()
                                 .fill(workoutAccentColor(exercise.accentName).opacity(0.16))
 
-                            Image(systemName: exercise.systemImage)
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(workoutAccentColor(exercise.accentName))
+                            workoutIconImage(
+                                named: exercise.systemImage,
+                                accentName: exercise.accentName,
+                                size: 18
+                            )
                         }
                         .frame(width: 40, height: 40)
 
@@ -63,8 +69,8 @@ struct WorkoutExerciseCard: View {
                             .font(.system(size: 15, weight: .semibold))
                     }
                     .padding(14)
-                    .background(RoundedRectangle(cornerRadius: 14).fill(Color.white))
-                    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.black.opacity(0.06)))
+                    .background(RoundedRectangle(cornerRadius: 14).fill(workoutCardInsetBackground))
+                    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(workoutCardBorder))
                 }
                 .buttonStyle(.plain)
                 .padding(10)
@@ -132,7 +138,11 @@ struct WorkoutExerciseCard: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
-            .background(RoundedRectangle(cornerRadius: 16).fill(Color.white))
+            .background(RoundedRectangle(cornerRadius: 16).fill(workoutCardBackground))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(workoutCardBorder)
+            )
         }
     }
 }
@@ -215,7 +225,7 @@ struct SwipeRevealDeleteContainer<Content: View>: View {
             }
 
             content()
-                .background(Color.white)
+                .background(workoutCardBackground)
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
                 .offset(x: currentOffset)
                 .gesture(

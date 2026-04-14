@@ -1,6 +1,9 @@
 import SwiftUI
 import SwiftData
 
+private let profileCardBackground = Color(.secondarySystemBackground)
+private let profileCardBorder = Color(.separator).opacity(0.22)
+
 struct ProfileScreen: View {
     @Query private var users: [UserData]
     @Environment(\.modelContext) private var modelContext
@@ -22,7 +25,7 @@ struct ProfileScreen: View {
     }
 
     var body: some View {
-        let bg = Color(.systemGray6)
+        let bg = Color(.systemGroupedBackground)
 
         NavigationStack {
             ScrollView {
@@ -491,11 +494,11 @@ private struct ManualNutritionGoalsEditor: View {
         .padding(.vertical, 15)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.systemBackground))
+                .fill(profileCardBackground)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.black.opacity(0.06))
+                .stroke(profileCardBorder)
         )
     }
 
@@ -544,11 +547,11 @@ private struct ProfileHeroCard: View {
         .padding(18)
         .background(
             RoundedRectangle(cornerRadius: 20)
-                .fill(Color(.systemBackground))
+                .fill(profileCardBackground)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 20)
-                .stroke(Color.black.opacity(0.06))
+                .stroke(profileCardBorder)
         )
         .shadow(color: .black.opacity(0.03), radius: 10, x: 0, y: 4)
         .padding(.horizontal)
@@ -631,7 +634,7 @@ private struct EditableSummaryMetricCardInt: View {
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(.secondarySystemBackground))
+                    .fill(profileCardBackground)
             )
         }
         .buttonStyle(.plain)
@@ -692,7 +695,7 @@ private struct EditableSummaryMetricCardDoubleAsInt: View {
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(.secondarySystemBackground))
+                    .fill(profileCardBackground)
             )
         }
         .buttonStyle(.plain)

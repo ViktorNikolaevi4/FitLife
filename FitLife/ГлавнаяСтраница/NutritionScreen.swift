@@ -1,6 +1,9 @@
 import SwiftUI
 import SwiftData
 
+private let nutritionCardBackground = Color(.secondarySystemBackground)
+private let nutritionCardBorder = Color(.separator).opacity(0.22)
+
 struct NutritionScreen: View {
     @Binding var selectedDate: Date
 
@@ -489,7 +492,7 @@ struct MacroNutrientDetailScreen: View {
             .frame(width: 58, height: 58)
         }
         .padding(18)
-        .background(RoundedRectangle(cornerRadius: 24).fill(Color.white))
+        .background(RoundedRectangle(cornerRadius: 24).fill(nutritionCardBackground))
         .overlay(
             RoundedRectangle(cornerRadius: 24)
                 .strokeBorder(macro.tint(theme: theme).opacity(0.18))
@@ -534,10 +537,10 @@ struct MacroNutrientDetailScreen: View {
                 }
             }
             .padding(14)
-            .background(RoundedRectangle(cornerRadius: 20).fill(Color.white))
+            .background(RoundedRectangle(cornerRadius: 20).fill(nutritionCardBackground))
             .overlay(
                 RoundedRectangle(cornerRadius: 20)
-                    .strokeBorder(Color.black.opacity(0.04))
+                    .strokeBorder(nutritionCardBorder)
             )
         }
     }

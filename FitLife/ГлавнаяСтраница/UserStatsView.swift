@@ -2,6 +2,9 @@
 import SwiftUI
 import SwiftData
 
+private let statsPickerBackground = Color(.secondarySystemBackground)
+private let statsPickerBorder = Color(.separator).opacity(0.22)
+
 struct UserStatsView: View {
     @Bindable var userData: UserData
     @Environment(\.modelContext) private var modelContext
@@ -30,7 +33,7 @@ struct UserStatsView: View {
                                 Text(AppLocalizer.string("stats.weight"))
                                 Text("\(Int(userData.weight))")
                             }
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.primary)
                         }
                         .buttonStyle(.plain)
 
@@ -41,7 +44,7 @@ struct UserStatsView: View {
                                 Text(AppLocalizer.string("stats.height"))
                                 Text("\(Int(userData.height))")
                             }
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.primary)
                         }
                         .buttonStyle(.plain)
 
@@ -52,7 +55,7 @@ struct UserStatsView: View {
                                 Text(AppLocalizer.string("stats.age"))
                                 Text("\(userData.age)")
                             }
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.primary)
                         }
                         .buttonStyle(.plain)
                     }
@@ -206,7 +209,11 @@ struct PickerView: View {
                 .cornerRadius(10)
             }
             .padding()
-            .background(Color.white) // Непрозрачный фон для Picker
+            .background(statsPickerBackground)
+            .overlay(
+                RoundedRectangle(cornerRadius: 15)
+                    .stroke(statsPickerBorder)
+            )
             .cornerRadius(15)
             .shadow(radius: 10) // Тень для эффекта объема
         }

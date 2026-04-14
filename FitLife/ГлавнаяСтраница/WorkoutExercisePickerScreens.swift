@@ -1,6 +1,10 @@
 import SwiftUI
 import SwiftData
 
+private let workoutPickerCardBackground = Color(.secondarySystemBackground)
+private let workoutPickerInsetBackground = Color(.tertiarySystemBackground)
+private let workoutPickerCardBorder = Color(.separator).opacity(0.22)
+
 struct WorkoutExerciseTemplate: Identifiable {
     let id = UUID()
     let name: String
@@ -149,7 +153,7 @@ struct AddWorkoutExerciseScreen: View {
             HStack(spacing: 14) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 18)
-                        .fill(Color.black.opacity(0.08))
+                        .fill(workoutPickerInsetBackground)
 
                     Image(systemName: "plus")
                         .font(.system(size: 22, weight: .bold))
@@ -173,7 +177,11 @@ struct AddWorkoutExerciseScreen: View {
                     .foregroundStyle(.secondary)
             }
             .padding(16)
-            .background(RoundedRectangle(cornerRadius: 22).fill(Color.white))
+            .background(RoundedRectangle(cornerRadius: 22).fill(workoutPickerCardBackground))
+            .overlay(
+                RoundedRectangle(cornerRadius: 22)
+                    .strokeBorder(workoutPickerCardBorder)
+            )
         }
         .buttonStyle(.plain)
     }
@@ -191,9 +199,11 @@ struct AddWorkoutExerciseScreen: View {
                                 RoundedRectangle(cornerRadius: 18)
                                     .fill(workoutAccentColor(template.accentName).opacity(0.14))
 
-                                Image(systemName: template.systemImage)
-                                    .font(.system(size: 22, weight: .semibold))
-                                    .foregroundStyle(workoutAccentColor(template.accentName))
+                                workoutIconImage(
+                                    named: template.systemImage,
+                                    accentName: template.accentName,
+                                    size: 22
+                                )
                             }
                             .frame(width: 56, height: 56)
 
@@ -210,10 +220,14 @@ struct AddWorkoutExerciseScreen: View {
 
                             Image(systemName: "plus.circle.fill")
                                 .font(.title3)
-                                .foregroundStyle(.black)
+                                .foregroundStyle(.primary)
                         }
                         .padding(16)
-                        .background(RoundedRectangle(cornerRadius: 22).fill(Color.white))
+                        .background(RoundedRectangle(cornerRadius: 22).fill(workoutPickerCardBackground))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 22)
+                                .strokeBorder(workoutPickerCardBorder)
+                        )
                     }
                     .buttonStyle(.plain)
                 }
@@ -234,9 +248,11 @@ struct AddWorkoutExerciseScreen: View {
                                 RoundedRectangle(cornerRadius: 18)
                                     .fill(workoutAccentColor(template.accentName).opacity(0.14))
 
-                                Image(systemName: template.systemImage)
-                                    .font(.system(size: 22, weight: .semibold))
-                                    .foregroundStyle(workoutAccentColor(template.accentName))
+                                workoutIconImage(
+                                    named: template.systemImage,
+                                    accentName: template.accentName,
+                                    size: 22
+                                )
                             }
                             .frame(width: 56, height: 56)
 
@@ -253,10 +269,14 @@ struct AddWorkoutExerciseScreen: View {
 
                             Image(systemName: "plus.circle.fill")
                                 .font(.title3)
-                                .foregroundStyle(.black)
+                                .foregroundStyle(.primary)
                         }
                         .padding(16)
-                        .background(RoundedRectangle(cornerRadius: 22).fill(Color.white))
+                        .background(RoundedRectangle(cornerRadius: 22).fill(workoutPickerCardBackground))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 22)
+                                .strokeBorder(workoutPickerCardBorder)
+                        )
                     }
                     .buttonStyle(.plain)
                 }
@@ -318,7 +338,11 @@ private struct CreateWorkoutExerciseTemplateScreen: View {
                         .focused($isNameFieldFocused)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 14)
-                        .background(RoundedRectangle(cornerRadius: 18).fill(Color.white))
+                        .background(RoundedRectangle(cornerRadius: 18).fill(workoutPickerCardBackground))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18)
+                                .strokeBorder(workoutPickerCardBorder)
+                        )
                 }
 
                 VStack(alignment: .leading, spacing: 12) {
@@ -354,13 +378,25 @@ private struct CreateWorkoutExerciseTemplateScreen: View {
                             Button(action: { selectedIcon = option.systemImage }) {
                                 ZStack {
                                     RoundedRectangle(cornerRadius: 18)
-                                        .fill(selectedIcon == option.systemImage ? workoutAccentColor(selectedAccent).opacity(0.16) : Color.white)
+                                        .fill(
+                                            selectedIcon == option.systemImage
+                                            ? workoutAccentColor(selectedAccent).opacity(0.16)
+                                            : workoutPickerCardBackground
+                                        )
 
                                     Image(systemName: option.systemImage)
                                         .font(.system(size: 22, weight: .semibold))
                                         .foregroundStyle(selectedIcon == option.systemImage ? workoutAccentColor(selectedAccent) : .primary)
                                 }
                                 .frame(height: 64)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 18)
+                                        .strokeBorder(
+                                            selectedIcon == option.systemImage
+                                            ? workoutAccentColor(selectedAccent).opacity(0.28)
+                                            : workoutPickerCardBorder
+                                        )
+                                )
                             }
                             .buttonStyle(.plain)
                         }
@@ -370,10 +406,10 @@ private struct CreateWorkoutExerciseTemplateScreen: View {
                 Button(action: saveTemplate) {
                     Text(AppLocalizer.string("workout.create.save"))
                         .font(.headline.weight(.semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color(.systemBackground))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(RoundedRectangle(cornerRadius: 18).fill(.black))
+                        .background(RoundedRectangle(cornerRadius: 18).fill(Color.primary))
                 }
                 .buttonStyle(.plain)
                 .disabled(trimmedName.isEmpty)
@@ -418,7 +454,11 @@ private struct CreateWorkoutExerciseTemplateScreen: View {
             Spacer()
         }
         .padding(18)
-        .background(RoundedRectangle(cornerRadius: 24).fill(Color.white))
+        .background(RoundedRectangle(cornerRadius: 24).fill(workoutPickerCardBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24)
+                .strokeBorder(workoutPickerCardBorder)
+        )
     }
 
     private var trimmedName: String {
@@ -461,9 +501,11 @@ private struct WorkoutExerciseSetupScreen: View {
                         RoundedRectangle(cornerRadius: 18)
                             .fill(workoutAccentColor(draft.accentName).opacity(0.14))
 
-                        Image(systemName: draft.systemImage)
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundStyle(workoutAccentColor(draft.accentName))
+                        workoutIconImage(
+                            named: draft.systemImage,
+                            accentName: draft.accentName,
+                            size: 24
+                        )
                     }
                     .frame(width: 60, height: 60)
 
@@ -501,17 +543,21 @@ private struct WorkoutExerciseSetupScreen: View {
                     .foregroundStyle(.primary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(RoundedRectangle(cornerRadius: 18).fill(Color.white))
+                    .background(RoundedRectangle(cornerRadius: 18).fill(workoutPickerCardBackground))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18)
+                            .strokeBorder(workoutPickerCardBorder)
+                    )
                 }
                 .buttonStyle(.plain)
 
                 Button(action: save) {
                     Text(AppLocalizer.string("workout.setup.save"))
                         .font(.headline.weight(.semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color(.systemBackground))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(RoundedRectangle(cornerRadius: 18).fill(.black))
+                        .background(RoundedRectangle(cornerRadius: 18).fill(Color.primary))
                 }
                 .buttonStyle(.plain)
             }
@@ -652,7 +698,11 @@ struct WorkoutDraftSetEditorRow: View {
             }
         }
         .padding(16)
-        .background(RoundedRectangle(cornerRadius: 22).fill(Color.white))
+        .background(RoundedRectangle(cornerRadius: 22).fill(workoutPickerCardBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22)
+                .strokeBorder(workoutPickerCardBorder)
+        )
         .onChange(of: set) { _, newValue in
             if focusedField != .weight {
                 weightText = Self.weightText(from: newValue.weight)
@@ -722,7 +772,7 @@ struct WorkoutDraftSetEditorRow: View {
                         .font(.caption.weight(.bold))
                         .foregroundStyle(.secondary)
                         .frame(width: 28, height: 28)
-                        .background(Circle().fill(Color.white.opacity(activeEditor == field ? 0.9 : 0.7)))
+                        .background(Circle().fill(workoutPickerCardBackground.opacity(activeEditor == field ? 0.95 : 0.8)))
                 }
                 .buttonStyle(.plain)
             }
@@ -730,7 +780,7 @@ struct WorkoutDraftSetEditorRow: View {
             .padding(.vertical, 12)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(activeEditor == field ? Color.black.opacity(0.06) : Color(.systemGray6))
+                    .fill(activeEditor == field ? workoutPickerInsetBackground : workoutPickerInsetBackground.opacity(0.9))
             )
 
             if activeEditor == field {
@@ -745,7 +795,7 @@ struct WorkoutDraftSetEditorRow: View {
                                     .padding(.vertical, 10)
                                     .background(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .fill(Color(.systemGray6))
+                                            .fill(workoutPickerInsetBackground)
                                     )
                             }
                             .buttonStyle(.plain)
@@ -762,7 +812,7 @@ struct WorkoutDraftSetEditorRow: View {
                             .padding(.vertical, 12)
                             .background(
                                 RoundedRectangle(cornerRadius: 14)
-                                    .fill(Color(.systemGray6))
+                                    .fill(workoutPickerInsetBackground)
                             )
                             .onSubmit(onCommit)
                     }

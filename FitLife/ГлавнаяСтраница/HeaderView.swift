@@ -18,19 +18,19 @@ struct HeaderView: View {
                     Text(formattedDate(selectedDate))
                         .font(.title3)
                         .fontWeight(.semibold)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.primary)
                         .padding(.vertical, 6)
                         .padding(.horizontal, 14)
                     Image(systemName: "calendar")
                         .font(.title2)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.primary)
                 }
                 .background(
-                    Color.white.opacity(colorScheme == .dark ? 0.25 : 0.15)
+                    Color(.secondarySystemBackground)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.gray.opacity(colorScheme == .dark ? 0.4 : 0.2), lineWidth: 1)
+                        .stroke(Color(.separator).opacity(colorScheme == .dark ? 0.35 : 0.18), lineWidth: 1)
                 )
                 .cornerRadius(12)
             }

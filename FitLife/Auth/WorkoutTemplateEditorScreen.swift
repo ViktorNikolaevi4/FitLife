@@ -1,6 +1,9 @@
 import SwiftUI
 import SwiftData
 
+private let workoutTemplateEditorCardBackground = Color(.secondarySystemBackground)
+private let workoutTemplateEditorBorder = Color(.separator).opacity(0.22)
+
 struct WorkoutTemplateEditorScreen: View {
     let template: WorkoutTemplate
 
@@ -102,7 +105,11 @@ struct WorkoutTemplateEditorScreen: View {
                             .padding(.leading, 4)
                         }
                         .padding(14)
-                        .background(RoundedRectangle(cornerRadius: 16).fill(Color.white))
+                        .background(RoundedRectangle(cornerRadius: 16).fill(workoutTemplateEditorCardBackground))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .strokeBorder(workoutTemplateEditorBorder)
+                        )
                     }
                     .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
                     .listRowBackground(Color.clear)

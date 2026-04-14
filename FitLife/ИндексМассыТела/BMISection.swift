@@ -77,11 +77,11 @@ private struct BMICardView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 18)
-                .fill(Color(.systemBackground))
+                .fill(Color(.secondarySystemBackground))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18)
-                .stroke(Color.black.opacity(0.06))
+                .stroke(Color(.separator).opacity(0.22))
         )
         .shadow(color: .black.opacity(0.03), radius: 6, x: 0, y: 2)
     }
