@@ -1,5 +1,6 @@
 import SwiftUI
 import FirebaseFirestore
+import SwiftData
 
 enum ProfileUpdateRequestType: String, CaseIterable, Codable, Identifiable {
     case weightUpdate = "weight_update"
@@ -249,11 +250,231 @@ struct CoachingNote: Identifiable, Hashable {
     }
 }
 
+struct CoachingWorkoutSetSnapshot: Hashable {
+    let orderIndex: Int
+    let weight: Double
+    let reps: Int
+    let durationSeconds: Int
+    let metricTypeRaw: String
+    let isCompleted: Bool
+
+    init(set: WorkoutSet) {
+        orderIndex = set.orderIndex
+        weight = set.weight
+        reps = set.reps
+        durationSeconds = set.durationSeconds
+        metricTypeRaw = set.metricType.rawValue
+        isCompleted = set.isCompleted
+    }
+
+    init?(_ data: [String: Any]) {
+        guard
+            let orderIndex = data["orderIndex"] as? Int,
+            let weight = data["weight"] as? Double,
+            let reps = data["reps"] as? Int,
+            let durationSeconds = data["durationSeconds"] as? Int,
+            let metricTypeRaw = data["metricTypeRaw"] as? String,
+            let isCompleted = data["isCompleted"] as? Bool
+        else {
+            return nil
+        }
+
+        self.orderIndex = orderIndex
+        self.weight = weight
+        self.reps = reps
+        self.durationSeconds = durationSeconds
+        self.metricTypeRaw = metricTypeRaw
+        self.isCompleted = isCompleted
+    }
+
+    var firestoreData: [String: Any] {
+        [
+            "orderIndex": orderIndex,
+            "weight": weight,
+            "reps": reps,
+            "durationSeconds": durationSeconds,
+            "metricTypeRaw": metricTypeRaw,
+            "isCompleted": isCompleted
+        ]
+    }
+}
+
+struct CoachingWorkoutExerciseSnapshot: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let systemImage: String
+    let accentName: String
+    let orderIndex: Int
+    let note: String
+    let sets: [CoachingWorkoutSetSnapshot]
+
+    init(exercise: WorkoutExercise) {
+        id = exercise.id.uuidString
+        name = exercise.name
+        systemImage = exercise.systemImage
+        accentName = exercise.accentName
+        orderIndex = exercise.orderIndex
+        note = exercise.note
+        sets = exercise.sets
+            .sorted { $0.orderIndex < $1.orderIndex }
+            .map(CoachingWorkoutSetSnapshot.init(set:))
+    }
+
+    init?(_ data: [String: Any]) {
+        guard
+            let id = data["id"] as? String,
+            let name = data["name"] as? String,
+            let systemImage = data["systemImage"] as? String,
+            let accentName = data["accentName"] as? String,
+            let orderIndex = data["orderIndex"] as? Int,
+            let note = data["note"] as? String,
+            let setsData = data["sets"] as? [[String: Any]]
+        else {
+            return nil
+        }
+
+        self.id = id
+        self.name = name
+        self.systemImage = systemImage
+        self.accentName = accentName
+        self.orderIndex = orderIndex
+        self.note = note
+        self.sets = setsData.compactMap(CoachingWorkoutSetSnapshot.init)
+    }
+
+    var firestoreData: [String: Any] {
+        [
+            "id": id,
+            "name": name,
+            "systemImage": systemImage,
+            "accentName": accentName,
+            "orderIndex": orderIndex,
+            "note": note,
+            "sets": sets.map(\.firestoreData)
+        ]
+    }
+}
+
+struct CoachingWorkoutSnapshot: Identifiable, Hashable {
+    let id: String
+    let title: String
+    let createdAt: Date
+    let endedAt: Date?
+    let elapsedSeconds: Int
+    let note: String
+    let exercises: [CoachingWorkoutExerciseSnapshot]
+
+    init(workout: WorkoutSession) {
+        id = workout.id.uuidString
+        title = workout.title
+        createdAt = workout.createdAt
+        endedAt = workout.endedAt
+        elapsedSeconds = workout.elapsedSeconds
+        note = workout.note
+        exercises = workout.exercises
+            .sorted { $0.orderIndex < $1.orderIndex }
+            .map(CoachingWorkoutExerciseSnapshot.init(exercise:))
+    }
+
+    init?(_ data: [String: Any]) {
+        guard
+            let id = data["id"] as? String,
+            let title = data["title"] as? String,
+            let elapsedSeconds = data["elapsedSeconds"] as? Int,
+            let note = data["note"] as? String,
+            let exercisesData = data["exercises"] as? [[String: Any]]
+        else {
+            return nil
+        }
+
+        self.id = id
+        self.title = title
+        self.elapsedSeconds = elapsedSeconds
+        self.note = note
+        if let createdTimestamp = data["createdAt"] as? Timestamp {
+            self.createdAt = createdTimestamp.dateValue()
+        } else {
+            self.createdAt = (data["createdAt"] as? Date) ?? .now
+        }
+        if let endedTimestamp = data["endedAt"] as? Timestamp {
+            self.endedAt = endedTimestamp.dateValue()
+        } else {
+            self.endedAt = data["endedAt"] as? Date
+        }
+        self.exercises = exercisesData.compactMap(CoachingWorkoutExerciseSnapshot.init)
+    }
+
+    var firestoreData: [String: Any] {
+        [
+            "id": id,
+            "title": title,
+            "createdAt": createdAt,
+            "endedAt": endedAt as Any,
+            "elapsedSeconds": elapsedSeconds,
+            "note": note,
+            "exercises": exercises.map(\.firestoreData)
+        ]
+    }
+
+    var exerciseCount: Int { exercises.count }
+    var setCount: Int { exercises.reduce(0) { $0 + $1.sets.count } }
+    var completedSetCount: Int { exercises.reduce(0) { $0 + $1.sets.filter(\.isCompleted).count } }
+    var exerciseNoteCount: Int { exercises.filter { $0.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }.count }
+}
+
+struct CoachingWorkoutReport: Identifiable, Hashable {
+    let id: String
+    let clientId: String
+    let trainerId: String
+    let createdAt: Date
+    let workouts: [CoachingWorkoutSnapshot]
+
+    init(id: String = UUID().uuidString, clientId: String, trainerId: String, createdAt: Date = .now, workouts: [CoachingWorkoutSnapshot]) {
+        self.id = id
+        self.clientId = clientId
+        self.trainerId = trainerId
+        self.createdAt = createdAt
+        self.workouts = workouts
+    }
+
+    init?(id: String, data: [String: Any]) {
+        guard
+            let clientId = data["clientId"] as? String,
+            let trainerId = data["trainerId"] as? String,
+            let workoutsData = data["workouts"] as? [[String: Any]]
+        else {
+            return nil
+        }
+
+        self.id = id
+        self.clientId = clientId
+        self.trainerId = trainerId
+        if let createdTimestamp = data["createdAt"] as? Timestamp {
+            self.createdAt = createdTimestamp.dateValue()
+        } else {
+            self.createdAt = (data["createdAt"] as? Date) ?? .now
+        }
+        self.workouts = workoutsData.compactMap(CoachingWorkoutSnapshot.init)
+    }
+
+    var firestoreData: [String: Any] {
+        [
+            "clientId": clientId,
+            "trainerId": trainerId,
+            "createdAt": createdAt,
+            "workouts": workouts.map(\.firestoreData)
+        ]
+    }
+
+    var workoutCount: Int { workouts.count }
+}
+
 @MainActor
 final class ClientCoachingHomeStore: ObservableObject {
     @Published private(set) var checkIns: [ProgressCheckIn] = []
     @Published private(set) var updateRequests: [ProfileUpdateRequest] = []
     @Published private(set) var notes: [CoachingNote] = []
+    @Published private(set) var workoutReports: [CoachingWorkoutReport] = []
     @Published private(set) var isLoading = false
     @Published private(set) var isSubmitting = false
     @Published var errorMessage: String?
@@ -288,7 +509,13 @@ final class ClientCoachingHomeStore: ObservableObject {
                 .whereField("clientId", isEqualTo: clientId)
                 .getDocuments()
 
-            let (checkInDocs, requestDocs, noteDocs) = try await (checkInsSnapshot, requestsSnapshot, notesSnapshot)
+            async let workoutReportsSnapshot = firestore
+                .collection("coaching_workout_reports")
+                .whereField("clientId", isEqualTo: clientId)
+                .whereField("trainerId", isEqualTo: trainerId)
+                .getDocuments()
+
+            let (checkInDocs, requestDocs, noteDocs, workoutReportDocs) = try await (checkInsSnapshot, requestsSnapshot, notesSnapshot, workoutReportsSnapshot)
 
             checkIns = checkInDocs.documents.compactMap { ProgressCheckIn(id: $0.documentID, data: $0.data()) }
                 .sorted { $0.createdAt > $1.createdAt }
@@ -297,6 +524,9 @@ final class ClientCoachingHomeStore: ObservableObject {
                 .sorted { $0.createdAt > $1.createdAt }
 
             notes = noteDocs.documents.compactMap { CoachingNote(id: $0.documentID, data: $0.data()) }
+                .sorted { $0.createdAt > $1.createdAt }
+
+            workoutReports = workoutReportDocs.documents.compactMap { CoachingWorkoutReport(id: $0.documentID, data: $0.data()) }
                 .sorted { $0.createdAt > $1.createdAt }
 
             isLoading = false
@@ -389,6 +619,31 @@ final class ClientCoachingHomeStore: ObservableObject {
             errorMessage = error.localizedDescription
         }
     }
+
+    func sendWorkoutReport(workouts: [WorkoutSession]) async {
+        guard workouts.isEmpty == false else { return }
+
+        isSubmitting = true
+        errorMessage = nil
+
+        let report = CoachingWorkoutReport(
+            clientId: clientId,
+            trainerId: trainerId,
+            workouts: workouts.map(CoachingWorkoutSnapshot.init(workout:))
+        )
+
+        do {
+            try await firestore
+                .collection("coaching_workout_reports")
+                .document(report.id)
+                .setData(report.firestoreData)
+            isSubmitting = false
+            await load()
+        } catch {
+            errorMessage = error.localizedDescription
+            isSubmitting = false
+        }
+    }
 }
 
 @MainActor
@@ -398,6 +653,7 @@ final class TrainerClientSupportStore: ObservableObject {
     @Published private(set) var checkIns: [ProgressCheckIn] = []
     @Published private(set) var updateRequests: [ProfileUpdateRequest] = []
     @Published private(set) var notes: [CoachingNote] = []
+    @Published private(set) var workoutReports: [CoachingWorkoutReport] = []
     @Published private(set) var isLoading = false
     @Published private(set) var isSubmitting = false
     @Published var errorMessage: String?
@@ -445,12 +701,19 @@ final class TrainerClientSupportStore: ObservableObject {
                 .whereField("trainerId", isEqualTo: trainerId)
                 .getDocuments()
 
-            let (intakeDoc, activeLinkDoc, checkInDocs, requestDocs, noteDocs) = try await (
+            async let workoutReportsSnapshot = firestore
+                .collection("coaching_workout_reports")
+                .whereField("clientId", isEqualTo: client.id)
+                .whereField("trainerId", isEqualTo: trainerId)
+                .getDocuments()
+
+            let (intakeDoc, activeLinkDoc, checkInDocs, requestDocs, noteDocs, workoutReportDocs) = try await (
                 intakeSnapshot,
                 activeLinkSnapshot,
                 checkInsSnapshot,
                 requestsSnapshot,
-                notesSnapshot
+                notesSnapshot,
+                workoutReportsSnapshot
             )
 
             intake = intakeDoc.data().flatMap { ClientIntakeProfile(id: intakeDoc.documentID, data: $0) }
@@ -463,6 +726,9 @@ final class TrainerClientSupportStore: ObservableObject {
                 .sorted { $0.createdAt > $1.createdAt }
 
             notes = noteDocs.documents.compactMap { CoachingNote(id: $0.documentID, data: $0.data()) }
+                .sorted { $0.createdAt > $1.createdAt }
+
+            workoutReports = workoutReportDocs.documents.compactMap { CoachingWorkoutReport(id: $0.documentID, data: $0.data()) }
                 .sorted { $0.createdAt > $1.createdAt }
 
             isLoading = false
@@ -535,8 +801,10 @@ struct ClientCoachingHomeScreen: View {
     let trainerId: String
     let trainer: AppUserProfile?
 
+    @Query private var workouts: [WorkoutSession]
     @StateObject private var store: ClientCoachingHomeStore
     @State private var showCheckInSheet = false
+    @State private var showWorkoutReportSheet = false
     @State private var noteMessage = ""
 
     init(clientId: String, trainerId: String, trainer: AppUserProfile?) {
@@ -572,6 +840,12 @@ struct ClientCoachingHomeScreen: View {
                     showCheckInSheet = true
                 } label: {
                     Label(AppLocalizer.string("coaching.checkin.action.new"), systemImage: "waveform.path.ecg")
+                }
+
+                Button {
+                    showWorkoutReportSheet = true
+                } label: {
+                    Label(AppLocalizer.string("coaching.workouts.action.send"), systemImage: "paperplane.fill")
                 }
             }
 
@@ -621,6 +895,20 @@ struct ClientCoachingHomeScreen: View {
                 }
             }
 
+            Section(AppLocalizer.string("coaching.workouts.section")) {
+                if completedWorkouts.isEmpty {
+                    Text(AppLocalizer.string("coaching.workouts.empty.available"))
+                        .foregroundStyle(.secondary)
+                } else if store.workoutReports.isEmpty {
+                    Text(AppLocalizer.string("coaching.workouts.empty.sent"))
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(store.workoutReports.prefix(10)) { report in
+                        CoachingWorkoutReportRow(report: report)
+                    }
+                }
+            }
+
             Section(AppLocalizer.string("coaching.notes.section")) {
                 TextField(AppLocalizer.string("coaching.notes.placeholder.client"), text: $noteMessage, axis: .vertical)
                     .lineLimit(2...5)
@@ -665,6 +953,20 @@ struct ClientCoachingHomeScreen: View {
                 ClientCheckInFormScreen(store: store)
             }
         }
+        .sheet(isPresented: $showWorkoutReportSheet) {
+            NavigationStack {
+                ClientWorkoutReportComposerScreen(
+                    workouts: completedWorkouts,
+                    store: store
+                )
+            }
+        }
+    }
+
+    private var completedWorkouts: [WorkoutSession] {
+        workouts
+            .filter { $0.ownerId == clientId && $0.endedAt != nil }
+            .sorted { ($0.endedAt ?? .distantPast) > ($1.endedAt ?? .distantPast) }
     }
 }
 
@@ -751,6 +1053,121 @@ private struct ClientCheckInFormScreen: View {
             Text(unit)
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+private struct ClientWorkoutReportComposerScreen: View {
+    let workouts: [WorkoutSession]
+
+    @ObservedObject var store: ClientCoachingHomeStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedWorkoutIds: Set<String> = []
+
+    var body: some View {
+        List {
+            Section {
+                Text(AppLocalizer.string("coaching.workouts.compose.subtitle"))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section(AppLocalizer.string("coaching.workouts.compose.section")) {
+                if workouts.isEmpty {
+                    Text(AppLocalizer.string("coaching.workouts.empty.available"))
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(workouts, id: \.id) { workout in
+                        Button {
+                            toggle(workout)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: isSelected(workout) ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(isSelected(workout) ? Color.accentColor : .secondary)
+
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(workout.title)
+                                        .font(.headline)
+                                        .foregroundStyle(.primary)
+
+                                    Text(workoutDateText(workout))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+
+                                    Text(
+                                        AppLocalizer.format(
+                                            "coaching.workouts.summary",
+                                            workout.exercises.count,
+                                            workout.exercises.reduce(0) { $0 + $1.sets.count }
+                                        )
+                                    )
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                }
+
+                                Spacer()
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            Section {
+                Button {
+                    Task {
+                        await store.sendWorkoutReport(workouts: selectedWorkouts)
+                        if store.errorMessage == nil {
+                            dismiss()
+                        }
+                    }
+                } label: {
+                    HStack {
+                        Text(AppLocalizer.string("coaching.workouts.action.submit"))
+                        Spacer()
+                        if store.isSubmitting {
+                            ProgressView()
+                        }
+                    }
+                }
+                .disabled(store.isSubmitting || selectedWorkouts.isEmpty)
+            }
+        }
+        .navigationTitle(AppLocalizer.string("coaching.workouts.compose.title"))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(AppLocalizer.string("common.cancel")) {
+                    dismiss()
+                }
+            }
+        }
+        .onAppear {
+            if selectedWorkoutIds.isEmpty, let firstWorkout = workouts.first {
+                selectedWorkoutIds.insert(firstWorkout.id.uuidString)
+            }
+        }
+    }
+
+    private var selectedWorkouts: [WorkoutSession] {
+        workouts.filter { selectedWorkoutIds.contains($0.id.uuidString) }
+    }
+
+    private func isSelected(_ workout: WorkoutSession) -> Bool {
+        selectedWorkoutIds.contains(workout.id.uuidString)
+    }
+
+    private func toggle(_ workout: WorkoutSession) {
+        let id = workout.id.uuidString
+        if selectedWorkoutIds.contains(id) {
+            selectedWorkoutIds.remove(id)
+        } else {
+            selectedWorkoutIds.insert(id)
+        }
+    }
+
+    private func workoutDateText(_ workout: WorkoutSession) -> String {
+        (workout.endedAt ?? workout.createdAt).formatted(date: .abbreviated, time: .omitted)
     }
 }
 
@@ -928,6 +1345,17 @@ struct TrainerClientSupportScreen: View {
                 }
             }
 
+            Section(AppLocalizer.string("coaching.workouts.section")) {
+                if store.workoutReports.isEmpty {
+                    Text(AppLocalizer.string("coaching.workouts.empty.received"))
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(store.workoutReports) { report in
+                        CoachingWorkoutReportRow(report: report)
+                    }
+                }
+            }
+
             Section(AppLocalizer.string("coaching.notes.section")) {
                 TextField(AppLocalizer.string("coaching.notes.placeholder.trainer"), text: $noteMessage, axis: .vertical)
                     .lineLimit(2...5)
@@ -972,6 +1400,53 @@ struct TrainerClientSupportScreen: View {
 
     private var openRequests: [ProfileUpdateRequest] {
         store.updateRequests.filter { $0.status == "open" }
+    }
+}
+
+private struct CoachingWorkoutReportRow: View {
+    let report: CoachingWorkoutReport
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(AppLocalizer.format("coaching.workouts.report.header", report.workoutCount))
+                    .font(.headline)
+                Spacer()
+                Text(report.createdAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            ForEach(report.workouts, id: \.id) { workout in
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(workout.title)
+                        .font(.subheadline.weight(.semibold))
+
+                    HStack(spacing: 10) {
+                        Text((workout.endedAt ?? workout.createdAt).formatted(date: .abbreviated, time: .omitted))
+                        Text(AppLocalizer.format("coaching.workouts.summary", workout.exerciseCount, workout.setCount))
+                        Text(AppLocalizer.format("coaching.workouts.completed_sets", workout.completedSetCount))
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                    if workout.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                        Text(workout.note)
+                            .font(.caption)
+                            .foregroundStyle(.primary)
+                            .lineLimit(2)
+                    }
+
+                    if workout.exerciseNoteCount > 0 {
+                        Text(AppLocalizer.format("coaching.workouts.exercise_notes", workout.exerciseNoteCount))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
 

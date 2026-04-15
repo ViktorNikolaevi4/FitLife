@@ -3,7 +3,7 @@ import SwiftData
 
 private let workoutPickerCardBackground = Color(.secondarySystemBackground)
 private let workoutPickerInsetBackground = Color(.tertiarySystemBackground)
-private let workoutPickerCardBorder = Color(.separator).opacity(0.22)
+private let workoutPickerCardBorder = Color(.separator).opacity(0.40)
 
 struct WorkoutExerciseTemplate: Identifiable {
     let id = UUID()

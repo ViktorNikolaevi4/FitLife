@@ -10,10 +10,22 @@ class FoodEntry {
     var portion: Double = 0
     var gender: Gender = FitLife.Gender.male
     var isFavorite: Bool = false
+    var aiMealGroupID: String?
+    var aiMealName: String?
 
     var product: Product?
 
-    init(date: Date, mealType: String, product: Product, portion: Double, gender: Gender, ownerId: String = "", isFavorite: Bool = false) {
+    init(
+        date: Date,
+        mealType: String,
+        product: Product,
+        portion: Double,
+        gender: Gender,
+        ownerId: String = "",
+        isFavorite: Bool = false,
+        aiMealGroupID: String? = nil,
+        aiMealName: String? = nil
+    ) {
         self.ownerId = ownerId
         self.date = date
         self.mealType = mealType
@@ -21,6 +33,8 @@ class FoodEntry {
         self.portion = portion
         self.gender = gender
         self.isFavorite = isFavorite
+        self.aiMealGroupID = aiMealGroupID
+        self.aiMealName = aiMealName
     }
 }
 extension FoodEntry {

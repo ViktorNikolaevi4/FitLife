@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 private let profileCardBackground = Color(.secondarySystemBackground)
-private let profileCardBorder = Color(.separator).opacity(0.22)
+private let profileCardBorder = Color(.separator).opacity(0.40)
 
 struct ProfileScreen: View {
     @Query private var users: [UserData]

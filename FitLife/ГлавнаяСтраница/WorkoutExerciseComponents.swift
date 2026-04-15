@@ -2,7 +2,7 @@ import SwiftUI
 
 private let workoutCardBackground = Color(.secondarySystemBackground)
 private let workoutCardInsetBackground = Color(.tertiarySystemBackground)
-private let workoutCardBorder = Color(.separator).opacity(0.22)
+private let workoutCardBorder = Color(.separator).opacity(0.40)
 
 struct WorkoutExerciseCard: View {
     let exercise: WorkoutExercise

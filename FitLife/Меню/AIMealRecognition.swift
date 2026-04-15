@@ -706,6 +706,8 @@ struct AIMealRecognitionFlowView: View {
 
         isSaving = true
         let ownerId = sessionStore.firebaseUser?.uid ?? ""
+        let aiMealGroupID = UUID().uuidString
+        let normalizedDishName = draft.dishName.trimmingCharacters(in: .whitespacesAndNewlines)
 
         do {
             upsertCustomMealTemplate(from: draft, items: items)
@@ -728,7 +730,9 @@ struct AIMealRecognitionFlowView: View {
                     portion: item.gramsValue,
                     gender: selectedGender,
                     ownerId: ownerId,
-                    isFavorite: false
+                    isFavorite: false,
+                    aiMealGroupID: aiMealGroupID,
+                    aiMealName: normalizedDishName.isEmpty ? nil : normalizedDishName
                 )
                 modelContext.insert(entry)
             }

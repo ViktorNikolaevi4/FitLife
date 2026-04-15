@@ -3,7 +3,7 @@ import SwiftData
 
 private let productSelectionCardBackground = Color(.secondarySystemBackground)
 private let productSelectionInsetBackground = Color(.tertiarySystemBackground)
-private let productSelectionCardBorder = Color(.separator).opacity(0.22)
+private let productSelectionCardBorder = Color(.separator).opacity(0.40)
 
 actor ProductUsageCache {
     static let shared = ProductUsageCache()

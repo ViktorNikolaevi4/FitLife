@@ -655,3 +655,16 @@
 "profile.nutrition_goals.calories_hint" = "Calories are calculated automatically from macros.";
 "entry.portion.title" = "Portion";
 "entry.preview.title" = "Preview";
+"coaching.workouts.section" = "Workouts for coach";
+"coaching.workouts.action.send" = "Send workouts";
+"coaching.workouts.action.submit" = "Send to coach";
+"coaching.workouts.compose.title" = "Select Workouts";
+"coaching.workouts.compose.subtitle" = "Choose completed workouts to send to your coach.";
+"coaching.workouts.compose.section" = "Completed workouts";
+"coaching.workouts.empty.available" = "You do not have any completed workouts to send yet.";
+"coaching.workouts.empty.sent" = "You have not sent any completed workouts to your coach yet.";
+"coaching.workouts.empty.received" = "The client has not sent any completed workouts yet.";
+"coaching.workouts.report.header" = "Workouts sent: %d";
+"coaching.workouts.summary" = "%d exercises • %d sets";
+"coaching.workouts.completed_sets" = "Completed sets: %d";
+"coaching.workouts.exercise_notes" = "Exercise notes: %d";

@@ -655,3 +655,16 @@
 "profile.nutrition_goals.calories_hint" = "Калории рассчитываются автоматически по БЖУ.";
 "entry.portion.title" = "Порция";
 "entry.preview.title" = "Итог";
+"coaching.workouts.section" = "Тренировки для тренера";
+"coaching.workouts.action.send" = "Отправить тренировки";
+"coaching.workouts.action.submit" = "Отправить тренеру";
+"coaching.workouts.compose.title" = "Выбрать тренировки";
+"coaching.workouts.compose.subtitle" = "Выбери завершённые тренировки, которые нужно отправить тренеру.";
+"coaching.workouts.compose.section" = "Завершённые тренировки";
+"coaching.workouts.empty.available" = "У вас пока нет завершённых тренировок для отправки.";
+"coaching.workouts.empty.sent" = "Вы ещё не отправляли тренеру завершённые тренировки.";
+"coaching.workouts.empty.received" = "Клиент пока не отправлял завершённые тренировки.";
+"coaching.workouts.report.header" = "Отправлено тренировок: %d";
+"coaching.workouts.summary" = "%d упражнений • %d подходов";
+"coaching.workouts.completed_sets" = "Выполнено подходов: %d";
+"coaching.workouts.exercise_notes" = "Заметки к упражнениям: %d";

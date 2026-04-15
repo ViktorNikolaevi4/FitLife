@@ -3,7 +3,7 @@ import SwiftData
 
 private let workoutsCardBackground = Color(.secondarySystemBackground)
 private let workoutsInsetBackground = Color(.tertiarySystemBackground)
-private let workoutsCardBorder = Color(.separator).opacity(0.22)
+private let workoutsCardBorder = Color(.separator).opacity(0.40)
 
 struct WorkoutsScreen: View {
     @Environment(\.modelContext) private var modelContext
@@ -232,6 +232,7 @@ private struct WorkoutsShortcutCard: View {
             .frame(maxWidth: .infinity, minHeight: 122, alignment: .topLeading)
             .background(RoundedRectangle(cornerRadius: 18).fill(theme.card))
             .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(theme.border))
+            .shadow(color: theme.cardShadow.opacity(0.95), radius: 14, x: 0, y: 5)
         }
         .buttonStyle(.plain)
     }
@@ -276,6 +277,7 @@ private struct WorkoutsFeatureCard: View {
             .padding(18)
             .background(RoundedRectangle(cornerRadius: 20).fill(theme.card))
             .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(theme.border))
+            .shadow(color: theme.cardShadow, radius: theme.cardShadowRadius, x: 0, y: theme.cardShadowY)
             .padding(.horizontal)
         }
         .buttonStyle(.plain)

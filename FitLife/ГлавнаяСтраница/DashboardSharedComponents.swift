@@ -5,6 +5,9 @@ struct AppTheme {
     let bg: Color, card: Color, border: Color, subtleFill: Color, ringTrack: Color
     let protein: Color, fat: Color, carb: Color
     let ringGradient: Gradient
+    let cardShadow: Color
+    let cardShadowRadius: CGFloat
+    let cardShadowY: CGFloat
 
     init(_ scheme: ColorScheme) {
         if scheme == .dark {
@@ -15,14 +18,20 @@ struct AppTheme {
             ringTrack = Color(.separator).opacity(0.22)
             protein = .blue; fat = .red.opacity(0.8); carb = .green
             ringGradient = .init(colors: [.blue.opacity(0.95), .cyan.opacity(0.9), .blue.opacity(0.95)])
+            cardShadow = .clear
+            cardShadowRadius = 0
+            cardShadowY = 0
         } else {
             bg = Color(UIColor.systemGroupedBackground)
             card = Color(UIColor.secondarySystemBackground)
-            border = Color(.separator).opacity(0.18)
+            border = Color(.separator).opacity(0.42)
             subtleFill = Color(UIColor.tertiarySystemBackground)
-            ringTrack = Color(.separator).opacity(0.12)
+            ringTrack = Color(.separator).opacity(0.24)
             protein = .blue; fat = .red.opacity(0.8); carb = .green
             ringGradient = .init(colors: [.blue, .cyan, .blue])
+            cardShadow = .black.opacity(0.08)
+            cardShadowRadius = 16
+            cardShadowY = 6
         }
     }
 }
@@ -107,6 +116,7 @@ struct WaterSummaryCard: View {
         .padding(20)
         .background(RoundedRectangle(cornerRadius: 16).fill(theme.card))
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(theme.border))
+        .shadow(color: theme.cardShadow, radius: theme.cardShadowRadius, x: 0, y: theme.cardShadowY)
         .padding(.horizontal)
     }
 }
@@ -144,6 +154,7 @@ struct TrainingDiaryCard: View {
         .padding(.vertical, 24)
         .background(RoundedRectangle(cornerRadius: 16).fill(theme.card))
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(theme.border))
+        .shadow(color: theme.cardShadow, radius: theme.cardShadowRadius, x: 0, y: theme.cardShadowY)
         .padding(.horizontal)
     }
 }
@@ -289,6 +300,7 @@ struct BalanceCard: View {
         }
         .background(RoundedRectangle(cornerRadius: 16).fill(theme.card))
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(theme.border))
+        .shadow(color: theme.cardShadow, radius: theme.cardShadowRadius, x: 0, y: theme.cardShadowY)
         .padding(.horizontal)
     }
 }
@@ -459,6 +471,7 @@ struct MealsSection: View {
     @Binding var expanded: Set<MealType>
     var onTapMeal: (MealType) -> Void
     var onDeleteEntry: (FoodEntry) -> Void
+    var onDeleteEntries: ([FoodEntry]) -> Void
     var onUpdateEntry: (FoodEntry) -> Void
 
     private func isExpanded(_ m: MealType) -> Bool { expanded.contains(m) }
@@ -486,7 +499,13 @@ struct MealsSection: View {
             .onTapGesture { onTapMeal(.breakfast) }
 
             if isExpanded(.breakfast) {
-                ProductsList(entries.breakfast, theme: theme, onDelete: onDeleteEntry, onUpdate: onUpdateEntry)
+                ProductsList(
+                    entries.breakfast,
+                    theme: theme,
+                    onDelete: onDeleteEntry,
+                    onDeleteMany: onDeleteEntries,
+                    onUpdate: onUpdateEntry
+                )
             }
 
             // Обед
@@ -505,7 +524,13 @@ struct MealsSection: View {
             .onTapGesture { onTapMeal(.lunch) }
 
             if isExpanded(.lunch) {
-                ProductsList(entries.lunch, theme: theme, onDelete: onDeleteEntry, onUpdate: onUpdateEntry)
+                ProductsList(
+                    entries.lunch,
+                    theme: theme,
+                    onDelete: onDeleteEntry,
+                    onDeleteMany: onDeleteEntries,
+                    onUpdate: onUpdateEntry
+                )
             }
 
             // Ужин
@@ -524,7 +549,13 @@ struct MealsSection: View {
             .onTapGesture { onTapMeal(.dinner) }
 
             if isExpanded(.dinner) {
-                ProductsList(entries.dinner, theme: theme, onDelete: onDeleteEntry, onUpdate: onUpdateEntry)
+                ProductsList(
+                    entries.dinner,
+                    theme: theme,
+                    onDelete: onDeleteEntry,
+                    onDeleteMany: onDeleteEntries,
+                    onUpdate: onUpdateEntry
+                )
             }
 
             // Перекус
@@ -543,7 +574,13 @@ struct MealsSection: View {
             .onTapGesture { onTapMeal(.snacks) }
 
             if isExpanded(.snacks) {
-                ProductsList(entries.snacks, theme: theme, onDelete: onDeleteEntry, onUpdate: onUpdateEntry)
+                ProductsList(
+                    entries.snacks,
+                    theme: theme,
+                    onDelete: onDeleteEntry,
+                    onDeleteMany: onDeleteEntries,
+                    onUpdate: onUpdateEntry
+                )
             }
         }
     }
@@ -606,43 +643,103 @@ struct MealRow: View {
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 14).fill(theme.card))
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(theme.border))
+        .shadow(color: theme.cardShadow.opacity(0.9), radius: 10, x: 0, y: 4)
     }
 }
 
 // MARK: - Список продуктов (раскрытие + редактор по тапу)
 
 private struct ProductsList: View {
+    private struct DisplayItem: Identifiable {
+        let id: String
+        let title: String
+        let grams: Int
+        let calories: Int
+        let entries: [FoodEntry]
+        let isGroupedAIMeal: Bool
+    }
+
     let items: [FoodEntry]
     let theme: AppTheme
     var onDelete: (FoodEntry) -> Void
+    var onDeleteMany: ([FoodEntry]) -> Void
     var onUpdate: (FoodEntry) -> Void
 
     @State private var pendingDelete: FoodEntry?
+    @State private var pendingDeleteGroup: [FoodEntry] = []
     @State private var editingSelection: FoodEntryEditorSelection?
 
     @Environment(\.modelContext) private var modelContext
 
-    init(_ items: [FoodEntry], theme: AppTheme, onDelete: @escaping (FoodEntry) -> Void, onUpdate: @escaping (FoodEntry) -> Void) {
+    private var displayItems: [DisplayItem] {
+        var groupedByKey: [String: [FoodEntry]] = [:]
+        var order: [String] = []
+
+        for entry in items {
+            let trimmedMealName = entry.aiMealName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let key: String
+
+            if let aiMealGroupID = entry.aiMealGroupID, !trimmedMealName.isEmpty {
+                key = "ai-\(aiMealGroupID)"
+            } else {
+                key = "entry-\(entry.id.uuidString)"
+            }
+
+            if groupedByKey[key] == nil {
+                order.append(key)
+                groupedByKey[key] = []
+            }
+            groupedByKey[key]?.append(entry)
+        }
+
+        return order.compactMap { key in
+            guard let entries = groupedByKey[key], let first = entries.first else { return nil }
+            let isGroupedAIMeal = entries.count > 1 && key.hasPrefix("ai-")
+            let title = isGroupedAIMeal
+                ? (first.aiMealName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                    ? first.aiMealName!.trimmingCharacters(in: .whitespacesAndNewlines)
+                    : (first.product?.name ?? AppLocalizer.string("product.default")))
+                : (first.product?.name ?? AppLocalizer.string("product.default"))
+
+            return DisplayItem(
+                id: key,
+                title: title,
+                grams: Int(entries.reduce(0.0) { $0 + $1.portion }),
+                calories: entries.reduce(0) { $0 + ($1.product?.calories ?? 0) },
+                entries: entries,
+                isGroupedAIMeal: isGroupedAIMeal
+            )
+        }
+    }
+
+    init(
+        _ items: [FoodEntry],
+        theme: AppTheme,
+        onDelete: @escaping (FoodEntry) -> Void,
+        onDeleteMany: @escaping ([FoodEntry]) -> Void,
+        onUpdate: @escaping (FoodEntry) -> Void
+    ) {
         self.items = items
         self.theme = theme
         self.onDelete = onDelete
+        self.onDeleteMany = onDeleteMany
         self.onUpdate = onUpdate
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            ForEach(items) { entry in
+            ForEach(displayItems) { item in
                 VStack(spacing: 0) {
                     HStack {
-                        Text(entry.product?.name ?? AppLocalizer.string("product.default"))
+                        Text(item.title)
                             .lineLimit(2)
                         Spacer()
                         HStack(spacing: 8) {
-                            if entry.portion > 0 {
-                                Text(AppLocalizer.format("unit.grams.value", Int(entry.portion)))
+                            if item.grams > 0 {
+                                Text(AppLocalizer.format("unit.grams.value", item.grams))
                                     .foregroundStyle(.secondary)
                             }
-                            Text(AppLocalizer.format("unit.kcal.value", entry.product?.calories ?? 0))
+                            Text(AppLocalizer.format("unit.kcal.value", item.calories))
                                 .foregroundStyle(.secondary)
                         }
                         .font(.subheadline)
@@ -652,11 +749,16 @@ private struct ProductsList: View {
                     .padding(.vertical, 12)
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        editingSelection = FoodEntryEditorSelection(entry: entry)
+                        guard item.isGroupedAIMeal == false, let first = item.entries.first else { return }
+                        editingSelection = FoodEntryEditorSelection(entry: first)
                     }
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                         Button(role: .destructive) {
-                            pendingDelete = entry
+                            if item.isGroupedAIMeal {
+                                pendingDeleteGroup = item.entries
+                            } else {
+                                pendingDelete = item.entries.first
+                            }
                         } label: {
                             Label(AppLocalizer.string("common.delete"), systemImage: "trash")
                         }
@@ -690,6 +792,23 @@ private struct ProductsList: View {
                 pendingDelete = nil
             }
             Button(AppLocalizer.string("common.cancel"), role: .cancel) { pendingDelete = nil }
+        } message: {
+            Text(AppLocalizer.string("common.cannot_undo"))
+        }
+        .alert(
+            AppLocalizer.string("product.delete.confirm"),
+            isPresented: Binding(
+                get: { pendingDeleteGroup.isEmpty == false },
+                set: { if !$0 { pendingDeleteGroup = [] } }
+            )
+        ) {
+            Button(AppLocalizer.string("common.delete"), role: .destructive) {
+                onDeleteMany(pendingDeleteGroup)
+                pendingDeleteGroup = []
+            }
+            Button(AppLocalizer.string("common.cancel"), role: .cancel) {
+                pendingDeleteGroup = []
+            }
         } message: {
             Text(AppLocalizer.string("common.cannot_undo"))
         }

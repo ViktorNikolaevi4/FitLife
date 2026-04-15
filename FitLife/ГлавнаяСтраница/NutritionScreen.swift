@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 private let nutritionCardBackground = Color(.secondarySystemBackground)
-private let nutritionCardBorder = Color(.separator).opacity(0.22)
+private let nutritionCardBorder = Color(.separator).opacity(0.40)
 
 struct NutritionScreen: View {
     @Binding var selectedDate: Date
@@ -36,6 +36,7 @@ struct NutritionScreen: View {
 
     private var selectedGender: Gender { Gender(rawValue: activeGenderRaw) ?? .male }
     private var theme: AppTheme { AppTheme(colorScheme) }
+    private var nutritionCardShadow: Color { colorScheme == .dark ? .clear : .black.opacity(0.08) }
     private var currentOwnerId: String? { sessionStore.firebaseUser?.uid }
     private var userData: UserData? {
         guard let currentOwnerId else { return nil }
@@ -76,6 +77,7 @@ struct NutritionScreen: View {
                         expanded: $expandedMeals,
                         onTapMeal: { meal in sheet = .quick(meal) },
                         onDeleteEntry: { entry in deleteEntry(entry) },
+                        onDeleteEntries: { entries in deleteEntries(entries) },
                         onUpdateEntry: { _ in refreshDerivedState() }
                     )
                 }
@@ -182,6 +184,7 @@ struct NutritionScreen: View {
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 24).fill(theme.card))
         .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(theme.border))
+        .shadow(color: nutritionCardShadow, radius: 16, x: 0, y: 6)
         .padding(.horizontal)
     }
 
@@ -244,6 +247,42 @@ struct NutritionScreen: View {
             case .snacks: isEmpty = snacksItems.isEmpty
             }
             if isEmpty { expandedMeals.remove(meal) }
+        }
+    }
+
+    private func deleteEntries(_ entries: [FoodEntry]) {
+        guard !entries.isEmpty else { return }
+
+        for entry in entries {
+            modelContext.delete(entry)
+            switch MealType(rawValue: entry.mealType) {
+            case .breakfast:
+                breakfastItems.removeAll { $0.id == entry.id }
+            case .lunch:
+                lunchItems.removeAll { $0.id == entry.id }
+            case .dinner:
+                dinnerItems.removeAll { $0.id == entry.id }
+            case .snacks:
+                snacksItems.removeAll { $0.id == entry.id }
+            case nil:
+                break
+            }
+        }
+
+        do { try modelContext.save() } catch {}
+        refreshDerivedState()
+
+        for meal in MealType.allCases {
+            let isEmpty: Bool
+            switch meal {
+            case .breakfast: isEmpty = breakfastItems.isEmpty
+            case .lunch: isEmpty = lunchItems.isEmpty
+            case .dinner: isEmpty = dinnerItems.isEmpty
+            case .snacks: isEmpty = snacksItems.isEmpty
+            }
+            if isEmpty {
+                expandedMeals.remove(meal)
+            }
         }
     }
 
@@ -381,6 +420,7 @@ struct MacroNutrientDetailScreen: View {
     let selectedDate: Date
 
     private var theme: AppTheme { AppTheme(colorScheme) }
+    private var nutritionCardShadow: Color { colorScheme == .dark ? .clear : .black.opacity(0.08) }
 
     private var filteredMeals: [(MealType, [FoodEntry])] {
         MealType.allCases.compactMap { meal in
@@ -497,6 +537,7 @@ struct MacroNutrientDetailScreen: View {
             RoundedRectangle(cornerRadius: 24)
                 .strokeBorder(macro.tint(theme: theme).opacity(0.18))
         )
+        .shadow(color: nutritionCardShadow, radius: 16, x: 0, y: 6)
     }
 
     private func mealSection(meal: MealType, entries: [FoodEntry]) -> some View {
@@ -542,6 +583,7 @@ struct MacroNutrientDetailScreen: View {
                 RoundedRectangle(cornerRadius: 20)
                     .strokeBorder(nutritionCardBorder)
             )
+            .shadow(color: nutritionCardShadow.opacity(0.9), radius: 12, x: 0, y: 4)
         }
     }
 }

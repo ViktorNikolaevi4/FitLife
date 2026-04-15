@@ -30,7 +30,7 @@ struct HeaderView: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color(.separator).opacity(colorScheme == .dark ? 0.35 : 0.18), lineWidth: 1)
+                        .stroke(Color(.separator).opacity(colorScheme == .dark ? 0.35 : 0.42), lineWidth: 1)
                 )
                 .cornerRadius(12)
             }

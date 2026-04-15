@@ -4,11 +4,12 @@ import FirebaseFirestore
 
 private let activeWorkoutCardBackground = Color(.secondarySystemBackground)
 private let activeWorkoutInsetBackground = Color(.tertiarySystemBackground)
-private let activeWorkoutCardBorder = Color(.separator).opacity(0.22)
+private let activeWorkoutCardBorder = Color(.separator).opacity(0.40)
 
 struct ActiveWorkoutScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
 
     let workout: WorkoutSession
     @State private var isShowingExercisePicker = false
@@ -20,6 +21,7 @@ struct ActiveWorkoutScreen: View {
     private var sortedExercises: [WorkoutExercise] {
         workout.exercises.sorted { $0.orderIndex < $1.orderIndex }
     }
+    private var activeWorkoutCardShadow: Color { colorScheme == .dark ? .clear : .black.opacity(0.08) }
 
     private var elapsedString: String {
         let interval = max(0, workout.elapsedSeconds)
@@ -167,6 +169,7 @@ struct ActiveWorkoutScreen: View {
             RoundedRectangle(cornerRadius: 28)
                 .strokeBorder(activeWorkoutCardBorder)
         )
+        .shadow(color: activeWorkoutCardShadow, radius: 16, x: 0, y: 6)
     }
 
     private var activeWorkoutHeader: some View {
@@ -237,6 +240,7 @@ struct ActiveWorkoutScreen: View {
             RoundedRectangle(cornerRadius: 24)
                 .strokeBorder(activeWorkoutCardBorder)
         )
+        .shadow(color: activeWorkoutCardShadow, radius: 16, x: 0, y: 6)
     }
 
     private var workoutNoteCard: some View {
@@ -284,6 +288,7 @@ struct ActiveWorkoutScreen: View {
                 RoundedRectangle(cornerRadius: 20)
                     .strokeBorder(activeWorkoutCardBorder)
             )
+            .shadow(color: activeWorkoutCardShadow.opacity(0.95), radius: 12, x: 0, y: 4)
         }
         .buttonStyle(.plain)
     }
