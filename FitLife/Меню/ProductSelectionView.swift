@@ -72,10 +72,13 @@ struct ProductSelectionView: View {
     @State private var cachedFilteredProducts: [Product] = []
     @State private var filteredProductsCache: [Product] = []
     @State private var filteredCustomProductsCache: [CustomProduct] = []
+    @State private var hasLoadedFavorites = false
+    @State private var hasLoadedCustomProducts = false
 
     // частоты использования по имени продукта
     @State private var usageCounts: [String: Int] = [:]
     @State private var usageCountsTask: Task<Void, Never>?
+    @State private var deferredUsageCountsTask: Task<Void, Never>?
     @State private var expandsResultsTask: Task<Void, Never>?
     @State private var showsExpandedResults = false
 
@@ -155,6 +158,10 @@ struct ProductSelectionView: View {
             && filteredCustomProducts.isEmpty
     }
 
+    private var isInSearchMode: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     private var localSectionTitle: String {
         switch selectedFilter {
         case .all:
@@ -202,14 +209,16 @@ struct ProductSelectionView: View {
         NavigationStack {
             VStack(spacing: 14) {
                 VStack(alignment: .leading, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(appLanguage.localized("search.prompt"))
-                            .font(.headline)
-                            .foregroundStyle(.primary)
+                    if !isInSearchMode {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(appLanguage.localized("search.prompt"))
+                                .font(.headline)
+                                .foregroundStyle(.primary)
 
-                        Text(appLanguage.localized("search.subtitle"))
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            Text(appLanguage.localized("search.subtitle"))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
                     Picker(appLanguage.localized("search.category"), selection: $selectedFilter) {
@@ -249,26 +258,28 @@ struct ProductSelectionView: View {
                             .stroke(productSelectionCardBorder)
                     )
 
-                    HStack(spacing: 10) {
-                        actionPill(
-                            title: AppLocalizer.string("ai.meal.action"),
-                            systemImage: "camera.viewfinder"
-                        ) {
-                            isShowingAIMealRecognition = true
-                        }
+                    if !isInSearchMode {
+                        HStack(spacing: 10) {
+                            actionPill(
+                                title: AppLocalizer.string("ai.meal.action"),
+                                systemImage: "camera.viewfinder"
+                            ) {
+                                isShowingAIMealRecognition = true
+                            }
 
-                        actionPill(
-                            title: appLanguage.localized("common.scan"),
-                            systemImage: "barcode.viewfinder"
-                        ) {
-                            isShowingBarcodeScanner = true
-                        }
+                            actionPill(
+                                title: appLanguage.localized("common.scan"),
+                                systemImage: "barcode.viewfinder"
+                            ) {
+                                isShowingBarcodeScanner = true
+                            }
 
-                        actionPill(
-                            title: appLanguage.localized("common.create"),
-                            systemImage: "plus"
-                        ) {
-                            isCreatingProduct = true
+                            actionPill(
+                                title: appLanguage.localized("common.create"),
+                                systemImage: "plus"
+                            ) {
+                                isCreatingProduct = true
+                            }
                         }
                     }
 
@@ -281,11 +292,13 @@ struct ProductSelectionView: View {
                             Text(searchStatusText)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
+                                .lineLimit(1)
                         }
                     }
                 }
+                .animation(.easeInOut(duration: 0.2), value: isInSearchMode)
                 .padding(.horizontal, 16)
-                .padding(.top, 12)
+                .padding(.top, isInSearchMode ? 6 : 12)
 
                 ScrollView(showsIndicators: false) {
                     LazyVStack(alignment: .leading, spacing: 10) {
@@ -333,6 +346,7 @@ struct ProductSelectionView: View {
                     .padding(.top, 8)
                     .padding(.bottom, 16)
                 }
+                .scrollDismissesKeyboard(.immediately)
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -354,25 +368,28 @@ struct ProductSelectionView: View {
                 }
             }
             .onAppear {
-                productCatalogStore.preloadIfNeeded()
-                loadFavorites()
-                loadCustomProducts()
-                cachedFilteredProducts = productCatalogStore.products.filter { $0.isFavorite }
+                ensureLazyLoadedDataForCurrentContext()
                 refreshVisibleProducts()
                 scheduleExpandedResults()
                 scheduleHybridSearch()
-                loadUsageCountsIfNeeded()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    isSearchFocused = true
+                deferredUsageCountsTask?.cancel()
+                deferredUsageCountsTask = Task {
+                    try? await Task.sleep(nanoseconds: 700_000_000)
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run {
+                        loadUsageCountsIfNeeded()
+                    }
                 }
             }
             .onChange(of: productCatalogStore.products.count) { _, _ in
-                loadFavorites()
+                hasLoadedFavorites = false
+                ensureLazyLoadedDataForCurrentContext()
                 refreshVisibleProducts()
                 scheduleHybridSearch(immediate: true)
             }
             .onDisappear {
                 usageCountsTask?.cancel()
+                deferredUsageCountsTask?.cancel()
                 expandsResultsTask?.cancel()
             }
             .onChange(of: searchText) { _, _ in
@@ -381,6 +398,7 @@ struct ProductSelectionView: View {
                 scheduleHybridSearch()
             }
             .onChange(of: selectedFilter) { _, _ in
+                ensureLazyLoadedDataForCurrentContext()
                 refreshVisibleProducts()
                 scheduleExpandedResults()
                 scheduleHybridSearch(immediate: true)
@@ -701,6 +719,7 @@ struct ProductSelectionView: View {
         let fd = FetchDescriptor<CustomProduct>()
         do {
             customProducts = try modelContext.fetch(fd)
+            hasLoadedCustomProducts = true
             refreshVisibleProducts()
         } catch {}
     }
@@ -711,7 +730,19 @@ struct ProductSelectionView: View {
             productCatalogStore.products[i].isFavorite = names.contains(productCatalogStore.products[i].name)
         }
         cachedFilteredProducts = productCatalogStore.products.filter { $0.isFavorite }
+        hasLoadedFavorites = true
         refreshVisibleProducts()
+    }
+
+    private func ensureLazyLoadedDataForCurrentContext() {
+        if selectedFilter == .favorites, !hasLoadedFavorites {
+            loadFavorites()
+        }
+
+        if (selectedFilter == .custom || (selectedFilter == .all && appLanguage == .english)),
+           !hasLoadedCustomProducts {
+            loadCustomProducts()
+        }
     }
 
     private func persistFavorites() {
