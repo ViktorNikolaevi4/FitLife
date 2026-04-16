@@ -668,3 +668,8 @@
 "coaching.workouts.summary" = "%d exercises • %d sets";
 "coaching.workouts.completed_sets" = "Completed sets: %d";
 "coaching.workouts.exercise_notes" = "Exercise notes: %d";
+"coaching.workouts.detail.title" = "Workout Report";
+"coaching.workouts.detail.date" = "Date";
+"coaching.workouts.detail.duration" = "Duration";
+"coaching.workouts.detail.summary" = "Summary";
+"coaching.workouts.detail.workout_note" = "Workout note";

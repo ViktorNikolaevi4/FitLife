@@ -668,3 +668,8 @@
 "coaching.workouts.summary" = "%d упражнений • %d подходов";
 "coaching.workouts.completed_sets" = "Выполнено подходов: %d";
 "coaching.workouts.exercise_notes" = "Заметки к упражнениям: %d";
+"coaching.workouts.detail.title" = "Отчёт по тренировкам";
+"coaching.workouts.detail.date" = "Дата";
+"coaching.workouts.detail.duration" = "Длительность";
+"coaching.workouts.detail.summary" = "Сводка";
+"coaching.workouts.detail.workout_note" = "Заметка к тренировке";

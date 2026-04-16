@@ -805,6 +805,7 @@ struct ClientCoachingHomeScreen: View {
     @StateObject private var store: ClientCoachingHomeStore
     @State private var showCheckInSheet = false
     @State private var showWorkoutReportSheet = false
+    @State private var selectedWorkoutReport: CoachingWorkoutReport?
     @State private var noteMessage = ""
 
     init(clientId: String, trainerId: String, trainer: AppUserProfile?) {
@@ -904,7 +905,12 @@ struct ClientCoachingHomeScreen: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(store.workoutReports.prefix(10)) { report in
-                        CoachingWorkoutReportRow(report: report)
+                        Button {
+                            selectedWorkoutReport = report
+                        } label: {
+                            CoachingWorkoutReportRow(report: report)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -959,6 +965,11 @@ struct ClientCoachingHomeScreen: View {
                     workouts: completedWorkouts,
                     store: store
                 )
+            }
+        }
+        .sheet(item: $selectedWorkoutReport) { report in
+            NavigationStack {
+                CoachingWorkoutReportDetailScreen(report: report)
             }
         }
     }
@@ -1179,6 +1190,7 @@ struct TrainerClientSupportScreen: View {
     @State private var requestType: ProfileUpdateRequestType = .generalUpdate
     @State private var requestMessage = ""
     @State private var noteMessage = ""
+    @State private var selectedWorkoutReport: CoachingWorkoutReport?
     @FocusState private var focusedField: TrainerWorkspaceField?
 
     init(trainerId: String, client: AppUserProfile) {
@@ -1351,7 +1363,12 @@ struct TrainerClientSupportScreen: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(store.workoutReports) { report in
-                        CoachingWorkoutReportRow(report: report)
+                        Button {
+                            selectedWorkoutReport = report
+                        } label: {
+                            CoachingWorkoutReportRow(report: report)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -1395,6 +1412,11 @@ struct TrainerClientSupportScreen: View {
         }
         .refreshable {
             await store.load()
+        }
+        .sheet(item: $selectedWorkoutReport) { report in
+            NavigationStack {
+                CoachingWorkoutReportDetailScreen(report: report)
+            }
         }
     }
 
@@ -1447,6 +1469,108 @@ private struct CoachingWorkoutReportRow: View {
             }
         }
         .padding(.vertical, 4)
+    }
+}
+
+private struct CoachingWorkoutReportDetailScreen: View {
+    let report: CoachingWorkoutReport
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(AppLocalizer.format("coaching.workouts.report.header", report.workoutCount))
+                        .font(.headline)
+                    Text(report.createdAt.formatted(date: .abbreviated, time: .shortened))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+            }
+
+            ForEach(report.workouts, id: \.id) { workout in
+                Section(workout.title) {
+                    LabeledContent(
+                        AppLocalizer.string("coaching.workouts.detail.date"),
+                        value: (workout.endedAt ?? workout.createdAt).formatted(date: .abbreviated, time: .omitted)
+                    )
+                    LabeledContent(
+                        AppLocalizer.string("coaching.workouts.detail.duration"),
+                        value: formattedElapsed(workout.elapsedSeconds)
+                    )
+                    LabeledContent(
+                        AppLocalizer.string("coaching.workouts.detail.summary"),
+                        value: AppLocalizer.format("coaching.workouts.summary", workout.exerciseCount, workout.setCount)
+                    )
+
+                    if workout.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(AppLocalizer.string("coaching.workouts.detail.workout_note"))
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            Text(workout.note)
+                                .font(.subheadline)
+                        }
+                        .padding(.vertical, 4)
+                    }
+
+                    ForEach(workout.exercises.sorted { $0.orderIndex < $1.orderIndex }, id: \.id) { exercise in
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(exercise.name)
+                                .font(.headline)
+
+                            ForEach(exercise.sets.sorted { $0.orderIndex < $1.orderIndex }, id: \.orderIndex) { set in
+                                HStack {
+                                    Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
+                                        .foregroundStyle(set.isCompleted ? Color.green : .secondary)
+                                    Text(formattedSnapshotSetValue(set))
+                                        .font(.subheadline)
+                                    Spacer()
+                                }
+                            }
+
+                            if exercise.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                                Text(exercise.note)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+            }
+        }
+        .navigationTitle(AppLocalizer.string("coaching.workouts.detail.title"))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(AppLocalizer.string("common.close")) {
+                    dismiss()
+                }
+            }
+        }
+    }
+
+    private func formattedElapsed(_ seconds: Int) -> String {
+        let hours = seconds / 3600
+        let minutes = (seconds % 3600) / 60
+        let secs = seconds % 60
+        if hours > 0 {
+            return String(format: "%02d:%02d:%02d", hours, minutes, secs)
+        }
+        return String(format: "%02d:%02d", minutes, secs)
+    }
+
+    private func formattedSnapshotSetValue(_ set: CoachingWorkoutSetSnapshot) -> String {
+        let metricType = WorkoutSetMetricType(rawValue: set.metricTypeRaw) ?? .reps
+        return formattedWorkoutSetValue(
+            weight: set.weight,
+            reps: set.reps,
+            durationSeconds: set.durationSeconds,
+            metricType: metricType
+        )
     }
 }
 
