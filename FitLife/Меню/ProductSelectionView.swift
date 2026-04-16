@@ -133,6 +133,28 @@ struct ProductSelectionView: View {
         selectedFilter == .all && !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !remoteProducts.isEmpty
     }
 
+    private var shouldShowLocalProductsSection: Bool {
+        switch selectedFilter {
+        case .all:
+            return appLanguage != .english
+        case .favorites:
+            return true
+        case .custom:
+            return false
+        }
+    }
+
+    private var shouldShowEnglishCustomSectionInAll: Bool {
+        selectedFilter == .all && appLanguage == .english && !filteredCustomProducts.isEmpty
+    }
+
+    private var shouldShowEnglishAllEmptyState: Bool {
+        selectedFilter == .all
+            && appLanguage == .english
+            && !shouldShowRemoteSection
+            && filteredCustomProducts.isEmpty
+    }
+
     private var localSectionTitle: String {
         switch selectedFilter {
         case .all:
@@ -279,7 +301,7 @@ struct ProductSelectionView: View {
                             }
                         }
 
-                        if selectedFilter != .custom {
+                        if shouldShowLocalProductsSection {
                             sectionHeader(localSectionTitle)
 
                             if filteredProducts.isEmpty {
@@ -291,7 +313,11 @@ struct ProductSelectionView: View {
                             }
                         }
 
-                        if selectedFilter == .custom {
+                        if shouldShowEnglishAllEmptyState {
+                            emptyStateRow(message: emptyMessageForCurrentFilter)
+                        }
+
+                        if shouldShowEnglishCustomSectionInAll || selectedFilter == .custom {
                             sectionHeader(appLanguage.localized("search.section.custom_products"))
 
                             if filteredCustomProducts.isEmpty {

@@ -98,7 +98,7 @@
 "search.filter.favorites" = "Favorites";
 "search.filter.custom" = "Custom";
 "search.section.common_products" = "Common Products";
-"search.section.local_database" = "Local Database";
+"search.section.local_database" = "Product Matches";
 "search.section.custom_products" = "Custom Products";
 "search.section.online" = "Online";
 "search.status.barcode" = "Searching barcode in Open Food Facts...";
@@ -107,15 +107,15 @@
 "search.status.source" = "Checking data source...";
 "search.nutrition.summary" = "Per 100 g: %d kcal, P %@ g, F %@ g, C %@ g";
 
-"search.message.offline_local" = "No internet connection. Showing the local database.";
+"search.message.offline_local" = "No internet connection. Only your custom products are available.";
 "search.message.barcode_not_found" = "Barcode was not found in Open Food Facts.";
 "search.message.barcode_checked" = "Barcode was checked via Open Food Facts.";
-"search.message.usda_empty" = "USDA returned no results. Falling back to the local database.";
-"search.message.usda_error" = "USDA is temporarily unavailable or its response could not be processed. Showing the local database.";
-"search.message.usda_then_local" = "USDA results are shown first, followed by the local database.";
-"search.message.local_first" = "Showing the local database first.";
-"search.message.local_and_off_empty" = "The local database is empty and Open Food Facts found nothing either.";
-"search.message.local_empty_off_results" = "The local database is empty, showing Open Food Facts results.";
+"search.message.usda_empty" = "USDA returned no results. Showing your custom products if available.";
+"search.message.usda_error" = "USDA is temporarily unavailable or its response could not be processed. Showing your custom products if available.";
+"search.message.usda_then_local" = "USDA results are shown first. Your custom products are shown separately.";
+"search.message.local_first" = "Showing product matches first.";
+"search.message.local_and_off_empty" = "No matching products were found, and Open Food Facts returned nothing either.";
+"search.message.local_empty_off_results" = "No matching products were found locally. Showing Open Food Facts results.";
 "search.scan.title" = "Scan Barcode";
 "search.scan.subtitle" = "Point the camera at the package barcode to find the product in Open Food Facts.";
 "search.scan.alert.title" = "Unable to Open Scanner";
