@@ -673,3 +673,6 @@
 "coaching.workouts.detail.duration" = "Длительность";
 "coaching.workouts.detail.summary" = "Сводка";
 "coaching.workouts.detail.workout_note" = "Заметка к тренировке";
+"coaching.history.view_all" = "Смотреть все";
+"coaching.history.delete.title" = "Удалить запись?";
+"coaching.history.delete.message" = "Запись будет удалена без возможности восстановления.";

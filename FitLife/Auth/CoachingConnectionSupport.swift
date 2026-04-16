@@ -644,6 +644,34 @@ final class ClientCoachingHomeStore: ObservableObject {
             isSubmitting = false
         }
     }
+
+    func deleteCheckIn(_ checkIn: ProgressCheckIn) async {
+        errorMessage = nil
+
+        do {
+            try await firestore
+                .collection("progress_checkins")
+                .document(checkIn.id)
+                .delete()
+            await load()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func deleteWorkoutReport(_ report: CoachingWorkoutReport) async {
+        errorMessage = nil
+
+        do {
+            try await firestore
+                .collection("coaching_workout_reports")
+                .document(report.id)
+                .delete()
+            await load()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
 }
 
 @MainActor
@@ -806,6 +834,8 @@ struct ClientCoachingHomeScreen: View {
     @State private var showCheckInSheet = false
     @State private var showWorkoutReportSheet = false
     @State private var selectedWorkoutReport: CoachingWorkoutReport?
+    @State private var showAllCheckIns = false
+    @State private var showAllWorkoutReports = false
     @State private var noteMessage = ""
 
     init(clientId: String, trainerId: String, trainer: AppUserProfile?) {
@@ -872,31 +902,30 @@ struct ClientCoachingHomeScreen: View {
                 }
             }
 
-            Section(AppLocalizer.string("coaching.checkin.history")) {
+            Section(
+                header: coachingSectionHeader(
+                    title: AppLocalizer.string("coaching.checkin.history"),
+                    showsViewAll: store.checkIns.count > 2,
+                    action: { showAllCheckIns = true }
+                )
+            ) {
                 if store.checkIns.isEmpty {
                     Text(AppLocalizer.string("coaching.checkin.empty"))
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(store.checkIns.prefix(5)) { checkIn in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(checkIn.createdAt.formatted(date: .abbreviated, time: .omitted))
-                                .font(.headline)
-                            Text("\(AppLocalizer.string("coaching.intake.weight")): \(String(format: "%.1f", checkIn.weight)) \(AppLocalizer.string("coaching.unit.kg"))")
-                                .foregroundStyle(.secondary)
-                            Text("\(AppLocalizer.string("coaching.checkin.energy")): \(checkIn.energy)/5  •  \(AppLocalizer.string("coaching.checkin.adherence")): \(checkIn.adherence)/5")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            if checkIn.notes.isEmpty == false {
-                                Text(checkIn.notes)
-                                    .font(.caption)
-                            }
-                        }
-                        .padding(.vertical, 4)
+                    ForEach(store.checkIns.prefix(2)) { checkIn in
+                        CoachingCheckInRow(checkIn: checkIn, isTrainerView: false)
                     }
                 }
             }
 
-            Section(AppLocalizer.string("coaching.workouts.section")) {
+            Section(
+                header: coachingSectionHeader(
+                    title: AppLocalizer.string("coaching.workouts.section"),
+                    showsViewAll: store.workoutReports.count > 2,
+                    action: { showAllWorkoutReports = true }
+                )
+            ) {
                 if completedWorkouts.isEmpty {
                     Text(AppLocalizer.string("coaching.workouts.empty.available"))
                         .foregroundStyle(.secondary)
@@ -904,7 +933,7 @@ struct ClientCoachingHomeScreen: View {
                     Text(AppLocalizer.string("coaching.workouts.empty.sent"))
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(store.workoutReports.prefix(10)) { report in
+                    ForEach(store.workoutReports.prefix(2)) { report in
                         Button {
                             selectedWorkoutReport = report
                         } label: {
@@ -970,6 +999,30 @@ struct ClientCoachingHomeScreen: View {
         .sheet(item: $selectedWorkoutReport) { report in
             NavigationStack {
                 CoachingWorkoutReportDetailScreen(report: report)
+            }
+        }
+        .sheet(isPresented: $showAllCheckIns) {
+            NavigationStack {
+                CoachingCheckInHistoryScreen(
+                    title: AppLocalizer.string("coaching.checkin.history"),
+                    checkIns: store.checkIns,
+                    isTrainerView: false,
+                    canDelete: true,
+                    onDelete: { checkIn in
+                        await store.deleteCheckIn(checkIn)
+                    }
+                )
+            }
+        }
+        .sheet(isPresented: $showAllWorkoutReports) {
+            NavigationStack {
+                CoachingWorkoutReportHistoryScreen(
+                    reports: store.workoutReports,
+                    canDelete: true,
+                    onDelete: { report in
+                        await store.deleteWorkoutReport(report)
+                    }
+                )
             }
         }
     }
@@ -1191,6 +1244,8 @@ struct TrainerClientSupportScreen: View {
     @State private var requestMessage = ""
     @State private var noteMessage = ""
     @State private var selectedWorkoutReport: CoachingWorkoutReport?
+    @State private var showAllCheckIns = false
+    @State private var showAllWorkoutReports = false
     @FocusState private var focusedField: TrainerWorkspaceField?
 
     init(trainerId: String, client: AppUserProfile) {
@@ -1330,39 +1385,35 @@ struct TrainerClientSupportScreen: View {
                 }
             }
 
-            Section(AppLocalizer.string("coaching.checkin.history")) {
+            Section(
+                header: coachingSectionHeader(
+                    title: AppLocalizer.string("coaching.checkin.history"),
+                    showsViewAll: store.checkIns.count > 2,
+                    action: { showAllCheckIns = true }
+                )
+            ) {
                 if store.checkIns.isEmpty {
                     Text(AppLocalizer.string("coaching.checkin.empty"))
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(store.checkIns) { checkIn in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(checkIn.createdAt.formatted(date: .abbreviated, time: .omitted))
-                                .font(.headline)
-                            Text("\(AppLocalizer.string("coaching.intake.weight")): \(String(format: "%.1f", checkIn.weight)) \(AppLocalizer.string("coaching.unit.kg"))")
-                                .foregroundStyle(.secondary)
-                            Text("\(AppLocalizer.string("coaching.intake.measurement.waist")): \(String(format: "%.1f", checkIn.waist)) • \(AppLocalizer.string("coaching.intake.measurement.chest")): \(String(format: "%.1f", checkIn.chest)) • \(AppLocalizer.string("coaching.intake.measurement.hips")): \(String(format: "%.1f", checkIn.hips))")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text("\(AppLocalizer.string("coaching.checkin.energy")): \(checkIn.energy)/5  •  \(AppLocalizer.string("coaching.checkin.adherence")): \(checkIn.adherence)/5")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            if checkIn.notes.isEmpty == false {
-                                Text(checkIn.notes)
-                                    .font(.caption)
-                            }
-                        }
-                        .padding(.vertical, 4)
+                    ForEach(store.checkIns.prefix(2)) { checkIn in
+                        CoachingCheckInRow(checkIn: checkIn, isTrainerView: true)
                     }
                 }
             }
 
-            Section(AppLocalizer.string("coaching.workouts.section")) {
+            Section(
+                header: coachingSectionHeader(
+                    title: AppLocalizer.string("coaching.workouts.section"),
+                    showsViewAll: store.workoutReports.count > 2,
+                    action: { showAllWorkoutReports = true }
+                )
+            ) {
                 if store.workoutReports.isEmpty {
                     Text(AppLocalizer.string("coaching.workouts.empty.received"))
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(store.workoutReports) { report in
+                    ForEach(store.workoutReports.prefix(2)) { report in
                         Button {
                             selectedWorkoutReport = report
                         } label: {
@@ -1418,6 +1469,26 @@ struct TrainerClientSupportScreen: View {
                 CoachingWorkoutReportDetailScreen(report: report)
             }
         }
+        .sheet(isPresented: $showAllCheckIns) {
+            NavigationStack {
+                CoachingCheckInHistoryScreen(
+                    title: AppLocalizer.string("coaching.checkin.history"),
+                    checkIns: store.checkIns,
+                    isTrainerView: true,
+                    canDelete: false,
+                    onDelete: nil
+                )
+            }
+        }
+        .sheet(isPresented: $showAllWorkoutReports) {
+            NavigationStack {
+                CoachingWorkoutReportHistoryScreen(
+                    reports: store.workoutReports,
+                    canDelete: false,
+                    onDelete: nil
+                )
+            }
+        }
     }
 
     private var openRequests: [ProfileUpdateRequest] {
@@ -1469,6 +1540,176 @@ private struct CoachingWorkoutReportRow: View {
             }
         }
         .padding(.vertical, 4)
+    }
+}
+
+private func coachingSectionHeader(
+    title: String,
+    showsViewAll: Bool,
+    action: @escaping () -> Void
+) -> some View {
+    HStack {
+        Text(title)
+        Spacer()
+        if showsViewAll {
+            Button(AppLocalizer.string("coaching.history.view_all"), action: action)
+                .font(.caption.weight(.semibold))
+                .textCase(.none)
+        }
+    }
+}
+
+private struct CoachingCheckInRow: View {
+    let checkIn: ProgressCheckIn
+    let isTrainerView: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(checkIn.createdAt.formatted(date: .abbreviated, time: .omitted))
+                .font(.headline)
+            Text("\(AppLocalizer.string("coaching.intake.weight")): \(String(format: "%.1f", checkIn.weight)) \(AppLocalizer.string("coaching.unit.kg"))")
+                .foregroundStyle(.secondary)
+            if isTrainerView {
+                Text("\(AppLocalizer.string("coaching.intake.measurement.waist")): \(String(format: "%.1f", checkIn.waist)) • \(AppLocalizer.string("coaching.intake.measurement.chest")): \(String(format: "%.1f", checkIn.chest)) • \(AppLocalizer.string("coaching.intake.measurement.hips")): \(String(format: "%.1f", checkIn.hips))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Text("\(AppLocalizer.string("coaching.checkin.energy")): \(checkIn.energy)/5  •  \(AppLocalizer.string("coaching.checkin.adherence")): \(checkIn.adherence)/5")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if checkIn.notes.isEmpty == false {
+                Text(checkIn.notes)
+                    .font(.caption)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+private struct CoachingCheckInHistoryScreen: View {
+    let title: String
+    let checkIns: [ProgressCheckIn]
+    let isTrainerView: Bool
+    let canDelete: Bool
+    let onDelete: ((ProgressCheckIn) async -> Void)?
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var pendingDelete: ProgressCheckIn?
+
+    var body: some View {
+        List {
+            if checkIns.isEmpty {
+                Text(AppLocalizer.string("coaching.checkin.empty"))
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(checkIns) { checkIn in
+                    CoachingCheckInRow(checkIn: checkIn, isTrainerView: isTrainerView)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            if canDelete {
+                                Button(role: .destructive) {
+                                    pendingDelete = checkIn
+                                } label: {
+                                    Label(AppLocalizer.string("common.delete"), systemImage: "trash")
+                                }
+                            }
+                        }
+                }
+            }
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(AppLocalizer.string("common.close")) {
+                    dismiss()
+                }
+            }
+        }
+        .alert(AppLocalizer.string("coaching.history.delete.title"), isPresented: Binding(
+            get: { pendingDelete != nil },
+            set: { if !$0 { pendingDelete = nil } }
+        )) {
+            Button(AppLocalizer.string("common.cancel"), role: .cancel) {
+                pendingDelete = nil
+            }
+            Button(AppLocalizer.string("common.delete"), role: .destructive) {
+                guard let pendingDelete, let onDelete else { return }
+                Task {
+                    await onDelete(pendingDelete)
+                }
+                self.pendingDelete = nil
+            }
+        } message: {
+            Text(AppLocalizer.string("coaching.history.delete.message"))
+        }
+    }
+}
+
+private struct CoachingWorkoutReportHistoryScreen: View {
+    let reports: [CoachingWorkoutReport]
+    let canDelete: Bool
+    let onDelete: ((CoachingWorkoutReport) async -> Void)?
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedWorkoutReport: CoachingWorkoutReport?
+    @State private var pendingDelete: CoachingWorkoutReport?
+
+    var body: some View {
+        List {
+            if reports.isEmpty {
+                Text(AppLocalizer.string("coaching.workouts.empty.received"))
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(reports) { report in
+                    Button {
+                        selectedWorkoutReport = report
+                    } label: {
+                        CoachingWorkoutReportRow(report: report)
+                    }
+                    .buttonStyle(.plain)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        if canDelete {
+                            Button(role: .destructive) {
+                                pendingDelete = report
+                            } label: {
+                                Label(AppLocalizer.string("common.delete"), systemImage: "trash")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle(AppLocalizer.string("coaching.workouts.section"))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(AppLocalizer.string("common.close")) {
+                    dismiss()
+                }
+            }
+        }
+        .sheet(item: $selectedWorkoutReport) { report in
+            NavigationStack {
+                CoachingWorkoutReportDetailScreen(report: report)
+            }
+        }
+        .alert(AppLocalizer.string("coaching.history.delete.title"), isPresented: Binding(
+            get: { pendingDelete != nil },
+            set: { if !$0 { pendingDelete = nil } }
+        )) {
+            Button(AppLocalizer.string("common.cancel"), role: .cancel) {
+                pendingDelete = nil
+            }
+            Button(AppLocalizer.string("common.delete"), role: .destructive) {
+                guard let pendingDelete, let onDelete else { return }
+                Task {
+                    await onDelete(pendingDelete)
+                }
+                self.pendingDelete = nil
+            }
+        } message: {
+            Text(AppLocalizer.string("coaching.history.delete.message"))
+        }
     }
 }
 
