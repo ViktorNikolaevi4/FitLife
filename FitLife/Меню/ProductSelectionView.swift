@@ -637,17 +637,6 @@ struct ProductSelectionView: View {
                 }
                 .buttonStyle(.plain)
 
-                Button {
-                    editingCustomProductSelection = CustomProductEditorSelection(product: customProduct)
-                } label: {
-                    Image(systemName: "pencil")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(.blue)
-                        .frame(width: 36, height: 36)
-                        .background(Color.blue.opacity(0.1), in: Circle())
-                }
-                .buttonStyle(.plain)
-
                 Button(role: .destructive) {
                     deleteCustomProduct(customProduct)
                 } label: {
@@ -667,6 +656,10 @@ struct ProductSelectionView: View {
             RoundedRectangle(cornerRadius: 18)
                 .stroke(productSelectionCardBorder)
         )
+        .contentShape(RoundedRectangle(cornerRadius: 18))
+        .onTapGesture {
+            editingCustomProductSelection = CustomProductEditorSelection(product: customProduct)
+        }
     }
 
 
@@ -1113,44 +1106,91 @@ struct CustomProductCreationView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text(AppLocalizer.string("custom_product.new")).font(.largeTitle.bold())
-                    Text(AppLocalizer.string("custom_product.subtitle"))
-                        .font(.caption).foregroundStyle(.secondary)
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 20) {
+                    customProductHeader(
+                        title: AppLocalizer.string("custom_product.new"),
+                        subtitle: AppLocalizer.string("custom_product.subtitle")
+                    )
 
-                    field(AppLocalizer.string("custom_product.name"), text: $name, field: .name, kb: .default, submit: .next)
-                        .onSubmit { focusedField = .calories }
+                    customProductNameSection(
+                        title: AppLocalizer.string("custom_product.name"),
+                        placeholder: AppLocalizer.string("custom_product.name"),
+                        text: $name,
+                        focusedField: $focusedField,
+                        field: .name,
+                        kb: .default,
+                        submit: .next
+                    )
+                    .onSubmit { focusedField = .calories }
 
-                    field(AppLocalizer.string("custom_product.calories"), text: $calories, field: .calories, kb: .decimalPad, submit: .next)
-                        .onSubmit { focusedField = .protein }
+                    customProductCaloriesSection(
+                        title: AppLocalizer.string("custom_product.calories"),
+                        placeholder: AppLocalizer.string("custom_product.calories"),
+                        text: $calories,
+                        focusedField: $focusedField,
+                        field: .calories
+                    )
+                    .onSubmit { focusedField = .protein }
 
-                    HStack(spacing: 12) {
-                        field(AppLocalizer.string("custom_product.protein"), text: $protein, field: .protein, kb: .decimalPad, submit: .next)
-                            .onSubmit { focusedField = .fat }
-                        field(AppLocalizer.string("custom_product.fat"), text: $fat, field: .fat, kb: .decimalPad, submit: .next)
-                            .onSubmit { focusedField = .carbs }
-                        field(AppLocalizer.string("custom_product.carbs"), text: $carbs, field: .carbs, kb: .decimalPad, submit: .done)
-                            .onSubmit { focusedField = nil }
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("БЖУ")
+                            .font(.title3.weight(.bold))
+
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(AppLocalizer.string("custom_product.protein"))
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                field(AppLocalizer.string("custom_product.protein"), text: $protein, field: .protein, kb: .decimalPad, submit: .next)
+                                    .onSubmit { focusedField = .fat }
+                            }
+                            .frame(maxWidth: .infinity)
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(AppLocalizer.string("custom_product.fat"))
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                field(AppLocalizer.string("custom_product.fat"), text: $fat, field: .fat, kb: .decimalPad, submit: .next)
+                                    .onSubmit { focusedField = .carbs }
+                            }
+                            .frame(maxWidth: .infinity)
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(AppLocalizer.string("custom_product.carbs"))
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                field(AppLocalizer.string("custom_product.carbs"), text: $carbs, field: .carbs, kb: .decimalPad, submit: .done)
+                                    .onSubmit { focusedField = nil }
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
                     }
+                    .padding(18)
+                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24))
 
-                    VStack(spacing: 10) {
-                        Button(AppLocalizer.string("common.create"), action: submit)
-                            .buttonStyle(.borderedProminent)
-                            .tint(.blue)
+                    VStack(spacing: 12) {
+                        primaryActionButton(title: AppLocalizer.string("common.create"), action: submit)
                             .disabled(!isValid)
-                            .frame(maxWidth: .infinity)
 
-                        Button(AppLocalizer.string("common.cancel"), role: .destructive) { dismiss() }
-                            .buttonStyle(.borderedProminent)
-                            .tint(.red)
-                            .frame(maxWidth: .infinity)
+                        secondaryDestructiveButton(title: AppLocalizer.string("common.cancel")) {
+                            dismiss()
+                        }
                     }
                 }
                 .padding(20)
             }
+            .background(Color(.systemGroupedBackground))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.headline.weight(.semibold))
+                    }
+                }
                 ToolbarItemGroup(placement: .keyboard) {
                     Button(AppLocalizer.string("common.back")) { prev() }.disabled(focusedField == .name)
                     Button(AppLocalizer.string("common.next")) { next() }.disabled(focusedField == .carbs)
@@ -1169,10 +1209,12 @@ struct CustomProductCreationView: View {
             .textInputAutocapitalization(.never)
             .focused($focusedField, equals: field)
             .submitLabel(submit)
-            .padding(12)
-            .background(productSelectionCardBackground, in: RoundedRectangle(cornerRadius: 10))
+            .font(.body.weight(.medium))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 16)
+            .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
             .overlay(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: 16)
                     .stroke(focusedField == field ? Color.blue : productSelectionCardBorder,
                             lineWidth: focusedField == field ? 2 : 1)
             )
@@ -1261,48 +1303,91 @@ struct CustomProductEditorScreen: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text(AppLocalizer.string("custom_product.edit"))
-                        .font(.largeTitle.bold())
-                    Text(AppLocalizer.string("custom_product.subtitle"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 20) {
+                    customProductHeader(
+                        title: AppLocalizer.string("custom_product.edit"),
+                        subtitle: AppLocalizer.string("custom_product.subtitle")
+                    )
 
-                    field(AppLocalizer.string("custom_product.name"), text: $name, field: .name, kb: .default, submit: .next)
-                        .onSubmit { focusedField = .calories }
+                    customProductNameSection(
+                        title: AppLocalizer.string("custom_product.name"),
+                        placeholder: AppLocalizer.string("custom_product.name"),
+                        text: $name,
+                        focusedField: $focusedField,
+                        field: .name,
+                        kb: .default,
+                        submit: .next
+                    )
+                    .onSubmit { focusedField = .calories }
 
-                    field(AppLocalizer.string("custom_product.calories"), text: $calories, field: .calories, kb: .decimalPad, submit: .next)
-                        .onSubmit { focusedField = .protein }
+                    customProductCaloriesSection(
+                        title: AppLocalizer.string("custom_product.calories"),
+                        placeholder: AppLocalizer.string("custom_product.calories"),
+                        text: $calories,
+                        focusedField: $focusedField,
+                        field: .calories
+                    )
+                    .onSubmit { focusedField = .protein }
 
-                    HStack(spacing: 12) {
-                        field(AppLocalizer.string("custom_product.protein"), text: $protein, field: .protein, kb: .decimalPad, submit: .next)
-                            .onSubmit { focusedField = .fat }
-                        field(AppLocalizer.string("custom_product.fat"), text: $fat, field: .fat, kb: .decimalPad, submit: .next)
-                            .onSubmit { focusedField = .carbs }
-                        field(AppLocalizer.string("custom_product.carbs"), text: $carbs, field: .carbs, kb: .decimalPad, submit: .done)
-                            .onSubmit { focusedField = nil }
-                    }
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("БЖУ")
+                            .font(.title3.weight(.bold))
 
-                    VStack(spacing: 10) {
-                        Button(AppLocalizer.string("common.save"), action: save)
-                            .buttonStyle(.borderedProminent)
-                            .tint(.blue)
-                            .disabled(!isValid)
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(AppLocalizer.string("custom_product.protein"))
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                field(AppLocalizer.string("custom_product.protein"), text: $protein, field: .protein, kb: .decimalPad, submit: .next)
+                                    .onSubmit { focusedField = .fat }
+                            }
                             .frame(maxWidth: .infinity)
 
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(AppLocalizer.string("custom_product.fat"))
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                field(AppLocalizer.string("custom_product.fat"), text: $fat, field: .fat, kb: .decimalPad, submit: .next)
+                                    .onSubmit { focusedField = .carbs }
+                            }
+                            .frame(maxWidth: .infinity)
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(AppLocalizer.string("custom_product.carbs"))
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                field(AppLocalizer.string("custom_product.carbs"), text: $carbs, field: .carbs, kb: .decimalPad, submit: .done)
+                                    .onSubmit { focusedField = nil }
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .padding(18)
+                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24))
+
+                    VStack(spacing: 12) {
+                        primaryActionButton(title: AppLocalizer.string("common.save"), action: save)
+                            .disabled(!isValid)
+
                         if allowsDelete {
-                            Button(AppLocalizer.string("common.delete"), role: .destructive, action: deleteProduct)
-                                .buttonStyle(.borderedProminent)
-                                .tint(.red)
-                                .frame(maxWidth: .infinity)
+                            secondaryDestructiveButton(title: AppLocalizer.string("common.delete"), action: deleteProduct)
                         }
                     }
                 }
                 .padding(20)
             }
+            .background(Color(.systemGroupedBackground))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.headline.weight(.semibold))
+                    }
+                }
                 ToolbarItemGroup(placement: .keyboard) {
                     Button(AppLocalizer.string("common.back")) { prev() }.disabled(focusedField == .name)
                     Button(AppLocalizer.string("common.next")) { next() }.disabled(focusedField == .carbs)
@@ -1321,10 +1406,12 @@ struct CustomProductEditorScreen: View {
             .textInputAutocapitalization(.never)
             .focused($focusedField, equals: field)
             .submitLabel(submit)
-            .padding(12)
-            .background(productSelectionCardBackground, in: RoundedRectangle(cornerRadius: 10))
+            .font(.body.weight(.medium))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 16)
+            .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
             .overlay(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: 16)
                     .stroke(focusedField == field ? Color.blue : productSelectionCardBorder,
                             lineWidth: focusedField == field ? 2 : 1)
             )
@@ -1396,4 +1483,95 @@ struct CustomProductEditorScreen: View {
         }
         return String(format: "%.1f", rounded).replacingOccurrences(of: ".", with: ",")
     }
+}
+
+private func customProductHeader(title: String, subtitle: String) -> some View {
+    VStack(alignment: .leading, spacing: 8) {
+        Text(title)
+            .font(.system(size: 36, weight: .bold))
+        Text(subtitle)
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(.secondary)
+    }
+}
+
+private func customProductNameSection<FieldType: Hashable>(
+    title: String,
+    placeholder: String,
+    text: Binding<String>,
+    focusedField: FocusState<FieldType?>.Binding,
+    field: FieldType,
+    kb: UIKeyboardType,
+    submit: SubmitLabel
+) -> some View {
+    VStack(alignment: .leading, spacing: 12) {
+        Text(title)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+        TextField(placeholder, text: text)
+            .keyboardType(kb)
+            .textInputAutocapitalization(.words)
+            .focused(focusedField, equals: field)
+            .submitLabel(submit)
+            .font(.body.weight(.medium))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 16)
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24))
+            .overlay(
+                RoundedRectangle(cornerRadius: 24)
+                    .stroke(focusedField.wrappedValue == field ? Color.blue : productSelectionCardBorder,
+                            lineWidth: focusedField.wrappedValue == field ? 2 : 1)
+            )
+    }
+}
+
+private func customProductCaloriesSection<FieldType: Hashable>(
+    title: String,
+    placeholder: String,
+    text: Binding<String>,
+    focusedField: FocusState<FieldType?>.Binding,
+    field: FieldType
+) -> some View {
+    VStack(alignment: .leading, spacing: 12) {
+        Text(title)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+        TextField(placeholder, text: text)
+            .keyboardType(.decimalPad)
+            .textInputAutocapitalization(.never)
+            .focused(focusedField, equals: field)
+            .submitLabel(.next)
+            .font(.system(size: 32, weight: .bold, design: .rounded))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(focusedField.wrappedValue == field ? Color.blue : productSelectionCardBorder,
+                            lineWidth: focusedField.wrappedValue == field ? 2 : 1)
+            )
+    }
+    .padding(18)
+    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24))
+}
+
+private func primaryActionButton(title: String, action: @escaping () -> Void) -> some View {
+    Button(title, action: action)
+        .font(.headline.weight(.semibold))
+        .foregroundStyle(Color(.systemBackground))
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 18)
+        .background(RoundedRectangle(cornerRadius: 20).fill(Color.primary))
+}
+
+private func secondaryDestructiveButton(title: String, action: @escaping () -> Void) -> some View {
+    Button(title, role: .destructive, action: action)
+        .font(.headline.weight(.semibold))
+        .foregroundStyle(.red)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 18)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color.red.opacity(0.10))
+        )
 }
