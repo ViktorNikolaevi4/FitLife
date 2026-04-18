@@ -668,6 +668,7 @@ private struct ProductsList: View {
     @State private var pendingDelete: FoodEntry?
     @State private var pendingDeleteGroup: [FoodEntry] = []
     @State private var editingSelection: FoodEntryEditorSelection?
+    @State private var editingGroupedMealSelection: GroupedAIMealEditorSelection?
 
     @Environment(\.modelContext) private var modelContext
 
@@ -749,8 +750,16 @@ private struct ProductsList: View {
                     .padding(.vertical, 12)
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        guard item.isGroupedAIMeal == false, let first = item.entries.first else { return }
-                        editingSelection = FoodEntryEditorSelection(entry: first)
+                        guard let first = item.entries.first else { return }
+                        if item.isGroupedAIMeal {
+                            editingGroupedMealSelection = GroupedAIMealEditorSelection(
+                                id: item.id,
+                                title: item.title,
+                                entries: item.entries
+                            )
+                        } else {
+                            editingSelection = FoodEntryEditorSelection(entry: first)
+                        }
                     }
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                         Button(role: .destructive) {
@@ -778,6 +787,19 @@ private struct ProductsList: View {
                 },
                 onDelete: {
                     onDelete(selection.entry)
+                }
+            )
+        }
+        .navigationDestination(item: $editingGroupedMealSelection) { selection in
+            GroupedAIMealPortionEditorScreen(
+                title: selection.title,
+                entries: selection.entries,
+                onSave: { newPortion in
+                    applyNewPortion(selection.entries, newTotalPortion: newPortion)
+                    selection.entries.forEach(onUpdate)
+                },
+                onDelete: {
+                    onDeleteMany(selection.entries)
                 }
             )
         }
@@ -826,6 +848,23 @@ private struct ProductsList: View {
         entry.portion = newPortion
         do { try modelContext.save() } catch {}
     }
+
+    private func applyNewPortion(_ entries: [FoodEntry], newTotalPortion: Double) {
+        let oldTotal = max(1.0, entries.reduce(0.0) { $0 + $1.portion })
+        let k = newTotalPortion / oldTotal
+
+        for entry in entries {
+            if let product = entry.product {
+                product.protein *= k
+                product.fat *= k
+                product.carbs *= k
+                product.calories = Int((Double(product.calories) * k).rounded())
+            }
+            entry.portion = max(1.0, entry.portion * k)
+        }
+
+        do { try modelContext.save() } catch {}
+    }
 }
 
 private struct FoodEntryEditorSelection: Identifiable, Hashable {
@@ -841,16 +880,32 @@ private struct FoodEntryEditorSelection: Identifiable, Hashable {
     }
 }
 
+private struct GroupedAIMealEditorSelection: Identifiable, Hashable {
+    let id: String
+    let title: String
+    let entries: [FoodEntry]
+
+    static func == (lhs: GroupedAIMealEditorSelection, rhs: GroupedAIMealEditorSelection) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+}
+
 // MARK: - Portion Editor
 
 private struct PortionEditorScreen: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
 
     let entry: FoodEntry
     var onSave: (Double) -> Void
     var onDelete: () -> Void
 
     @State private var gramsText: String
+    @State private var editingCustomProductSelection: CustomProductPortionEditorSelection?
 
     init(entry: FoodEntry, onSave: @escaping (Double) -> Void, onDelete: @escaping () -> Void) {
         self.entry = entry
@@ -866,6 +921,11 @@ private struct PortionEditorScreen: View {
 
     private var gramsValue: Double {
         max(1, Double(gramsText) ?? entry.portion)
+    }
+
+    private struct CustomProductPortionEditorSelection: Identifiable {
+        let product: CustomProduct
+        var id: UUID { product.id }
     }
 
     var body: some View {
@@ -928,6 +988,214 @@ private struct PortionEditorScreen: View {
                     )
                 }
 
+                if let customProduct = linkedCustomProduct {
+                    Button(AppLocalizer.string("custom_product.edit")) {
+                        editingCustomProductSelection = CustomProductPortionEditorSelection(product: customProduct)
+                    }
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.blue)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(Color.blue.opacity(0.12))
+                    )
+                }
+
+                Button(AppLocalizer.string("common.save")) {
+                    onSave(gramsValue)
+                    dismiss()
+                }
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(Color(.systemBackground))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 18)
+                .background(RoundedRectangle(cornerRadius: 20).fill(Color.primary))
+
+                Button(AppLocalizer.string("common.delete"), role: .destructive) {
+                    onDelete()
+                    dismiss()
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.red)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+            }
+            .padding(20)
+        }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .navigationTitle(AppLocalizer.string("entry.portion.title"))
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $editingCustomProductSelection) { selection in
+            CustomProductEditorScreen(
+                product: selection.product,
+                allowsDelete: false,
+                onSaved: {
+                    applyUpdatedCustomProduct(selection.product)
+                }
+            )
+        }
+    }
+
+    private func updateGrams(by delta: Int) {
+        let next = max(1, Int(gramsValue) + delta)
+        gramsText = String(next)
+    }
+
+    private func stepperButton(systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.headline.weight(.semibold))
+                .frame(width: 42, height: 42)
+                .background(Color(.secondarySystemBackground), in: Circle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var linkedCustomProduct: CustomProduct? {
+        guard let customProductID = entry.customProductID else { return nil }
+        let predicate = #Predicate<CustomProduct> { product in
+            product.id == customProductID
+        }
+        let descriptor = FetchDescriptor<CustomProduct>(predicate: predicate)
+        return try? modelContext.fetch(descriptor).first
+    }
+
+    private func applyUpdatedCustomProduct(_ customProduct: CustomProduct) {
+        guard let product = entry.product else { return }
+        let factor = max(1.0, entry.portion) / 100
+        product.name = customProduct.name
+        product.calories = Int((Double(customProduct.calories) * factor).rounded())
+        product.protein = customProduct.protein * factor
+        product.fat = customProduct.fat * factor
+        product.carbs = customProduct.carbs * factor
+        do {
+            try modelContext.save()
+        } catch {}
+    }
+}
+
+private struct PortionMetricRow: View {
+    let title: String
+    let value: Double
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.body.weight(.medium))
+            Spacer()
+            Text(String(format: "%.1f %@", value, AppLocalizer.string("unit.grams.short")))
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct GroupedAIMealPortionEditorScreen: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let title: String
+    let entries: [FoodEntry]
+    var onSave: (Double) -> Void
+    var onDelete: () -> Void
+
+    @State private var gramsText: String
+
+    init(title: String, entries: [FoodEntry], onSave: @escaping (Double) -> Void, onDelete: @escaping () -> Void) {
+        self.title = title
+        self.entries = entries
+        self.onSave = onSave
+        self.onDelete = onDelete
+        let initialGrams = max(1, Int(entries.reduce(0.0) { $0 + $1.portion }))
+        _gramsText = State(initialValue: String(initialGrams))
+    }
+
+    private var totalPortion: Double {
+        max(1.0, entries.reduce(0.0) { $0 + $1.portion })
+    }
+
+    private var gramsValue: Double {
+        max(1, Double(gramsText) ?? totalPortion)
+    }
+
+    private var previewScale: Double {
+        gramsValue / totalPortion
+    }
+
+    private var totalCalories: Int {
+        entries.reduce(0) { $0 + ($1.product?.calories ?? 0) }
+    }
+
+    private var totalProtein: Double {
+        entries.reduce(0.0) { $0 + ($1.product?.protein ?? 0) }
+    }
+
+    private var totalFat: Double {
+        entries.reduce(0.0) { $0 + ($1.product?.fat ?? 0) }
+    }
+
+    private var totalCarbs: Double {
+        entries.reduce(0.0) { $0 + ($1.product?.carbs ?? 0) }
+    }
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(title)
+                        .font(.title3.weight(.semibold))
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(2)
+
+                    Text(AppLocalizer.string("search.per_100g"))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                VStack(spacing: 16) {
+                    HStack(spacing: 14) {
+                        stepperButton(systemImage: "minus") {
+                            updateGrams(by: -10)
+                        }
+
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            TextField("100", text: $gramsText)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.center)
+                                .font(.system(size: 36, weight: .bold, design: .rounded))
+                                .onChange(of: gramsText) { gramsText = gramsText.filter(\.isNumber) }
+
+                            Text(AppLocalizer.string("unit.grams.short"))
+                                .font(.headline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+
+                        stepperButton(systemImage: "plus") {
+                            updateGrams(by: 10)
+                        }
+                    }
+                }
+                .padding(18)
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24))
+
+                VStack(alignment: .leading, spacing: 14) {
+                    Text(AppLocalizer.format("entry.will_be_kcal", Int(Double(totalCalories) * previewScale)))
+                        .font(.system(size: 30, weight: .bold))
+
+                    VStack(spacing: 10) {
+                        PortionMetricRow(title: AppLocalizer.string("macro.protein"), value: totalProtein * previewScale)
+                        PortionMetricRow(title: AppLocalizer.string("macro.fat"), value: totalFat * previewScale)
+                        PortionMetricRow(title: AppLocalizer.string("macro.carbs"), value: totalCarbs * previewScale)
+                    }
+                }
+                .padding(18)
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24)
+                        .stroke(Color(.separator).opacity(0.22))
+                )
+
                 Button(AppLocalizer.string("common.save")) {
                     onSave(gramsValue)
                     dismiss()
@@ -967,21 +1235,5 @@ private struct PortionEditorScreen: View {
                 .background(Color(.secondarySystemBackground), in: Circle())
         }
         .buttonStyle(.plain)
-    }
-}
-
-private struct PortionMetricRow: View {
-    let title: String
-    let value: Double
-
-    var body: some View {
-        HStack {
-            Text(title)
-                .font(.body.weight(.medium))
-            Spacer()
-            Text(String(format: "%.1f %@", value, AppLocalizer.string("unit.grams.short")))
-                .font(.body.weight(.semibold))
-                .foregroundStyle(.secondary)
-        }
     }
 }

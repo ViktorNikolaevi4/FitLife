@@ -60,6 +60,7 @@ struct RationPopupView: View {
     // MARK: — Состояние
     @State private var selectedMeal: MealType? = nil
     @State private var selectedProduct: Product? = nil
+    @State private var selectedCustomProduct: CustomProduct? = nil
     @State private var showProductDetails = false
     @State private var portionSize: String = "100"
     @State private var activeMeal: MealType? = nil
@@ -114,6 +115,7 @@ struct RationPopupView: View {
                     selectedGender: selectedGender,
                     onProductSelected: { product in
                         selectedProduct = product
+                        selectedCustomProduct = nil
                         activeMeal = meal
                         withAnimation {
                             showProductDetails = true
@@ -131,6 +133,7 @@ struct RationPopupView: View {
                             isCustom: true
                         )
                         selectedProduct = generic
+                        selectedCustomProduct = custom
                         activeMeal = meal
                         withAnimation {
                             showProductDetails = true
@@ -163,6 +166,7 @@ struct RationPopupView: View {
                             showProductDetails = false
                             activeMeal = nil
                             selectedProduct = nil
+                            selectedCustomProduct = nil
                         }
                     }
             }
@@ -465,7 +469,8 @@ struct RationPopupView: View {
             portion:   portion,
             gender:    gender,
             ownerId:   sessionStore.firebaseUser?.uid ?? "",
-            isFavorite: product.isFavorite
+            isFavorite: product.isFavorite,
+            customProductID: selectedCustomProduct?.id
         )
 
         do {
@@ -488,6 +493,7 @@ struct RationPopupView: View {
 
             onMealAdded()
             activeMeal = nil
+            selectedCustomProduct = nil
             withAnimation { showProductDetails = false }
         } catch {}
     }

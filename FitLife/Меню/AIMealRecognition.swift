@@ -49,6 +49,15 @@ private struct AIMealRecognitionResponse: Decodable {
         case isBeverage = "is_beverage"
         case portionSizeGuess = "portion_size_guess"
     }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        dishName = container.decodeLossyString(forKey: .dishName) ?? "Meal"
+        ingredients = (try? container.decode([AIMealRecognitionIngredient].self, forKey: .ingredients)) ?? []
+        notes = container.decodeLossyString(forKey: .notes)
+        isBeverage = container.decodeLossyBool(forKey: .isBeverage)
+        portionSizeGuess = container.decodeLossyString(forKey: .portionSizeGuess)
+    }
 }
 
 private struct AIMealRecognitionIngredient: Decodable {
@@ -59,6 +68,124 @@ private struct AIMealRecognitionIngredient: Decodable {
     let fat: Double
     let carbs: Double
     let confidence: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case name
+        case grams
+        case calories
+        case protein
+        case fat
+        case carbs
+        case confidence
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = container.decodeLossyString(forKey: .name) ?? "Ingredient"
+        grams = max(container.decodeLossyDouble(forKey: .grams) ?? 0, 0)
+        calories = max(container.decodeLossyInt(forKey: .calories) ?? 0, 0)
+        protein = max(container.decodeLossyDouble(forKey: .protein) ?? 0, 0)
+        fat = max(container.decodeLossyDouble(forKey: .fat) ?? 0, 0)
+        carbs = max(container.decodeLossyDouble(forKey: .carbs) ?? 0, 0)
+        confidence = container.decodeLossyString(forKey: .confidence)
+    }
+}
+
+private extension KeyedDecodingContainer {
+    func decodeLossyString(forKey key: Key) -> String? {
+        if let value = tryOptionalString(forKey: key) {
+            return value.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let value = tryOptionalDouble(forKey: key) {
+            return String(value)
+        }
+        if let value = tryOptionalInt(forKey: key) {
+            return String(value)
+        }
+        if let value = tryOptionalBool(forKey: key) {
+            return String(value)
+        }
+        return nil
+    }
+
+    func decodeLossyDouble(forKey key: Key) -> Double? {
+        if let value = tryOptionalDouble(forKey: key) {
+            return value
+        }
+        if let value = tryOptionalInt(forKey: key) {
+            return Double(value)
+        }
+        if let value = decodeLossyString(forKey: key)?
+            .replacingOccurrences(of: ",", with: "."),
+           let doubleValue = Double(value) {
+            return doubleValue
+        }
+        return nil
+    }
+
+    func decodeLossyInt(forKey key: Key) -> Int? {
+        if let value = tryOptionalInt(forKey: key) {
+            return value
+        }
+        if let value = tryOptionalDouble(forKey: key) {
+            return Int(value.rounded())
+        }
+        if let value = decodeLossyString(forKey: key)?
+            .replacingOccurrences(of: ",", with: "."),
+           let doubleValue = Double(value) {
+            return Int(doubleValue.rounded())
+        }
+        return nil
+    }
+
+    func decodeLossyBool(forKey key: Key) -> Bool? {
+        if let value = tryOptionalBool(forKey: key) {
+            return value
+        }
+        if let stringValue = decodeLossyString(forKey: key)?.lowercased() {
+            switch stringValue {
+            case "true", "yes", "1":
+                return true
+            case "false", "no", "0":
+                return false
+            default:
+                return nil
+            }
+        }
+        return nil
+    }
+
+    private func tryOptionalString(forKey key: Key) -> String? {
+        do {
+            return try decodeIfPresent(String.self, forKey: key)
+        } catch {
+            return nil
+        }
+    }
+
+    private func tryOptionalDouble(forKey key: Key) -> Double? {
+        do {
+            return try decodeIfPresent(Double.self, forKey: key)
+        } catch {
+            return nil
+        }
+    }
+
+    private func tryOptionalInt(forKey key: Key) -> Int? {
+        do {
+            return try decodeIfPresent(Int.self, forKey: key)
+        } catch {
+            return nil
+        }
+    }
+
+    private func tryOptionalBool(forKey key: Key) -> Bool? {
+        do {
+            return try decodeIfPresent(Bool.self, forKey: key)
+        } catch {
+            return nil
+        }
+    }
 }
 
 private struct AIMealIngredientDraft: Identifiable, Hashable {

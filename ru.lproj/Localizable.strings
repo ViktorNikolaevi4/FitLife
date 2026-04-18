@@ -636,6 +636,7 @@
 "onboarding.height.value" = "%d см";
 
 "custom_product.new" = "Новый продукт";
+"custom_product.edit" = "Редактировать продукт";
 "custom_product.subtitle" = "БЖУ указывайте на 100 г продукта";
 "custom_product.name" = "Наименование";
 "custom_product.calories" = "Энергия, ккал";

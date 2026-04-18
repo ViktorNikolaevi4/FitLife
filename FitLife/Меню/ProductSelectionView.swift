@@ -41,6 +41,7 @@ actor ProductUsageCache {
 
 struct ProductSelectionView: View {
     private static let favoriteNamesKey = "favoriteProductNames"
+    private static let favoriteUSDASnapshotsKey = "favoriteUSDASnapshots"
     @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
 
     @State private var customProducts: [CustomProduct] = []
@@ -74,6 +75,10 @@ struct ProductSelectionView: View {
     @State private var filteredCustomProductsCache: [CustomProduct] = []
     @State private var hasLoadedFavorites = false
     @State private var hasLoadedCustomProducts = false
+    @State private var remoteFavoriteProducts: [Product] = []
+    @State private var remoteFavoriteKeys: Set<String> = []
+    @State private var hasHydratedRemoteFavoriteKeys = false
+    @State private var editingCustomProductSelection: CustomProductEditorSelection?
 
     // частоты использования по имени продукта
     @State private var usageCounts: [String: Int] = [:]
@@ -92,6 +97,46 @@ struct ProductSelectionView: View {
         case all = "Общие"
         case favorites = "Любимые"
         case custom = "Свои"
+    }
+
+    private struct FavoriteUSDASnapshot: Codable {
+        let key: String
+        let name: String
+        let nameEN: String?
+        let protein: Double
+        let fat: Double
+        let carbs: Double
+        let calories: Int
+
+        var product: Product {
+            Product(
+                name: name,
+                nameEN: nameEN,
+                protein: protein,
+                fat: fat,
+                carbs: carbs,
+                calories: calories,
+                isFavorite: true,
+                source: .usda
+            )
+        }
+
+        static func from(product: Product, key: String) -> FavoriteUSDASnapshot {
+            FavoriteUSDASnapshot(
+                key: key,
+                name: product.name,
+                nameEN: product.nameEN,
+                protein: product.protein,
+                fat: product.fat,
+                carbs: product.carbs,
+                calories: product.calories
+            )
+        }
+    }
+
+    private struct CustomProductEditorSelection: Identifiable {
+        let product: CustomProduct
+        var id: UUID { product.id }
     }
 
     private var appLanguage: AppLanguage {
@@ -368,6 +413,7 @@ struct ProductSelectionView: View {
                 }
             }
             .onAppear {
+                hydrateRemoteFavoriteKeysIfNeeded()
                 ensureLazyLoadedDataForCurrentContext()
                 refreshVisibleProducts()
                 scheduleExpandedResults()
@@ -411,6 +457,18 @@ struct ProductSelectionView: View {
                     customProducts.append(newProduct)
                     refreshVisibleProducts()
                 }
+            }
+            .sheet(item: $editingCustomProductSelection) { selection in
+                CustomProductEditorScreen(
+                    product: selection.product,
+                    allowsDelete: true,
+                    onSaved: {
+                        loadCustomProducts()
+                    },
+                    onDeleted: {
+                        loadCustomProducts()
+                    }
+                )
             }
             .sheet(isPresented: $isShowingBarcodeScanner) {
                 BarcodeScannerView(
@@ -457,7 +515,10 @@ struct ProductSelectionView: View {
     // MARK: - Rows
 
     private func productRow(product: Product) -> some View {
-        HStack(alignment: .top, spacing: 12) {
+        let remoteFavoriteKey = favoriteKey(for: product)
+        let isUSDARemoteFavorite = remoteFavoriteKey.map { remoteFavoriteKeys.contains($0) } ?? false
+
+        return HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(product.displayName(preferredLanguageCode: searchLanguage.rawValue))
                     .font(.body.weight(.semibold))
@@ -499,6 +560,16 @@ struct ProductSelectionView: View {
                     }) {
                         Image(systemName: product.isFavorite ? "star.fill" : "star")
                             .foregroundColor(product.isFavorite ? .yellow : .gray)
+                            .frame(width: 36, height: 36)
+                            .background(Color(.secondarySystemBackground), in: Circle())
+                    }
+                    .buttonStyle(.borderless)
+                } else if product.source == .usda, let remoteFavoriteKey {
+                    Button(action: {
+                        toggleRemoteFavorite(product, key: remoteFavoriteKey)
+                    }) {
+                        Image(systemName: isUSDARemoteFavorite ? "star.fill" : "star")
+                            .foregroundColor(isUSDARemoteFavorite ? .yellow : .gray)
                             .frame(width: 36, height: 36)
                             .background(Color(.secondarySystemBackground), in: Circle())
                     }
@@ -566,6 +637,17 @@ struct ProductSelectionView: View {
                 }
                 .buttonStyle(.plain)
 
+                Button {
+                    editingCustomProductSelection = CustomProductEditorSelection(product: customProduct)
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.blue)
+                        .frame(width: 36, height: 36)
+                        .background(Color.blue.opacity(0.1), in: Circle())
+                }
+                .buttonStyle(.plain)
+
                 Button(role: .destructive) {
                     deleteCustomProduct(customProduct)
                 } label: {
@@ -599,7 +681,12 @@ struct ProductSelectionView: View {
     private func refreshVisibleProducts() {
         let trimmedSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        let baseProducts = selectedFilter == .favorites ? cachedFilteredProducts : productCatalogStore.products
+        let baseProducts: [Product]
+        if selectedFilter == .favorites {
+            baseProducts = cachedFilteredProducts + remoteFavoriteProducts
+        } else {
+            baseProducts = productCatalogStore.products
+        }
         let localMatches = trimmedSearch.isEmpty
             ? baseProducts
             : baseProducts.filter { $0.matches(trimmedSearch) }
@@ -730,6 +817,10 @@ struct ProductSelectionView: View {
             productCatalogStore.products[i].isFavorite = names.contains(productCatalogStore.products[i].name)
         }
         cachedFilteredProducts = productCatalogStore.products.filter { $0.isFavorite }
+        let remoteSnapshots = favoriteUSDASnapshots()
+        remoteFavoriteKeys = Set(remoteSnapshots.map(\.key))
+        remoteFavoriteProducts = remoteSnapshots.map(\.product)
+        hasHydratedRemoteFavoriteKeys = true
         hasLoadedFavorites = true
         refreshVisibleProducts()
     }
@@ -757,6 +848,65 @@ struct ProductSelectionView: View {
     private func favoriteProductNames() -> Set<String> {
         let names = UserDefaults.standard.stringArray(forKey: Self.favoriteNamesKey) ?? []
         return Set(names)
+    }
+
+    private func toggleRemoteFavorite(_ product: Product, key: String) {
+        var snapshots = favoriteUSDASnapshots()
+
+        if let existingIndex = snapshots.firstIndex(where: { $0.key == key }) {
+            snapshots.remove(at: existingIndex)
+        } else {
+            snapshots.append(.from(product: product, key: key))
+        }
+
+        persistUSDASnapshots(snapshots)
+        remoteFavoriteKeys = Set(snapshots.map(\.key))
+        remoteFavoriteProducts = snapshots.map(\.product)
+        hasHydratedRemoteFavoriteKeys = true
+
+        if selectedFilter == .favorites {
+            refreshVisibleProducts()
+        }
+    }
+
+    private func hydrateRemoteFavoriteKeysIfNeeded() {
+        guard !hasHydratedRemoteFavoriteKeys else { return }
+        remoteFavoriteKeys = Set(favoriteUSDASnapshots().map(\.key))
+        hasHydratedRemoteFavoriteKeys = true
+    }
+
+    private func favoriteUSDASnapshots() -> [FavoriteUSDASnapshot] {
+        guard let data = UserDefaults.standard.data(forKey: Self.favoriteUSDASnapshotsKey),
+              let snapshots = try? JSONDecoder().decode([FavoriteUSDASnapshot].self, from: data) else {
+            return []
+        }
+        return snapshots
+    }
+
+    private func persistUSDASnapshots(_ snapshots: [FavoriteUSDASnapshot]) {
+        guard let data = try? JSONEncoder().encode(snapshots) else { return }
+        UserDefaults.standard.set(data, forKey: Self.favoriteUSDASnapshotsKey)
+    }
+
+    private func favoriteKey(for product: Product) -> String? {
+        guard product.source == .usda else { return nil }
+
+        let normalizedName = product.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let normalizedEnglishName = (product.nameEN ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+
+        guard !normalizedName.isEmpty || !normalizedEnglishName.isEmpty else { return nil }
+
+        return [
+            product.source.rawValue,
+            normalizedName,
+            normalizedEnglishName,
+            String(product.calories),
+            String(format: "%.2f", product.protein),
+            String(format: "%.2f", product.fat),
+            String(format: "%.2f", product.carbs)
+        ].joined(separator: "|")
     }
 
     private func scheduleHybridSearch(immediate: Bool = false) {
@@ -1071,5 +1221,179 @@ struct CustomProductCreationView: View {
             onProductCreated(item)
             dismiss()
         } catch {}
+    }
+}
+
+struct CustomProductEditorScreen: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+
+    let product: CustomProduct
+    let allowsDelete: Bool
+    var onSaved: (() -> Void)? = nil
+    var onDeleted: (() -> Void)? = nil
+
+    @State private var name: String
+    @State private var calories: String
+    @State private var protein: String
+    @State private var fat: String
+    @State private var carbs: String
+
+    private enum Field: Hashable { case name, calories, protein, fat, carbs }
+    @FocusState private var focusedField: Field?
+
+    init(
+        product: CustomProduct,
+        allowsDelete: Bool = true,
+        onSaved: (() -> Void)? = nil,
+        onDeleted: (() -> Void)? = nil
+    ) {
+        self.product = product
+        self.allowsDelete = allowsDelete
+        self.onSaved = onSaved
+        self.onDeleted = onDeleted
+        _name = State(initialValue: product.name)
+        _calories = State(initialValue: String(product.calories))
+        _protein = State(initialValue: Self.formatDecimal(product.protein))
+        _fat = State(initialValue: Self.formatDecimal(product.fat))
+        _carbs = State(initialValue: Self.formatDecimal(product.carbs))
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(AppLocalizer.string("custom_product.edit"))
+                        .font(.largeTitle.bold())
+                    Text(AppLocalizer.string("custom_product.subtitle"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    field(AppLocalizer.string("custom_product.name"), text: $name, field: .name, kb: .default, submit: .next)
+                        .onSubmit { focusedField = .calories }
+
+                    field(AppLocalizer.string("custom_product.calories"), text: $calories, field: .calories, kb: .decimalPad, submit: .next)
+                        .onSubmit { focusedField = .protein }
+
+                    HStack(spacing: 12) {
+                        field(AppLocalizer.string("custom_product.protein"), text: $protein, field: .protein, kb: .decimalPad, submit: .next)
+                            .onSubmit { focusedField = .fat }
+                        field(AppLocalizer.string("custom_product.fat"), text: $fat, field: .fat, kb: .decimalPad, submit: .next)
+                            .onSubmit { focusedField = .carbs }
+                        field(AppLocalizer.string("custom_product.carbs"), text: $carbs, field: .carbs, kb: .decimalPad, submit: .done)
+                            .onSubmit { focusedField = nil }
+                    }
+
+                    VStack(spacing: 10) {
+                        Button(AppLocalizer.string("common.save"), action: save)
+                            .buttonStyle(.borderedProminent)
+                            .tint(.blue)
+                            .disabled(!isValid)
+                            .frame(maxWidth: .infinity)
+
+                        if allowsDelete {
+                            Button(AppLocalizer.string("common.delete"), role: .destructive, action: deleteProduct)
+                                .buttonStyle(.borderedProminent)
+                                .tint(.red)
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                }
+                .padding(20)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Button(AppLocalizer.string("common.back")) { prev() }.disabled(focusedField == .name)
+                    Button(AppLocalizer.string("common.next")) { next() }.disabled(focusedField == .carbs)
+                    Spacer()
+                    Button(AppLocalizer.string("common.done")) { focusedField = nil }
+                }
+            }
+            .onAppear { focusedField = .name }
+        }
+        .scrollDismissesKeyboard(.interactively)
+    }
+
+    private func field(_ title: String, text: Binding<String>, field: Field, kb: UIKeyboardType, submit: SubmitLabel) -> some View {
+        TextField(title, text: text)
+            .keyboardType(kb)
+            .textInputAutocapitalization(.never)
+            .focused($focusedField, equals: field)
+            .submitLabel(submit)
+            .padding(12)
+            .background(productSelectionCardBackground, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(focusedField == field ? Color.blue : productSelectionCardBorder,
+                            lineWidth: focusedField == field ? 2 : 1)
+            )
+            .animation(.easeInOut(duration: 0.15), value: focusedField == field)
+    }
+
+    private var isValid: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        Double(calories.replacingOccurrences(of: ",", with: ".")) != nil &&
+        Double(protein.replacingOccurrences(of: ",", with: ".")) != nil &&
+        Double(fat.replacingOccurrences(of: ",", with: ".")) != nil &&
+        Double(carbs.replacingOccurrences(of: ",", with: ".")) != nil
+    }
+
+    private func next() {
+        switch focusedField {
+        case .name:     focusedField = .calories
+        case .calories: focusedField = .protein
+        case .protein:  focusedField = .fat
+        case .fat:      focusedField = .carbs
+        default:        focusedField = nil
+        }
+    }
+
+    private func prev() {
+        switch focusedField {
+        case .carbs:    focusedField = .fat
+        case .fat:      focusedField = .protein
+        case .protein:  focusedField = .calories
+        case .calories: focusedField = .name
+        default:        break
+        }
+    }
+
+    private func save() {
+        guard
+            let k = Double(calories.replacingOccurrences(of: ",", with: ".")),
+            let p = Double(protein.replacingOccurrences(of: ",", with: ".")),
+            let f = Double(fat.replacingOccurrences(of: ",", with: ".")),
+            let c = Double(carbs.replacingOccurrences(of: ",", with: "."))
+        else { return }
+
+        product.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        product.calories = Int(k.rounded())
+        product.protein = p
+        product.fat = f
+        product.carbs = c
+
+        do {
+            try modelContext.save()
+            onSaved?()
+            dismiss()
+        } catch {}
+    }
+
+    private func deleteProduct() {
+        modelContext.delete(product)
+        do {
+            try modelContext.save()
+            onDeleted?()
+            dismiss()
+        } catch {}
+    }
+
+    private static func formatDecimal(_ value: Double) -> String {
+        let rounded = (value * 10).rounded() / 10
+        if rounded.rounded(.towardZero) == rounded {
+            return String(Int(rounded))
+        }
+        return String(format: "%.1f", rounded).replacingOccurrences(of: ".", with: ",")
     }
 }

@@ -636,6 +636,7 @@
 "onboarding.height.value" = "%d cm";
 
 "custom_product.new" = "New Product";
+"custom_product.edit" = "Edit Product";
 "custom_product.subtitle" = "Enter nutrition values per 100 g of product";
 "custom_product.name" = "Name";
 "custom_product.calories" = "Energy, kcal";

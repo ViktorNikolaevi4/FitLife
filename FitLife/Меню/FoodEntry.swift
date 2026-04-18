@@ -12,6 +12,7 @@ class FoodEntry {
     var isFavorite: Bool = false
     var aiMealGroupID: String?
     var aiMealName: String?
+    var customProductID: UUID?
 
     var product: Product?
 
@@ -24,7 +25,8 @@ class FoodEntry {
         ownerId: String = "",
         isFavorite: Bool = false,
         aiMealGroupID: String? = nil,
-        aiMealName: String? = nil
+        aiMealName: String? = nil,
+        customProductID: UUID? = nil
     ) {
         self.ownerId = ownerId
         self.date = date
@@ -35,6 +37,7 @@ class FoodEntry {
         self.isFavorite = isFavorite
         self.aiMealGroupID = aiMealGroupID
         self.aiMealName = aiMealName
+        self.customProductID = customProductID
     }
 }
 extension FoodEntry {
