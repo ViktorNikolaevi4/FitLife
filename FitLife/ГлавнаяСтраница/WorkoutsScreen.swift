@@ -68,6 +68,7 @@ struct WorkoutsScreen: View {
                         systemImage: "figure.strengthtraining.traditional",
                         tint: .orange,
                         isEmptyState: lastWorkout == nil,
+                        isPrimary: false,
                         theme: theme,
                         action: openLastWorkout
                     )
@@ -80,6 +81,7 @@ struct WorkoutsScreen: View {
                         systemImage: "dumbbell.fill",
                         tint: .blue,
                         isEmptyState: false,
+                        isPrimary: true,
                         theme: theme,
                         action: openActiveWorkout
                     )
@@ -92,6 +94,7 @@ struct WorkoutsScreen: View {
                             systemImage: "list.bullet.clipboard.fill",
                             tint: .pink,
                             isEmptyState: false,
+                            isPrimary: false,
                             theme: theme,
                             action: {
                                 onlineAssignments = OnlineAssignmentsSelection(clientId: clientId)
@@ -104,6 +107,7 @@ struct WorkoutsScreen: View {
                             systemImage: "person.2.wave.2.fill",
                             tint: .green,
                             isEmptyState: false,
+                            isPrimary: false,
                             theme: theme,
                             action: {
                                 coachingEntrySelection = ClientCoachingSelection(clientId: clientId)
@@ -260,6 +264,7 @@ private struct WorkoutsFeatureCard: View {
     let systemImage: String
     let tint: Color
     let isEmptyState: Bool
+    let isPrimary: Bool
     let theme: AppTheme
     let action: () -> Void
 
@@ -274,25 +279,26 @@ private struct WorkoutsFeatureCard: View {
         HStack(spacing: 16) {
             ZStack {
                 RoundedRectangle(cornerRadius: 18)
-                    .fill(tint.opacity(0.14))
+                    .fill(iconBackgroundColor)
 
                 Image(systemName: systemImage)
                     .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(tint)
+                    .foregroundStyle(iconForegroundColor)
             }
             .frame(width: 84, height: 84)
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(title)
                     .font(.title3.weight(.semibold))
+                    .foregroundStyle(titleColor)
                 if isEmptyState {
                     Text(AppLocalizer.string("workouts.last.empty.title"))
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(subtitleColor)
                 } else {
                     Text(subtitle)
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(subtitleColor)
                         .multilineTextAlignment(.leading)
                 }
             }
@@ -301,13 +307,58 @@ private struct WorkoutsFeatureCard: View {
 
             Image(systemName: isEmptyState ? "info.circle" : "chevron.right")
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(chevronColor)
         }
         .padding(18)
-        .background(RoundedRectangle(cornerRadius: 20).fill(theme.card))
-        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(theme.border))
-        .shadow(color: theme.cardShadow, radius: theme.cardShadowRadius, x: 0, y: theme.cardShadowY)
+        .background(RoundedRectangle(cornerRadius: 20).fill(backgroundColor))
+        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(borderColor))
+        .shadow(color: shadowColor, radius: shadowRadius, x: 0, y: shadowY)
         .padding(.horizontal)
+    }
+
+    private var backgroundColor: Color {
+        if isPrimary { return tint }
+        if isEmptyState { return theme.card.opacity(0.72) }
+        return theme.card
+    }
+
+    private var borderColor: Color {
+        if isPrimary { return tint.opacity(0.18) }
+        if isEmptyState { return theme.border.opacity(0.55) }
+        return theme.border
+    }
+
+    private var iconBackgroundColor: Color {
+        if isPrimary { return Color.white.opacity(0.15) }
+        return tint.opacity(isEmptyState ? 0.10 : 0.14)
+    }
+
+    private var iconForegroundColor: Color {
+        isPrimary ? .white : tint
+    }
+
+    private var titleColor: Color {
+        isPrimary ? .white : .primary
+    }
+
+    private var subtitleColor: Color {
+        isPrimary ? .white.opacity(0.86) : .secondary
+    }
+
+    private var chevronColor: Color {
+        isPrimary ? .white.opacity(0.9) : .secondary
+    }
+
+    private var shadowColor: Color {
+        isPrimary ? tint.opacity(0.26) : theme.cardShadow
+    }
+
+    private var shadowRadius: CGFloat {
+        isPrimary ? max(theme.cardShadowRadius + 4, 14) : theme.cardShadowRadius
+    }
+
+    private var shadowY: CGFloat {
+        isPrimary ? max(theme.cardShadowY + 2, 6) : theme.cardShadowY
     }
 }
 

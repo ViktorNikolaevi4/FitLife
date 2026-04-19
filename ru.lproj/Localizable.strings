@@ -264,8 +264,8 @@
 "workouts.new" = "Новая тренировка";
 "workouts.new.subtitle" = "Собери новую сессию и начни дневник сегодняшней активности.";
 "workouts.new.resume" = "Продолжить текущую тренировку";
-"workouts.online" = "Онлайн тренировка";
-"workouts.online.subtitle" = "Открой присланные тренером тренировки.";
+"workouts.online" = "Тренировки от тренера";
+"workouts.online.subtitle" = "Открой назначенные тренером тренировки.";
 "workouts.connection" = "Связь с тренером";
 "workouts.connection.subtitle" = "Заполни анкету, отправь заявку и следи за статусом сопровождения.";
 "workouts.weekly.activity" = "Активность за неделю";
