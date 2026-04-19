@@ -89,6 +89,29 @@ struct ProfileScreen: View {
                                 .pickerStyle(.segmented)
 
                                 if u.nutritionGoalMode == .automatic {
+                                    VStack(spacing: 12) {
+                                        GoalMetricRow(
+                                            title: AppLocalizer.string("nutrition.calories"),
+                                            value: "\(u.calories)",
+                                            unit: AppLocalizer.string("unit.kcal")
+                                        )
+                                        GoalMetricRow(
+                                            title: AppLocalizer.string("macro.protein"),
+                                            value: "\(u.proteins)",
+                                            unit: AppLocalizer.string("unit.grams.short")
+                                        )
+                                        GoalMetricRow(
+                                            title: AppLocalizer.string("macro.fat"),
+                                            value: "\(u.fats)",
+                                            unit: AppLocalizer.string("unit.grams.short")
+                                        )
+                                        GoalMetricRow(
+                                            title: AppLocalizer.string("macro.carbs"),
+                                            value: "\(u.carbs)",
+                                            unit: AppLocalizer.string("unit.grams.short")
+                                        )
+                                    }
+
                                     Text(AppLocalizer.string("profile.nutrition_goals.auto_hint"))
                                         .font(.subheadline)
                                         .foregroundStyle(.secondary)
