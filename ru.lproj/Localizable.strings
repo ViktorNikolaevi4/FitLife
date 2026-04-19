@@ -252,6 +252,8 @@
 "workouts.templates" = "Шаблоны тренировочных программ";
 "workouts.last" = "Прошлая тренировка";
 "workouts.last.subtitle" = "Посмотри последнее занятие и вернись к своим результатам.";
+"workouts.last.empty.title" = "Пока нет прошлых тренировок";
+"workouts.last.empty.subtitle" = "Заверши первую тренировку, и она появится здесь.";
 "workouts.last.summary" = "%d упражнений • %d выполнено";
 "workout.last.duration" = "Длительность";
 "workout.last.exercises" = "Упражнения";

@@ -17,6 +17,7 @@ struct WorkoutsScreen: View {
     @State private var onlineAssignments: OnlineAssignmentsSelection?
     @State private var coachingEntrySelection: ClientCoachingSelection?
     @State private var historySelection: WorkoutHistorySelection?
+    @State private var showLastWorkoutEmptyAlert = false
 
     private var theme: AppTheme { AppTheme(colorScheme) }
     private var selectedGender: Gender { Gender(rawValue: activeGenderRaw) ?? .male }
@@ -66,6 +67,7 @@ struct WorkoutsScreen: View {
                         subtitle: lastWorkoutSubtitle,
                         systemImage: "figure.strengthtraining.traditional",
                         tint: .orange,
+                        isEmptyState: lastWorkout == nil,
                         theme: theme,
                         action: openLastWorkout
                     )
@@ -77,6 +79,7 @@ struct WorkoutsScreen: View {
                             : AppLocalizer.string("workouts.new.resume"),
                         systemImage: "dumbbell.fill",
                         tint: .blue,
+                        isEmptyState: false,
                         theme: theme,
                         action: openActiveWorkout
                     )
@@ -88,6 +91,7 @@ struct WorkoutsScreen: View {
                             subtitle: AppLocalizer.string("workouts.online.subtitle"),
                             systemImage: "list.bullet.clipboard.fill",
                             tint: .pink,
+                            isEmptyState: false,
                             theme: theme,
                             action: {
                                 onlineAssignments = OnlineAssignmentsSelection(clientId: clientId)
@@ -99,6 +103,7 @@ struct WorkoutsScreen: View {
                             subtitle: AppLocalizer.string("workouts.connection.subtitle"),
                             systemImage: "person.2.wave.2.fill",
                             tint: .green,
+                            isEmptyState: false,
                             theme: theme,
                             action: {
                                 coachingEntrySelection = ClientCoachingSelection(clientId: clientId)
@@ -143,11 +148,19 @@ struct WorkoutsScreen: View {
             .navigationDestination(item: $historySelection) { selection in
                 WorkoutHistoryScreen(gender: selection.gender)
             }
+            .alert(
+                AppLocalizer.string("workouts.last.empty.title"),
+                isPresented: $showLastWorkoutEmptyAlert
+            ) {
+                Button(AppLocalizer.string("common.close"), role: .cancel) {}
+            } message: {
+                Text(AppLocalizer.string("workouts.last.empty.subtitle"))
+            }
         }
     }
 
     private var lastWorkoutSubtitle: String {
-        guard let lastWorkout else { return AppLocalizer.string("workouts.last.subtitle") }
+        guard let lastWorkout else { return AppLocalizer.string("workouts.last.empty.subtitle") }
         let exercisesCount = lastWorkout.exercises.count
         let completedSets = lastWorkout.exercises.flatMap(\.sets).filter(\.isCompleted).count
         return AppLocalizer.format("workouts.last.summary", exercisesCount, completedSets)
@@ -171,7 +184,10 @@ struct WorkoutsScreen: View {
     }
 
     private func openLastWorkout() {
-        guard let lastWorkout else { return }
+        guard let lastWorkout else {
+            showLastWorkoutEmptyAlert = true
+            return
+        }
         selectedLastWorkout = LastWorkoutSelection(workout: lastWorkout)
     }
 
@@ -243,44 +259,55 @@ private struct WorkoutsFeatureCard: View {
     let subtitle: String
     let systemImage: String
     let tint: Color
+    let isEmptyState: Bool
     let theme: AppTheme
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 16) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(tint.opacity(0.14))
+            cardContent
+        }
+        .buttonStyle(.plain)
+    }
 
-                    Image(systemName: systemImage)
-                        .font(.system(size: 28, weight: .semibold))
-                        .foregroundStyle(tint)
-                }
-                .frame(width: 84, height: 84)
+    private var cardContent: some View {
+        HStack(spacing: 16) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(tint.opacity(0.14))
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(title)
-                        .font(.title3.weight(.semibold))
+                Image(systemName: systemImage)
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundStyle(tint)
+            }
+            .frame(width: 84, height: 84)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .font(.title3.weight(.semibold))
+                if isEmptyState {
+                    Text(AppLocalizer.string("workouts.last.empty.title"))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                } else {
                     Text(subtitle)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.leading)
                 }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
             }
-            .padding(18)
-            .background(RoundedRectangle(cornerRadius: 20).fill(theme.card))
-            .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(theme.border))
-            .shadow(color: theme.cardShadow, radius: theme.cardShadowRadius, x: 0, y: theme.cardShadowY)
-            .padding(.horizontal)
+
+            Spacer()
+
+            Image(systemName: isEmptyState ? "info.circle" : "chevron.right")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
         }
-        .buttonStyle(.plain)
+        .padding(18)
+        .background(RoundedRectangle(cornerRadius: 20).fill(theme.card))
+        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(theme.border))
+        .shadow(color: theme.cardShadow, radius: theme.cardShadowRadius, x: 0, y: theme.cardShadowY)
+        .padding(.horizontal)
     }
 }
 

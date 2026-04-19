@@ -252,6 +252,8 @@
 "workouts.templates" = "Workout Program Templates";
 "workouts.last" = "Last Workout";
 "workouts.last.subtitle" = "Review your latest session and jump back into your results.";
+"workouts.last.empty.title" = "No previous workouts yet";
+"workouts.last.empty.subtitle" = "Finish your first workout and it will appear here.";
 "workouts.last.summary" = "%d exercises • %d completed";
 "workout.last.duration" = "Duration";
 "workout.last.exercises" = "Exercises";
