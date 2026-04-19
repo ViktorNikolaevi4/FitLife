@@ -475,6 +475,7 @@ final class ClientCoachingHomeStore: ObservableObject {
     @Published private(set) var updateRequests: [ProfileUpdateRequest] = []
     @Published private(set) var notes: [CoachingNote] = []
     @Published private(set) var workoutReports: [CoachingWorkoutReport] = []
+    @Published private(set) var nutritionReports: [CoachingNutritionReport] = []
     @Published private(set) var isLoading = false
     @Published private(set) var isSubmitting = false
     @Published var errorMessage: String?
@@ -515,7 +516,19 @@ final class ClientCoachingHomeStore: ObservableObject {
                 .whereField("trainerId", isEqualTo: trainerId)
                 .getDocuments()
 
-            let (checkInDocs, requestDocs, noteDocs, workoutReportDocs) = try await (checkInsSnapshot, requestsSnapshot, notesSnapshot, workoutReportsSnapshot)
+            async let nutritionReportsSnapshot = firestore
+                .collection("coaching_nutrition_reports")
+                .whereField("clientId", isEqualTo: clientId)
+                .whereField("trainerId", isEqualTo: trainerId)
+                .getDocuments()
+
+            let (checkInDocs, requestDocs, noteDocs, workoutReportDocs, nutritionReportDocs) = try await (
+                checkInsSnapshot,
+                requestsSnapshot,
+                notesSnapshot,
+                workoutReportsSnapshot,
+                nutritionReportsSnapshot
+            )
 
             checkIns = checkInDocs.documents.compactMap { ProgressCheckIn(id: $0.documentID, data: $0.data()) }
                 .sorted { $0.createdAt > $1.createdAt }
@@ -527,6 +540,9 @@ final class ClientCoachingHomeStore: ObservableObject {
                 .sorted { $0.createdAt > $1.createdAt }
 
             workoutReports = workoutReportDocs.documents.compactMap { CoachingWorkoutReport(id: $0.documentID, data: $0.data()) }
+                .sorted { $0.createdAt > $1.createdAt }
+
+            nutritionReports = nutritionReportDocs.documents.compactMap { CoachingNutritionReport(id: $0.documentID, data: $0.data()) }
                 .sorted { $0.createdAt > $1.createdAt }
 
             isLoading = false
@@ -645,6 +661,23 @@ final class ClientCoachingHomeStore: ObservableObject {
         }
     }
 
+    func sendNutritionReport(_ report: CoachingNutritionReport) async {
+        isSubmitting = true
+        errorMessage = nil
+
+        do {
+            try await firestore
+                .collection("coaching_nutrition_reports")
+                .document(report.id)
+                .setData(report.firestoreData)
+            isSubmitting = false
+            await load()
+        } catch {
+            errorMessage = error.localizedDescription
+            isSubmitting = false
+        }
+    }
+
     func deleteCheckIn(_ checkIn: ProgressCheckIn) async {
         errorMessage = nil
 
@@ -672,6 +705,20 @@ final class ClientCoachingHomeStore: ObservableObject {
             errorMessage = error.localizedDescription
         }
     }
+
+    func deleteNutritionReport(_ report: CoachingNutritionReport) async {
+        errorMessage = nil
+
+        do {
+            try await firestore
+                .collection("coaching_nutrition_reports")
+                .document(report.id)
+                .delete()
+            await load()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
 }
 
 @MainActor
@@ -682,6 +729,7 @@ final class TrainerClientSupportStore: ObservableObject {
     @Published private(set) var updateRequests: [ProfileUpdateRequest] = []
     @Published private(set) var notes: [CoachingNote] = []
     @Published private(set) var workoutReports: [CoachingWorkoutReport] = []
+    @Published private(set) var nutritionReports: [CoachingNutritionReport] = []
     @Published private(set) var isLoading = false
     @Published private(set) var isSubmitting = false
     @Published var errorMessage: String?
@@ -735,13 +783,20 @@ final class TrainerClientSupportStore: ObservableObject {
                 .whereField("trainerId", isEqualTo: trainerId)
                 .getDocuments()
 
-            let (intakeDoc, activeLinkDoc, checkInDocs, requestDocs, noteDocs, workoutReportDocs) = try await (
+            async let nutritionReportsSnapshot = firestore
+                .collection("coaching_nutrition_reports")
+                .whereField("clientId", isEqualTo: client.id)
+                .whereField("trainerId", isEqualTo: trainerId)
+                .getDocuments()
+
+            let (intakeDoc, activeLinkDoc, checkInDocs, requestDocs, noteDocs, workoutReportDocs, nutritionReportDocs) = try await (
                 intakeSnapshot,
                 activeLinkSnapshot,
                 checkInsSnapshot,
                 requestsSnapshot,
                 notesSnapshot,
-                workoutReportsSnapshot
+                workoutReportsSnapshot,
+                nutritionReportsSnapshot
             )
 
             intake = intakeDoc.data().flatMap { ClientIntakeProfile(id: intakeDoc.documentID, data: $0) }
@@ -757,6 +812,9 @@ final class TrainerClientSupportStore: ObservableObject {
                 .sorted { $0.createdAt > $1.createdAt }
 
             workoutReports = workoutReportDocs.documents.compactMap { CoachingWorkoutReport(id: $0.documentID, data: $0.data()) }
+                .sorted { $0.createdAt > $1.createdAt }
+
+            nutritionReports = nutritionReportDocs.documents.compactMap { CoachingNutritionReport(id: $0.documentID, data: $0.data()) }
                 .sorted { $0.createdAt > $1.createdAt }
 
             isLoading = false
@@ -833,9 +891,12 @@ struct ClientCoachingHomeScreen: View {
     @StateObject private var store: ClientCoachingHomeStore
     @State private var showCheckInSheet = false
     @State private var showWorkoutReportSheet = false
+    @State private var showNutritionReportSheet = false
     @State private var selectedWorkoutReport: CoachingWorkoutReport?
+    @State private var selectedNutritionReport: CoachingNutritionReport?
     @State private var showAllCheckIns = false
     @State private var showAllWorkoutReports = false
+    @State private var showAllNutritionReports = false
     @State private var noteMessage = ""
 
     init(clientId: String, trainerId: String, trainer: AppUserProfile?) {
@@ -877,6 +938,12 @@ struct ClientCoachingHomeScreen: View {
                     showWorkoutReportSheet = true
                 } label: {
                     Label(AppLocalizer.string("coaching.workouts.action.send"), systemImage: "paperplane.fill")
+                }
+
+                Button {
+                    showNutritionReportSheet = true
+                } label: {
+                    Label(AppLocalizer.string("coaching.nutrition.action.send"), systemImage: "fork.knife")
                 }
             }
 
@@ -944,6 +1011,28 @@ struct ClientCoachingHomeScreen: View {
                 }
             }
 
+            Section(
+                header: coachingSectionHeader(
+                    title: AppLocalizer.string("coaching.nutrition.section"),
+                    showsViewAll: store.nutritionReports.count > 2,
+                    action: { showAllNutritionReports = true }
+                )
+            ) {
+                if store.nutritionReports.isEmpty {
+                    Text(AppLocalizer.string("coaching.nutrition.empty.sent"))
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(store.nutritionReports.prefix(2)) { report in
+                        Button {
+                            selectedNutritionReport = report
+                        } label: {
+                            CoachingNutritionReportRow(report: report)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
             Section(AppLocalizer.string("coaching.notes.section")) {
                 TextField(AppLocalizer.string("coaching.notes.placeholder.client"), text: $noteMessage, axis: .vertical)
                     .lineLimit(2...5)
@@ -996,9 +1085,23 @@ struct ClientCoachingHomeScreen: View {
                 )
             }
         }
+        .sheet(isPresented: $showNutritionReportSheet) {
+            NavigationStack {
+                ClientNutritionReportComposerScreen(
+                    clientId: clientId,
+                    trainerId: trainerId,
+                    store: store
+                )
+            }
+        }
         .sheet(item: $selectedWorkoutReport) { report in
             NavigationStack {
                 CoachingWorkoutReportDetailScreen(report: report)
+            }
+        }
+        .sheet(item: $selectedNutritionReport) { report in
+            NavigationStack {
+                CoachingNutritionReportDetailScreen(report: report)
             }
         }
         .sheet(isPresented: $showAllCheckIns) {
@@ -1021,6 +1124,17 @@ struct ClientCoachingHomeScreen: View {
                     canDelete: true,
                     onDelete: { report in
                         await store.deleteWorkoutReport(report)
+                    }
+                )
+            }
+        }
+        .sheet(isPresented: $showAllNutritionReports) {
+            NavigationStack {
+                CoachingNutritionReportHistoryScreen(
+                    reports: store.nutritionReports,
+                    canDelete: true,
+                    onDelete: { report in
+                        await store.deleteNutritionReport(report)
                     }
                 )
             }
@@ -1244,8 +1358,10 @@ struct TrainerClientSupportScreen: View {
     @State private var requestMessage = ""
     @State private var noteMessage = ""
     @State private var selectedWorkoutReport: CoachingWorkoutReport?
+    @State private var selectedNutritionReport: CoachingNutritionReport?
     @State private var showAllCheckIns = false
     @State private var showAllWorkoutReports = false
+    @State private var showAllNutritionReports = false
     @FocusState private var focusedField: TrainerWorkspaceField?
 
     init(trainerId: String, client: AppUserProfile) {
@@ -1424,6 +1540,28 @@ struct TrainerClientSupportScreen: View {
                 }
             }
 
+            Section(
+                header: coachingSectionHeader(
+                    title: AppLocalizer.string("coaching.nutrition.section"),
+                    showsViewAll: store.nutritionReports.count > 2,
+                    action: { showAllNutritionReports = true }
+                )
+            ) {
+                if store.nutritionReports.isEmpty {
+                    Text(AppLocalizer.string("coaching.nutrition.empty.received"))
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(store.nutritionReports.prefix(2)) { report in
+                        Button {
+                            selectedNutritionReport = report
+                        } label: {
+                            CoachingNutritionReportRow(report: report)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
             Section(AppLocalizer.string("coaching.notes.section")) {
                 TextField(AppLocalizer.string("coaching.notes.placeholder.trainer"), text: $noteMessage, axis: .vertical)
                     .lineLimit(2...5)
@@ -1469,6 +1607,11 @@ struct TrainerClientSupportScreen: View {
                 CoachingWorkoutReportDetailScreen(report: report)
             }
         }
+        .sheet(item: $selectedNutritionReport) { report in
+            NavigationStack {
+                CoachingNutritionReportDetailScreen(report: report)
+            }
+        }
         .sheet(isPresented: $showAllCheckIns) {
             NavigationStack {
                 CoachingCheckInHistoryScreen(
@@ -1484,6 +1627,15 @@ struct TrainerClientSupportScreen: View {
             NavigationStack {
                 CoachingWorkoutReportHistoryScreen(
                     reports: store.workoutReports,
+                    canDelete: false,
+                    onDelete: nil
+                )
+            }
+        }
+        .sheet(isPresented: $showAllNutritionReports) {
+            NavigationStack {
+                CoachingNutritionReportHistoryScreen(
+                    reports: store.nutritionReports,
                     canDelete: false,
                     onDelete: nil
                 )
