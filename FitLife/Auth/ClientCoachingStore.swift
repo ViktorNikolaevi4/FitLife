@@ -68,7 +68,7 @@ final class ClientCoachingStore: ObservableObject {
 
             isLoading = false
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresenter.message(for: error)
             isLoading = false
         }
     }
@@ -88,7 +88,7 @@ final class ClientCoachingStore: ObservableObject {
             self.intake = intake
             isSaving = false
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresenter.message(for: error)
             isSaving = false
         }
     }
@@ -122,11 +122,19 @@ final class ClientCoachingStore: ObservableObject {
 
         do {
             try await batch.commit()
+            try? await AppNotificationEventWriter.createForActiveTrainers(
+                type: .coachingRequestSubmitted,
+                senderId: clientId,
+                senderName: profile.displayName,
+                targetType: .coachingRequest,
+                targetId: request.id,
+                firestore: firestore
+            )
             self.intake = intake
             self.request = request
             isSaving = false
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresenter.message(for: error)
             isSaving = false
         }
     }

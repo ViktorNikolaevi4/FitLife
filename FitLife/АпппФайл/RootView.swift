@@ -6,6 +6,7 @@ struct RootView: View {
     @AppStorage(Gender.appStorageKey) private var activeGenderRaw: String = Gender.male.rawValue
 
     @EnvironmentObject private var sessionStore: AppSessionStore
+    @EnvironmentObject private var notificationsStore: AppNotificationsStore
     @Environment(\.modelContext) private var modelContext
     @Query private var users: [UserData]
     @State private var preparedOwnerId: String?
@@ -74,9 +75,11 @@ struct RootView: View {
         }
         .onAppear {
             prepareLocalDataIfNeeded()
+            notificationsStore.setCurrentUser(currentOwnerId)
         }
         .onChange(of: currentOwnerId) { _, _ in
             prepareLocalDataIfNeeded()
+            notificationsStore.setCurrentUser(currentOwnerId)
         }
     }
 

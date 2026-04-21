@@ -33,8 +33,8 @@ struct NotificationSettingsView: View {
             Form {
                 Section {
                     Toggle("Включить уведомления", isOn: $isNotificationEnabled)
-                        .onChange(of: isNotificationEnabled) { on in
-                            if on {
+                        .onChange(of: isNotificationEnabled) { _, isEnabled in
+                            if isEnabled {
                                 requestPermissionAndSchedule()
                             } else {
                                 cancelWaterNotifications()
@@ -87,10 +87,15 @@ struct NotificationSettingsView: View {
                     DispatchQueue.main.async { self.isNotificationEnabled = anyWater }
                 }
             }
-            // авто-перепланирование при изменениях
-            .onChange(of: selectedStartTime) { if isNotificationEnabled { reschedule() } }
-            .onChange(of: selectedEndTime)   { if isNotificationEnabled { reschedule() } }
-            .onChange(of: selectedIntervalSec) { if isNotificationEnabled { reschedule() } }
+            .onChange(of: selectedStartTime) { _, _ in
+                if isNotificationEnabled { reschedule() }
+            }
+            .onChange(of: selectedEndTime) { _, _ in
+                if isNotificationEnabled { reschedule() }
+            }
+            .onChange(of: selectedIntervalSec) { _, _ in
+                if isNotificationEnabled { reschedule() }
+            }
             .alert(AppLocalizer.string("notifications.invalid_range"), isPresented: $showInvalidRangeAlert) { Button(AppLocalizer.string("common.ok"), role: .cancel) {} }
         }
     }

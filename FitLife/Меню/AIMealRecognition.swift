@@ -15,7 +15,7 @@ private enum AIMealRecognitionError: LocalizedError {
     case invalidResponse
     case emptyIngredients
     case cameraUnavailable
-    case apiError(String)
+    case apiError
 
     var errorDescription: String? {
         switch self {
@@ -29,8 +29,8 @@ private enum AIMealRecognitionError: LocalizedError {
             return AppLocalizer.string("ai.meal.error.empty")
         case .cameraUnavailable:
             return AppLocalizer.string("ai.meal.error.camera")
-        case .apiError(let message):
-            return message
+        case .apiError:
+            return AppLocalizer.string("ai.meal.error.request")
         }
     }
 }
@@ -404,8 +404,7 @@ private actor OpenAIMealRecognitionService {
         }
 
         guard (200...299).contains(httpResponse.statusCode) else {
-            let message = Self.apiErrorMessage(from: data) ?? AppLocalizer.string("ai.meal.error.request")
-            throw AIMealRecognitionError.apiError(message)
+            throw Self.apiError(from: data)
         }
 
         guard let text = Self.extractOutputText(from: data),
@@ -446,16 +445,26 @@ private actor OpenAIMealRecognitionService {
         return nil
     }
 
-    private static func apiErrorMessage(from data: Data) -> String? {
+    private static func apiError(from data: Data) -> AIMealRecognitionError {
         guard
             let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let error = jsonObject["error"] as? [String: Any],
-            let message = error["message"] as? String
+            let error = jsonObject["error"] as? [String: Any]
         else {
-            return nil
+            return .apiError
         }
 
-        return message
+        let code = (error["code"] as? String)?.lowercased()
+        let type = (error["type"] as? String)?.lowercased()
+        let message = (error["message"] as? String)?.lowercased() ?? ""
+
+        if code == "invalid_api_key"
+            || message.contains("incorrect api key")
+            || message.contains("invalid api key")
+            || type == "invalid_request_error" && message.contains("api key") {
+            return .missingAPIKey
+        }
+
+        return .apiError
     }
 }
 
@@ -818,7 +827,7 @@ struct AIMealRecognitionFlowView: View {
                 }
             } catch {
                 await MainActor.run {
-                    step = .error(error.localizedDescription)
+                    step = .error(userVisibleMessage(for: error))
                 }
             }
         }
@@ -877,7 +886,7 @@ struct AIMealRecognitionFlowView: View {
             onSaved()
             dismiss()
         } catch {
-            step = .error(error.localizedDescription)
+            step = .error(userVisibleMessage(for: error))
         }
 
         isSaving = false
@@ -938,6 +947,16 @@ struct AIMealRecognitionFlowView: View {
         if draft.isBeverage {
             applySugarOption(draft.sugarOption)
         }
+    }
+
+    private func userVisibleMessage(for error: Error) -> String {
+        if let localizedError = error as? LocalizedError,
+           let description = localizedError.errorDescription,
+           !description.isEmpty {
+            return description
+        }
+
+        return AppErrorPresenter.message(for: error)
     }
 
     private func applySugarOption(_ option: AIBeverageSugarOption) {

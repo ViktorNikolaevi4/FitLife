@@ -36,7 +36,7 @@ final class AppSessionStore: ObservableObject {
         do {
             _ = try await auth.signIn(withEmail: email, password: password)
         } catch {
-            authErrorMessage = error.localizedDescription
+            authErrorMessage = AppErrorPresenter.message(for: error)
             isLoading = false
         }
     }
@@ -52,7 +52,7 @@ final class AppSessionStore: ObservableObject {
             changeRequest.displayName = name.trimmingCharacters(in: .whitespacesAndNewlines)
             try await changeRequest.commitChanges()
         } catch {
-            authErrorMessage = error.localizedDescription
+            authErrorMessage = AppErrorPresenter.message(for: error)
             isLoading = false
         }
     }
@@ -64,7 +64,7 @@ final class AppSessionStore: ObservableObject {
             firebaseUser = nil
             authErrorMessage = nil
         } catch {
-            authErrorMessage = error.localizedDescription
+            authErrorMessage = AppErrorPresenter.message(for: error)
         }
     }
 
@@ -107,7 +107,7 @@ final class AppSessionStore: ObservableObject {
             profile = createdProfile
             isLoading = false
         } catch {
-            authErrorMessage = error.localizedDescription
+            authErrorMessage = AppErrorPresenter.message(for: error)
             isLoading = false
         }
     }

@@ -547,7 +547,7 @@ final class ClientCoachingHomeStore: ObservableObject {
 
             isLoading = false
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresenter.message(for: error)
             isLoading = false
         }
     }
@@ -559,7 +559,8 @@ final class ClientCoachingHomeStore: ObservableObject {
         hips: Double,
         energy: Int,
         adherence: Int,
-        notes: String
+        notes: String,
+        senderName: String = ""
     ) async {
         isSubmitting = true
         errorMessage = nil
@@ -582,15 +583,24 @@ final class ClientCoachingHomeStore: ObservableObject {
                 .collection("progress_checkins")
                 .document(checkIn.id)
                 .setData(checkIn.firestoreData)
+            try? await AppNotificationEventWriter.create(
+                type: .checkInSubmitted,
+                recipientId: trainerId,
+                senderId: clientId,
+                senderName: senderName,
+                targetType: .checkIn,
+                targetId: checkIn.id,
+                firestore: firestore
+            )
             isSubmitting = false
             await load()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresenter.message(for: error)
             isSubmitting = false
         }
     }
 
-    func sendNote(_ message: String) async {
+    func sendNote(_ message: String, senderName: String = "") async {
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else { return }
 
@@ -611,10 +621,19 @@ final class ClientCoachingHomeStore: ObservableObject {
                 .collection("coaching_notes")
                 .document(note.id)
                 .setData(note.firestoreData)
+            try? await AppNotificationEventWriter.create(
+                type: .clientNoteReceived,
+                recipientId: trainerId,
+                senderId: clientId,
+                senderName: senderName,
+                targetType: .coachingConnection,
+                targetId: note.id,
+                firestore: firestore
+            )
             isSubmitting = false
             await load()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresenter.message(for: error)
             isSubmitting = false
         }
     }
@@ -632,11 +651,11 @@ final class ClientCoachingHomeStore: ObservableObject {
                 ], merge: true)
             await load()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresenter.message(for: error)
         }
     }
 
-    func sendWorkoutReport(workouts: [WorkoutSession]) async {
+    func sendWorkoutReport(workouts: [WorkoutSession], senderName: String = "") async {
         guard workouts.isEmpty == false else { return }
 
         isSubmitting = true
@@ -653,15 +672,24 @@ final class ClientCoachingHomeStore: ObservableObject {
                 .collection("coaching_workout_reports")
                 .document(report.id)
                 .setData(report.firestoreData)
+            try? await AppNotificationEventWriter.create(
+                type: .workoutReportSent,
+                recipientId: trainerId,
+                senderId: clientId,
+                senderName: senderName,
+                targetType: .workoutReport,
+                targetId: report.id,
+                firestore: firestore
+            )
             isSubmitting = false
             await load()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresenter.message(for: error)
             isSubmitting = false
         }
     }
 
-    func sendNutritionReport(_ report: CoachingNutritionReport) async {
+    func sendNutritionReport(_ report: CoachingNutritionReport, senderName: String = "") async {
         isSubmitting = true
         errorMessage = nil
 
@@ -670,10 +698,19 @@ final class ClientCoachingHomeStore: ObservableObject {
                 .collection("coaching_nutrition_reports")
                 .document(report.id)
                 .setData(report.firestoreData)
+            try? await AppNotificationEventWriter.create(
+                type: .nutritionReportSent,
+                recipientId: trainerId,
+                senderId: clientId,
+                senderName: senderName,
+                targetType: .nutritionReport,
+                targetId: report.id,
+                firestore: firestore
+            )
             isSubmitting = false
             await load()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresenter.message(for: error)
             isSubmitting = false
         }
     }
@@ -688,7 +725,7 @@ final class ClientCoachingHomeStore: ObservableObject {
                 .delete()
             await load()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresenter.message(for: error)
         }
     }
 
@@ -702,7 +739,7 @@ final class ClientCoachingHomeStore: ObservableObject {
                 .delete()
             await load()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresenter.message(for: error)
         }
     }
 
@@ -716,7 +753,7 @@ final class ClientCoachingHomeStore: ObservableObject {
                 .delete()
             await load()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresenter.message(for: error)
         }
     }
 }
@@ -819,12 +856,12 @@ final class TrainerClientSupportStore: ObservableObject {
 
             isLoading = false
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresenter.message(for: error)
             isLoading = false
         }
     }
 
-    func sendNote(_ message: String) async {
+    func sendNote(_ message: String, senderName: String = "") async {
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else { return }
 
@@ -845,15 +882,24 @@ final class TrainerClientSupportStore: ObservableObject {
                 .collection("coaching_notes")
                 .document(note.id)
                 .setData(note.firestoreData)
+            try? await AppNotificationEventWriter.create(
+                type: .coachNoteReceived,
+                recipientId: client.id,
+                senderId: trainerId,
+                senderName: senderName,
+                targetType: .coachingConnection,
+                targetId: note.id,
+                firestore: firestore
+            )
             isSubmitting = false
             await load()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresenter.message(for: error)
             isSubmitting = false
         }
     }
 
-    func createUpdateRequest(type: ProfileUpdateRequestType, message: String) async {
+    func createUpdateRequest(type: ProfileUpdateRequestType, message: String, senderName: String = "") async {
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else { return }
 
@@ -873,10 +919,19 @@ final class TrainerClientSupportStore: ObservableObject {
                 .collection("profile_update_requests")
                 .document(request.id)
                 .setData(request.firestoreData)
+            try? await AppNotificationEventWriter.create(
+                type: .profileUpdateRequested,
+                recipientId: client.id,
+                senderId: trainerId,
+                senderName: senderName,
+                targetType: .profileUpdateRequest,
+                targetId: request.id,
+                firestore: firestore
+            )
             isSubmitting = false
             await load()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AppErrorPresenter.message(for: error)
             isSubmitting = false
         }
     }
@@ -887,6 +942,7 @@ struct ClientCoachingHomeScreen: View {
     let trainerId: String
     let trainer: AppUserProfile?
 
+    @EnvironmentObject private var sessionStore: AppSessionStore
     @Query private var workouts: [WorkoutSession]
     @StateObject private var store: ClientCoachingHomeStore
     @State private var showCheckInSheet = false
@@ -1039,7 +1095,10 @@ struct ClientCoachingHomeScreen: View {
 
                 Button {
                     Task {
-                        await store.sendNote(noteMessage)
+                        await store.sendNote(
+                            noteMessage,
+                            senderName: sessionStore.profile?.displayName ?? ""
+                        )
                         if store.errorMessage == nil {
                             noteMessage = ""
                         }
@@ -1151,6 +1210,7 @@ struct ClientCoachingHomeScreen: View {
 private struct ClientCheckInFormScreen: View {
     @ObservedObject var store: ClientCoachingHomeStore
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var sessionStore: AppSessionStore
 
     @State private var weight: Double = 70
     @State private var waist: Double = 80
@@ -1186,7 +1246,8 @@ private struct ClientCheckInFormScreen: View {
                             hips: hips,
                             energy: energy,
                             adherence: adherence,
-                            notes: notes
+                            notes: notes,
+                            senderName: sessionStore.profile?.displayName ?? ""
                         )
                         if store.errorMessage == nil {
                             dismiss()
@@ -1239,6 +1300,7 @@ private struct ClientWorkoutReportComposerScreen: View {
 
     @ObservedObject var store: ClientCoachingHomeStore
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var sessionStore: AppSessionStore
     @State private var selectedWorkoutIds: Set<String> = []
 
     var body: some View {
@@ -1294,7 +1356,10 @@ private struct ClientWorkoutReportComposerScreen: View {
             Section {
                 Button {
                     Task {
-                        await store.sendWorkoutReport(workouts: selectedWorkouts)
+                        await store.sendWorkoutReport(
+                            workouts: selectedWorkouts,
+                            senderName: sessionStore.profile?.displayName ?? ""
+                        )
                         if store.errorMessage == nil {
                             dismiss()
                         }
@@ -1353,6 +1418,7 @@ struct TrainerClientSupportScreen: View {
     let trainerId: String
     let client: AppUserProfile
 
+    @EnvironmentObject private var sessionStore: AppSessionStore
     @StateObject private var store: TrainerClientSupportStore
     @State private var requestType: ProfileUpdateRequestType = .generalUpdate
     @State private var requestMessage = ""
@@ -1471,7 +1537,11 @@ struct TrainerClientSupportScreen: View {
 
                 Button {
                     Task {
-                        await store.createUpdateRequest(type: requestType, message: requestMessage)
+                        await store.createUpdateRequest(
+                            type: requestType,
+                            message: requestMessage,
+                            senderName: sessionStore.profile?.displayName ?? ""
+                        )
                         if store.errorMessage == nil {
                             requestMessage = ""
                             requestType = .generalUpdate
@@ -1569,7 +1639,10 @@ struct TrainerClientSupportScreen: View {
 
                 Button {
                     Task {
-                        await store.sendNote(noteMessage)
+                        await store.sendNote(
+                            noteMessage,
+                            senderName: sessionStore.profile?.displayName ?? ""
+                        )
                         if store.errorMessage == nil {
                             noteMessage = ""
                         }
@@ -1865,7 +1938,7 @@ private struct CoachingWorkoutReportHistoryScreen: View {
     }
 }
 
-private struct CoachingWorkoutReportDetailScreen: View {
+struct CoachingWorkoutReportDetailScreen: View {
     let report: CoachingWorkoutReport
 
     @Environment(\.dismiss) private var dismiss

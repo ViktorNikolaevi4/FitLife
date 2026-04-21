@@ -106,6 +106,14 @@ final class WorkoutTemplateAssignmentStore: ObservableObject {
             }
 
             try await batch.commit()
+            try? await AppNotificationEventWriter.create(
+                type: .workoutAssigned,
+                recipientId: client.id,
+                senderId: template.trainerId,
+                targetType: .workoutAssignment,
+                targetId: assignment.id,
+                firestore: firestore
+            )
             assignedClientIds.insert(client.id)
             return true
         } catch {

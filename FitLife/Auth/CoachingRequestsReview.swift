@@ -111,6 +111,15 @@ final class CoachingRequestsReviewStore: ObservableObject {
 
         do {
             try await batch.commit()
+            try? await AppNotificationEventWriter.create(
+                type: .coachingRequestApproved,
+                recipientId: request.clientId,
+                senderId: currentUser.id,
+                senderName: currentUser.displayName,
+                targetType: .coachingConnection,
+                targetId: request.id,
+                firestore: firestore
+            )
             await load()
             return true
         } catch {
@@ -146,6 +155,17 @@ final class CoachingRequestsReviewStore: ObservableObject {
                 .collection("coaching_requests")
                 .document(request.id)
                 .setData(updatedRequest.firestoreData, merge: true)
+            if status == .rejected {
+                try? await AppNotificationEventWriter.create(
+                    type: .coachingRequestRejected,
+                    recipientId: request.clientId,
+                    senderId: currentUser.id,
+                    senderName: currentUser.displayName,
+                    targetType: .coachingRequest,
+                    targetId: request.id,
+                    firestore: firestore
+                )
+            }
             await load()
             return true
         } catch {

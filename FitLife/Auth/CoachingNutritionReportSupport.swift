@@ -315,6 +315,7 @@ struct ClientNutritionReportComposerScreen: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var sessionStore: AppSessionStore
     @ObservedObject var store: ClientCoachingHomeStore
     @Query private var users: [UserData]
     @AppStorage(Gender.appStorageKey) private var activeGenderRaw: String = Gender.male.rawValue
@@ -386,7 +387,8 @@ struct ClientNutritionReportComposerScreen: View {
                     Button {
                         Task {
                             await store.sendNutritionReport(
-                                previewReport.with(comment: comment)
+                                previewReport.with(comment: comment),
+                                senderName: sessionStore.profile?.displayName ?? ""
                             )
                             if store.errorMessage == nil {
                                 dismiss()

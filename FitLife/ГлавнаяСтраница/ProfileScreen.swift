@@ -8,6 +8,7 @@ struct ProfileScreen: View {
     @Query private var users: [UserData]
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var sessionStore: AppSessionStore
+    @EnvironmentObject private var notificationsStore: AppNotificationsStore
 
     @AppStorage(Gender.appStorageKey) private var activeGenderRaw: String = Gender.male.rawValue
     @State private var editingGender: Gender
@@ -29,7 +30,7 @@ struct ProfileScreen: View {
 
         NavigationStack {
             ScrollView {
-                VStack(spacing: 16) {
+                LazyVStack(spacing: 16) {
                     ProfileHeroCard()
 
                     SectionCard(title: AppLocalizer.string("profile.gender")) {
@@ -177,20 +178,51 @@ struct ProfileScreen: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarBackground(bg, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        AppNotificationsScreen()
+                    } label: {
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "bell")
+                                .font(.system(size: 18, weight: .semibold))
+
+                            if notificationsStore.unreadCount > 0 {
+                                Text("\(min(notificationsStore.unreadCount, 99))")
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(Capsule().fill(Color.red))
+                                    .offset(x: 10, y: -8)
+                            }
+                        }
+                    }
+                    .accessibilityLabel(AppLocalizer.string("notifications.inbox.title"))
+                }
+            }
         }
         .onChange(of: editingGender) { _, new in
-            activeGenderRaw = new.rawValue
+            if activeGenderRaw != new.rawValue {
+                activeGenderRaw = new.rawValue
+            }
             ensureUserIfNeeded(for: new)
             if let currentOwnerId,
                let u = users.first(where: { $0.gender == new && $0.ownerId == currentOwnerId }) {
-                u.gender = new
-                try? modelContext.save()
+                if u.gender != new {
+                    u.gender = new
+                    try? modelContext.save()
+                }
                 recalc(u)
             }
         }
         .onAppear {
-            activeGenderRaw = editingGender.rawValue
-            ensureUserIfNeeded(for: editingGender)
+            if activeGenderRaw != editingGender.rawValue {
+                activeGenderRaw = editingGender.rawValue
+            }
+            if user == nil {
+                ensureUserIfNeeded(for: editingGender)
+            }
         }
     }
 

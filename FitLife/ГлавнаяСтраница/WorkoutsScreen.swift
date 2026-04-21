@@ -45,21 +45,12 @@ struct WorkoutsScreen: View {
                         .font(.largeTitle.bold())
                         .padding(.horizontal)
 
-                    HStack(spacing: 12) {
-                        WorkoutsShortcutCard(
-                            title: AppLocalizer.string("workouts.history"),
-                            systemImage: "clock.arrow.circlepath",
-                            theme: theme,
-                            action: openHistory
-                        )
-
-                        WorkoutsShortcutCard(
-                            title: AppLocalizer.string("workouts.templates"),
-                            systemImage: "square.grid.2x2.fill",
-                            theme: theme,
-                            action: {}
-                        )
-                    }
+                    WorkoutsShortcutCard(
+                        title: AppLocalizer.string("workouts.history"),
+                        systemImage: "clock.arrow.circlepath",
+                        theme: theme,
+                        action: openHistory
+                    )
                     .padding(.horizontal)
 
                     WorkoutsFeatureCard(
@@ -115,22 +106,6 @@ struct WorkoutsScreen: View {
                         )
                     }
 
-                    Button(action: {}) {
-                        HStack {
-                            Text(AppLocalizer.string("workouts.weekly.activity"))
-                                .font(.headline.weight(.semibold))
-                            Spacer()
-                            Image(systemName: "arrow.right")
-                                .font(.subheadline.weight(.semibold))
-                        }
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 18)
-                        .background(RoundedRectangle(cornerRadius: 18).fill(Color.primary))
-                        .foregroundStyle(Color(.systemBackground))
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal)
-                    .padding(.top, 6)
                 }
                 .padding(.vertical, 16)
             }

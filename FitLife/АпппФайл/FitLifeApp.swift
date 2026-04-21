@@ -8,6 +8,7 @@ struct FitLifeApp: App {
     @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
     @StateObject private var sessionStore: AppSessionStore
     @StateObject private var productCatalogStore: ProductCatalogStore
+    @StateObject private var notificationsStore: AppNotificationsStore
 
     private let modelContainer: ModelContainer = {
         let schema = Schema([
@@ -31,27 +32,46 @@ struct FitLifeApp: App {
 
         let hasICloudAccount = FileManager.default.ubiquityIdentityToken != nil
 
-        do {
-            let cloudKitDatabase: ModelConfiguration.CloudKitDatabase =
-                (!inMemory && hasICloudAccount) ? .automatic : .none
-            let ck = ModelConfiguration(
-                schema: schema,
-                isStoredInMemoryOnly: inMemory,
-                allowsSave: true,
-                groupContainer: .none,
-                cloudKitDatabase: cloudKitDatabase
-            )
-            return try ModelContainer(for: schema, configurations: ck)
-        } catch {
-            let local = ModelConfiguration(
-                schema: schema,
-                isStoredInMemoryOnly: inMemory,
-                allowsSave: true,
-                groupContainer: .none,
-                cloudKitDatabase: .none
-            )
-            return try! ModelContainer(for: schema, configurations: local)
+        let cloudKitDatabase: ModelConfiguration.CloudKitDatabase =
+            (!inMemory && hasICloudAccount) ? .automatic : .none
+
+        let primaryConfiguration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: inMemory,
+            allowsSave: true,
+            groupContainer: .none,
+            cloudKitDatabase: cloudKitDatabase
+        )
+
+        if let container = try? ModelContainer(for: schema, configurations: primaryConfiguration) {
+            return container
         }
+
+        let localConfiguration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: inMemory,
+            allowsSave: true,
+            groupContainer: .none,
+            cloudKitDatabase: .none
+        )
+
+        if let container = try? ModelContainer(for: schema, configurations: localConfiguration) {
+            return container
+        }
+
+        let inMemoryFallback = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: true,
+            allowsSave: true,
+            groupContainer: .none,
+            cloudKitDatabase: .none
+        )
+
+        if let container = try? ModelContainer(for: schema, configurations: inMemoryFallback) {
+            return container
+        }
+
+        fatalError("Failed to initialize SwiftData ModelContainer for FitLifeApp.")
     }()
 
     init() {
@@ -61,6 +81,7 @@ struct FitLifeApp: App {
 
         _sessionStore = StateObject(wrappedValue: AppSessionStore())
         _productCatalogStore = StateObject(wrappedValue: ProductCatalogStore())
+        _notificationsStore = StateObject(wrappedValue: AppNotificationsStore())
     }
 
     var body: some Scene {
@@ -70,6 +91,7 @@ struct FitLifeApp: App {
                 .environment(\.locale, AppLanguage.from(rawValue: appLanguageRaw).locale)
                 .environmentObject(sessionStore)
                 .environmentObject(productCatalogStore)
+                .environmentObject(notificationsStore)
         }
             .modelContainer(modelContainer)
     }
