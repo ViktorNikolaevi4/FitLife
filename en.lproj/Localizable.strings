@@ -719,6 +719,8 @@
 "notifications.inbox.empty.title" = "No notifications yet";
 "notifications.inbox.empty.subtitle" = "New client and coach events will appear here.";
 "notifications.inbox.mark_all_read" = "Mark all read";
+"notifications.inbox.move_to_client" = "Open client card";
+"notifications.inbox.open_related" = "Open";
 "notifications.event.coaching_request_submitted.title" = "New coaching request";
 "notifications.event.coaching_request_submitted.body" = "A client submitted a coaching request.";
 "notifications.event.coaching_request_submitted.body.sender" = "%@ submitted a coaching request.";

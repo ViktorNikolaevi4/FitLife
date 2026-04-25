@@ -719,6 +719,8 @@
 "notifications.inbox.empty.title" = "Пока нет уведомлений";
 "notifications.inbox.empty.subtitle" = "Здесь будут появляться новые события от клиента и тренера.";
 "notifications.inbox.mark_all_read" = "Прочитать все";
+"notifications.inbox.move_to_client" = "В карточку клиента";
+"notifications.inbox.open_related" = "Открыть";
 "notifications.event.coaching_request_submitted.title" = "Новый запрос на сопровождение";
 "notifications.event.coaching_request_submitted.body" = "Клиент отправил запрос на сопровождение.";
 "notifications.event.coaching_request_submitted.body.sender" = "%@ отправил запрос на сопровождение.";

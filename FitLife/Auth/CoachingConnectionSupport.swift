@@ -655,6 +655,20 @@ final class ClientCoachingHomeStore: ObservableObject {
         }
     }
 
+    func deleteNote(_ note: CoachingNote) async {
+        errorMessage = nil
+
+        do {
+            try await firestore
+                .collection("coaching_notes")
+                .document(note.id)
+                .delete()
+            await load()
+        } catch {
+            errorMessage = AppErrorPresenter.message(for: error)
+        }
+    }
+
     func sendWorkoutReport(workouts: [WorkoutSession], senderName: String = "") async {
         guard workouts.isEmpty == false else { return }
 
@@ -935,6 +949,20 @@ final class TrainerClientSupportStore: ObservableObject {
             isSubmitting = false
         }
     }
+
+    func deleteNote(_ note: CoachingNote) async {
+        errorMessage = nil
+
+        do {
+            try await firestore
+                .collection("coaching_notes")
+                .document(note.id)
+                .delete()
+            await load()
+        } catch {
+            errorMessage = AppErrorPresenter.message(for: error)
+        }
+    }
 }
 
 struct ClientCoachingHomeScreen: View {
@@ -953,6 +981,7 @@ struct ClientCoachingHomeScreen: View {
     @State private var showAllCheckIns = false
     @State private var showAllWorkoutReports = false
     @State private var showAllNutritionReports = false
+    @State private var showAllNotes = false
     @State private var noteMessage = ""
 
     init(clientId: String, trainerId: String, trainer: AppUserProfile?) {
@@ -1089,7 +1118,13 @@ struct ClientCoachingHomeScreen: View {
                 }
             }
 
-            Section(AppLocalizer.string("coaching.notes.section")) {
+            Section(
+                header: coachingSectionHeader(
+                    title: AppLocalizer.string("coaching.notes.section"),
+                    showsViewAll: store.notes.count > 1,
+                    action: { showAllNotes = true }
+                )
+            ) {
                 TextField(AppLocalizer.string("coaching.notes.placeholder.client"), text: $noteMessage, axis: .vertical)
                     .lineLimit(2...5)
 
@@ -1118,7 +1153,7 @@ struct ClientCoachingHomeScreen: View {
                     Text(AppLocalizer.string("coaching.notes.empty"))
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(store.notes.prefix(10)) { note in
+                    ForEach(store.notes.prefix(1)) { note in
                         CoachingNoteRow(note: note)
                     }
                 }
@@ -1194,6 +1229,17 @@ struct ClientCoachingHomeScreen: View {
                     canDelete: true,
                     onDelete: { report in
                         await store.deleteNutritionReport(report)
+                    }
+                )
+            }
+        }
+        .sheet(isPresented: $showAllNotes) {
+            NavigationStack {
+                CoachingNotesHistoryScreen(
+                    notes: store.notes,
+                    canDelete: true,
+                    onDelete: { note in
+                        await store.deleteNote(note)
                     }
                 )
             }
@@ -1428,6 +1474,7 @@ struct TrainerClientSupportScreen: View {
     @State private var showAllCheckIns = false
     @State private var showAllWorkoutReports = false
     @State private var showAllNutritionReports = false
+    @State private var showAllNotes = false
     @FocusState private var focusedField: TrainerWorkspaceField?
 
     init(trainerId: String, client: AppUserProfile) {
@@ -1632,7 +1679,13 @@ struct TrainerClientSupportScreen: View {
                 }
             }
 
-            Section(AppLocalizer.string("coaching.notes.section")) {
+            Section(
+                header: coachingSectionHeader(
+                    title: AppLocalizer.string("coaching.notes.section"),
+                    showsViewAll: store.notes.count > 1,
+                    action: { showAllNotes = true }
+                )
+            ) {
                 TextField(AppLocalizer.string("coaching.notes.placeholder.trainer"), text: $noteMessage, axis: .vertical)
                     .lineLimit(2...5)
                     .focused($focusedField, equals: .note)
@@ -1662,7 +1715,7 @@ struct TrainerClientSupportScreen: View {
                     Text(AppLocalizer.string("coaching.notes.empty"))
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(store.notes) { note in
+                    ForEach(store.notes.prefix(1)) { note in
                         CoachingNoteRow(note: note)
                     }
                 }
@@ -1711,6 +1764,17 @@ struct TrainerClientSupportScreen: View {
                     reports: store.nutritionReports,
                     canDelete: false,
                     onDelete: nil
+                )
+            }
+        }
+        .sheet(isPresented: $showAllNotes) {
+            NavigationStack {
+                CoachingNotesHistoryScreen(
+                    notes: store.notes,
+                    canDelete: true,
+                    onDelete: { note in
+                        await store.deleteNote(note)
+                    }
                 )
             }
         }
@@ -1916,6 +1980,63 @@ private struct CoachingWorkoutReportHistoryScreen: View {
         .sheet(item: $selectedWorkoutReport) { report in
             NavigationStack {
                 CoachingWorkoutReportDetailScreen(report: report)
+            }
+        }
+        .alert(AppLocalizer.string("coaching.history.delete.title"), isPresented: Binding(
+            get: { pendingDelete != nil },
+            set: { if !$0 { pendingDelete = nil } }
+        )) {
+            Button(AppLocalizer.string("common.cancel"), role: .cancel) {
+                pendingDelete = nil
+            }
+            Button(AppLocalizer.string("common.delete"), role: .destructive) {
+                guard let pendingDelete, let onDelete else { return }
+                Task {
+                    await onDelete(pendingDelete)
+                }
+                self.pendingDelete = nil
+            }
+        } message: {
+            Text(AppLocalizer.string("coaching.history.delete.message"))
+        }
+    }
+}
+
+private struct CoachingNotesHistoryScreen: View {
+    let notes: [CoachingNote]
+    let canDelete: Bool
+    let onDelete: ((CoachingNote) async -> Void)?
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var pendingDelete: CoachingNote?
+
+    var body: some View {
+        List {
+            if notes.isEmpty {
+                Text(AppLocalizer.string("coaching.notes.empty"))
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(notes) { note in
+                    CoachingNoteRow(note: note)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            if canDelete {
+                                Button(role: .destructive) {
+                                    pendingDelete = note
+                                } label: {
+                                    Label(AppLocalizer.string("common.delete"), systemImage: "trash")
+                                }
+                            }
+                        }
+                }
+            }
+        }
+        .navigationTitle(AppLocalizer.string("coaching.notes.section"))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(AppLocalizer.string("common.close")) {
+                    dismiss()
+                }
             }
         }
         .alert(AppLocalizer.string("coaching.history.delete.title"), isPresented: Binding(

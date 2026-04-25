@@ -4,9 +4,11 @@ import SwiftData
 struct RootView: View {
     @AppStorage("didOnboard") private var didOnboard = false
     @AppStorage(Gender.appStorageKey) private var activeGenderRaw: String = Gender.male.rawValue
+    @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
 
     @EnvironmentObject private var sessionStore: AppSessionStore
     @EnvironmentObject private var notificationsStore: AppNotificationsStore
+    @EnvironmentObject private var pushNotificationsManager: AppPushNotificationsManager
     @Environment(\.modelContext) private var modelContext
     @Query private var users: [UserData]
     @State private var preparedOwnerId: String?
@@ -76,10 +78,17 @@ struct RootView: View {
         .onAppear {
             prepareLocalDataIfNeeded()
             notificationsStore.setCurrentUser(currentOwnerId)
+            pushNotificationsManager.setCurrentUser(currentOwnerId)
         }
         .onChange(of: currentOwnerId) { _, _ in
             prepareLocalDataIfNeeded()
             notificationsStore.setCurrentUser(currentOwnerId)
+            pushNotificationsManager.setCurrentUser(currentOwnerId)
+        }
+        .onChange(of: appLanguageRaw) { _, _ in
+            Task {
+                await pushNotificationsManager.syncCurrentLanguagePreference()
+            }
         }
     }
 

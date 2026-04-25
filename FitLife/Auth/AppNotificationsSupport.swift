@@ -34,6 +34,7 @@ struct AppNotificationEvent: Identifiable, Hashable {
     let targetId: String
     let createdAt: Date
     let isRead: Bool
+    let isArchived: Bool
 
     init(
         id: String = UUID().uuidString,
@@ -44,7 +45,8 @@ struct AppNotificationEvent: Identifiable, Hashable {
         targetType: AppNotificationTargetType,
         targetId: String,
         createdAt: Date = .now,
-        isRead: Bool = false
+        isRead: Bool = false,
+        isArchived: Bool = false
     ) {
         self.id = id
         self.type = type
@@ -55,6 +57,7 @@ struct AppNotificationEvent: Identifiable, Hashable {
         self.targetId = targetId
         self.createdAt = createdAt
         self.isRead = isRead
+        self.isArchived = isArchived
     }
 
     init?(id: String, data: [String: Any]) {
@@ -83,6 +86,7 @@ struct AppNotificationEvent: Identifiable, Hashable {
             self.createdAt = (data["createdAt"] as? Date) ?? .now
         }
         self.isRead = (data["isRead"] as? Bool) ?? false
+        self.isArchived = (data["isArchived"] as? Bool) ?? false
     }
 
     var firestoreData: [String: Any] {
@@ -94,7 +98,8 @@ struct AppNotificationEvent: Identifiable, Hashable {
             "targetType": targetType.rawValue,
             "targetId": targetId,
             "createdAt": createdAt,
-            "isRead": isRead
+            "isRead": isRead,
+            "isArchived": isArchived
         ]
     }
 
@@ -207,9 +212,11 @@ final class AppNotificationsStore: ObservableObject {
             .addSnapshotListener { [weak self] snapshot, _ in
                 guard let self, let snapshot else { return }
                 Task { @MainActor in
-                    self.notifications = snapshot.documents.compactMap { document in
-                        AppNotificationEvent(id: document.documentID, data: document.data())
-                    }
+                    self.notifications = snapshot.documents
+                        .compactMap { document in
+                            AppNotificationEvent(id: document.documentID, data: document.data())
+                        }
+                        .filter { $0.isArchived == false }
                     self.unreadCount = self.notifications.filter { $0.isRead == false }.count
                 }
             }
@@ -238,6 +245,15 @@ final class AppNotificationsStore: ObservableObject {
 
         do {
             try await batch.commit()
+        } catch {}
+    }
+
+    func delete(_ notification: AppNotificationEvent) async {
+        do {
+            try await firestore
+                .collection("notification_events")
+                .document(notification.id)
+                .setData(["isArchived": true, "isRead": true], merge: true)
         } catch {}
     }
 }
@@ -321,7 +337,7 @@ private struct AppNotificationDestinationScreen: View {
         case .client:
             ClientCoachingEntryScreen(clientId: profile.id)
         case .trainer, .owner:
-            CoachingRequestsReviewScreen(currentUser: profile)
+            CoachingRequestNotificationDestination(notification: notification, currentUser: profile)
         }
     }
 
@@ -329,8 +345,24 @@ private struct AppNotificationDestinationScreen: View {
     private func coachingAreaDestination(for profile: AppUserProfile) -> some View {
         switch profile.role {
         case .client:
-            ClientCoachingEntryScreen(clientId: profile.id)
-        case .trainer, .owner:
+            switch notification.type {
+            case .coachNoteReceived:
+                ClientNoteNotificationDestination(notification: notification, clientId: profile.id)
+            case .profileUpdateRequested, .coachingRequestApproved, .coachingRequestRejected:
+                ClientNotificationBridgeScreen(notification: notification, clientId: profile.id)
+            case .coachingRequestSubmitted, .workoutReportSent, .nutritionReportSent, .checkInSubmitted, .clientNoteReceived, .workoutAssigned:
+                ClientCoachingEntryScreen(clientId: profile.id)
+            }
+        case .trainer:
+            switch notification.type {
+            case .clientNoteReceived:
+                TrainerNoteNotificationDestination(notification: notification, trainerId: profile.id, clientId: notification.senderId)
+            case .checkInSubmitted:
+                TrainerNotificationBridgeScreen(notification: notification, trainerId: profile.id, clientId: notification.senderId)
+            case .coachingRequestSubmitted, .coachingRequestApproved, .coachingRequestRejected, .workoutReportSent, .nutritionReportSent, .coachNoteReceived, .workoutAssigned, .profileUpdateRequested:
+                TrainerClientNotificationDestination(trainerId: profile.id, clientId: notification.senderId)
+            }
+        case .owner:
             TrainerAssignedClientsScreen(trainerId: profile.id)
         }
     }
@@ -339,7 +371,7 @@ private struct AppNotificationDestinationScreen: View {
     private func workoutAssignmentDestination(for profile: AppUserProfile) -> some View {
         switch profile.role {
         case .client:
-            ClientAssignedWorkoutsScreen(clientId: profile.id)
+            ClientWorkoutAssignmentNotificationDestination(notification: notification, clientId: profile.id)
         case .trainer, .owner:
             TrainerAssignmentsOverviewScreen(trainerId: profile.id)
         }
@@ -347,33 +379,456 @@ private struct AppNotificationDestinationScreen: View {
 
     @ViewBuilder
     private func reportsDestination(for profile: AppUserProfile) -> some View {
-        switch notification.targetType {
-        case .workoutReport:
-            WorkoutReportNotificationDestination(reportId: notification.targetId)
-        case .nutritionReport:
-            NutritionReportNotificationDestination(reportId: notification.targetId)
-        case .coachingRequest, .coachingConnection, .checkIn, .workoutAssignment, .profileUpdateRequest:
-            switch profile.role {
-            case .client:
+        switch profile.role {
+        case .trainer:
+            switch notification.targetType {
+            case .workoutReport:
+                WorkoutReportNotificationDestination(notification: notification)
+            case .nutritionReport:
+                NutritionReportNotificationDestination(notification: notification)
+            case .coachingRequest, .coachingConnection, .checkIn, .workoutAssignment, .profileUpdateRequest:
+                TrainerClientNotificationDestination(trainerId: profile.id, clientId: notification.senderId)
+            }
+        case .client:
+            switch notification.targetType {
+            case .workoutReport:
+                WorkoutReportNotificationDestination(notification: notification)
+            case .nutritionReport:
+                NutritionReportNotificationDestination(notification: notification)
+            case .coachingRequest, .coachingConnection, .checkIn, .workoutAssignment, .profileUpdateRequest:
                 ClientCoachingEntryScreen(clientId: profile.id)
-            case .trainer, .owner:
+            }
+        case .owner:
+            switch notification.targetType {
+            case .workoutReport:
+                WorkoutReportNotificationDestination(notification: notification)
+            case .nutritionReport:
+                NutritionReportNotificationDestination(notification: notification)
+            case .coachingRequest, .coachingConnection, .checkIn, .workoutAssignment, .profileUpdateRequest:
                 TrainerAssignedClientsScreen(trainerId: profile.id)
             }
         }
     }
 }
 
-private struct WorkoutReportNotificationDestination: View {
-    let reportId: String
+private struct TrainerClientNotificationDestination: View {
+    let trainerId: String
+    let clientId: String
 
-    @State private var report: CoachingWorkoutReport?
+    @State private var client: AppUserProfile?
     @State private var isLoading = true
     @State private var errorMessage: String?
 
     var body: some View {
         Group {
+            if let client {
+                TrainerClientSupportScreen(trainerId: trainerId, client: client)
+            } else if isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemGroupedBackground))
+            } else {
+                ContentUnavailableView(
+                    AppLocalizer.string("notifications.inbox.empty.title"),
+                    systemImage: "person.crop.circle.badge.exclamationmark",
+                    description: Text(errorMessage ?? AppLocalizer.string("common.error.generic"))
+                )
+            }
+        }
+        .task(id: clientId) {
+            await load()
+        }
+    }
+
+    private func load() async {
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            let snapshot = try await Firestore.firestore()
+                .collection("users")
+                .document(clientId)
+                .getDocument()
+
+            guard let data = snapshot.data(),
+                  let client = AppUserProfile(id: snapshot.documentID, data: data) else {
+                errorMessage = AppLocalizer.string("common.error.generic")
+                isLoading = false
+                return
+            }
+
+            self.client = client
+            isLoading = false
+        } catch {
+            errorMessage = AppErrorPresenter.message(for: error)
+            isLoading = false
+        }
+    }
+}
+
+private struct CoachingRequestNotificationDestination: View {
+    let notification: AppNotificationEvent
+    let currentUser: AppUserProfile
+
+    @EnvironmentObject private var notificationsStore: AppNotificationsStore
+    @StateObject private var store: CoachingRequestsReviewStore
+
+    init(notification: AppNotificationEvent, currentUser: AppUserProfile) {
+        self.notification = notification
+        self.currentUser = currentUser
+        _store = StateObject(wrappedValue: CoachingRequestsReviewStore(currentUser: currentUser))
+    }
+
+    var body: some View {
+        Group {
+            if let request = store.requests.first(where: { $0.id == notification.targetId }) {
+                CoachingRequestDetailScreen(
+                    request: request,
+                    currentUser: currentUser,
+                    trainers: store.trainers,
+                    onApprove: { trainerId in
+                        let succeeded = await store.approve(request, trainerId: trainerId)
+                        if succeeded {
+                            await notificationsStore.delete(notification)
+                        }
+                        return succeeded
+                    },
+                    onClarify: { comment in
+                        let succeeded = await store.requestClarification(for: request, comment: comment)
+                        if succeeded {
+                            await notificationsStore.delete(notification)
+                        }
+                        return succeeded
+                    },
+                    onReject: { comment in
+                        let succeeded = await store.reject(request, comment: comment)
+                        if succeeded {
+                            await notificationsStore.delete(notification)
+                        }
+                        return succeeded
+                    }
+                )
+            } else if store.isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemGroupedBackground))
+            } else {
+                ContentUnavailableView(
+                    AppLocalizer.string("notifications.inbox.empty.title"),
+                    systemImage: "doc.text.magnifyingglass",
+                    description: Text(store.errorMessage ?? AppLocalizer.string("common.error.generic"))
+                )
+            }
+        }
+        .task {
+            await store.load()
+        }
+    }
+}
+
+private struct TrainerNotificationBridgeScreen: View {
+    let notification: AppNotificationEvent
+    let trainerId: String
+    let clientId: String
+
+    @EnvironmentObject private var notificationsStore: AppNotificationsStore
+    @State private var openClientCard = false
+
+    var body: some View {
+        Color.clear
+            .navigationTitle(notification.localizedTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(AppLocalizer.string("notifications.inbox.move_to_client")) {
+                        Task {
+                            await notificationsStore.delete(notification)
+                            openClientCard = true
+                        }
+                    }
+                }
+            }
+            .navigationDestination(isPresented: $openClientCard) {
+                TrainerClientNotificationDestination(trainerId: trainerId, clientId: clientId)
+            }
+    }
+}
+
+private struct ClientNotificationBridgeScreen: View {
+    let notification: AppNotificationEvent
+    let clientId: String
+
+    @EnvironmentObject private var notificationsStore: AppNotificationsStore
+    @State private var openCoaching = false
+
+    var body: some View {
+        Color.clear
+            .navigationTitle(notification.localizedTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(AppLocalizer.string("notifications.inbox.open_related")) {
+                        Task {
+                            await notificationsStore.delete(notification)
+                            openCoaching = true
+                        }
+                    }
+                }
+            }
+            .navigationDestination(isPresented: $openCoaching) {
+                ClientCoachingEntryScreen(clientId: clientId)
+            }
+    }
+}
+
+private struct ClientWorkoutAssignmentNotificationDestination: View {
+    let notification: AppNotificationEvent
+    let clientId: String
+
+    @EnvironmentObject private var notificationsStore: AppNotificationsStore
+    @State private var openAssignments = false
+
+    var body: some View {
+        Color.clear
+            .navigationTitle(notification.localizedTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(AppLocalizer.string("notifications.inbox.open_related")) {
+                        Task {
+                            await notificationsStore.delete(notification)
+                            openAssignments = true
+                        }
+                    }
+                }
+            }
+            .navigationDestination(isPresented: $openAssignments) {
+                ClientAssignedWorkoutsScreen(clientId: clientId)
+            }
+    }
+}
+
+private struct ClientNoteNotificationDestination: View {
+    let notification: AppNotificationEvent
+    let clientId: String
+
+    @EnvironmentObject private var notificationsStore: AppNotificationsStore
+    @State private var note: CoachingNote?
+    @State private var isLoading = true
+    @State private var errorMessage: String?
+    @State private var openCoaching = false
+
+    var body: some View {
+        Group {
+            if let note {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(notification.senderName.isEmpty ? notification.localizedTitle : notification.senderName)
+                                .font(.title2.weight(.semibold))
+                            Text(note.createdAt.formatted(date: .abbreviated, time: .shortened))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(AppLocalizer.string("coaching.notes.title"))
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            Text(note.message)
+                                .font(.body)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                        .fill(Color(.secondarySystemGroupedBackground))
+                                )
+                        }
+                    }
+                    .padding()
+                }
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(AppLocalizer.string("notifications.inbox.open_related")) {
+                            Task {
+                                await notificationsStore.delete(notification)
+                                openCoaching = true
+                            }
+                        }
+                    }
+                }
+            } else if isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemGroupedBackground))
+            } else {
+                ContentUnavailableView(
+                    AppLocalizer.string("notifications.inbox.empty.title"),
+                    systemImage: "message.badge",
+                    description: Text(errorMessage ?? AppLocalizer.string("common.error.generic"))
+                )
+            }
+        }
+        .navigationTitle(notification.localizedTitle)
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(isPresented: $openCoaching) {
+            ClientCoachingEntryScreen(clientId: clientId)
+        }
+        .task(id: notification.targetId) {
+            await load()
+        }
+    }
+
+    private func load() async {
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            let snapshot = try await Firestore.firestore()
+                .collection("coaching_notes")
+                .document(notification.targetId)
+                .getDocument()
+
+            guard let data = snapshot.data(),
+                  let note = CoachingNote(id: snapshot.documentID, data: data) else {
+                errorMessage = AppLocalizer.string("common.error.generic")
+                isLoading = false
+                return
+            }
+
+            self.note = note
+            isLoading = false
+        } catch {
+            errorMessage = AppErrorPresenter.message(for: error)
+            isLoading = false
+        }
+    }
+}
+
+private struct TrainerNoteNotificationDestination: View {
+    let notification: AppNotificationEvent
+    let trainerId: String
+    let clientId: String
+
+    @EnvironmentObject private var notificationsStore: AppNotificationsStore
+    @State private var note: CoachingNote?
+    @State private var isLoading = true
+    @State private var errorMessage: String?
+    @State private var openClientCard = false
+
+    var body: some View {
+        Group {
+            if let note {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(notification.senderName.isEmpty ? notification.localizedTitle : notification.senderName)
+                                .font(.title2.weight(.semibold))
+                            Text(note.createdAt.formatted(date: .abbreviated, time: .shortened))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(AppLocalizer.string("coaching.notes.title"))
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            Text(note.message)
+                                .font(.body)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                        .fill(Color(.secondarySystemGroupedBackground))
+                                )
+                        }
+                    }
+                    .padding()
+                }
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(AppLocalizer.string("notifications.inbox.move_to_client")) {
+                            Task {
+                                await notificationsStore.delete(notification)
+                                openClientCard = true
+                            }
+                        }
+                    }
+                }
+            } else if isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemGroupedBackground))
+            } else {
+                ContentUnavailableView(
+                    AppLocalizer.string("notifications.inbox.empty.title"),
+                    systemImage: "message.badge",
+                    description: Text(errorMessage ?? AppLocalizer.string("common.error.generic"))
+                )
+            }
+        }
+        .navigationTitle(notification.localizedTitle)
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(isPresented: $openClientCard) {
+            TrainerClientNotificationDestination(trainerId: trainerId, clientId: clientId)
+        }
+        .task(id: notification.targetId) {
+            await load()
+        }
+    }
+
+    private func load() async {
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            let snapshot = try await Firestore.firestore()
+                .collection("coaching_notes")
+                .document(notification.targetId)
+                .getDocument()
+
+            guard let data = snapshot.data(),
+                  let note = CoachingNote(id: snapshot.documentID, data: data) else {
+                errorMessage = AppLocalizer.string("common.error.generic")
+                isLoading = false
+                return
+            }
+
+            self.note = note
+            isLoading = false
+        } catch {
+            errorMessage = AppErrorPresenter.message(for: error)
+            isLoading = false
+        }
+    }
+}
+
+private struct WorkoutReportNotificationDestination: View {
+    let notification: AppNotificationEvent
+
+    @EnvironmentObject private var sessionStore: AppSessionStore
+    @EnvironmentObject private var notificationsStore: AppNotificationsStore
+    @State private var report: CoachingWorkoutReport?
+    @State private var isLoading = true
+    @State private var errorMessage: String?
+    @State private var showClientCard = false
+
+    var body: some View {
+        Group {
             if let report {
                 CoachingWorkoutReportDetailScreen(report: report)
+                    .toolbar {
+                        if canMoveToClientCard {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button(AppLocalizer.string("notifications.inbox.move_to_client")) {
+                                    Task {
+                                        await notificationsStore.delete(notification)
+                                        showClientCard = true
+                                    }
+                                }
+                            }
+                        }
+                    }
             } else if isLoading {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -386,8 +841,16 @@ private struct WorkoutReportNotificationDestination: View {
                 )
             }
         }
-        .task(id: reportId) {
+        .task(id: notification.targetId) {
             await load()
+        }
+        .navigationDestination(isPresented: $showClientCard) {
+            if let report {
+                TrainerClientNotificationDestination(
+                    trainerId: sessionStore.profile?.id ?? notification.recipientId,
+                    clientId: report.clientId
+                )
+            }
         }
     }
 
@@ -398,7 +861,7 @@ private struct WorkoutReportNotificationDestination: View {
         do {
             let snapshot = try await Firestore.firestore()
                 .collection("coaching_workout_reports")
-                .document(reportId)
+                .document(notification.targetId)
                 .getDocument()
 
             guard let data = snapshot.data(),
@@ -415,19 +878,38 @@ private struct WorkoutReportNotificationDestination: View {
             isLoading = false
         }
     }
+
+    private var canMoveToClientCard: Bool {
+        sessionStore.currentRole == .trainer && report != nil
+    }
 }
 
 private struct NutritionReportNotificationDestination: View {
-    let reportId: String
+    let notification: AppNotificationEvent
 
+    @EnvironmentObject private var sessionStore: AppSessionStore
+    @EnvironmentObject private var notificationsStore: AppNotificationsStore
     @State private var report: CoachingNutritionReport?
     @State private var isLoading = true
     @State private var errorMessage: String?
+    @State private var showClientCard = false
 
     var body: some View {
         Group {
             if let report {
                 CoachingNutritionReportDetailScreen(report: report)
+                    .toolbar {
+                        if canMoveToClientCard {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button(AppLocalizer.string("notifications.inbox.move_to_client")) {
+                                    Task {
+                                        await notificationsStore.delete(notification)
+                                        showClientCard = true
+                                    }
+                                }
+                            }
+                        }
+                    }
             } else if isLoading {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -440,8 +922,16 @@ private struct NutritionReportNotificationDestination: View {
                 )
             }
         }
-        .task(id: reportId) {
+        .task(id: notification.targetId) {
             await load()
+        }
+        .navigationDestination(isPresented: $showClientCard) {
+            if let report {
+                TrainerClientNotificationDestination(
+                    trainerId: sessionStore.profile?.id ?? notification.recipientId,
+                    clientId: report.clientId
+                )
+            }
         }
     }
 
@@ -452,7 +942,7 @@ private struct NutritionReportNotificationDestination: View {
         do {
             let snapshot = try await Firestore.firestore()
                 .collection("coaching_nutrition_reports")
-                .document(reportId)
+                .document(notification.targetId)
                 .getDocument()
 
             guard let data = snapshot.data(),
@@ -468,6 +958,10 @@ private struct NutritionReportNotificationDestination: View {
             errorMessage = AppErrorPresenter.message(for: error)
             isLoading = false
         }
+    }
+
+    private var canMoveToClientCard: Bool {
+        sessionStore.currentRole == .trainer && report != nil
     }
 }
 

@@ -283,7 +283,7 @@ private struct CoachingRequestRow: View {
     }
 }
 
-private struct CoachingRequestDetailScreen: View {
+struct CoachingRequestDetailScreen: View {
     let request: CoachingRequest
     let currentUser: AppUserProfile?
     let trainers: [AppUserProfile]

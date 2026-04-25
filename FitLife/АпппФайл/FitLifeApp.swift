@@ -5,10 +5,12 @@ import FirebaseCore
 
 @main
 struct FitLifeApp: App {
+    @UIApplicationDelegateAdaptor(FitLifeAppDelegate.self) private var appDelegate
     @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
     @StateObject private var sessionStore: AppSessionStore
     @StateObject private var productCatalogStore: ProductCatalogStore
     @StateObject private var notificationsStore: AppNotificationsStore
+    @StateObject private var pushNotificationsManager: AppPushNotificationsManager
 
     private let modelContainer: ModelContainer = {
         let schema = Schema([
@@ -82,6 +84,7 @@ struct FitLifeApp: App {
         _sessionStore = StateObject(wrappedValue: AppSessionStore())
         _productCatalogStore = StateObject(wrappedValue: ProductCatalogStore())
         _notificationsStore = StateObject(wrappedValue: AppNotificationsStore())
+        _pushNotificationsManager = StateObject(wrappedValue: AppPushNotificationsManager.shared)
     }
 
     var body: some Scene {
@@ -92,6 +95,7 @@ struct FitLifeApp: App {
                 .environmentObject(sessionStore)
                 .environmentObject(productCatalogStore)
                 .environmentObject(notificationsStore)
+                .environmentObject(pushNotificationsManager)
         }
             .modelContainer(modelContainer)
     }
