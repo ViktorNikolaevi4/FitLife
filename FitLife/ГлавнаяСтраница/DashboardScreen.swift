@@ -40,6 +40,7 @@ struct DashboardScreen: View {
     // Шиты / календарь
     @State private var sheet: RationSheet? = nil
     @State private var showCalendar = false
+    @State private var showSettings = false
 
     // Состояние разворота
     @State private var expandedMeals: Set<MealType> = []
@@ -110,6 +111,9 @@ struct DashboardScreen: View {
             }
             .background(theme.bg.ignoresSafeArea())
             .navigationBarHidden(true)
+            .navigationDestination(isPresented: $showSettings) {
+                SettingsScreenContainer(showsFloatingAddButton: $showsFloatingAddButton)
+            }
         }
         .onAppear { ensureUserIfNeeded(); recalcFor(selectedDate) }
         .onChange(of: selectedDate) { _, newDate in
@@ -198,7 +202,10 @@ struct DashboardScreen: View {
 
             Spacer()
 
-            NavigationLink(destination: SettingsScreenContainer(showsFloatingAddButton: $showsFloatingAddButton)) {
+            Button {
+                showsFloatingAddButton = false
+                showSettings = true
+            } label: {
                 ZStack {
                     Circle()
                         .fill(theme.card)
@@ -209,9 +216,6 @@ struct DashboardScreen: View {
                         .foregroundStyle(.primary)
                 }
             }
-            .simultaneousGesture(TapGesture().onEnded {
-                showsFloatingAddButton = false
-            })
             .buttonStyle(.plain)
         }
         .padding(.horizontal)
