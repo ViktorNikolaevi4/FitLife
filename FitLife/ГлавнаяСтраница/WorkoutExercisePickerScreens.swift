@@ -302,14 +302,28 @@ private struct CreateWorkoutExerciseTemplateScreen: View {
     let onCreated: (CustomWorkoutExerciseTemplate) -> Void
 
     @State private var name = ""
-    @State private var selectedIcon = "dumbbell.fill"
+    @State private var selectedIcon = WorkoutExerciseIcon.run
     @State private var selectedAccent = "blue"
     @FocusState private var isNameFieldFocused: Bool
 
     private let iconOptions: [ExerciseIconOption] = [
-        .init(systemImage: "dumbbell.fill"),
+        .init(systemImage: WorkoutExerciseIcon.cleanAndJerk),
+        .init(systemImage: WorkoutExerciseIcon.jumpingJack),
+        .init(systemImage: WorkoutExerciseIcon.run),
+        .init(systemImage: WorkoutExerciseIcon.bench),
+        .init(systemImage: WorkoutExerciseIcon.shoulderPress),
+        .init(systemImage: WorkoutExerciseIcon.legPress),
+        .init(systemImage: WorkoutExerciseIcon.biceps),
+        .init(systemImage: WorkoutExerciseIcon.pullUps),
+        .init(systemImage: WorkoutExerciseIcon.snatch),
+        .init(systemImage: WorkoutExerciseIcon.squats),
+        .init(systemImage: WorkoutExerciseIcon.lunges),
+        .init(systemImage: WorkoutExerciseIcon.sidePlank),
+        .init(systemImage: WorkoutExerciseIcon.boxJumps),
+        .init(systemImage: WorkoutExerciseIcon.deadlift),
+        .init(systemImage: WorkoutExerciseIcon.battleRopes),
+        .init(systemImage: WorkoutExerciseIcon.jumpRope),
         .init(systemImage: "figure.strengthtraining.traditional"),
-        .init(systemImage: "figure.run.square.stack"),
         .init(systemImage: "figure.core.training"),
         .init(systemImage: "figure.arms.open"),
         .init(systemImage: "figure.mixed.cardio"),
@@ -384,9 +398,11 @@ private struct CreateWorkoutExerciseTemplateScreen: View {
                                             : workoutPickerCardBackground
                                         )
 
-                                    Image(systemName: option.systemImage)
-                                        .font(.system(size: 22, weight: .semibold))
-                                        .foregroundStyle(selectedIcon == option.systemImage ? workoutAccentColor(selectedAccent) : .primary)
+                                    workoutIconImage(
+                                        named: option.systemImage,
+                                        accentName: selectedIcon == option.systemImage ? selectedAccent : "blue",
+                                        size: 22
+                                    )
                                 }
                                 .frame(height: 64)
                                 .overlay(
@@ -435,9 +451,11 @@ private struct CreateWorkoutExerciseTemplateScreen: View {
                 RoundedRectangle(cornerRadius: 20)
                     .fill(workoutAccentColor(selectedAccent).opacity(0.14))
 
-                Image(systemName: selectedIcon)
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(workoutAccentColor(selectedAccent))
+                workoutIconImage(
+                    named: selectedIcon,
+                    accentName: selectedAccent,
+                    size: 28
+                )
             }
             .frame(width: 68, height: 68)
 

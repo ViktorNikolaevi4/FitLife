@@ -47,6 +47,7 @@ struct WorkoutsScreen: View {
 
                     WorkoutsShortcutCard(
                         title: AppLocalizer.string("workouts.history"),
+                        subtitle: AppLocalizer.string("workouts.last.subtitle"),
                         systemImage: "clock.arrow.circlepath",
                         theme: theme,
                         action: openHistory
@@ -205,28 +206,46 @@ private struct ClientCoachingSelection: Identifiable, Hashable {
 
 private struct WorkoutsShortcutCard: View {
     let title: String
+    let subtitle: String
     let systemImage: String
     let theme: AppTheme
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 18) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .frame(width: 40, height: 40)
-                    .background(Circle().fill(theme.subtleFill))
+            HStack(spacing: 16) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 18)
+                        .fill(theme.subtleFill)
 
-                Text(title)
-                    .font(.headline.weight(.semibold))
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: systemImage)
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundStyle(.primary)
+                }
+                .frame(width: 84, height: 84)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(title)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .multilineTextAlignment(.leading)
+
+                    Text(subtitle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(3)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, minHeight: 122, alignment: .topLeading)
-            .background(RoundedRectangle(cornerRadius: 18).fill(theme.card))
-            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(theme.border))
+            .padding(18)
+            .background(RoundedRectangle(cornerRadius: 20).fill(theme.card))
+            .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(theme.border))
             .shadow(color: theme.cardShadow.opacity(0.95), radius: 14, x: 0, y: 5)
         }
         .buttonStyle(.plain)

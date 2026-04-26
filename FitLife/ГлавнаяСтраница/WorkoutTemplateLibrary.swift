@@ -3,12 +3,20 @@ import SwiftUI
 import UIKit
 
 enum WorkoutExerciseIcon {
+    static let cleanAndJerk = "CleanAndJerk"
+    static let jumpingJack = "JumpingJack"
+    static let run = "Бег"
     static let bench = "ЖимЛежа"
+    static let shoulderPress = "ЖимНаПлечи"
     static let legPress = "ЖимНогами"
     static let biceps = "Бицепс"
     static let sidePlank = "БоковаяПланка"
     static let lunges = "Выпады "
     static let pullUps = "Подтягивания"
+    static let snatch = "Рывок"
+    static let squats = "Приседания"
+    static let boxJumps = "Прыжки на тумбу"
+    static let deadlift = "СтановаяТяга"
     static let battleRopes = "канат"
     static let jumpRope = "скакалка"
 }
@@ -41,11 +49,27 @@ func workoutIconImage(
 func workoutTemplates() -> [WorkoutExerciseTemplate] {
     [
         WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.run"),
+            systemImage: WorkoutExerciseIcon.run,
+            accentName: "green",
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, durationSeconds: 900, metricType: .duration)
+            ]
+        ),
+        WorkoutExerciseTemplate(
             name: AppLocalizer.string("workout.exercise.bench"),
             systemImage: WorkoutExerciseIcon.bench,
             accentName: "blue",
             defaultSets: [
                 WorkoutDraftSet(weight: 60, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.clean_and_jerk"),
+            systemImage: WorkoutExerciseIcon.cleanAndJerk,
+            accentName: "orange",
+            defaultSets: [
+                WorkoutDraftSet(weight: 50, reps: 6)
             ]
         ),
         WorkoutExerciseTemplate(
@@ -58,7 +82,7 @@ func workoutTemplates() -> [WorkoutExerciseTemplate] {
         ),
         WorkoutExerciseTemplate(
             name: AppLocalizer.string("workout.exercise.press"),
-            systemImage: "figure.arms.open",
+            systemImage: WorkoutExerciseIcon.shoulderPress,
             accentName: "purple",
             defaultSets: [
                 WorkoutDraftSet(weight: 18, reps: 12)
@@ -105,6 +129,22 @@ func workoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.jumping_jack"),
+            systemImage: WorkoutExerciseIcon.jumpingJack,
+            accentName: "green",
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, durationSeconds: 60, metricType: .duration)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.squats"),
+            systemImage: WorkoutExerciseIcon.squats,
+            accentName: "orange",
+            defaultSets: [
+                WorkoutDraftSet(weight: 40, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
             name: AppLocalizer.string("workout.exercise.lunges"),
             systemImage: WorkoutExerciseIcon.lunges,
             accentName: "purple",
@@ -113,11 +153,35 @@ func workoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.box_jumps"),
+            systemImage: WorkoutExerciseIcon.boxJumps,
+            accentName: "green",
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
             name: AppLocalizer.string("workout.exercise.side_plank"),
             systemImage: WorkoutExerciseIcon.sidePlank,
             accentName: "blue",
             defaultSets: [
                 WorkoutDraftSet(weight: 0, durationSeconds: 45, metricType: .duration)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.deadlift"),
+            systemImage: WorkoutExerciseIcon.deadlift,
+            accentName: "purple",
+            defaultSets: [
+                WorkoutDraftSet(weight: 70, reps: 8)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.snatch"),
+            systemImage: WorkoutExerciseIcon.snatch,
+            accentName: "blue",
+            defaultSets: [
+                WorkoutDraftSet(weight: 35, reps: 6)
             ]
         ),
         WorkoutExerciseTemplate(

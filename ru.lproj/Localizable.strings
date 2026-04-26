@@ -436,6 +436,9 @@
 "workout.set.edit.subtitle" = "Обновите вес и цель для этого подхода.";
 "workout.set.edit.save" = "Сохранить изменения";
 "workout.exercise.bench" = "Жим лежа";
+"workout.exercise.clean_and_jerk" = "Подъём на грудь и толчок";
+"workout.exercise.jumping_jack" = "Jumping Jack";
+"workout.exercise.run" = "Бег";
 "workout.exercise.row" = "Тяга в наклоне";
 "workout.exercise.press" = "Жим плечами";
 "workout.exercise.lat" = "Тяга сверху";
@@ -443,8 +446,12 @@
 "workout.exercise.core" = "Пресс";
 "workout.exercise.biceps" = "Бицепс";
 "workout.exercise.pullups" = "Подтягивания";
+"workout.exercise.squats" = "Приседания";
 "workout.exercise.lunges" = "Выпады";
+"workout.exercise.box_jumps" = "Прыжки на тумбу";
 "workout.exercise.side_plank" = "Боковая планка";
+"workout.exercise.deadlift" = "Становая тяга";
+"workout.exercise.snatch" = "Рывок";
 "workout.exercise.battle_ropes" = "Канат";
 "workout.exercise.jump_rope" = "Скакалка";
 "workout.exercise.custom" = "Новое упражнение";

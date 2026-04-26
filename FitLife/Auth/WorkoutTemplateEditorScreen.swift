@@ -55,8 +55,11 @@ struct WorkoutTemplateEditorScreen: View {
                                     .fill(workoutAccentColor(exercise.accentName).opacity(0.16))
                                     .frame(width: 40, height: 40)
                                     .overlay {
-                                        Image(systemName: exercise.systemImage)
-                                            .foregroundStyle(workoutAccentColor(exercise.accentName))
+                                        workoutIconImage(
+                                            named: exercise.systemImage,
+                                            accentName: exercise.accentName,
+                                            size: 18
+                                        )
                                     }
 
                                 VStack(alignment: .leading, spacing: 2) {

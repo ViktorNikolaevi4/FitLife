@@ -130,22 +130,42 @@ struct TrainingDiaryCard: View {
         Button(action: onOpen) {
             HStack(spacing: 18) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(theme.subtleFill)
+                    RoundedRectangle(cornerRadius: 18)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.blue.opacity(0.16),
+                                    Color.cyan.opacity(0.10)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
 
                     Image(systemName: "dumbbell.fill")
-                        .font(.system(size: 36, weight: .medium))
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundStyle(.blue)
                 }
-                .frame(width: 96, height: 96)
+                .frame(width: 84, height: 84)
 
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 8) {
                     Text(title)
-                        .font(.title2.weight(.semibold))
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.primary)
                         .lineLimit(2)
+
+                    Text(AppLocalizer.string("workouts.new.subtitle"))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
                 }
 
                 Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
             }
             .contentShape(Rectangle())
         }
@@ -155,7 +175,6 @@ struct TrainingDiaryCard: View {
         .background(RoundedRectangle(cornerRadius: 16).fill(theme.card))
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(theme.border))
         .shadow(color: theme.cardShadow, radius: theme.cardShadowRadius, x: 0, y: theme.cardShadowY)
-        .padding(.horizontal)
     }
 }
 

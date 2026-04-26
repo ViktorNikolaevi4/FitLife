@@ -436,6 +436,9 @@
 "workout.set.edit.subtitle" = "Update weight and target for this set.";
 "workout.set.edit.save" = "Save Changes";
 "workout.exercise.bench" = "Bench Press";
+"workout.exercise.clean_and_jerk" = "Clean and Jerk";
+"workout.exercise.jumping_jack" = "Jumping Jack";
+"workout.exercise.run" = "Running";
 "workout.exercise.row" = "Bent-Over Row";
 "workout.exercise.press" = "Shoulder Press";
 "workout.exercise.lat" = "Lat Pulldown";
@@ -443,8 +446,12 @@
 "workout.exercise.core" = "Core";
 "workout.exercise.biceps" = "Biceps Curl";
 "workout.exercise.pullups" = "Pull-Ups";
+"workout.exercise.squats" = "Squats";
 "workout.exercise.lunges" = "Lunges";
+"workout.exercise.box_jumps" = "Box Jumps";
 "workout.exercise.side_plank" = "Side Plank";
+"workout.exercise.deadlift" = "Deadlift";
+"workout.exercise.snatch" = "Snatch";
 "workout.exercise.battle_ropes" = "Battle Ropes";
 "workout.exercise.jump_rope" = "Jump Rope";
 "workout.exercise.custom" = "New Exercise";
