@@ -22,127 +22,155 @@ struct WorkoutExerciseCard: View {
         sortedSets.filter(\.isCompleted).count
     }
 
+    @State private var showDeleteConfirmation = false
+
     private var trimmedNote: String {
         exercise.note.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var body: some View {
-        SwipeRevealDeleteContainer(cornerRadius: 16, onDelete: onDeleteExercise) {
-            VStack(alignment: .leading, spacing: 0) {
-                Button(action: onToggleExpanded) {
-                    HStack(spacing: 12) {
-                        ZStack {
-                            Circle()
-                                .fill(workoutAccentColor(exercise.accentName).opacity(0.16))
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: onToggleExpanded) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(workoutAccentColor(exercise.accentName).opacity(0.16))
 
-                            workoutIconImage(
-                                named: exercise.systemImage,
-                                accentName: exercise.accentName,
-                                size: 18
-                            )
-                        }
-                        .frame(width: 40, height: 40)
+                        workoutIconImage(
+                            named: exercise.systemImage,
+                            accentName: exercise.accentName,
+                            size: 18
+                        )
+                    }
+                    .frame(width: 40, height: 40)
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(exercise.name)
-                                .font(.headline)
-                                .foregroundStyle(.primary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(exercise.name)
+                            .font(.headline)
+                            .foregroundStyle(.primary)
 
-                            Text(AppLocalizer.format("workout.exercise.summary", sortedSets.count, completedCount))
+                        Text(AppLocalizer.format("workout.exercise.summary", sortedSets.count, completedCount))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        if trimmedNote.isEmpty == false {
+                            Text(trimmedNote)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-
-                            if trimmedNote.isEmpty == false {
-                                Text(trimmedNote)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                            }
-                        }
-
-                        Spacer()
-
-                        Image(systemName: "chevron.right")
-                            .rotationEffect(.degrees(exercise.isExpanded ? 90 : 0))
-                            .foregroundStyle(.secondary)
-                            .font(.system(size: 15, weight: .semibold))
-                    }
-                    .padding(14)
-                    .background(RoundedRectangle(cornerRadius: 14).fill(workoutCardInsetBackground))
-                    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(workoutCardBorder))
-                }
-                .buttonStyle(.plain)
-                .padding(10)
-
-                if exercise.isExpanded {
-                    VStack(spacing: 0) {
-                        Button(action: onEditNote) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "note.text")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-
-                                Text(
-                                    trimmedNote.isEmpty
-                                    ? AppLocalizer.string("workout.exercise.note.add")
-                                    : trimmedNote
-                                )
-                                .font(.subheadline)
-                                .foregroundStyle(
-                                    trimmedNote.isEmpty
-                                    ? .secondary
-                                    : .primary
-                                )
-                                .multilineTextAlignment(.leading)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
-
-                                Spacer()
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 16)
-                            .padding(.top, 2)
-                            .padding(.bottom, 14)
                         }
-                        .buttonStyle(.plain)
-
-                        Divider()
-                            .padding(.leading, 16)
-
-                        ForEach(sortedSets, id: \.id) { set in
-                            WorkoutSetRow(
-                                set: set,
-                                onEdit: { onEditSet(set) },
-                                onToggle: { onToggleSet(set) },
-                                onDelete: { onDeleteSet(set) }
-                            )
-                            if set.id != sortedSets.last?.id {
-                                Divider()
-                                    .padding(.leading, 16)
-                            }
-                        }
-
-                        Button(action: onAddSet) {
-                            Text(AppLocalizer.string("workout.add.set"))
-                                .fontWeight(.semibold)
-                            .font(.subheadline)
-                            .foregroundStyle(.primary)
-                            .padding(.top, 14)
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 16)
-                        }
-                        .buttonStyle(.plain)
-                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .rotationEffect(.degrees(exercise.isExpanded ? 90 : 0))
+                        .foregroundStyle(.secondary)
+                        .font(.system(size: 15, weight: .semibold))
                 }
+                .padding(14)
+                .background(RoundedRectangle(cornerRadius: 14).fill(workoutCardInsetBackground))
+                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(workoutCardBorder))
             }
-            .background(RoundedRectangle(cornerRadius: 16).fill(workoutCardBackground))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .strokeBorder(workoutCardBorder)
-            )
+            .buttonStyle(.plain)
+            .padding(10)
+
+            if exercise.isExpanded {
+                VStack(spacing: 0) {
+                    Button(action: onEditNote) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "note.text")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.secondary)
+
+                            Text(
+                                trimmedNote.isEmpty
+                                ? AppLocalizer.string("workout.exercise.note.add")
+                                : trimmedNote
+                            )
+                            .font(.subheadline)
+                            .foregroundStyle(
+                                trimmedNote.isEmpty
+                                ? .secondary
+                                : .primary
+                            )
+                            .multilineTextAlignment(.leading)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+
+                            Spacer()
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 2)
+                        .padding(.bottom, 14)
+                    }
+                    .buttonStyle(.plain)
+
+                    Divider()
+                        .padding(.leading, 16)
+
+                    ForEach(sortedSets, id: \.id) { set in
+                        WorkoutSetRow(
+                            set: set,
+                            onEdit: { onEditSet(set) },
+                            onToggle: { onToggleSet(set) }
+                        )
+                        if set.id != sortedSets.last?.id {
+                            Divider()
+                                .padding(.leading, 16)
+                        }
+                    }
+
+                    Button(action: onAddSet) {
+                        Text(AppLocalizer.string("workout.add.set"))
+                            .fontWeight(.semibold)
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+                        .padding(.top, 14)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 16)
+                    }
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .background(RoundedRectangle(cornerRadius: 16).fill(workoutCardBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(workoutCardBorder)
+        )
+        .contextMenu {
+            Button(action: onEditNote) {
+                Label(
+                    AppLocalizer.string("workout.exercise.note.title"),
+                    systemImage: "note.text"
+                )
+            }
+
+            Button(role: .destructive) {
+                showDeleteConfirmation = true
+            } label: {
+                Label(
+                    AppLocalizer.string("workout.exercise.delete"),
+                    systemImage: "trash"
+                )
+            }
+        }
+        .confirmationDialog(
+            AppLocalizer.string("workout.exercise.delete.title"),
+            isPresented: $showDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(AppLocalizer.string("workout.exercise.delete"), role: .destructive) {
+                onDeleteExercise()
+            }
+            Button(AppLocalizer.string("common.cancel"), role: .cancel) {}
+        } message: {
+            Text(AppLocalizer.string("workout.exercise.delete.message"))
         }
     }
 }
@@ -151,45 +179,41 @@ struct WorkoutSetRow: View {
     let set: WorkoutSet
     let onEdit: () -> Void
     let onToggle: () -> Void
-    let onDelete: () -> Void
 
     var body: some View {
-        SwipeRevealDeleteContainer(cornerRadius: 0, onDelete: onDelete) {
-            Button(action: onEdit) {
-                HStack(spacing: 12) {
-                    Text(AppLocalizer.format("workout.set.number", set.orderIndex + 1))
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 26, alignment: .leading)
+        Button(action: onEdit) {
+            HStack(spacing: 12) {
+                Text(AppLocalizer.format("workout.set.number", set.orderIndex + 1))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 26, alignment: .leading)
 
-                    Text(
-                        formattedWorkoutSetValue(
-                            weight: set.weight,
-                            reps: set.reps,
-                            durationSeconds: set.durationSeconds,
-                            metricType: set.metricType
-                        )
+                Text(
+                    formattedWorkoutSetValue(
+                        weight: set.weight,
+                        reps: set.reps,
+                        durationSeconds: set.durationSeconds,
+                        metricType: set.metricType
                     )
-                        .font(.body.weight(.medium))
-                        .foregroundStyle(.primary)
+                )
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.primary)
 
-                    Spacer()
+                Spacer()
 
-                    Button(action: onToggle) {
-                        Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(set.isCompleted ? Color.green : .secondary)
-                    }
-                    .buttonStyle(.plain)
+                Button(action: onToggle) {
+                    Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(set.isCompleted ? Color.green : .secondary)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
     }
 
 }

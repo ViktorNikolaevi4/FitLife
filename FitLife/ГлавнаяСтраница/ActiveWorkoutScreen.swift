@@ -113,6 +113,11 @@ struct ActiveWorkoutScreen: View {
                         durationSeconds: durationSeconds,
                         metricType: metricType
                     )
+                },
+                onDelete: {
+                    if let exercise = set.exercise {
+                        deleteSet(set, from: exercise)
+                    }
                 }
             )
             .presentationDetents([.medium, .large])
@@ -597,12 +602,19 @@ private struct EditWorkoutSetScreen: View {
 
     let set: WorkoutSet
     let onSave: (Double, Int, Int, WorkoutSetMetricType) -> Void
+    let onDelete: () -> Void
 
     @State private var draftSet: WorkoutDraftSet
+    @State private var showDeleteConfirmation = false
 
-    init(set: WorkoutSet, onSave: @escaping (Double, Int, Int, WorkoutSetMetricType) -> Void) {
+    init(
+        set: WorkoutSet,
+        onSave: @escaping (Double, Int, Int, WorkoutSetMetricType) -> Void,
+        onDelete: @escaping () -> Void
+    ) {
         self.set = set
         self.onSave = onSave
+        self.onDelete = onDelete
         _draftSet = State(
             initialValue: WorkoutDraftSet(
                 weight: set.weight,
@@ -642,6 +654,18 @@ private struct EditWorkoutSetScreen: View {
                             .background(RoundedRectangle(cornerRadius: 18).fill(Color.primary))
                     }
                     .buttonStyle(.plain)
+
+                    Button(role: .destructive) {
+                        showDeleteConfirmation = true
+                    } label: {
+                        Text(AppLocalizer.string("workout.set.delete"))
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(.red)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(RoundedRectangle(cornerRadius: 18).fill(activeWorkoutInsetBackground))
+                    }
+                    .buttonStyle(.plain)
                 }
                 .padding(.horizontal)
                 .padding(.top, 20)
@@ -666,6 +690,19 @@ private struct EditWorkoutSetScreen: View {
                         )
                     }
                 }
+            }
+            .confirmationDialog(
+                AppLocalizer.string("workout.set.delete.title"),
+                isPresented: $showDeleteConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button(AppLocalizer.string("workout.set.delete"), role: .destructive) {
+                    onDelete()
+                    dismiss()
+                }
+                Button(AppLocalizer.string("common.cancel"), role: .cancel) {}
+            } message: {
+                Text(AppLocalizer.string("workout.set.delete.message"))
             }
         }
     }

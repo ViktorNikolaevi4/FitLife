@@ -760,7 +760,7 @@ private struct WorkoutDetailScreen: View {
         .navigationBarBackButtonHidden(true)
         .alert(AppLocalizer.string("workouts.history.delete.title"), isPresented: $showDeleteConfirmation) {
             Button(AppLocalizer.string("common.cancel"), role: .cancel) {}
-            Button(AppLocalizer.string("common.delete"), role: .destructive) {
+            Button(AppLocalizer.string("workouts.history.delete.button"), role: .destructive) {
                 deleteWorkout()
             }
         } message: {

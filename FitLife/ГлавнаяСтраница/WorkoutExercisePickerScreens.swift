@@ -45,7 +45,7 @@ struct WorkoutExerciseDraft: Identifiable, Hashable {
 }
 
 struct WorkoutDraftSet: Identifiable, Hashable {
-    let id = UUID()
+    let id: UUID
     var weight: Double
     var reps: Int
     var durationSeconds: Int
@@ -57,11 +57,13 @@ struct WorkoutDraftSet: Identifiable, Hashable {
     }
 
     init(
+        id: UUID = UUID(),
         weight: Double,
         reps: Int = 10,
         durationSeconds: Int = 30,
         metricType: WorkoutSetMetricType = .reps
     ) {
+        self.id = id
         self.weight = weight
         self.reps = reps
         self.durationSeconds = durationSeconds
@@ -603,7 +605,14 @@ private struct WorkoutExerciseSetupScreen: View {
 
     private func addSet() {
         let last = sets.last ?? WorkoutDraftSet(weight: 20, reps: 10)
-        sets.append(WorkoutDraftSet(weight: last.weight, reps: last.reps))
+        sets.append(
+            WorkoutDraftSet(
+                weight: last.weight,
+                reps: last.reps,
+                durationSeconds: last.durationSeconds,
+                metricType: last.metricType
+            )
+        )
     }
 
     private func save() {
@@ -846,6 +855,7 @@ struct WorkoutDraftSetEditorRow: View {
         weightText = Self.weightText(from: next)
         onChange(
             WorkoutDraftSet(
+                id: set.id,
                 weight: next,
                 reps: set.reps,
                 durationSeconds: set.durationSeconds,
@@ -883,6 +893,7 @@ struct WorkoutDraftSetEditorRow: View {
         weightText = Self.weightText(from: clamped)
         onChange(
             WorkoutDraftSet(
+                id: set.id,
                 weight: clamped,
                 reps: set.reps,
                 durationSeconds: set.durationSeconds,
@@ -934,6 +945,7 @@ struct WorkoutDraftSetEditorRow: View {
         valueText = "\(next)"
         onChange(
             WorkoutDraftSet(
+                id: set.id,
                 weight: set.weight,
                 reps: next,
                 durationSeconds: set.durationSeconds,
@@ -947,6 +959,7 @@ struct WorkoutDraftSetEditorRow: View {
         valueText = "\(next)"
         onChange(
             WorkoutDraftSet(
+                id: set.id,
                 weight: set.weight,
                 reps: set.reps,
                 durationSeconds: next,
@@ -964,6 +977,7 @@ struct WorkoutDraftSetEditorRow: View {
             valueText = "\(clamped)"
             onChange(
                 WorkoutDraftSet(
+                    id: set.id,
                     weight: set.weight,
                     reps: clamped,
                     durationSeconds: set.durationSeconds,
@@ -976,6 +990,7 @@ struct WorkoutDraftSetEditorRow: View {
             valueText = "\(clamped)"
             onChange(
                 WorkoutDraftSet(
+                    id: set.id,
                     weight: set.weight,
                     reps: set.reps,
                     durationSeconds: clamped,

@@ -696,10 +696,11 @@ private struct ProductsList: View {
         var order: [String] = []
 
         for entry in items {
-            let trimmedMealName = entry.aiMealName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let key: String
 
-            if let aiMealGroupID = entry.aiMealGroupID, !trimmedMealName.isEmpty {
+            // AI-блюда должны отображаться одной строкой по groupID, даже если
+            // у части старых записей нет корректного aiMealName.
+            if let aiMealGroupID = entry.aiMealGroupID, !aiMealGroupID.isEmpty {
                 key = "ai-\(aiMealGroupID)"
             } else {
                 key = "entry-\(entry.id.uuidString)"
@@ -714,11 +715,13 @@ private struct ProductsList: View {
 
         return order.compactMap { key in
             guard let entries = groupedByKey[key], let first = entries.first else { return nil }
-            let isGroupedAIMeal = entries.count > 1 && key.hasPrefix("ai-")
+            let isGroupedAIMeal = key.hasPrefix("ai-")
+            let normalizedMealName = entries
+                .compactMap { $0.aiMealName?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .first(where: { !$0.isEmpty })
+
             let title = isGroupedAIMeal
-                ? (first.aiMealName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-                    ? first.aiMealName!.trimmingCharacters(in: .whitespacesAndNewlines)
-                    : (first.product?.name ?? AppLocalizer.string("product.default")))
+                ? (normalizedMealName ?? first.product?.name ?? AppLocalizer.string("product.default"))
                 : (first.product?.name ?? AppLocalizer.string("product.default"))
 
             return DisplayItem(
