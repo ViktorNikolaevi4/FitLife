@@ -4,6 +4,10 @@
 <dict>
 	<key>NSCameraUsageDescription</key>
 	<string>Камера нужна для сканирования штрихкодов продуктов и поиска их в Open Food Facts.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Микрофон нужен, чтобы голосом продиктовать еду и быстро добавить её в рацион.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Распознавание речи нужно, чтобы преобразовать описание еды в текст для расчёта калорий и БЖУ.</string>
 	<key>OpenAIAPIKey</key>
 	<string>$(OPENAI_API_KEY)</string>
 	<key>UIBackgroundModes</key>

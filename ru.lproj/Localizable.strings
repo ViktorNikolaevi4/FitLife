@@ -49,6 +49,25 @@
 "ai.meal.sugar.two" = "2 ложки";
 "ai.meal.sugar.ingredient" = "Сахар";
 "ai.meal.badge" = "ИИ";
+"ai.quick.title" = "Как добавить еду";
+"ai.quick.photo.title" = "Фото блюда";
+"ai.quick.photo.subtitle" = "Сфотографируй приём пищи, и ИИ оценит калории и БЖУ.";
+"ai.quick.text.title" = "Описать текстом";
+"ai.quick.text.subtitle" = "Напиши, что съел, и ИИ вернёт состав, калории и БЖУ.";
+"ai.quick.voice.title" = "Продиктовать";
+"ai.quick.voice.subtitle" = "Скажи, что съел, а приложение преобразует речь в текст и рассчитает БЖУ.";
+"ai.text.title" = "Текстовый ввод";
+"ai.text.subtitle" = "Опиши приём пищи обычной фразой. Например: 2 яйца, рисовая каша на молоке и протеиновый батончик.";
+"ai.text.placeholder" = "Что ты съел?";
+"ai.text.analyze" = "Рассчитать с помощью ИИ";
+"ai.text.analyzing" = "Анализируем описание";
+"ai.text.analyzing.subtitle" = "ИИ оценивает состав блюда, калории и БЖУ по твоему тексту.";
+"ai.text.error.empty" = "Введи описание приёма пищи.";
+"ai.voice.start" = "Начать диктовку";
+"ai.voice.stop" = "Остановить диктовку";
+"ai.voice.error.microphone_permission" = "Нет доступа к микрофону. Разреши его в настройках iPhone.";
+"ai.voice.error.speech_permission" = "Нет доступа к распознаванию речи. Разреши его в настройках iPhone.";
+"ai.voice.error.unavailable" = "Распознавание речи сейчас недоступно.";
 "common.delete" = "Удалить";
 
 "settings.title" = "Настройки";

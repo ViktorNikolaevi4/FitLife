@@ -1,6 +1,8 @@
 import SwiftUI
 import SwiftData
 import UIKit
+import Speech
+import AVFoundation
 
 private enum OpenAIConfiguration {
     static var apiKey: String {
@@ -16,6 +18,9 @@ private enum AIMealRecognitionError: LocalizedError {
     case emptyIngredients
     case cameraUnavailable
     case apiError
+    case microphonePermissionDenied
+    case speechPermissionDenied
+    case speechUnavailable
 
     var errorDescription: String? {
         switch self {
@@ -31,6 +36,102 @@ private enum AIMealRecognitionError: LocalizedError {
             return AppLocalizer.string("ai.meal.error.camera")
         case .apiError:
             return AppLocalizer.string("ai.meal.error.request")
+        case .microphonePermissionDenied:
+            return AppLocalizer.string("ai.voice.error.microphone_permission")
+        case .speechPermissionDenied:
+            return AppLocalizer.string("ai.voice.error.speech_permission")
+        case .speechUnavailable:
+            return AppLocalizer.string("ai.voice.error.unavailable")
+        }
+    }
+}
+
+@MainActor
+private final class MealSpeechRecognizer: ObservableObject {
+    @Published var isRecording = false
+
+    private let audioEngine = AVAudioEngine()
+    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+    private var recognitionTask: SFSpeechRecognitionTask?
+
+    func start(localeIdentifier: String, onText: @escaping (String) -> Void) async throws {
+        try await requestPermissionsIfNeeded()
+
+        guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: localeIdentifier)),
+              recognizer.isAvailable else {
+            throw AIMealRecognitionError.speechUnavailable
+        }
+
+        stop()
+
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.record, mode: .measurement, options: [.duckOthers])
+        try session.setActive(true, options: .notifyOthersOnDeactivation)
+
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        request.shouldReportPartialResults = true
+        recognitionRequest = request
+
+        let inputNode = audioEngine.inputNode
+        inputNode.removeTap(onBus: 0)
+
+        let format = inputNode.outputFormat(forBus: 0)
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+            self?.recognitionRequest?.append(buffer)
+        }
+
+        audioEngine.prepare()
+        try audioEngine.start()
+        isRecording = true
+
+        recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
+            Task { @MainActor in
+                if let result {
+                    onText(result.bestTranscription.formattedString)
+                }
+
+                if error != nil {
+                    self?.stop()
+                }
+            }
+        }
+    }
+
+    func stop() {
+        recognitionTask?.cancel()
+        recognitionTask = nil
+
+        recognitionRequest?.endAudio()
+        recognitionRequest = nil
+
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+        audioEngine.inputNode.removeTap(onBus: 0)
+
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        isRecording = false
+    }
+
+    private func requestPermissionsIfNeeded() async throws {
+        let speechStatus = await withCheckedContinuation { continuation in
+            SFSpeechRecognizer.requestAuthorization { status in
+                continuation.resume(returning: status)
+            }
+        }
+
+        guard speechStatus == .authorized else {
+            throw AIMealRecognitionError.speechPermissionDenied
+        }
+
+        let microphoneGranted = await withCheckedContinuation { continuation in
+            AVAudioSession.sharedInstance().requestRecordPermission { granted in
+                continuation.resume(returning: granted)
+            }
+        }
+
+        guard microphoneGranted else {
+            throw AIMealRecognitionError.microphonePermissionDenied
         }
     }
 }
@@ -241,6 +342,15 @@ private struct AIMealIngredientDraft: Identifiable, Hashable {
         carbs = max(baseCarbs * multiplier, 0)
     }
 
+    mutating func recalculateFromEnteredGrams() {
+        guard baseGrams > 0 else { return }
+        let multiplier = max(gramsValue / baseGrams, 0)
+        calories = max(Int((Double(baseCalories) * multiplier).rounded()), 0)
+        protein = max(baseProtein * multiplier, 0)
+        fat = max(baseFat * multiplier, 0)
+        carbs = max(baseCarbs * multiplier, 0)
+    }
+
     private static func formattedDecimalString(_ value: Double) -> String {
         let rounded = (value * 10).rounded() / 10
         if rounded.rounded(.towardZero) == rounded {
@@ -379,6 +489,98 @@ private actor OpenAIMealRecognitionService {
                             "type": "input_image",
                             "image_url": "data:image/jpeg;base64,\(base64Image)",
                             "detail": "high"
+                        ]
+                    ]
+                ]
+            ],
+            "text": [
+                "format": [
+                    "type": "json_object"
+                ]
+            ]
+        ]
+
+        let body = try JSONSerialization.data(withJSONObject: payload)
+        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/responses")!)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 60
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.httpBody = body
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIMealRecognitionError.invalidResponse
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw Self.apiError(from: data)
+        }
+
+        guard let text = Self.extractOutputText(from: data),
+              let jsonData = text.data(using: .utf8) else {
+            throw AIMealRecognitionError.invalidResponse
+        }
+
+        let decoded = try JSONDecoder().decode(AIMealRecognitionResponse.self, from: jsonData)
+        guard !decoded.ingredients.isEmpty else {
+            throw AIMealRecognitionError.emptyIngredients
+        }
+        return decoded
+    }
+
+    func recognizeMeal(from description: String, language: AppLanguage) async throws -> AIMealRecognitionResponse {
+        let apiKey = OpenAIConfiguration.apiKey
+        guard !apiKey.isEmpty else {
+            throw AIMealRecognitionError.missingAPIKey
+        }
+
+        let promptLanguage = language == .russian ? "Russian" : "English"
+        let systemPrompt = """
+        Return JSON only. Analyze a meal description and estimate the full meal composition.
+        Respond in \(promptLanguage).
+        Return an object with:
+        - dish_name: short meal name
+        - ingredients: array of 1 to 10 items
+        - notes: short uncertainty note
+        - is_beverage: boolean
+        - portion_size_guess: one of small, medium, large
+
+        Each ingredient must contain:
+        - name
+        - grams
+        - calories
+        - protein
+        - fat
+        - carbs
+        - confidence
+
+        Rules:
+        - estimate the meal as eaten, not per 100 g
+        - if the user gives a weight, use it
+        - if the user gives pieces or common household portions, convert to realistic grams
+        - if the meal includes milk, sugar, sauce, butter or oil, include them when explicitly mentioned or strongly implied
+        - if unsure, still make the best estimate and lower confidence
+        """
+
+        let payload: [String: Any] = [
+            "model": "gpt-4.1-mini",
+            "input": [
+                [
+                    "role": "system",
+                    "content": [
+                        [
+                            "type": "input_text",
+                            "text": systemPrompt
+                        ]
+                    ]
+                ],
+                [
+                    "role": "user",
+                    "content": [
+                        [
+                            "type": "input_text",
+                            "text": "Meal description: \(description)\nReturn JSON only."
                         ]
                     ]
                 ]
@@ -985,6 +1187,691 @@ struct AIMealRecognitionFlowView: View {
     }
 }
 
+struct AIQuickMealEntryChooserView: View {
+    let selectedDate: Date
+    let selectedGender: Gender
+    let onSaved: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var isShowingPhotoFlow = false
+    @State private var isShowingTextFlow = false
+    @State private var isShowingVoiceFlow = false
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                chooserCard(
+                    title: AppLocalizer.string("ai.quick.photo.title"),
+                    subtitle: AppLocalizer.string("ai.quick.photo.subtitle"),
+                    systemImage: "camera.fill",
+                    tint: .blue
+                ) {
+                    isShowingPhotoFlow = true
+                }
+
+                chooserCard(
+                    title: AppLocalizer.string("ai.quick.text.title"),
+                    subtitle: AppLocalizer.string("ai.quick.text.subtitle"),
+                    systemImage: "text.bubble.fill",
+                    tint: .green
+                ) {
+                    isShowingTextFlow = true
+                }
+
+                chooserCard(
+                    title: AppLocalizer.string("ai.quick.voice.title"),
+                    subtitle: AppLocalizer.string("ai.quick.voice.subtitle"),
+                    systemImage: "mic.fill",
+                    tint: .orange
+                ) {
+                    isShowingVoiceFlow = true
+                }
+
+                Spacer()
+            }
+            .padding(20)
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .navigationTitle(AppLocalizer.string("ai.quick.title"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(AppLocalizer.string("common.close")) {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $isShowingPhotoFlow) {
+            AIMealRecognitionFlowView(
+                selectedDate: selectedDate,
+                selectedGender: selectedGender,
+                onSaved: {
+                    onSaved()
+                    dismiss()
+                }
+            )
+        }
+        .sheet(isPresented: $isShowingTextFlow) {
+            AITextMealRecognitionFlowView(
+                selectedDate: selectedDate,
+                selectedGender: selectedGender,
+                preferredVoiceMode: false,
+                onSaved: {
+                    onSaved()
+                    dismiss()
+                }
+            )
+        }
+        .sheet(isPresented: $isShowingVoiceFlow) {
+            AITextMealRecognitionFlowView(
+                selectedDate: selectedDate,
+                selectedGender: selectedGender,
+                preferredVoiceMode: true,
+                onSaved: {
+                    onSaved()
+                    dismiss()
+                }
+            )
+        }
+    }
+
+    private func chooserCard(title: String, subtitle: String, systemImage: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 18)
+                        .fill(tint.opacity(0.12))
+                    Image(systemName: systemImage)
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(tint)
+                }
+                .frame(width: 68, height: 68)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(title)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Text(subtitle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(.secondary)
+            }
+            .padding(18)
+            .background(RoundedRectangle(cornerRadius: 20).fill(Color(.secondarySystemBackground)))
+            .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color(.separator).opacity(0.28)))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct AITextMealRecognitionFlowView: View {
+    let selectedDate: Date
+    let selectedGender: Gender
+    let preselectedMeal: MealType?
+    let preferredVoiceMode: Bool
+    let onSaved: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var sessionStore: AppSessionStore
+    @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
+
+    @State private var selectedMeal: MealType
+    @State private var inputText = ""
+    @State private var step: Step = .input
+    @State private var draft: AIMealDraft?
+    @State private var isSaving = false
+    @FocusState private var isInputFocused: Bool
+    @StateObject private var speechRecognizer = MealSpeechRecognizer()
+
+    private let recognitionService = OpenAIMealRecognitionService()
+
+    init(
+        selectedDate: Date,
+        selectedGender: Gender,
+        preselectedMeal: MealType? = nil,
+        preferredVoiceMode: Bool = false,
+        onSaved: @escaping () -> Void
+    ) {
+        self.selectedDate = selectedDate
+        self.selectedGender = selectedGender
+        self.preselectedMeal = preselectedMeal
+        self.preferredVoiceMode = preferredVoiceMode
+        self.onSaved = onSaved
+        _selectedMeal = State(initialValue: preselectedMeal ?? .breakfast)
+    }
+
+    private enum Step: Equatable {
+        case input
+        case analyzing
+        case confirmation
+        case error(String)
+    }
+
+    private var appLanguage: AppLanguage {
+        AppLanguage.from(rawValue: appLanguageRaw)
+    }
+
+    private var hasValidItems: Bool {
+        guard let draft else { return false }
+        return draft.items.contains {
+            !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.gramsValue > 0
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            content
+                .navigationTitle(AppLocalizer.string("ai.text.title"))
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(AppLocalizer.string("common.close")) {
+                            dismiss()
+                        }
+                    }
+                }
+        }
+        .onAppear {
+            if case .input = step {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    isInputFocused = true
+                }
+                if preferredVoiceMode {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                        Task {
+                            await toggleVoiceRecording()
+                        }
+                    }
+                }
+            }
+        }
+        .onDisappear {
+            speechRecognizer.stop()
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch step {
+        case .input:
+            VStack(alignment: .leading, spacing: 16) {
+                Text(AppLocalizer.string("ai.text.subtitle"))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                if preselectedMeal == nil {
+                    Picker(AppLocalizer.string("ai.meal.meal_picker"), selection: $selectedMeal) {
+                        ForEach(MealType.allCases) { meal in
+                            Text(meal.displayName).tag(meal)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                ZStack(alignment: .topLeading) {
+                    RoundedRectangle(cornerRadius: 18)
+                        .fill(Color(.secondarySystemBackground))
+
+                    if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text(AppLocalizer.string("ai.text.placeholder"))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 16)
+                    }
+
+                    TextEditor(text: $inputText)
+                        .padding(12)
+                        .scrollContentBackground(.hidden)
+                        .background(Color.clear)
+                        .focused($isInputFocused)
+                }
+                .frame(minHeight: 180)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18)
+                        .stroke(Color(.separator).opacity(0.22))
+                )
+
+                Button {
+                    Task {
+                        await toggleVoiceRecording()
+                    }
+                } label: {
+                    Label(
+                        speechRecognizer.isRecording
+                            ? AppLocalizer.string("ai.voice.stop")
+                            : AppLocalizer.string("ai.voice.start"),
+                        systemImage: speechRecognizer.isRecording ? "stop.circle.fill" : "mic.circle.fill"
+                    )
+                    .font(.headline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                }
+                .buttonStyle(.bordered)
+
+                Button {
+                    analyzeTextMeal()
+                } label: {
+                    Text(AppLocalizer.string("ai.text.analyze"))
+                        .font(.headline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                Spacer()
+            }
+            .padding(16)
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+
+        case .analyzing:
+            VStack(spacing: 18) {
+                Spacer()
+                ProgressView()
+                    .controlSize(.large)
+                Text(AppLocalizer.string("ai.text.analyzing"))
+                    .font(.headline)
+                Text(AppLocalizer.string("ai.text.analyzing.subtitle"))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+                Spacer()
+            }
+
+        case .error(let message):
+            VStack(spacing: 16) {
+                Spacer()
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 42))
+                    .foregroundStyle(.orange)
+                Text(AppLocalizer.string("ai.meal.error.title"))
+                    .font(.title3.weight(.bold))
+                Text(message)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 28)
+                Button(AppLocalizer.string("ai.meal.retry")) {
+                    step = .input
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        isInputFocused = true
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                Spacer()
+            }
+
+        case .confirmation:
+            if let draft {
+                confirmationContent(draft: draft)
+            }
+        }
+    }
+
+    private func confirmationContent(draft: AIMealDraft) -> some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(AppLocalizer.string("ai.meal.dish_name"))
+                        .font(.subheadline.weight(.semibold))
+
+                    TextField(AppLocalizer.string("ai.meal.dish_name.placeholder"), text: binding(\.dishName))
+                        .textFieldStyle(.roundedBorder)
+
+                    if preselectedMeal == nil {
+                        Picker(AppLocalizer.string("ai.meal.meal_picker"), selection: $selectedMeal) {
+                            ForEach(MealType.allCases) { meal in
+                                Text(meal.displayName).tag(meal)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                    } else {
+                        mealBadge(selectedMeal.displayName)
+                    }
+
+                    if !draft.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text(draft.notes)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(16)
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 20))
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(AppLocalizer.string("ai.meal.clarify.title"))
+                        .font(.headline)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(AppLocalizer.string("ai.meal.portion.title"))
+                            .font(.subheadline.weight(.semibold))
+
+                        HStack(spacing: 8) {
+                            ForEach(AIPortionSize.allCases) { portion in
+                                quickOptionChip(
+                                    title: AppLocalizer.string(portion.localizationKey),
+                                    isSelected: draft.portionSize == portion
+                                ) {
+                                    applyPortionSize(portion)
+                                }
+                            }
+                        }
+                    }
+
+                    if draft.isBeverage {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(AppLocalizer.string("ai.meal.sugar.title"))
+                                .font(.subheadline.weight(.semibold))
+
+                            HStack(spacing: 8) {
+                                ForEach(AIBeverageSugarOption.allCases) { option in
+                                    quickOptionChip(
+                                        title: AppLocalizer.string(option.localizationKey),
+                                        isSelected: draft.sugarOption == option
+                                    ) {
+                                        applySugarOption(option)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(16)
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 20))
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(AppLocalizer.string("ai.meal.ingredients"))
+                        .font(.headline)
+
+                    ForEach(Array(binding(\.items).wrappedValue.enumerated()), id: \.element.id) { index, item in
+                        AIMealIngredientCard(
+                            item: itemBinding(at: index),
+                            onRemove: {
+                                self.draft?.items.removeAll { $0.id == item.id }
+                            }
+                        )
+                    }
+                }
+
+                Button {
+                    saveRecognizedMeal()
+                } label: {
+                    if isSaving {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        Text(AppLocalizer.string("ai.meal.save"))
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isSaving || !hasValidItems)
+            }
+            .padding(16)
+        }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+    }
+
+    private func analyzeTextMeal() {
+        let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            step = .error(AppLocalizer.string("ai.text.error.empty"))
+            return
+        }
+
+        speechRecognizer.stop()
+        isInputFocused = false
+        step = .analyzing
+
+        Task {
+            do {
+                let response = try await recognitionService.recognizeMeal(from: trimmed, language: appLanguage)
+                await MainActor.run {
+                    draft = AIMealDraft(
+                        dishName: response.dishName,
+                        notes: response.notes ?? "",
+                        items: response.ingredients.map {
+                            AIMealIngredientDraft(
+                                name: $0.name,
+                                gramsText: String(Int($0.grams.rounded())),
+                                calories: $0.calories,
+                                protein: $0.protein,
+                                fat: $0.fat,
+                                carbs: $0.carbs,
+                                confidence: $0.confidence ?? "medium"
+                            )
+                        },
+                        isBeverage: response.isBeverage ?? false,
+                        portionSize: AIPortionSize(guess: response.portionSizeGuess),
+                        sugarOption: .none
+                    )
+                    applyPortionSize(draft?.portionSize ?? .medium)
+                    step = .confirmation
+                }
+            } catch {
+                await MainActor.run {
+                    step = .error(userVisibleMessage(for: error))
+                }
+            }
+        }
+    }
+
+    private func toggleVoiceRecording() async {
+        if speechRecognizer.isRecording {
+            speechRecognizer.stop()
+            return
+        }
+
+        do {
+            try await speechRecognizer.start(localeIdentifier: appLanguage == .russian ? "ru-RU" : "en-US") { text in
+                inputText = text
+            }
+        } catch {
+            step = .error(userVisibleMessage(for: error))
+        }
+    }
+
+    private func mealBadge(_ title: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "fork.knife")
+                .foregroundStyle(.secondary)
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func quickOptionChip(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(isSelected ? Color.white : Color.primary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(
+                    isSelected ? Color.accentColor : Color(.systemBackground),
+                    in: Capsule()
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func binding<Value>(_ keyPath: WritableKeyPath<AIMealDraft, Value>) -> Binding<Value> {
+        Binding(
+            get: { draft![keyPath: keyPath] },
+            set: { draft![keyPath: keyPath] = $0 }
+        )
+    }
+
+    private func itemBinding(at index: Int) -> Binding<AIMealIngredientDraft> {
+        Binding(
+            get: { draft!.items[index] },
+            set: { draft!.items[index] = $0 }
+        )
+    }
+
+    private func saveRecognizedMeal() {
+        guard let draft else { return }
+        let items = draft.items.filter {
+            !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.gramsValue > 0
+        }
+        guard !items.isEmpty else { return }
+
+        isSaving = true
+        let ownerId = sessionStore.firebaseUser?.uid ?? ""
+        let aiMealGroupID = UUID().uuidString
+        let normalizedDishName = draft.dishName.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        do {
+            upsertCustomMealTemplate(from: draft, items: items)
+
+            for item in items {
+                let productForEntry = Product(
+                    name: item.name,
+                    protein: item.protein,
+                    fat: item.fat,
+                    carbs: item.carbs,
+                    calories: item.calories,
+                    isFavorite: false,
+                    isCustom: true
+                )
+
+                let entry = FoodEntry(
+                    date: selectedDate,
+                    mealType: selectedMeal.rawValue,
+                    product: productForEntry,
+                    portion: item.gramsValue,
+                    gender: selectedGender,
+                    ownerId: ownerId,
+                    isFavorite: false,
+                    aiMealGroupID: aiMealGroupID,
+                    aiMealName: normalizedDishName.isEmpty ? nil : normalizedDishName
+                )
+                modelContext.insert(entry)
+            }
+
+            try modelContext.save()
+
+            if !ownerId.isEmpty {
+                Task {
+                    for item in items {
+                        await ProductUsageCache.shared.increment(productName: item.name, for: ownerId)
+                    }
+                }
+            }
+
+            onSaved()
+            dismiss()
+        } catch {
+            step = .error(userVisibleMessage(for: error))
+        }
+
+        isSaving = false
+    }
+
+    private func upsertCustomMealTemplate(from draft: AIMealDraft, items: [AIMealIngredientDraft]) {
+        let templateName = draft.dishName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !templateName.isEmpty else { return }
+
+        let totalGrams = items.reduce(0) { $0 + $1.gramsValue }
+        guard totalGrams > 0 else { return }
+
+        let totalCalories = items.reduce(0) { $0 + Double($1.calories) }
+        let totalProtein = items.reduce(0) { $0 + $1.protein }
+        let totalFat = items.reduce(0) { $0 + $1.fat }
+        let totalCarbs = items.reduce(0) { $0 + $1.carbs }
+        let normalization = 100 / totalGrams
+
+        let normalizedCalories = Int((totalCalories * normalization).rounded())
+        let normalizedProtein = totalProtein * normalization
+        let normalizedFat = totalFat * normalization
+        let normalizedCarbs = totalCarbs * normalization
+
+        let descriptor = FetchDescriptor<CustomProduct>()
+        let existingProducts = (try? modelContext.fetch(descriptor)) ?? []
+
+        if let existing = existingProducts.first(where: {
+            $0.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                .localizedCaseInsensitiveCompare(templateName) == .orderedSame
+        }) {
+            existing.protein = normalizedProtein
+            existing.fat = normalizedFat
+            existing.carbs = normalizedCarbs
+            existing.calories = normalizedCalories
+            existing.isAIGenerated = true
+        } else {
+            let template = CustomProduct(
+                name: templateName,
+                protein: normalizedProtein,
+                fat: normalizedFat,
+                carbs: normalizedCarbs,
+                calories: normalizedCalories,
+                isAIGenerated: true
+            )
+            modelContext.insert(template)
+        }
+    }
+
+    private func applyPortionSize(_ portionSize: AIPortionSize) {
+        guard var draft else { return }
+        draft.portionSize = portionSize
+        draft.items = draft.items.map { item in
+            var updated = item
+            updated.applyMultiplier(portionSize.multiplier)
+            return updated
+        }
+        self.draft = draft
+        if draft.isBeverage {
+            applySugarOption(draft.sugarOption)
+        }
+    }
+
+    private func applySugarOption(_ option: AIBeverageSugarOption) {
+        guard var draft else { return }
+        draft.sugarOption = option
+        let sugarName = AppLocalizer.string("ai.meal.sugar.ingredient")
+        draft.items.removeAll {
+            $0.name.trimmingCharacters(in: .whitespacesAndNewlines).caseInsensitiveCompare(sugarName) == .orderedSame
+        }
+
+        if option.grams > 0 {
+            draft.items.append(
+                AIMealIngredientDraft(
+                    name: sugarName,
+                    gramsText: String(Int(option.grams.rounded())),
+                    calories: Int((option.grams * 4).rounded()),
+                    protein: 0,
+                    fat: 0,
+                    carbs: option.grams,
+                    confidence: "user"
+                )
+            )
+        }
+
+        self.draft = draft
+    }
+
+    private func userVisibleMessage(for error: Error) -> String {
+        if let localizedError = error as? LocalizedError,
+           let description = localizedError.errorDescription,
+           !description.isEmpty {
+            return description
+        }
+
+        return AppErrorPresenter.message(for: error)
+    }
+}
+
 private struct AIMealIngredientCard: View {
     @Binding var item: AIMealIngredientDraft
     let onRemove: () -> Void
@@ -1007,6 +1894,7 @@ private struct AIMealIngredientCard: View {
                     .textFieldStyle(.roundedBorder)
                     .onChange(of: item.gramsText) { _, newValue in
                         item.gramsText = sanitizedNumberString(newValue)
+                        item.recalculateFromEnteredGrams()
                     }
 
                 VStack(alignment: .leading, spacing: 2) {

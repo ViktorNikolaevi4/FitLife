@@ -19,6 +19,7 @@ struct MainTabView: View {
     @State private var refreshID = UUID()
     @State private var selectedTab: MainTab = .home
     @State private var showsHomeFloatingAddButton = true
+    @State private var isShowingAIQuickAdd = false
 
     private var appLanguage: AppLanguage {
         AppLanguage.from(rawValue: appLanguageRaw)
@@ -65,7 +66,7 @@ struct MainTabView: View {
             }
 
             if showsFloatingAddButton {
-                Button(action: { sheet = .ration }) {
+                Button(action: { isShowingAIQuickAdd = true }) {
                     ZStack {
                         Circle()
                             .fill(Color.primary)
@@ -92,6 +93,13 @@ struct MainTabView: View {
                 selectedDate: $selectedDate,
                 onMealAdded: { refreshID = UUID() },
                 preselectedMeal: preset
+            )
+        }
+        .sheet(isPresented: $isShowingAIQuickAdd) {
+            AIQuickMealEntryChooserView(
+                selectedDate: selectedDate,
+                selectedGender: selectedGender,
+                onSaved: { refreshID = UUID() }
             )
         }
     }

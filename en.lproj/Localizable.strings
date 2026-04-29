@@ -49,6 +49,25 @@
 "ai.meal.sugar.two" = "2 spoons";
 "ai.meal.sugar.ingredient" = "Sugar";
 "ai.meal.badge" = "AI";
+"ai.quick.title" = "Add meal";
+"ai.quick.photo.title" = "Photo";
+"ai.quick.photo.subtitle" = "Take a meal photo and let AI estimate calories and macros.";
+"ai.quick.text.title" = "Describe with text";
+"ai.quick.text.subtitle" = "Write what you ate and AI will return meal composition, calories, and macros.";
+"ai.quick.voice.title" = "Dictate";
+"ai.quick.voice.subtitle" = "Say what you ate and the app will turn speech into text and estimate the macros.";
+"ai.text.title" = "Text input";
+"ai.text.subtitle" = "Describe the meal in a natural sentence. For example: 2 eggs, rice porridge with milk, and a protein bar.";
+"ai.text.placeholder" = "What did you eat?";
+"ai.text.analyze" = "Estimate with AI";
+"ai.text.analyzing" = "Analyzing description";
+"ai.text.analyzing.subtitle" = "AI is estimating the meal composition, calories, and macros from your text.";
+"ai.text.error.empty" = "Enter a meal description.";
+"ai.voice.start" = "Start dictation";
+"ai.voice.stop" = "Stop dictation";
+"ai.voice.error.microphone_permission" = "Microphone access is required. Allow it in iPhone Settings.";
+"ai.voice.error.speech_permission" = "Speech recognition access is required. Allow it in iPhone Settings.";
+"ai.voice.error.unavailable" = "Speech recognition is currently unavailable.";
 "common.delete" = "Delete";
 
 "settings.title" = "Settings";
