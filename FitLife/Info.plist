@@ -6,6 +6,8 @@
 	<string>Камера нужна для сканирования штрихкодов продуктов и поиска их в Open Food Facts.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Микрофон нужен, чтобы голосом продиктовать еду и быстро добавить её в рацион.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Галерея нужна, чтобы выбрать фото еды и отправить его ИИ для анализа калорий и БЖУ.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Распознавание речи нужно, чтобы преобразовать описание еды в текст для расчёта калорий и БЖУ.</string>
 	<key>OpenAIAPIKey</key>

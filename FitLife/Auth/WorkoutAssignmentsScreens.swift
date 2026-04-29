@@ -1,6 +1,10 @@
 import SwiftUI
 import SwiftData
 
+private let assignmentDetailCardBackground = Color(.secondarySystemBackground)
+private let assignmentDetailInsetBackground = Color(.tertiarySystemBackground)
+private let assignmentDetailCardBorder = Color(.separator).opacity(0.32)
+
 struct AssignWorkoutTemplateScreen: View {
     let template: WorkoutTemplate
     let exerciseCount: Int
@@ -228,69 +232,29 @@ struct ClientAssignmentDetailScreen: View {
             }
 
             Section {
-                if assignment.notesSnapshot.isEmpty == false {
-                    Text(assignment.notesSnapshot)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                ForEach(Array(store.exercises.enumerated()), id: \.element.id) { index, exercise in
+                    ClientAssignmentExerciseCard(
+                        exercise: exercise,
+                        displayIndex: index + 1
+                    )
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
                 }
-
-                if let trainerName {
-                    Text(AppLocalizer.format("client.assignments.trainer", trainerName))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Text(assignment.assignedAt.formatted(date: .abbreviated, time: .omitted))
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-
-            Section(appLanguage.localized("client.assignment.detail.exercises")) {
-                ForEach(store.exercises) { exercise in
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(exercise.name)
-                            .font(.headline)
-
-                        ForEach(Array(exercise.sets.enumerated()), id: \.offset) { index, set in
-                            HStack {
-                                Text("\(index + 1).")
-                                    .foregroundStyle(.secondary)
-                                Text(
-                                    formattedWorkoutSetValue(
-                                        weight: set.weight,
-                                        reps: set.reps,
-                                        durationSeconds: set.durationSeconds,
-                                        metricType: set.metricType
-                                    )
-                                )
-                                Spacer()
-                            }
-                            .font(.subheadline)
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-            }
-
-            Section {
-                Button(activeWorkout == nil ? AppLocalizer.string("client.assignments.start") : AppLocalizer.string("client.assignments.resume")) {
-                    Task {
-                        let workout = await ClientAssignedWorkoutsStore(clientId: assignment.clientId).startAssignment(
-                            assignment,
-                            gender: selectedGender,
-                            modelContext: modelContext
-                        )
-                        if let workout {
-                            selectedWorkout = workout
-                        }
-                    }
-                }
-                .buttonStyle(.borderedProminent)
+            } header: {
+                Text(appLanguage.localized("client.assignment.detail.exercises"))
+                    .font(.footnote.weight(.semibold))
             }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Color(.systemGroupedBackground))
         .navigationTitle(assignment.titleSnapshot)
         .navigationDestination(item: $selectedWorkout) { workout in
             ActiveWorkoutScreen(workout: workout)
+        }
+        .safeAreaInset(edge: .bottom) {
+            startAssignmentBar
         }
         .overlay {
             if store.isLoading {
@@ -309,5 +273,124 @@ struct ClientAssignmentDetailScreen: View {
         .refreshable {
             await store.load()
         }
+    }
+
+    private var startAssignmentBar: some View {
+        VStack(spacing: 0) {
+            Divider()
+            Button {
+                Task {
+                    let workout = await ClientAssignedWorkoutsStore(clientId: assignment.clientId).startAssignment(
+                        assignment,
+                        gender: selectedGender,
+                        modelContext: modelContext
+                    )
+                    if let workout {
+                        selectedWorkout = workout
+                    }
+                }
+            } label: {
+                Text(activeWorkout == nil ? AppLocalizer.string("client.assignments.start") : AppLocalizer.string("client.assignments.resume"))
+                    .font(.headline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 15)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(store.isLoading || store.exercises.isEmpty)
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+        }
+        .background(.ultraThinMaterial)
+    }
+}
+
+private struct ClientAssignmentExerciseCard: View {
+    let exercise: WorkoutTemplateExerciseItem
+    let displayIndex: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(workoutAccentColor(exercise.accentName).opacity(0.16))
+
+                    workoutIconImage(
+                        named: exercise.systemImage,
+                        accentName: exercise.accentName,
+                        size: 18
+                    )
+                }
+                .frame(width: 42, height: 42)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(exercise.name)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+
+                    Text(AppLocalizer.format("client.assignment.detail.set_count", exercise.sets.count))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 0)
+
+                Text(String(format: "%02d", displayIndex))
+                    .font(.caption.weight(.bold).monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(assignmentDetailInsetBackground, in: Capsule())
+            }
+
+            VStack(spacing: 8) {
+                ForEach(Array(exercise.sets.enumerated()), id: \.offset) { index, set in
+                    ClientAssignmentSetRow(index: index + 1, set: set)
+                }
+            }
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 22).fill(assignmentDetailCardBackground))
+        .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(assignmentDetailCardBorder))
+    }
+}
+
+private struct ClientAssignmentSetRow: View {
+    let index: Int
+    let set: WorkoutDraftSet
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("\(index)")
+                .font(.subheadline.weight(.semibold).monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 30, height: 30)
+                .background(Color(.systemBackground), in: Circle())
+
+            HStack(spacing: 8) {
+                Text("\(formattedWorkoutWeight(set.weight)) kg")
+                    .font(.body.weight(.semibold).monospacedDigit())
+
+                Text("x")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+
+                Text(
+                    formattedWorkoutMetricValue(
+                        reps: set.reps,
+                        durationSeconds: set.durationSeconds,
+                        metricType: set.metricType
+                    )
+                )
+                .font(.body.weight(.semibold).monospacedDigit())
+            }
+            .foregroundStyle(.primary)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(assignmentDetailInsetBackground, in: RoundedRectangle(cornerRadius: 16))
     }
 }

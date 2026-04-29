@@ -28,6 +28,12 @@
 "ai.meal.error.request" = "Ошибка запроса к OpenAI.";
 "ai.meal.retry" = "Попробовать ещё раз";
 "ai.meal.retake" = "Переснять";
+"ai.meal.choose_again" = "Выбрать другое";
+"ai.meal.source.subtitle" = "Добавь фото еды: сделай снимок сейчас или выбери готовое фото из галереи.";
+"ai.meal.source.camera.title" = "Сделать фото";
+"ai.meal.source.camera.subtitle" = "Откроем камеру и сразу отправим снимок на анализ калорий и БЖУ.";
+"ai.meal.source.gallery.title" = "Выбрать из галереи";
+"ai.meal.source.gallery.subtitle" = "Подойдёт уже снятое фото блюда из медиатеки.";
 "ai.meal.dish_name" = "Название блюда";
 "ai.meal.dish_name.placeholder" = "Например, курица с рисом";
 "ai.meal.meal_picker" = "Приём пищи";
@@ -235,6 +241,7 @@
 "client.assignments.start" = "Начать";
 "client.assignments.resume" = "Продолжить";
 "client.assignment.detail.exercises" = "Упражнения";
+"client.assignment.detail.set_count" = "Подходов: %d";
 "client.assignment.detail.empty.title" = "Пока нет упражнений";
 "client.assignment.detail.empty.subtitle" = "Упражнения назначения появятся здесь.";
 "trainer.overview.title" = "Назначения";

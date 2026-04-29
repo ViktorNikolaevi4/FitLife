@@ -28,6 +28,12 @@
 "ai.meal.error.request" = "OpenAI request failed.";
 "ai.meal.retry" = "Try Again";
 "ai.meal.retake" = "Retake";
+"ai.meal.choose_again" = "Choose Another";
+"ai.meal.source.subtitle" = "Add a meal photo: take a new shot or pick an existing photo from your gallery.";
+"ai.meal.source.camera.title" = "Take Photo";
+"ai.meal.source.camera.subtitle" = "Open the camera and send the shot for calories and macros analysis.";
+"ai.meal.source.gallery.title" = "Choose from Gallery";
+"ai.meal.source.gallery.subtitle" = "Use an existing meal photo from your library.";
 "ai.meal.dish_name" = "Meal Name";
 "ai.meal.dish_name.placeholder" = "For example, chicken with rice";
 "ai.meal.meal_picker" = "Meal";
@@ -235,6 +241,7 @@
 "client.assignments.start" = "Start";
 "client.assignments.resume" = "Resume";
 "client.assignment.detail.exercises" = "Exercises";
+"client.assignment.detail.set_count" = "%d sets";
 "client.assignment.detail.empty.title" = "No exercises yet";
 "client.assignment.detail.empty.subtitle" = "Assigned workout exercises will appear here.";
 "trainer.overview.title" = "Assignments";

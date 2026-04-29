@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import UIKit
+import PhotosUI
 import Speech
 import AVFoundation
 
@@ -682,10 +683,12 @@ struct AIMealRecognitionFlowView: View {
     @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
 
     @State private var selectedMeal: MealType
-    @State private var step: Step = .camera
+    @State private var step: Step = .sourceSelection
     @State private var draft: AIMealDraft?
     @State private var capturedImage: UIImage?
     @State private var isShowingCamera = false
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var isLoadingGalleryImage = false
     @State private var isSaving = false
 
     private let recognitionService = OpenAIMealRecognitionService()
@@ -704,6 +707,7 @@ struct AIMealRecognitionFlowView: View {
     }
 
     private enum Step: Equatable {
+        case sourceSelection
         case camera
         case analyzing
         case confirmation
@@ -734,8 +738,8 @@ struct AIMealRecognitionFlowView: View {
                     }
                     ToolbarItem(placement: .topBarTrailing) {
                         if step == .confirmation {
-                            Button(AppLocalizer.string("ai.meal.retake")) {
-                                reopenCamera()
+                            Button(AppLocalizer.string("ai.meal.choose_again")) {
+                                step = .sourceSelection
                             }
                         }
                     }
@@ -758,15 +762,22 @@ struct AIMealRecognitionFlowView: View {
         }
         .onAppear {
             if case .camera = step {
-                presentCameraIfPossible()
+                step = .sourceSelection
             }
+        }
+        .onChange(of: selectedPhotoItem) { _, newItem in
+            guard let newItem else { return }
+            loadGalleryImage(from: newItem)
         }
     }
 
     @ViewBuilder
     private var content: some View {
         switch step {
-        case .camera, .analyzing:
+        case .sourceSelection, .camera:
+            photoSourceContent
+
+        case .analyzing:
             VStack(spacing: 18) {
                 Spacer()
                 ProgressView()
@@ -794,7 +805,7 @@ struct AIMealRecognitionFlowView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 28)
                 Button(AppLocalizer.string("ai.meal.retry")) {
-                    reopenCamera()
+                    step = .sourceSelection
                 }
                 .buttonStyle(.borderedProminent)
                 Spacer()
@@ -805,6 +816,84 @@ struct AIMealRecognitionFlowView: View {
                 confirmationContent(draft: draft)
             }
         }
+    }
+
+    private var photoSourceContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(AppLocalizer.string("ai.meal.source.subtitle"))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 4)
+
+            Button {
+                reopenCamera()
+            } label: {
+                photoSourceCard(
+                    title: AppLocalizer.string("ai.meal.source.camera.title"),
+                    subtitle: AppLocalizer.string("ai.meal.source.camera.subtitle"),
+                    systemImage: "camera.fill",
+                    tint: .blue
+                )
+            }
+            .buttonStyle(.plain)
+
+            PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                photoSourceCard(
+                    title: AppLocalizer.string("ai.meal.source.gallery.title"),
+                    subtitle: AppLocalizer.string("ai.meal.source.gallery.subtitle"),
+                    systemImage: "photo.on.rectangle.angled",
+                    tint: .green,
+                    isLoading: isLoadingGalleryImage
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(isLoadingGalleryImage)
+
+            Spacer()
+        }
+        .padding(20)
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+    }
+
+    private func photoSourceCard(
+        title: String,
+        subtitle: String,
+        systemImage: String,
+        tint: Color,
+        isLoading: Bool = false
+    ) -> some View {
+        HStack(spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(tint.opacity(0.12))
+                if isLoading {
+                    ProgressView()
+                } else {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(tint)
+                }
+            }
+            .frame(width: 68, height: 68)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.leading)
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .foregroundStyle(.secondary)
+        }
+        .padding(18)
+        .background(RoundedRectangle(cornerRadius: 20).fill(Color(.secondarySystemBackground)))
+        .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color(.separator).opacity(0.28)))
     }
 
     private func confirmationContent(draft: AIMealDraft) -> some View {
@@ -1001,37 +1090,73 @@ struct AIMealRecognitionFlowView: View {
 
         Task {
             do {
-                guard let data = image.jpegData(compressionQuality: 0.82) else {
-                    throw AIMealRecognitionError.invalidImage
-                }
-                let response = try await recognitionService.recognizeMeal(from: data, language: appLanguage)
-                await MainActor.run {
-                    draft = AIMealDraft(
-                        dishName: response.dishName,
-                        notes: response.notes ?? "",
-                        items: response.ingredients.map {
-                            AIMealIngredientDraft(
-                                name: $0.name,
-                                gramsText: String(Int($0.grams.rounded())),
-                                calories: $0.calories,
-                                protein: $0.protein,
-                                fat: $0.fat,
-                                carbs: $0.carbs,
-                                confidence: $0.confidence ?? "medium"
-                            )
-                        },
-                        isBeverage: response.isBeverage ?? false,
-                        portionSize: AIPortionSize(guess: response.portionSizeGuess),
-                        sugarOption: .none
-                    )
-                    applyPortionSize(draft?.portionSize ?? .medium)
-                    step = .confirmation
-                }
+                try await analyze(image)
             } catch {
                 await MainActor.run {
                     step = .error(userVisibleMessage(for: error))
                 }
             }
+        }
+    }
+
+    private func loadGalleryImage(from item: PhotosPickerItem) {
+        isLoadingGalleryImage = true
+
+        Task {
+            defer {
+                Task { @MainActor in
+                    isLoadingGalleryImage = false
+                    selectedPhotoItem = nil
+                }
+            }
+
+            do {
+                guard let data = try await item.loadTransferable(type: Data.self),
+                      let image = UIImage(data: data) else {
+                    throw AIMealRecognitionError.invalidImage
+                }
+
+                await MainActor.run {
+                    capturedImage = image
+                    step = .analyzing
+                }
+
+                try await analyze(image)
+            } catch {
+                await MainActor.run {
+                    step = .error(userVisibleMessage(for: error))
+                }
+            }
+        }
+    }
+
+    private func analyze(_ image: UIImage) async throws {
+        guard let data = image.jpegData(compressionQuality: 0.82) else {
+            throw AIMealRecognitionError.invalidImage
+        }
+
+        let response = try await recognitionService.recognizeMeal(from: data, language: appLanguage)
+        await MainActor.run {
+            draft = AIMealDraft(
+                dishName: response.dishName,
+                notes: response.notes ?? "",
+                items: response.ingredients.map {
+                    AIMealIngredientDraft(
+                        name: $0.name,
+                        gramsText: String(Int($0.grams.rounded())),
+                        calories: $0.calories,
+                        protein: $0.protein,
+                        fat: $0.fat,
+                        carbs: $0.carbs,
+                        confidence: $0.confidence ?? "medium"
+                    )
+                },
+                isBeverage: response.isBeverage ?? false,
+                portionSize: AIPortionSize(guess: response.portionSizeGuess),
+                sugarOption: .none
+            )
+            applyPortionSize(draft?.portionSize ?? .medium)
+            step = .confirmation
         }
     }
 
