@@ -41,10 +41,7 @@ struct ClientCoachingEntryScreen: View {
     }
 
     private var isInitialLoading: Bool {
-        store.isLoading &&
-        store.intake == nil &&
-        store.request == nil &&
-        store.activeLink == nil
+        !store.hasLoadedInitialState
     }
 
     private var shouldShowForm: Bool {

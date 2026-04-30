@@ -8,6 +8,7 @@ final class ClientCoachingStore: ObservableObject {
     @Published var activeLink: TrainerClientLink?
     @Published var trainerProfile: AppUserProfile?
     @Published var isLoading = false
+    @Published private(set) var hasLoadedInitialState = false
     @Published var isSaving = false
     @Published var errorMessage: String?
 
@@ -74,9 +75,11 @@ final class ClientCoachingStore: ObservableObject {
                 self.trainerProfile = nil
             }
 
+            hasLoadedInitialState = true
             isLoading = false
         } catch {
             errorMessage = AppErrorPresenter.message(for: error)
+            hasLoadedInitialState = true
             isLoading = false
         }
     }
