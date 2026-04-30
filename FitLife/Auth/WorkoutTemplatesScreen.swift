@@ -5,6 +5,7 @@ struct WorkoutTemplatesScreen: View {
 
     @StateObject private var store: WorkoutTemplatesStore
     @State private var showCreateSheet = false
+    @State private var pendingDeleteTemplate: WorkoutTemplate?
     @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
 
     init(trainerId: String) {
@@ -48,6 +49,13 @@ struct WorkoutTemplatesScreen: View {
                         }
                         .padding(.vertical, 4)
                     }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button(role: .destructive) {
+                            pendingDeleteTemplate = template
+                        } label: {
+                            Label(AppLocalizer.string("common.delete"), systemImage: "trash")
+                        }
+                    }
                 }
             }
         }
@@ -85,6 +93,25 @@ struct WorkoutTemplatesScreen: View {
                     showCreateSheet = false
                 }
             }
+        }
+        .confirmationDialog(
+            AppLocalizer.string("trainer.templates.delete.title"),
+            isPresented: Binding(
+                get: { pendingDeleteTemplate != nil },
+                set: { if $0 == false { pendingDeleteTemplate = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(AppLocalizer.string("common.delete"), role: .destructive) {
+                guard let pendingDeleteTemplate else { return }
+                Task { await store.deleteTemplate(pendingDeleteTemplate) }
+                self.pendingDeleteTemplate = nil
+            }
+            Button(AppLocalizer.string("common.cancel"), role: .cancel) {
+                pendingDeleteTemplate = nil
+            }
+        } message: {
+            Text(AppLocalizer.string("trainer.templates.delete.message"))
         }
     }
 }

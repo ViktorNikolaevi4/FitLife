@@ -61,4 +61,25 @@ final class WorkoutTemplatesStore: ObservableObject {
             return false
         }
     }
+
+    func deleteTemplate(_ template: WorkoutTemplate) async {
+        errorMessage = nil
+
+        do {
+            try await firestore
+                .collection("workout_templates")
+                .document(template.id)
+                .setData(
+                    [
+                        "isActive": false,
+                        "updatedAt": Date()
+                    ],
+                    merge: true
+                )
+
+            templates.removeAll { $0.id == template.id }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
 }

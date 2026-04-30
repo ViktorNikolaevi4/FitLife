@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import FirebaseFirestore
 
 @MainActor
@@ -249,7 +250,7 @@ private struct CoachingRequestRow: View {
     let assignedTrainer: AppUserProfile?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(displayName)
                     .font(.headline)
@@ -412,10 +413,22 @@ struct CoachingRequestDetailScreen: View {
     }
 
     private func multilineRow(_ title: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        let normalizedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let displayValue = normalizedValue.isEmpty ? "—" : value
+
+        return VStack(alignment: .leading, spacing: 6) {
             Text(title)
-            Text(value.isEmpty ? "—" : value)
+            Text(displayValue)
                 .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+                .contextMenu {
+                    Button {
+                        UIPasteboard.general.string = normalizedValue
+                    } label: {
+                        Label(AppLocalizer.string("common.copy"), systemImage: "doc.on.doc")
+                    }
+                    .disabled(normalizedValue.isEmpty)
+                }
         }
     }
 

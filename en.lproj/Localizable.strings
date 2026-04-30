@@ -165,6 +165,7 @@
 "common.today" = "Today";
 "common.select_date" = "Select Date";
 "common.add" = "Add";
+"common.copy" = "Copy";
 "common.cannot_undo" = "This action cannot be undone.";
 "common.sign_out" = "Sign Out";
 
@@ -223,6 +224,8 @@
 "trainer.templates.create.title_placeholder" = "Workout title";
 "trainer.templates.create.notes_placeholder" = "Short description or note";
 "trainer.templates.notes" = "Note";
+"trainer.templates.delete.title" = "Delete template?";
+"trainer.templates.delete.message" = "The template will be hidden from the coach list. Already assigned workouts will not change.";
 "trainer.templates.exercises.section" = "Template Exercises";
 "trainer.templates.exercises.empty.title" = "No exercises yet";
 "trainer.templates.exercises.empty.subtitle" = "Add the first exercise to this template.";
@@ -299,6 +302,16 @@
 "coaching.intake.section.training" = "Training Context";
 "coaching.intake.section.measurements" = "Measurements";
 "coaching.intake.section.notes" = "Notes";
+"coaching.intake.step.goal.title" = "Where should we start?";
+"coaching.intake.step.goal.subtitle" = "Pick the main focus so your trainer can choose the right load and coaching format.";
+"coaching.intake.step.body.title" = "Body details";
+"coaching.intake.step.body.subtitle" = "Basic data helps keep training safe and recommendations relevant.";
+"coaching.intake.step.training.title" = "Training context";
+"coaching.intake.step.training.subtitle" = "Share your experience, limitations, and available equipment.";
+"coaching.intake.step.measurements.title" = "Measurements";
+"coaching.intake.step.measurements.subtitle" = "Optional, but useful for tracking progress more accurately.";
+"coaching.intake.step.notes.title" = "Final details";
+"coaching.intake.step.notes.subtitle" = "Add anything your trainer should know before starting.";
 "coaching.intake.goal" = "Goal";
 "coaching.intake.age" = "Age";
 "coaching.intake.height" = "Height";
@@ -310,11 +323,16 @@
 "coaching.intake.equipment" = "Equipment";
 "coaching.intake.schedule" = "Schedule";
 "coaching.intake.notes" = "Preferences and notes";
+"coaching.intake.limitations.placeholder" = "For example: knee pain, avoid axial load, be careful with lower back.";
+"coaching.intake.equipment.placeholder" = "For example: gym, dumbbells at home, pull-up bar, bands.";
+"coaching.intake.schedule.placeholder" = "For example: 3 evenings per week, 60 minutes each.";
+"coaching.intake.notes.placeholder" = "Goals, preferences, disliked exercises, nutrition, sleep, stress.";
 "coaching.intake.measurement.waist" = "Waist";
 "coaching.intake.measurement.chest" = "Chest";
 "coaching.intake.measurement.hips" = "Hips";
 "coaching.unit.cm" = "cm";
 "coaching.unit.kg" = "kg";
+"coaching.unit.years" = "years";
 "coaching.goal.lose_weight" = "Weight loss";
 "coaching.goal.gain_mass" = "Mass gain";
 "coaching.goal.maintain" = "Maintenance";

@@ -1453,6 +1453,11 @@ struct AITextMealRecognitionFlowView: View {
     @State private var step: Step = .input
     @State private var draft: AIMealDraft?
     @State private var isSaving = false
+    @State private var voiceBaseText = ""
+    @State private var lastSpeechTranscript = ""
+    @State private var lastAppliedSpeechText = ""
+    @State private var didManuallyEditDuringSpeech = false
+    @State private var isApplyingSpeechText = false
     @FocusState private var isInputFocused: Bool
     @StateObject private var speechRecognizer = MealSpeechRecognizer()
 
@@ -1527,74 +1532,83 @@ struct AITextMealRecognitionFlowView: View {
     private var content: some View {
         switch step {
         case .input:
-            VStack(alignment: .leading, spacing: 16) {
-                Text(AppLocalizer.string("ai.text.subtitle"))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(AppLocalizer.string("ai.text.subtitle"))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
 
-                if preselectedMeal == nil {
-                    Picker(AppLocalizer.string("ai.meal.meal_picker"), selection: $selectedMeal) {
-                        ForEach(MealType.allCases) { meal in
-                            Text(meal.displayName).tag(meal)
+                    if preselectedMeal == nil {
+                        Picker(AppLocalizer.string("ai.meal.meal_picker"), selection: $selectedMeal) {
+                            ForEach(MealType.allCases) { meal in
+                                Text(meal.displayName).tag(meal)
+                            }
                         }
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                ZStack(alignment: .topLeading) {
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(Color(.secondarySystemBackground))
-
-                    if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text(AppLocalizer.string("ai.text.placeholder"))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 18)
-                            .padding(.vertical, 16)
+                        .pickerStyle(.segmented)
                     }
 
-                    TextEditor(text: $inputText)
-                        .padding(12)
-                        .scrollContentBackground(.hidden)
-                        .background(Color.clear)
-                        .focused($isInputFocused)
-                }
-                .frame(minHeight: 180)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18)
-                        .stroke(Color(.separator).opacity(0.22))
-                )
+                    ZStack(alignment: .topLeading) {
+                        RoundedRectangle(cornerRadius: 18)
+                            .fill(Color(.secondarySystemBackground))
 
-                Button {
-                    Task {
-                        await toggleVoiceRecording()
+                        if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Text(AppLocalizer.string("ai.text.placeholder"))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 18)
+                                .padding(.vertical, 16)
+                        }
+
+                        TextEditor(text: $inputText)
+                            .padding(12)
+                            .scrollContentBackground(.hidden)
+                            .background(Color.clear)
+                            .focused($isInputFocused)
+                            .onChange(of: inputText) { _, newValue in
+                                guard speechRecognizer.isRecording, isApplyingSpeechText == false else { return }
+                                didManuallyEditDuringSpeech = true
+                                voiceBaseText = newValue
+                                lastAppliedSpeechText = newValue
+                            }
                     }
-                } label: {
-                    Label(
-                        speechRecognizer.isRecording
-                            ? AppLocalizer.string("ai.voice.stop")
-                            : AppLocalizer.string("ai.voice.start"),
-                        systemImage: speechRecognizer.isRecording ? "stop.circle.fill" : "mic.circle.fill"
+                    .frame(minHeight: 180)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18)
+                            .stroke(Color(.separator).opacity(0.22))
                     )
-                    .font(.headline.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                }
-                .buttonStyle(.bordered)
 
-                Button {
-                    analyzeTextMeal()
-                } label: {
-                    Text(AppLocalizer.string("ai.text.analyze"))
+                    Button {
+                        Task {
+                            await toggleVoiceRecording()
+                        }
+                    } label: {
+                        Label(
+                            speechRecognizer.isRecording
+                                ? AppLocalizer.string("ai.voice.stop")
+                                : AppLocalizer.string("ai.voice.start"),
+                            systemImage: speechRecognizer.isRecording ? "stop.circle.fill" : "mic.circle.fill"
+                        )
                         .font(.headline.weight(.semibold))
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .padding(.vertical, 14)
+                    }
+                    .buttonStyle(.bordered)
 
-                Spacer()
+                    Button {
+                        analyzeTextMeal()
+                    } label: {
+                        Text(AppLocalizer.string("ai.text.analyze"))
+                            .font(.headline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 28)
+                .padding(.bottom, 24)
             }
-            .padding(16)
+            .scrollDismissesKeyboard(.interactively)
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
 
         case .analyzing:
@@ -1796,12 +1810,62 @@ struct AITextMealRecognitionFlowView: View {
         }
 
         do {
+            resetVoiceSession()
             try await speechRecognizer.start(localeIdentifier: appLanguage == .russian ? "ru-RU" : "en-US") { text in
-                inputText = text
+                applySpeechTranscript(text)
             }
         } catch {
             step = .error(userVisibleMessage(for: error))
         }
+    }
+
+    private func resetVoiceSession() {
+        voiceBaseText = inputText
+        lastSpeechTranscript = ""
+        lastAppliedSpeechText = inputText
+        didManuallyEditDuringSpeech = false
+        isApplyingSpeechText = false
+    }
+
+    private func applySpeechTranscript(_ transcript: String) {
+        let addition: String
+        if didManuallyEditDuringSpeech {
+            addition = speechDelta(current: transcript, previous: lastSpeechTranscript)
+        } else {
+            addition = transcript
+        }
+
+        let newText = joinedVoiceText(base: voiceBaseText, addition: addition)
+        lastSpeechTranscript = transcript
+
+        guard newText != inputText else {
+            lastAppliedSpeechText = newText
+            return
+        }
+
+        isApplyingSpeechText = true
+        inputText = newText
+        lastAppliedSpeechText = newText
+        if didManuallyEditDuringSpeech {
+            voiceBaseText = newText
+        }
+        isApplyingSpeechText = false
+    }
+
+    private func speechDelta(current: String, previous: String) -> String {
+        guard previous.isEmpty == false else { return current }
+        guard current.hasPrefix(previous) else { return "" }
+        return String(current.dropFirst(previous.count))
+    }
+
+    private func joinedVoiceText(base: String, addition: String) -> String {
+        let normalizedAddition = addition.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalizedAddition.isEmpty == false else { return base }
+
+        let normalizedBase = base.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalizedBase.isEmpty == false else { return normalizedAddition }
+
+        return "\(normalizedBase) \(normalizedAddition)"
     }
 
     private func mealBadge(_ title: String) -> some View {

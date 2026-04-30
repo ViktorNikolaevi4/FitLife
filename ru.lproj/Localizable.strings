@@ -165,6 +165,7 @@
 "common.today" = "Сегодня";
 "common.select_date" = "Выберите дату";
 "common.add" = "Добавить";
+"common.copy" = "Скопировать";
 "common.cannot_undo" = "Это действие нельзя отменить.";
 "common.sign_out" = "Выйти";
 
@@ -223,6 +224,8 @@
 "trainer.templates.create.title_placeholder" = "Название тренировки";
 "trainer.templates.create.notes_placeholder" = "Короткое описание или заметка";
 "trainer.templates.notes" = "Заметка";
+"trainer.templates.delete.title" = "Удалить шаблон?";
+"trainer.templates.delete.message" = "Шаблон будет скрыт из списка тренера. Уже назначенные тренировки не изменятся.";
 "trainer.templates.exercises.section" = "Упражнения шаблона";
 "trainer.templates.exercises.empty.title" = "Пока нет упражнений";
 "trainer.templates.exercises.empty.subtitle" = "Добавь первое упражнение в шаблон.";
@@ -299,6 +302,16 @@
 "coaching.intake.section.training" = "Тренировочный контекст";
 "coaching.intake.section.measurements" = "Замеры";
 "coaching.intake.section.notes" = "Заметки";
+"coaching.intake.step.goal.title" = "С чего начнём?";
+"coaching.intake.step.goal.subtitle" = "Выбери главный фокус. Тренеру будет проще подобрать нагрузку и формат сопровождения.";
+"coaching.intake.step.body.title" = "Параметры тела";
+"coaching.intake.step.body.subtitle" = "Базовые данные нужны для безопасной нагрузки и расчёта рекомендаций.";
+"coaching.intake.step.training.title" = "Тренировочный контекст";
+"coaching.intake.step.training.subtitle" = "Расскажи про опыт, ограничения и доступное оборудование.";
+"coaching.intake.step.measurements.title" = "Замеры";
+"coaching.intake.step.measurements.subtitle" = "Необязательно, но помогает отслеживать прогресс точнее.";
+"coaching.intake.step.notes.title" = "Финальные детали";
+"coaching.intake.step.notes.subtitle" = "Добавь всё, что важно знать тренеру перед стартом.";
 "coaching.intake.goal" = "Цель";
 "coaching.intake.age" = "Возраст";
 "coaching.intake.height" = "Рост";
@@ -310,11 +323,16 @@
 "coaching.intake.equipment" = "Оборудование";
 "coaching.intake.schedule" = "График";
 "coaching.intake.notes" = "Пожелания и детали";
+"coaching.intake.limitations.placeholder" = "Например: болит колено, нельзя осевую нагрузку, нужна осторожность со спиной.";
+"coaching.intake.equipment.placeholder" = "Например: зал, гантели дома, турник, резинки.";
+"coaching.intake.schedule.placeholder" = "Например: 3 раза в неделю вечером, по 60 минут.";
+"coaching.intake.notes.placeholder" = "Цели, предпочтения, нелюбимые упражнения, питание, сон, стресс.";
 "coaching.intake.measurement.waist" = "Талия";
 "coaching.intake.measurement.chest" = "Грудь";
 "coaching.intake.measurement.hips" = "Бёдра";
 "coaching.unit.cm" = "см";
 "coaching.unit.kg" = "кг";
+"coaching.unit.years" = "лет";
 "coaching.goal.lose_weight" = "Похудение";
 "coaching.goal.gain_mass" = "Набор массы";
 "coaching.goal.maintain" = "Поддержание";

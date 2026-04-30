@@ -22,6 +22,14 @@ final class ClientCoachingStore: ObservableObject {
     func load(profile: AppUserProfile) async {
         isLoading = true
         errorMessage = nil
+        if intake == nil {
+            intake = ClientIntakeProfile(
+                id: clientId,
+                clientId: clientId,
+                clientEmail: profile.email,
+                clientDisplayName: profile.displayName
+            )
+        }
 
         do {
             async let intakeSnapshot = firestore.collection("client_intakes").document(clientId).getDocument()

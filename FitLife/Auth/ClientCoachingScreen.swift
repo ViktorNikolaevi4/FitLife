@@ -14,7 +14,7 @@ struct ClientCoachingEntryScreen: View {
 
     var body: some View {
         Group {
-            if store.isLoading || sessionStore.profile == nil {
+            if sessionStore.profile == nil || isInitialLoading {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color(.systemGroupedBackground))
@@ -40,6 +40,13 @@ struct ClientCoachingEntryScreen: View {
         }
     }
 
+    private var isInitialLoading: Bool {
+        store.isLoading &&
+        store.intake == nil &&
+        store.request == nil &&
+        store.activeLink == nil
+    }
+
     private var shouldShowForm: Bool {
         if isEditing { return true }
         guard let request = store.request else { return true }
@@ -50,128 +57,410 @@ struct ClientCoachingEntryScreen: View {
 private struct ClientCoachingIntakeScreen: View {
     @ObservedObject var store: ClientCoachingStore
     @EnvironmentObject private var sessionStore: AppSessionStore
+    @State private var selectedStep: IntakeStep = .goal
+
+    private enum IntakeStep: Int, CaseIterable, Identifiable {
+        case goal
+        case body
+        case training
+        case measurements
+        case notes
+
+        var id: Int { rawValue }
+
+        var titleKey: String {
+            switch self {
+            case .goal: "coaching.intake.step.goal.title"
+            case .body: "coaching.intake.step.body.title"
+            case .training: "coaching.intake.step.training.title"
+            case .measurements: "coaching.intake.step.measurements.title"
+            case .notes: "coaching.intake.step.notes.title"
+            }
+        }
+
+        var subtitleKey: String {
+            switch self {
+            case .goal: "coaching.intake.step.goal.subtitle"
+            case .body: "coaching.intake.step.body.subtitle"
+            case .training: "coaching.intake.step.training.subtitle"
+            case .measurements: "coaching.intake.step.measurements.subtitle"
+            case .notes: "coaching.intake.step.notes.subtitle"
+            }
+        }
+    }
 
     var body: some View {
-        Form {
+        Group {
+            if let intakeBinding = Binding($store.intake) {
+                VStack(spacing: 0) {
+                    header
+
+                    TabView(selection: $selectedStep) {
+                        ForEach(IntakeStep.allCases) { step in
+                            intakePage(step, intake: intakeBinding)
+                                .tag(step)
+                        }
+                    }
+                    .tabViewStyle(.page(indexDisplayMode: .never))
+                }
+                .safeAreaInset(edge: .bottom) {
+                    bottomBar
+                }
+            } else {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .navigationTitle(AppLocalizer.string("workouts.connection"))
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 14) {
             if let errorMessage = store.errorMessage, errorMessage.isEmpty == false {
-                Section {
-                    Text(errorMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
+                Text(errorMessage)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.red.opacity(0.10), in: RoundedRectangle(cornerRadius: 16))
+            }
+
+            HStack(spacing: 8) {
+                ForEach(IntakeStep.allCases) { step in
+                    Capsule()
+                        .fill(step.rawValue <= selectedStep.rawValue ? Color.accentColor : Color(.tertiarySystemFill))
+                        .frame(height: 5)
                 }
             }
 
-            if let intakeBinding = Binding($store.intake) {
-                Section(AppLocalizer.string("coaching.intake.section.basics")) {
-                    Picker(AppLocalizer.string("coaching.intake.goal"), selection: intakeBinding.goal) {
-                        ForEach(ClientCoachingGoal.allCases) { goal in
-                            Text(AppLocalizer.string(goal.localizationKey)).tag(goal)
-                        }
-                    }
+            VStack(alignment: .leading, spacing: 6) {
+                Text(AppLocalizer.string(selectedStep.titleKey))
+                    .font(.title2.weight(.bold))
 
-                    Stepper(value: intakeBinding.age, in: 14...80) {
-                        HStack {
-                            Text(AppLocalizer.string("coaching.intake.age"))
-                            Spacer()
-                            Text("\(intakeBinding.wrappedValue.age)")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+                Text(AppLocalizer.string(selectedStep.subtitleKey))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+    }
 
-                    metricField(
+    @ViewBuilder
+    private func intakePage(_ step: IntakeStep, intake: Binding<ClientIntakeProfile>) -> some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 14) {
+                switch step {
+                case .goal:
+                    choiceCard(
+                        title: AppLocalizer.string("coaching.intake.goal"),
+                        value: intake.goal,
+                        options: ClientCoachingGoal.allCases
+                    ) { AppLocalizer.string($0.localizationKey) }
+
+                case .body:
+                    numberStepperCard(
+                        title: AppLocalizer.string("coaching.intake.age"),
+                        value: intake.age,
+                        range: 14...80,
+                        unit: AppLocalizer.string("coaching.unit.years")
+                    )
+                    metricCard(
                         title: AppLocalizer.string("coaching.intake.height"),
-                        value: intakeBinding.height,
+                        value: intake.height,
                         unit: AppLocalizer.string("coaching.unit.cm"),
                         precision: .fractionLength(0)
                     )
-
-                    metricField(
+                    metricCard(
                         title: AppLocalizer.string("coaching.intake.weight"),
-                        value: intakeBinding.weight,
+                        value: intake.weight,
                         unit: AppLocalizer.string("coaching.unit.kg"),
                         precision: .fractionLength(1)
                     )
+                    choiceCard(
+                        title: AppLocalizer.string("coaching.intake.sex"),
+                        value: intake.sex,
+                        options: ClientCoachingSex.allCases
+                    ) { AppLocalizer.string($0.localizationKey) }
 
-                    Picker(AppLocalizer.string("coaching.intake.sex"), selection: intakeBinding.sex) {
-                        ForEach(ClientCoachingSex.allCases) { sex in
-                            Text(AppLocalizer.string(sex.localizationKey)).tag(sex)
-                        }
-                    }
-                }
+                case .training:
+                    choiceCard(
+                        title: AppLocalizer.string("coaching.intake.activity"),
+                        value: intake.activity,
+                        options: ClientCoachingActivity.allCases
+                    ) { AppLocalizer.string($0.localizationKey) }
+                    choiceCard(
+                        title: AppLocalizer.string("coaching.intake.experience"),
+                        value: intake.experience,
+                        options: ClientCoachingExperience.allCases
+                    ) { AppLocalizer.string($0.localizationKey) }
+                    textAreaCard(
+                        title: AppLocalizer.string("coaching.intake.limitations"),
+                        placeholder: AppLocalizer.string("coaching.intake.limitations.placeholder"),
+                        text: intake.limitations,
+                        minHeight: 104
+                    )
+                    textAreaCard(
+                        title: AppLocalizer.string("coaching.intake.equipment"),
+                        placeholder: AppLocalizer.string("coaching.intake.equipment.placeholder"),
+                        text: intake.equipment,
+                        minHeight: 92
+                    )
+                    textAreaCard(
+                        title: AppLocalizer.string("coaching.intake.schedule"),
+                        placeholder: AppLocalizer.string("coaching.intake.schedule.placeholder"),
+                        text: intake.schedule,
+                        minHeight: 92
+                    )
 
-                Section(AppLocalizer.string("coaching.intake.section.training")) {
-                    Picker(AppLocalizer.string("coaching.intake.activity"), selection: intakeBinding.activity) {
-                        ForEach(ClientCoachingActivity.allCases) { level in
-                            Text(AppLocalizer.string(level.localizationKey)).tag(level)
-                        }
-                    }
-
-                    Picker(AppLocalizer.string("coaching.intake.experience"), selection: intakeBinding.experience) {
-                        ForEach(ClientCoachingExperience.allCases) { level in
-                            Text(AppLocalizer.string(level.localizationKey)).tag(level)
-                        }
-                    }
-
-                    TextField(AppLocalizer.string("coaching.intake.limitations"), text: intakeBinding.limitations, axis: .vertical)
-                        .lineLimit(3...6)
-
-                    TextField(AppLocalizer.string("coaching.intake.equipment"), text: intakeBinding.equipment, axis: .vertical)
-                        .lineLimit(2...5)
-
-                    TextField(AppLocalizer.string("coaching.intake.schedule"), text: intakeBinding.schedule, axis: .vertical)
-                        .lineLimit(2...5)
-                }
-
-                Section(AppLocalizer.string("coaching.intake.section.measurements")) {
-                    metricField(
+                case .measurements:
+                    metricCard(
                         title: AppLocalizer.string("coaching.intake.measurement.waist"),
-                        value: intakeBinding.measurements.waist,
+                        value: intake.measurements.waist,
                         unit: AppLocalizer.string("coaching.unit.cm"),
                         precision: .fractionLength(1)
                     )
-                    metricField(
+                    metricCard(
                         title: AppLocalizer.string("coaching.intake.measurement.chest"),
-                        value: intakeBinding.measurements.chest,
+                        value: intake.measurements.chest,
                         unit: AppLocalizer.string("coaching.unit.cm"),
                         precision: .fractionLength(1)
                     )
-                    metricField(
+                    metricCard(
                         title: AppLocalizer.string("coaching.intake.measurement.hips"),
-                        value: intakeBinding.measurements.hips,
+                        value: intake.measurements.hips,
                         unit: AppLocalizer.string("coaching.unit.cm"),
                         precision: .fractionLength(1)
                     )
+
+                case .notes:
+                    textAreaCard(
+                        title: AppLocalizer.string("coaching.intake.notes"),
+                        placeholder: AppLocalizer.string("coaching.intake.notes.placeholder"),
+                        text: intake.notes,
+                        minHeight: 180
+                    )
                 }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 130)
+        }
+    }
 
-                Section(AppLocalizer.string("coaching.intake.section.notes")) {
-                    TextField(AppLocalizer.string("coaching.intake.notes"), text: intakeBinding.notes, axis: .vertical)
-                        .lineLimit(4...8)
+    private var bottomBar: some View {
+        VStack(spacing: 0) {
+            Divider()
+
+            HStack(spacing: 12) {
+                Button {
+                    moveBack()
+                } label: {
+                    Text(AppLocalizer.string("common.back"))
+                        .font(.headline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
                 }
+                .buttonStyle(.bordered)
+                .disabled(selectedStep == IntakeStep.allCases.first || store.isSaving)
 
-                Section {
-                    Button {
-                        Task {
-                            guard let profile = sessionStore.profile else { return }
-                            await store.saveDraft(profile: profile)
-                        }
-                    } label: {
-                        actionRow(title: AppLocalizer.string("coaching.action.save"))
-                    }
-                    .disabled(store.isSaving)
-
-                    Button {
+                Button {
+                    if selectedStep == IntakeStep.allCases.last {
                         Task {
                             guard let profile = sessionStore.profile else { return }
                             await store.submit(profile: profile)
                         }
-                    } label: {
-                        actionRow(title: AppLocalizer.string("coaching.action.submit"), bold: true)
+                    } else {
+                        moveForward()
                     }
-                    .disabled(store.isSaving)
+                } label: {
+                    HStack(spacing: 8) {
+                        Text(selectedStep == IntakeStep.allCases.last ? AppLocalizer.string("coaching.action.submit") : AppLocalizer.string("common.next"))
+                            .font(.headline.weight(.semibold))
+                        if store.isSaving {
+                            ProgressView()
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(store.isSaving)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+
+            Button {
+                Task {
+                    guard let profile = sessionStore.profile else { return }
+                    await store.saveDraft(profile: profile)
+                }
+            } label: {
+                Text(AppLocalizer.string("coaching.action.save"))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+            }
+            .buttonStyle(.plain)
+            .disabled(store.isSaving)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 8)
+        }
+        .background(.ultraThinMaterial)
+    }
+
+    private func moveBack() {
+        guard let previous = IntakeStep(rawValue: selectedStep.rawValue - 1) else { return }
+        withAnimation(.snappy) {
+            selectedStep = previous
+        }
+    }
+
+    private func moveForward() {
+        guard let next = IntakeStep(rawValue: selectedStep.rawValue + 1) else { return }
+        withAnimation(.snappy) {
+            selectedStep = next
+        }
+    }
+
+    private func card<Content: View>(
+        title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.headline)
+            content()
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22))
+        .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(Color(.separator).opacity(0.20)))
+    }
+
+    private func choiceCard<Value: Hashable>(
+        title: String,
+        value: Binding<Value>,
+        options: [Value],
+        label: @escaping (Value) -> String
+    ) -> some View {
+        card(title: title) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 132), spacing: 10)], spacing: 10) {
+                ForEach(options, id: \.self) { option in
+                    Button {
+                        value.wrappedValue = option
+                    } label: {
+                        HStack {
+                            Text(label(option))
+                                .font(.subheadline.weight(.semibold))
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                            Spacer(minLength: 8)
+                            if value.wrappedValue == option {
+                                Image(systemName: "checkmark.circle.fill")
+                            }
+                        }
+                        .foregroundStyle(value.wrappedValue == option ? Color.white : Color.primary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 12)
+                        .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+                        .background(
+                            value.wrappedValue == option ? Color.accentColor : Color(.tertiarySystemGroupedBackground),
+                            in: RoundedRectangle(cornerRadius: 16)
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
-        .navigationTitle(AppLocalizer.string("workouts.connection"))
+    }
+
+    private func numberStepperCard(
+        title: String,
+        value: Binding<Int>,
+        range: ClosedRange<Int>,
+        unit: String
+    ) -> some View {
+        card(title: title) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(value.wrappedValue)")
+                        .font(.system(size: 38, weight: .bold, design: .rounded).monospacedDigit())
+                    Text(unit)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                HStack(spacing: 10) {
+                    roundStepperButton(systemImage: "minus") {
+                        value.wrappedValue = max(range.lowerBound, value.wrappedValue - 1)
+                    }
+                    roundStepperButton(systemImage: "plus") {
+                        value.wrappedValue = min(range.upperBound, value.wrappedValue + 1)
+                    }
+                }
+            }
+        }
+    }
+
+    private func roundStepperButton(systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.title3.weight(.semibold))
+                .frame(width: 48, height: 48)
+                .background(Color(.tertiarySystemGroupedBackground), in: Circle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func metricCard(
+        title: String,
+        value: Binding<Double>,
+        unit: String,
+        precision: FloatingPointFormatStyle<Double>.Configuration.Precision
+    ) -> some View {
+        card(title: title) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                TextField("0", value: value, format: .number.precision(precision))
+                    .keyboardType(.decimalPad)
+                    .font(.system(size: 38, weight: .bold, design: .rounded).monospacedDigit())
+                    .multilineTextAlignment(.leading)
+
+                Text(unit)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func textAreaCard(
+        title: String,
+        placeholder: String,
+        text: Binding<String>,
+        minHeight: CGFloat
+    ) -> some View {
+        card(title: title) {
+            ZStack(alignment: .topLeading) {
+                if text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(placeholder)
+                        .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 11)
+                }
+
+                TextEditor(text: text)
+                    .frame(minHeight: minHeight)
+                    .padding(8)
+                    .scrollContentBackground(.hidden)
+                    .background(Color.clear)
+            }
+            .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+        }
     }
 
     private func metricField(
