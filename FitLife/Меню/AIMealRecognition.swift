@@ -1131,7 +1131,7 @@ struct AIMealRecognitionFlowView: View {
     }
 
     private func analyze(_ image: UIImage) async throws {
-        guard let data = image.jpegData(compressionQuality: 0.82) else {
+        guard let data = preparedImageDataForRecognition(from: image) else {
             throw AIMealRecognitionError.invalidImage
         }
 
@@ -1158,6 +1158,29 @@ struct AIMealRecognitionFlowView: View {
             applyPortionSize(draft?.portionSize ?? .medium)
             step = .confirmation
         }
+    }
+
+    private func preparedImageDataForRecognition(from image: UIImage) -> Data? {
+        let maxLongSide: CGFloat = 1_600
+        let originalSize = image.size
+        let longSide = max(originalSize.width, originalSize.height)
+
+        guard longSide > maxLongSide else {
+            return image.jpegData(compressionQuality: 0.82)
+        }
+
+        let scale = maxLongSide / longSide
+        let targetSize = CGSize(
+            width: originalSize.width * scale,
+            height: originalSize.height * scale
+        )
+
+        let renderer = UIGraphicsImageRenderer(size: targetSize)
+        let resizedImage = renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+
+        return resizedImage.jpegData(compressionQuality: 0.82)
     }
 
     private func saveRecognizedMeal() {
