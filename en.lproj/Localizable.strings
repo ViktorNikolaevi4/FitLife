@@ -55,6 +55,7 @@
 "ai.meal.sugar.two" = "2 spoons";
 "ai.meal.sugar.ingredient" = "Sugar";
 "ai.meal.badge" = "AI";
+"ai.meal.disclaimer" = "AI estimates calories and macros approximately. Results may differ from the actual meal composition and are not medical advice.";
 "ai.quick.title" = "Add meal";
 "ai.quick.photo.title" = "Photo";
 "ai.quick.photo.subtitle" = "Take a meal photo and let AI estimate calories and macros.";
@@ -678,6 +679,25 @@
 "notifications.reminder_title" = "Reminder";
 "notifications.reminder_body" = "Time to drink water!";
 "notifications.today" = "Today";
+"notifications.water.enable" = "Water reminders";
+"notifications.smart.title" = "Smart Reminders";
+"notifications.smart.footer" = "These are gentle local reminders. Coach events arrive separately through app notifications.";
+"notifications.meal.enable" = "Remind about meals";
+"notifications.meal.breakfast.title" = "Add breakfast?";
+"notifications.meal.breakfast.body" = "If you already ate, log the meal and macros.";
+"notifications.meal.lunch.title" = "Time to log lunch";
+"notifications.meal.lunch.body" = "Add lunch to keep your daily target accurate.";
+"notifications.meal.dinner.title" = "Log dinner";
+"notifications.meal.dinner.body" = "Check your calories and macros for the day.";
+"notifications.workout.enable" = "Remind about today's workout";
+"notifications.workout.title" = "Workout today";
+"notifications.workout.body" = "If you planned a workout, open your training diary.";
+"notifications.unfinished_workout.enable" = "Remind about unfinished workout";
+"notifications.unfinished_workout.title" = "Workout still active?";
+"notifications.unfinished_workout.body" = "Check your active workout and finish it if you are done.";
+"notifications.checkin.enable" = "Weekly coach check-in";
+"notifications.checkin.title" = "Check-in time";
+"notifications.checkin.body" = "Send your coach weekly progress, wellbeing, and notes.";
 
 "chart.no_data" = "No data entered yet";
 

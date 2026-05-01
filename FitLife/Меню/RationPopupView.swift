@@ -491,6 +491,11 @@ struct RationPopupView: View {
             case .snacks:    snacksEntries.append(entry)
             }
 
+            LocalReminderScheduler.rescheduleMealRemindersIfEnabled(
+                modelContext: modelContext,
+                ownerId: entry.ownerId,
+                gender: gender
+            )
             onMealAdded()
             activeMeal = nil
             selectedCustomProduct = nil
@@ -516,6 +521,11 @@ struct RationPopupView: View {
                     await ProductUsageCache.shared.decrement(productName: removedProductName, for: ownerId)
                 }
             }
+            LocalReminderScheduler.rescheduleMealRemindersIfEnabled(
+                modelContext: modelContext,
+                ownerId: entry.ownerId,
+                gender: entry.gender
+            )
             onMealAdded()
         } catch {}
     }

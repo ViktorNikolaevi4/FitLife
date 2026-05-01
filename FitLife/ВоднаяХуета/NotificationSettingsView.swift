@@ -1,10 +1,17 @@
 import SwiftUI
+import SwiftData
 import UserNotifications
-
-private let waterPrefix = "water-" // префикс для наших уведомлений
 
 struct NotificationSettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var sessionStore: AppSessionStore
+    @AppStorage(Gender.appStorageKey) private var activeGenderRaw = Gender.male.rawValue
+
+    @AppStorage(LocalReminderScheduler.mealRemindersEnabledKey) private var mealRemindersEnabled = false
+    @AppStorage("notifications.workoutReminder.enabled") private var workoutReminderEnabled = false
+    @AppStorage("notifications.unfinishedWorkoutReminder.enabled") private var unfinishedWorkoutReminderEnabled = false
+    @AppStorage("notifications.weeklyCheckInReminder.enabled") private var weeklyCheckInReminderEnabled = false
 
     @State private var isNotificationEnabled = false
     @State private var selectedStartTime = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: .now)!
@@ -32,7 +39,7 @@ struct NotificationSettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    Toggle("Включить уведомления", isOn: $isNotificationEnabled)
+                    Toggle(AppLocalizer.string("notifications.water.enable"), isOn: $isNotificationEnabled)
                         .onChange(of: isNotificationEnabled) { _, isEnabled in
                             if isEnabled {
                                 requestPermissionAndSchedule()
@@ -67,10 +74,62 @@ struct NotificationSettingsView: View {
                     Section(AppLocalizer.string("notifications.actions")) {
                         Button(AppLocalizer.string("notifications.update")) { reschedule() }
                         Button(AppLocalizer.string("notifications.disable_all"), role: .destructive) {
-                            isNotificationEnabled = false
-                            cancelWaterNotifications()
+                            disableAllReminders()
                         }
                     }
+                }
+
+                Section(AppLocalizer.string("notifications.smart.title")) {
+                    Toggle(AppLocalizer.string("notifications.meal.enable"), isOn: $mealRemindersEnabled)
+                        .onChange(of: mealRemindersEnabled) { _, isEnabled in
+                            handleReminderToggle(isEnabled: isEnabled, prefix: LocalReminderScheduler.mealReminderPrefix) {
+                                scheduleMealReminders()
+                            }
+                        }
+
+                    Toggle(AppLocalizer.string("notifications.workout.enable"), isOn: $workoutReminderEnabled)
+                        .onChange(of: workoutReminderEnabled) { _, isEnabled in
+                            handleReminderToggle(isEnabled: isEnabled, prefix: LocalReminderScheduler.workoutReminderPrefix) {
+                                scheduleDailyReminder(
+                                    id: "\(LocalReminderScheduler.workoutReminderPrefix)today",
+                                    hour: 18,
+                                    minute: 30,
+                                    title: AppLocalizer.string("notifications.workout.title"),
+                                    body: AppLocalizer.string("notifications.workout.body")
+                                )
+                            }
+                        }
+
+                    Toggle(AppLocalizer.string("notifications.unfinished_workout.enable"), isOn: $unfinishedWorkoutReminderEnabled)
+                        .onChange(of: unfinishedWorkoutReminderEnabled) { _, isEnabled in
+                            handleReminderToggle(isEnabled: isEnabled, prefix: LocalReminderScheduler.unfinishedWorkoutReminderPrefix) {
+                                scheduleDailyReminder(
+                                    id: "\(LocalReminderScheduler.unfinishedWorkoutReminderPrefix)evening",
+                                    hour: 21,
+                                    minute: 30,
+                                    title: AppLocalizer.string("notifications.unfinished_workout.title"),
+                                    body: AppLocalizer.string("notifications.unfinished_workout.body")
+                                )
+                            }
+                        }
+
+                    Toggle(AppLocalizer.string("notifications.checkin.enable"), isOn: $weeklyCheckInReminderEnabled)
+                        .onChange(of: weeklyCheckInReminderEnabled) { _, isEnabled in
+                            handleReminderToggle(isEnabled: isEnabled, prefix: LocalReminderScheduler.checkInReminderPrefix) {
+                                scheduleWeeklyReminder(
+                                    id: "\(LocalReminderScheduler.checkInReminderPrefix)weekly",
+                                    weekday: 2,
+                                    hour: 10,
+                                    minute: 0,
+                                    title: AppLocalizer.string("notifications.checkin.title"),
+                                    body: AppLocalizer.string("notifications.checkin.body")
+                                )
+                            }
+                        }
+
+                    Text(AppLocalizer.string("notifications.smart.footer"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
             .navigationTitle(AppLocalizer.string("notifications.title"))
@@ -83,7 +142,7 @@ struct NotificationSettingsView: View {
             .onAppear {
                 refreshAuthorization()
                 UNUserNotificationCenter.current().getPendingNotificationRequests { reqs in
-                    let anyWater = reqs.contains { $0.identifier.hasPrefix(waterPrefix) }
+                    let anyWater = reqs.contains { $0.identifier.hasPrefix(LocalReminderScheduler.waterPrefix) }
                     DispatchQueue.main.async { self.isNotificationEnabled = anyWater }
                 }
             }
@@ -150,18 +209,96 @@ struct NotificationSettingsView: View {
         }
     }
 
+    private func handleReminderToggle(isEnabled: Bool, prefix: String, schedule: @escaping () -> Void) {
+        if isEnabled {
+            requestPermission {
+                LocalReminderScheduler.cancelNotifications(prefix: prefix, completion: schedule)
+            }
+        } else {
+            LocalReminderScheduler.cancelNotifications(prefix: prefix)
+        }
+    }
+
+    private func requestPermission(onGranted: @escaping () -> Void) {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+            DispatchQueue.main.async {
+                self.authorizationStatus = granted ? .authorized : .denied
+                if granted {
+                    onGranted()
+                } else {
+                    self.mealRemindersEnabled = false
+                    self.workoutReminderEnabled = false
+                    self.unfinishedWorkoutReminderEnabled = false
+                    self.weeklyCheckInReminderEnabled = false
+                }
+            }
+        }
+    }
+
+    private func scheduleMealReminders() {
+        LocalReminderScheduler.rescheduleMealReminders(
+            modelContext: modelContext,
+            ownerId: sessionStore.firebaseUser?.uid ?? "",
+            gender: Gender(rawValue: activeGenderRaw) ?? .male
+        )
+    }
+
+    private func scheduleDailyReminder(id: String, hour: Int, minute: Int, title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+
+        let trigger = UNCalendarNotificationTrigger(
+            dateMatching: DateComponents(hour: hour, minute: minute),
+            repeats: true
+        )
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
+    }
+
+    private func scheduleWeeklyReminder(id: String, weekday: Int, hour: Int, minute: Int, title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+
+        let trigger = UNCalendarNotificationTrigger(
+            dateMatching: DateComponents(hour: hour, minute: minute, weekday: weekday),
+            repeats: true
+        )
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
+    }
+
     private func makeId(_ comps: DateComponents) -> String {
         let h = comps.hour ?? 0, m = comps.minute ?? 0
-        return "\(waterPrefix)\(String(format: "%02d-%02d", h, m))"
+        return "\(LocalReminderScheduler.waterPrefix)\(String(format: "%02d-%02d", h, m))"
     }
 
     private func cancelWaterNotifications(_ completion: (() -> Void)? = nil) {
-        let center = UNUserNotificationCenter.current()
-        center.getPendingNotificationRequests { reqs in
-            let ids = reqs.map(\.identifier).filter { $0.hasPrefix(waterPrefix) }
-            center.removePendingNotificationRequests(withIdentifiers: ids)
-            center.removeDeliveredNotifications(withIdentifiers: ids)
-            DispatchQueue.main.async { completion?() }
+        LocalReminderScheduler.cancelNotifications(prefix: LocalReminderScheduler.waterPrefix, completion: completion)
+    }
+
+    private func disableAllReminders() {
+        isNotificationEnabled = false
+        mealRemindersEnabled = false
+        workoutReminderEnabled = false
+        unfinishedWorkoutReminderEnabled = false
+        weeklyCheckInReminderEnabled = false
+
+        let prefixes = [
+            LocalReminderScheduler.waterPrefix,
+            LocalReminderScheduler.mealReminderPrefix,
+            LocalReminderScheduler.workoutReminderPrefix,
+            LocalReminderScheduler.unfinishedWorkoutReminderPrefix,
+            LocalReminderScheduler.checkInReminderPrefix
+        ]
+
+        UNUserNotificationCenter.current().getPendingNotificationRequests { reqs in
+            let ids = reqs
+                .map(\.identifier)
+                .filter { id in prefixes.contains { id.hasPrefix($0) } }
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ids)
         }
     }
 

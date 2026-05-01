@@ -849,6 +849,8 @@ struct AIMealRecognitionFlowView: View {
             .buttonStyle(.plain)
             .disabled(isLoadingGalleryImage)
 
+            AIDisclaimerCard()
+
             Spacer()
         }
         .padding(20)
@@ -907,6 +909,8 @@ struct AIMealRecognitionFlowView: View {
                         .frame(maxWidth: .infinity)
                         .clipShape(RoundedRectangle(cornerRadius: 20))
                 }
+
+                AIDisclaimerCard()
 
                 VStack(alignment: .leading, spacing: 10) {
                     Text(AppLocalizer.string("ai.meal.dish_name"))
@@ -1224,6 +1228,12 @@ struct AIMealRecognitionFlowView: View {
             }
 
             try modelContext.save()
+
+            LocalReminderScheduler.rescheduleMealRemindersIfEnabled(
+                modelContext: modelContext,
+                ownerId: ownerId,
+                gender: selectedGender
+            )
 
             if !ownerId.isEmpty {
                 Task {
@@ -1570,6 +1580,8 @@ struct AITextMealRecognitionFlowView: View {
                         .pickerStyle(.segmented)
                     }
 
+                    AIDisclaimerCard()
+
                     ZStack(alignment: .topLeading) {
                         RoundedRectangle(cornerRadius: 18)
                             .fill(Color(.secondarySystemBackground))
@@ -1681,6 +1693,8 @@ struct AITextMealRecognitionFlowView: View {
     private func confirmationContent(draft: AIMealDraft) -> some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 16) {
+                AIDisclaimerCard()
+
                 VStack(alignment: .leading, spacing: 10) {
                     Text(AppLocalizer.string("ai.meal.dish_name"))
                         .font(.subheadline.weight(.semibold))
@@ -1974,6 +1988,12 @@ struct AITextMealRecognitionFlowView: View {
 
             try modelContext.save()
 
+            LocalReminderScheduler.rescheduleMealRemindersIfEnabled(
+                modelContext: modelContext,
+                ownerId: ownerId,
+                gender: selectedGender
+            )
+
             if !ownerId.isEmpty {
                 Task {
                     for item in items {
@@ -2081,6 +2101,29 @@ struct AITextMealRecognitionFlowView: View {
         }
 
         return AppErrorPresenter.message(for: error)
+    }
+}
+
+private struct AIDisclaimerCard: View {
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "info.circle.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.orange)
+
+            Text(AppLocalizer.string("ai.meal.disclaimer"))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.orange.opacity(0.18))
+        )
+        .accessibilityElement(children: .combine)
     }
 }
 

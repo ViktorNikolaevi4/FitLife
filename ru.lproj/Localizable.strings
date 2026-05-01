@@ -55,6 +55,7 @@
 "ai.meal.sugar.two" = "2 ложки";
 "ai.meal.sugar.ingredient" = "Сахар";
 "ai.meal.badge" = "ИИ";
+"ai.meal.disclaimer" = "ИИ рассчитывает калории и БЖУ приблизительно. Результат может отличаться от фактического состава блюда и не является медицинской рекомендацией.";
 "ai.quick.title" = "Как добавить еду";
 "ai.quick.photo.title" = "Фото блюда";
 "ai.quick.photo.subtitle" = "Сфотографируй приём пищи, и ИИ оценит калории и БЖУ.";
@@ -678,6 +679,25 @@
 "notifications.reminder_title" = "Напоминание";
 "notifications.reminder_body" = "Пора выпить воды!";
 "notifications.today" = "Сегодня";
+"notifications.water.enable" = "Напоминания о воде";
+"notifications.smart.title" = "Умные напоминания";
+"notifications.smart.footer" = "Это мягкие локальные напоминания. События от тренера приходят отдельно через уведомления приложения.";
+"notifications.meal.enable" = "Напоминать о приёмах пищи";
+"notifications.meal.breakfast.title" = "Добавить завтрак?";
+"notifications.meal.breakfast.body" = "Если уже позавтракали, внесите приём пищи и БЖУ.";
+"notifications.meal.lunch.title" = "Время записать обед";
+"notifications.meal.lunch.body" = "Добавьте обед, чтобы дневная цель была точнее.";
+"notifications.meal.dinner.title" = "Записать ужин";
+"notifications.meal.dinner.body" = "Проверьте калории и БЖУ за день.";
+"notifications.workout.enable" = "Напоминать о тренировке сегодня";
+"notifications.workout.title" = "Тренировка сегодня";
+"notifications.workout.body" = "Если планировали тренировку, самое время открыть дневник.";
+"notifications.unfinished_workout.enable" = "Напоминать о незавершённой тренировке";
+"notifications.unfinished_workout.title" = "Тренировка не завершена?";
+"notifications.unfinished_workout.body" = "Проверьте активную тренировку и завершите её, если уже закончили.";
+"notifications.checkin.enable" = "Еженедельный check-in тренеру";
+"notifications.checkin.title" = "Время check-in";
+"notifications.checkin.body" = "Отправьте тренеру прогресс, самочувствие и заметки за неделю.";
 
 "chart.no_data" = "Данные ещё не введены";
 
