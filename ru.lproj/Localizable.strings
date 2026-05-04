@@ -431,11 +431,16 @@
 "coaching.workspace.last_note" = "Последняя заметка";
 "workout.active.title" = "Активная тренировка";
 "workout.finish" = "Завершить";
+"workout.finish.confirm.title" = "Завершить тренировку?";
+"workout.finish.confirm.message" = "Тренировка будет сохранена как завершённая.";
+"workout.finish.confirm.action" = "Завершить";
 "workout.timer" = "Таймер";
 "workout.note.add" = "Добавить заметку к тренировке";
 "workout.note.title" = "Заметка к тренировке";
 "workout.note.placeholder" = "Например, сегодня делаю легче обычного";
 "workout.note.save" = "Сохранить заметку";
+"workout.note.compact.add" = "Заметка";
+"workout.note.compact.added" = "Есть заметка";
 "workout.add.exercise" = "+ Добавить упражнение";
 "workout.add.set" = "+ Добавить подход";
 "workout.empty.title" = "Пока нет упражнений";

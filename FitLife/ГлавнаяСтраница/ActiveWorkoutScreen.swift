@@ -16,6 +16,7 @@ struct ActiveWorkoutScreen: View {
     @State private var editingSet: WorkoutSet?
     @State private var editingExerciseNote: WorkoutExercise?
     @State private var isEditingWorkoutNote = false
+    @State private var showFinishConfirmation = false
     private let firestore = Firestore.firestore()
 
     private var sortedExercises: [WorkoutExercise] {
@@ -35,8 +36,7 @@ struct ActiveWorkoutScreen: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 16) {
                 activeWorkoutHeader
-                timerCard
-                workoutNoteCard
+                workoutControlsCard
 
                 if sortedExercises.isEmpty {
                     emptyStateCard
@@ -143,6 +143,18 @@ struct ActiveWorkoutScreen: View {
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
         }
+        .confirmationDialog(
+            AppLocalizer.string("workout.finish.confirm.title"),
+            isPresented: $showFinishConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(AppLocalizer.string("workout.finish.confirm.action"), role: .destructive) {
+                finishWorkout()
+            }
+            Button(AppLocalizer.string("common.cancel"), role: .cancel) {}
+        } message: {
+            Text(AppLocalizer.string("workout.finish.confirm.message"))
+        }
     }
 
     private var emptyStateCard: some View {
@@ -195,107 +207,71 @@ struct ActiveWorkoutScreen: View {
 
             Spacer()
 
-            Button(action: finishWorkout) {
-                Text(AppLocalizer.string("workout.finish"))
+            Button(action: { showFinishConfirmation = true }) {
+                Label(AppLocalizer.string("workout.finish"), systemImage: "checkmark.circle.fill")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, 14)
+                    .foregroundStyle(.white)
+                    .labelStyle(.titleAndIcon)
+                    .padding(.horizontal, 12)
                     .padding(.vertical, 10)
-                    .background(Capsule().fill(activeWorkoutCardBackground))
+                    .background(Capsule().fill(Color.green))
             }
             .buttonStyle(.plain)
         }
     }
 
-    private var timerCard: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(activeWorkoutInsetBackground)
-
-                Image(systemName: "clock.fill")
-                    .font(.system(size: 26, weight: .semibold))
-                    .foregroundStyle(.secondary)
-            }
-            .frame(width: 64, height: 64)
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(AppLocalizer.string("workout.timer"))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Text(elapsedString)
-                    .font(.system(size: 32, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-            }
-
-            Spacer()
-
+    private var workoutControlsCard: some View {
+        HStack(spacing: 12) {
             Button(action: toggleTimer) {
                 Image(systemName: workout.isTimerRunning ? "pause.fill" : "play.fill")
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.primary)
-                    .frame(width: 48, height: 48)
+                    .frame(width: 38, height: 38)
                     .background(Circle().fill(Color(.tertiarySystemFill)))
             }
             .buttonStyle(.plain)
-        }
-        .padding(18)
-        .background(RoundedRectangle(cornerRadius: 24).fill(activeWorkoutCardBackground))
-        .overlay(
-            RoundedRectangle(cornerRadius: 24)
-                .strokeBorder(activeWorkoutCardBorder)
-        )
-        .shadow(color: activeWorkoutCardShadow, radius: 16, x: 0, y: 6)
-    }
 
-    private var workoutNoteCard: some View {
-        Button(action: { isEditingWorkoutNote = true }) {
-            HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(activeWorkoutInsetBackground)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(AppLocalizer.string("workout.timer"))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
 
-                    Image(systemName: "note.text")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
-                .frame(width: 52, height: 52)
+                Text(elapsedString)
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.primary)
+            }
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(AppLocalizer.string("workout.note.title"))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
+            Spacer(minLength: 8)
+
+            Button(action: { isEditingWorkoutNote = true }) {
+                HStack(spacing: 8) {
+                    Image(systemName: workout.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "note.text" : "note.text.badge.plus")
+                        .font(.system(size: 15, weight: .semibold))
 
                     Text(
                         workout.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        ? AppLocalizer.string("workout.note.add")
-                        : workout.note.trimmingCharacters(in: .whitespacesAndNewlines)
+                        ? AppLocalizer.string("workout.note.compact.add")
+                        : AppLocalizer.string("workout.note.compact.added")
                     )
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(
-                        workout.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        ? .secondary
-                        : .primary
-                    )
+                    .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
-                    .truncationMode(.tail)
                 }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.footnote.weight(.bold))
-                    .foregroundStyle(.secondary)
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 12)
+                .frame(height: 38)
+                .background(Capsule().fill(activeWorkoutInsetBackground))
             }
-            .padding(16)
-            .background(RoundedRectangle(cornerRadius: 20).fill(activeWorkoutCardBackground))
-            .overlay(
-                RoundedRectangle(cornerRadius: 20)
-                    .strokeBorder(activeWorkoutCardBorder)
-            )
-            .shadow(color: activeWorkoutCardShadow.opacity(0.95), radius: 12, x: 0, y: 4)
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(RoundedRectangle(cornerRadius: 22).fill(activeWorkoutCardBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22)
+                .strokeBorder(activeWorkoutCardBorder)
+        )
+        .shadow(color: activeWorkoutCardShadow.opacity(0.9), radius: 12, x: 0, y: 4)
     }
 
     private func toggleExpanded(_ exercise: WorkoutExercise) {
@@ -493,17 +469,6 @@ private struct EditWorkoutExerciseNoteScreen: View {
                         dismiss()
                     }
                 }
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button(AppLocalizer.string("common.done")) {
-                        UIApplication.shared.sendAction(
-                            #selector(UIResponder.resignFirstResponder),
-                            to: nil,
-                            from: nil,
-                            for: nil
-                        )
-                    }
-                }
             }
             .onAppear {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
@@ -569,17 +534,6 @@ private struct EditWorkoutSessionNoteScreen: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(AppLocalizer.string("common.cancel")) {
                         dismiss()
-                    }
-                }
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button(AppLocalizer.string("common.done")) {
-                        UIApplication.shared.sendAction(
-                            #selector(UIResponder.resignFirstResponder),
-                            to: nil,
-                            from: nil,
-                            for: nil
-                        )
                     }
                 }
             }
@@ -677,17 +631,6 @@ private struct EditWorkoutSetScreen: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(AppLocalizer.string("common.cancel")) {
                         dismiss()
-                    }
-                }
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button(AppLocalizer.string("common.done")) {
-                        UIApplication.shared.sendAction(
-                            #selector(UIResponder.resignFirstResponder),
-                            to: nil,
-                            from: nil,
-                            for: nil
-                        )
                     }
                 }
             }

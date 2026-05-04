@@ -431,11 +431,16 @@
 "coaching.workspace.last_note" = "Latest note";
 "workout.active.title" = "Active Workout";
 "workout.finish" = "Finish";
+"workout.finish.confirm.title" = "Finish workout?";
+"workout.finish.confirm.message" = "This workout will be saved as completed.";
+"workout.finish.confirm.action" = "Finish";
 "workout.timer" = "Timer";
 "workout.note.add" = "Add Workout Note";
 "workout.note.title" = "Workout Note";
 "workout.note.placeholder" = "For example, taking it a bit lighter today";
 "workout.note.save" = "Save Note";
+"workout.note.compact.add" = "Note";
+"workout.note.compact.added" = "Note added";
 "workout.add.exercise" = "+ Add Exercise";
 "workout.add.set" = "+ Add Set";
 "workout.empty.title" = "No exercises yet";
