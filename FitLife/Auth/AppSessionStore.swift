@@ -130,7 +130,6 @@ final class AppSessionStore: ObservableObject {
 
     private func createInitialProfile(for user: User) async throws -> AppUserProfile {
         let email = user.email ?? ""
-        let role = AuthConfiguration.role(for: email)
         let trimmedName = (user.displayName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let displayName: String
 
@@ -144,7 +143,7 @@ final class AppSessionStore: ObservableObject {
             id: user.uid,
             email: email,
             displayName: displayName,
-            role: role
+            role: AuthConfiguration.defaultNewUserRole
         )
     }
 }
