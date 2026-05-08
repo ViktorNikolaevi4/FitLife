@@ -179,6 +179,15 @@
 "auth.password" = "Пароль";
 "auth.action.sign_in" = "Войти";
 "auth.action.sign_up" = "Создать аккаунт";
+"auth.action.reset_password" = "Забыли пароль?";
+"auth.reset.missing_email" = "Сначала введите email.";
+"auth.reset.sent" = "Письмо для сброса пароля отправлено.";
+"auth.verify_required.title" = "Подтвердите email";
+"auth.verify_required.subtitle" = "Мы отправили ссылку подтверждения на %@. Подтвердите email, чтобы продолжить.";
+"auth.verify_required.refresh" = "Я подтвердил email";
+"auth.verify_required.resend" = "Отправить письмо ещё раз";
+"auth.verify_required.sent" = "Письмо подтверждения отправлено.";
+"auth.verify_required.not_verified_yet" = "Email пока не подтверждён. Откройте ссылку из письма и попробуйте снова.";
 
 "role.owner" = "Owner";
 "role.trainer" = "Тренер";
@@ -187,6 +196,11 @@
 "settings.account.section" = "Аккаунт";
 "settings.account.role" = "Роль";
 "settings.account.sign_out" = "Выйти";
+"settings.account.delete" = "Удалить аккаунт";
+"settings.account.delete.alert.title" = "Удалить аккаунт?";
+"settings.account.delete.alert.message" = "Будет удалён аккаунт FitLife и локальные данные на этом устройстве. Это действие нельзя отменить.";
+"settings.account.delete.alert.confirm" = "Удалить";
+"settings.account.delete.failed" = "Не удалось удалить аккаунт. Войдите заново и попробуйте ещё раз.";
 "settings.admin.section" = "Управление";
 "settings.admin.users" = "Пользователи";
 "settings.admin.links" = "Связи тренер-клиент";
@@ -802,6 +816,12 @@
 "auth.error.weak_password" = "Пароль слишком простой.";
 "auth.error.too_many_requests" = "Слишком много попыток. Попробуйте позже.";
 "auth.error.operation_not_allowed" = "Этот способ входа сейчас недоступен.";
+"settings.account.email_status" = "Email";
+"settings.account.email_verified" = "Подтверждён";
+"settings.account.email_unverified" = "Не подтверждён";
+"settings.account.send_verification" = "Отправить письмо подтверждения";
+"settings.account.refresh_verification" = "Обновить статус";
+"settings.account.verification_sent" = "Письмо подтверждения отправлено.";
 "notifications.inbox.title" = "Уведомления";
 "notifications.inbox.empty.title" = "Пока нет уведомлений";
 "notifications.inbox.empty.subtitle" = "Здесь будут появляться новые события от клиента и тренера.";

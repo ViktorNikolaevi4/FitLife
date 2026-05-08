@@ -179,6 +179,15 @@
 "auth.password" = "Password";
 "auth.action.sign_in" = "Sign In";
 "auth.action.sign_up" = "Create Account";
+"auth.action.reset_password" = "Forgot password?";
+"auth.reset.missing_email" = "Enter your email address first.";
+"auth.reset.sent" = "Password reset email sent.";
+"auth.verify_required.title" = "Verify your email";
+"auth.verify_required.subtitle" = "We sent a verification link to %@. Confirm your email to continue.";
+"auth.verify_required.refresh" = "I verified my email";
+"auth.verify_required.resend" = "Resend verification email";
+"auth.verify_required.sent" = "Verification email sent.";
+"auth.verify_required.not_verified_yet" = "Email is not verified yet. Open the link from the email, then try again.";
 
 "role.owner" = "Owner";
 "role.trainer" = "Trainer";
@@ -187,6 +196,11 @@
 "settings.account.section" = "Account";
 "settings.account.role" = "Role";
 "settings.account.sign_out" = "Sign Out";
+"settings.account.delete" = "Delete Account";
+"settings.account.delete.alert.title" = "Delete account?";
+"settings.account.delete.alert.message" = "This will delete your FitLife account and local data on this device. This action cannot be undone.";
+"settings.account.delete.alert.confirm" = "Delete";
+"settings.account.delete.failed" = "Could not delete the account. Sign in again and try once more.";
 "settings.admin.section" = "Admin";
 "settings.admin.users" = "Users";
 "settings.admin.links" = "Trainer-Client Links";
@@ -802,6 +816,12 @@
 "auth.error.weak_password" = "The password is too weak.";
 "auth.error.too_many_requests" = "Too many attempts. Please try again later.";
 "auth.error.operation_not_allowed" = "This sign-in method is not available right now.";
+"settings.account.email_status" = "Email";
+"settings.account.email_verified" = "Verified";
+"settings.account.email_unverified" = "Not verified";
+"settings.account.send_verification" = "Send verification email";
+"settings.account.refresh_verification" = "Refresh status";
+"settings.account.verification_sent" = "Verification email sent.";
 "notifications.inbox.title" = "Notifications";
 "notifications.inbox.empty.title" = "No notifications yet";
 "notifications.inbox.empty.subtitle" = "New client and coach events will appear here.";

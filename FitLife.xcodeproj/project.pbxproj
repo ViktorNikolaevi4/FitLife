@@ -40,9 +40,10 @@
 		B606BD3A2E82D9B900C75F92 /* Exceptions for "FitLife" folder in "FitLife" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				Config/AppConfig.xcconfig,
-				Info.plist,
-			);
+					Config/AppConfig.xcconfig,
+					Config/OpenAI.xcconfig,
+					Info.plist,
+				);
 			target = B6B3C67E2D0480B900D0226C /* FitLife */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */

@@ -5,13 +5,6 @@ import PhotosUI
 import Speech
 import AVFoundation
 
-private enum OpenAIConfiguration {
-    static var apiKey: String {
-        (Bundle.main.object(forInfoDictionaryKey: "OpenAIAPIKey") as? String)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    }
-}
-
 private enum AIMealRecognitionError: LocalizedError {
     case missingAPIKey
     case invalidImage
@@ -429,18 +422,30 @@ private enum AIBeverageSugarOption: String, CaseIterable, Identifiable {
     }
 }
 
-private actor OpenAIMealRecognitionService {
-    func recognizeMeal(from imageData: Data, language: AppLanguage) async throws -> AIMealRecognitionResponse {
-        let apiKey = OpenAIConfiguration.apiKey
-        guard !apiKey.isEmpty else {
-            throw AIMealRecognitionError.missingAPIKey
+private enum OpenAIConfiguration {
+    static var apiKey: String? {
+        guard let rawValue = Bundle.main.object(forInfoDictionaryKey: "OpenAIAPIKey") as? String else {
+            return nil
         }
 
-        let base64Image = imageData.base64EncodedString()
-        let promptLanguage = language == .russian ? "Russian" : "English"
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.contains("$(") else {
+            return nil
+        }
+
+        return trimmed
+    }
+}
+
+private actor AIMealRecognitionService {
+    private let apiURL = URL(string: "https://api.openai.com/v1/responses")!
+    private let model = "gpt-4.1-mini"
+
+    func recognizeMeal(from imageData: Data, language: AppLanguage) async throws -> AIMealRecognitionResponse {
+        let languageName = recognitionLanguageName(for: language)
         let systemPrompt = """
         Return JSON only. Analyze a single meal photo and estimate the visible edible components.
-        Respond in \(promptLanguage).
+        Respond in \(languageName).
         Return an object with:
         - dish_name: short meal name
         - ingredients: array of 1 to 8 items
@@ -467,79 +472,38 @@ private actor OpenAIMealRecognitionService {
         - if unsure, still make the best estimate and lower confidence
         """
 
-        let payload: [String: Any] = [
-            "model": "gpt-4.1-mini",
-            "input": [
-                [
-                    "role": "system",
-                    "content": [
-                        [
-                            "type": "input_text",
-                            "text": systemPrompt
-                        ]
-                    ]
-                ],
-                [
-                    "role": "user",
-                    "content": [
-                        [
-                            "type": "input_text",
-                            "text": "Analyze this food photo and return JSON."
-                        ],
-                        [
-                            "type": "input_image",
-                            "image_url": "data:image/jpeg;base64,\(base64Image)",
-                            "detail": "high"
-                        ]
+        return try await performOpenAIRequest(input: [
+            [
+                "role": "system",
+                "content": [
+                    [
+                        "type": "input_text",
+                        "text": systemPrompt
                     ]
                 ]
             ],
-            "text": [
-                "format": [
-                    "type": "json_object"
+            [
+                "role": "user",
+                "content": [
+                    [
+                        "type": "input_text",
+                        "text": "Analyze this food photo and return JSON."
+                    ],
+                    [
+                        "type": "input_image",
+                        "image_url": "data:image/jpeg;base64,\(imageData.base64EncodedString())",
+                        "detail": "high"
+                    ]
                 ]
             ]
-        ]
-
-        let body = try JSONSerialization.data(withJSONObject: payload)
-        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/responses")!)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 60
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.httpBody = body
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AIMealRecognitionError.invalidResponse
-        }
-
-        guard (200...299).contains(httpResponse.statusCode) else {
-            throw Self.apiError(from: data)
-        }
-
-        guard let text = Self.extractOutputText(from: data),
-              let jsonData = text.data(using: .utf8) else {
-            throw AIMealRecognitionError.invalidResponse
-        }
-
-        let decoded = try JSONDecoder().decode(AIMealRecognitionResponse.self, from: jsonData)
-        guard !decoded.ingredients.isEmpty else {
-            throw AIMealRecognitionError.emptyIngredients
-        }
-        return decoded
+        ])
     }
 
     func recognizeMeal(from description: String, language: AppLanguage) async throws -> AIMealRecognitionResponse {
-        let apiKey = OpenAIConfiguration.apiKey
-        guard !apiKey.isEmpty else {
-            throw AIMealRecognitionError.missingAPIKey
-        }
-
-        let promptLanguage = language == .russian ? "Russian" : "English"
+        let languageName = recognitionLanguageName(for: language)
         let systemPrompt = """
         Return JSON only. Analyze a meal description and estimate the full meal composition.
-        Respond in \(promptLanguage).
+        Respond in \(languageName).
         Return an object with:
         - dish_name: short meal name
         - ingredients: array of 1 to 10 items
@@ -564,42 +528,47 @@ private actor OpenAIMealRecognitionService {
         - if unsure, still make the best estimate and lower confidence
         """
 
-        let payload: [String: Any] = [
-            "model": "gpt-4.1-mini",
-            "input": [
-                [
-                    "role": "system",
-                    "content": [
-                        [
-                            "type": "input_text",
-                            "text": systemPrompt
-                        ]
-                    ]
-                ],
-                [
-                    "role": "user",
-                    "content": [
-                        [
-                            "type": "input_text",
-                            "text": "Meal description: \(description)\nReturn JSON only."
-                        ]
+        return try await performOpenAIRequest(input: [
+            [
+                "role": "system",
+                "content": [
+                    [
+                        "type": "input_text",
+                        "text": systemPrompt
                     ]
                 ]
             ],
+            [
+                "role": "user",
+                "content": [
+                    [
+                        "type": "input_text",
+                        "text": "Meal description: \(description)\nReturn JSON only."
+                    ]
+                ]
+            ]
+        ])
+    }
+
+    private func performOpenAIRequest(input: [[String: Any]]) async throws -> AIMealRecognitionResponse {
+        guard let apiKey = OpenAIConfiguration.apiKey else {
+            throw AIMealRecognitionError.missingAPIKey
+        }
+
+        var request = URLRequest(url: apiURL)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 120
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "model": model,
+            "input": input,
             "text": [
                 "format": [
                     "type": "json_object"
                 ]
             ]
-        ]
-
-        let body = try JSONSerialization.data(withJSONObject: payload)
-        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/responses")!)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 60
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.httpBody = body
+        ])
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -607,22 +576,31 @@ private actor OpenAIMealRecognitionService {
         }
 
         guard (200...299).contains(httpResponse.statusCode) else {
-            throw Self.apiError(from: data)
+            throw Self.apiError(from: data, statusCode: httpResponse.statusCode)
         }
 
-        guard let text = Self.extractOutputText(from: data),
-              let jsonData = text.data(using: .utf8) else {
+        guard let outputText = Self.outputText(from: data),
+              let mealData = outputText.data(using: .utf8) else {
             throw AIMealRecognitionError.invalidResponse
         }
 
-        let decoded = try JSONDecoder().decode(AIMealRecognitionResponse.self, from: jsonData)
+        let decoded = try JSONDecoder().decode(AIMealRecognitionResponse.self, from: mealData)
         guard !decoded.ingredients.isEmpty else {
             throw AIMealRecognitionError.emptyIngredients
         }
         return decoded
     }
 
-    private static func extractOutputText(from data: Data) -> String? {
+    private func recognitionLanguageName(for language: AppLanguage) -> String {
+        switch language {
+        case .english:
+            return "English"
+        case .russian:
+            return "Russian"
+        }
+    }
+
+    private static func outputText(from data: Data) -> String? {
         guard let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return nil
         }
@@ -632,15 +610,19 @@ private actor OpenAIMealRecognitionService {
             return outputText
         }
 
-        if let outputs = jsonObject["output"] as? [[String: Any]] {
-            for output in outputs {
-                if let contents = output["content"] as? [[String: Any]] {
-                    for content in contents {
-                        if let text = content["text"] as? String,
-                           !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            return text
-                        }
-                    }
+        guard let output = jsonObject["output"] as? [[String: Any]] else {
+            return nil
+        }
+
+        for item in output {
+            guard let content = item["content"] as? [[String: Any]] else {
+                continue
+            }
+
+            for contentItem in content {
+                if let text = contentItem["text"] as? String,
+                   !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return text
                 }
             }
         }
@@ -648,7 +630,7 @@ private actor OpenAIMealRecognitionService {
         return nil
     }
 
-    private static func apiError(from data: Data) -> AIMealRecognitionError {
+    private static func apiError(from data: Data, statusCode: Int) -> AIMealRecognitionError {
         guard
             let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let error = jsonObject["error"] as? [String: Any]
@@ -660,7 +642,9 @@ private actor OpenAIMealRecognitionService {
         let type = (error["type"] as? String)?.lowercased()
         let message = (error["message"] as? String)?.lowercased() ?? ""
 
-        if code == "invalid_api_key"
+        if code == "missing_openai_key"
+            || code == "invalid_api_key"
+            || statusCode == 401
             || message.contains("incorrect api key")
             || message.contains("invalid api key")
             || type == "invalid_request_error" && message.contains("api key") {
@@ -691,7 +675,7 @@ struct AIMealRecognitionFlowView: View {
     @State private var isLoadingGalleryImage = false
     @State private var isSaving = false
 
-    private let recognitionService = OpenAIMealRecognitionService()
+    private let recognitionService = AIMealRecognitionService()
 
     init(
         selectedDate: Date,
@@ -1494,7 +1478,7 @@ struct AITextMealRecognitionFlowView: View {
     @FocusState private var isInputFocused: Bool
     @StateObject private var speechRecognizer = MealSpeechRecognizer()
 
-    private let recognitionService = OpenAIMealRecognitionService()
+    private let recognitionService = AIMealRecognitionService()
 
     init(
         selectedDate: Date,

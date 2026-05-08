@@ -10,6 +10,7 @@ struct AuthScreen: View {
     @State private var name = ""
     @State private var email = ""
     @State private var password = ""
+    @State private var statusMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -58,12 +59,28 @@ struct AuthScreen: View {
                             RoundedRectangle(cornerRadius: 18)
                                 .strokeBorder(authCardBorder)
                         )
+
+                    if mode == .signIn {
+                        Button(AppLocalizer.string("auth.action.reset_password")) {
+                            resetPassword()
+                        }
+                        .font(.footnote.weight(.semibold))
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .disabled(sessionStore.isLoading)
+                    }
                 }
 
                 if let authErrorMessage = sessionStore.authErrorMessage, authErrorMessage.isEmpty == false {
                     Text(authErrorMessage)
                         .font(.footnote)
                         .foregroundStyle(.red)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                if let statusMessage, statusMessage.isEmpty == false {
+                    Text(statusMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
@@ -107,6 +124,7 @@ struct AuthScreen: View {
     }
 
     private func submit() {
+        statusMessage = nil
         Task {
             switch mode {
             case .signIn:
@@ -120,6 +138,18 @@ struct AuthScreen: View {
                     email: email.trimmingCharacters(in: .whitespacesAndNewlines),
                     password: password
                 )
+            }
+        }
+    }
+
+    private func resetPassword() {
+        statusMessage = nil
+        Task {
+            let didSend = await sessionStore.sendPasswordReset(
+                email: email.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+            if didSend {
+                statusMessage = AppLocalizer.string("auth.reset.sent")
             }
         }
     }

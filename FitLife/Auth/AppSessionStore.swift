@@ -51,6 +51,12 @@ final class AppSessionStore: ObservableObject {
             let changeRequest = result.user.createProfileChangeRequest()
             changeRequest.displayName = name.trimmingCharacters(in: .whitespacesAndNewlines)
             try await changeRequest.commitChanges()
+            do {
+                try await result.user.sendEmailVerification()
+            } catch {
+                logAuthDiagnostic("Email verification send failed after sign up", error)
+                authErrorMessage = AppErrorPresenter.message(for: error)
+            }
         } catch {
             authErrorMessage = AppErrorPresenter.message(for: error)
             isLoading = false
@@ -68,6 +74,73 @@ final class AppSessionStore: ObservableObject {
         }
     }
 
+    func sendPasswordReset(email: String) async -> Bool {
+        authErrorMessage = nil
+        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard trimmedEmail.isEmpty == false else {
+            authErrorMessage = AppLocalizer.string("auth.reset.missing_email")
+            return false
+        }
+
+        do {
+            try await auth.sendPasswordReset(withEmail: trimmedEmail)
+            return true
+        } catch {
+            authErrorMessage = AppErrorPresenter.message(for: error)
+            return false
+        }
+    }
+
+    func sendEmailVerification() async -> Bool {
+        authErrorMessage = nil
+
+        guard let user = auth.currentUser else {
+            return false
+        }
+
+        do {
+            try await user.sendEmailVerification()
+            return true
+        } catch {
+            logAuthDiagnostic("Email verification send failed", error)
+            authErrorMessage = AppErrorPresenter.message(for: error)
+            return false
+        }
+    }
+
+    func reloadCurrentUser() async {
+        guard let user = auth.currentUser else { return }
+
+        do {
+            try await user.reload()
+            firebaseUser = auth.currentUser
+        } catch {
+            authErrorMessage = AppErrorPresenter.message(for: error)
+        }
+    }
+
+    func deleteCurrentAccount() async -> Bool {
+        authErrorMessage = nil
+
+        guard let user = auth.currentUser else {
+            return false
+        }
+
+        let userId = user.uid
+
+        do {
+            try await firestore.collection("users").document(userId).delete()
+            try await user.delete()
+            profile = nil
+            firebaseUser = nil
+            return true
+        } catch {
+            authErrorMessage = AppErrorPresenter.message(for: error)
+            return false
+        }
+    }
+
     private func observeAuthState() {
         authListenerHandle = auth.addStateDidChangeListener { [weak self] _, user in
             guard let self else { return }
@@ -75,6 +148,11 @@ final class AppSessionStore: ObservableObject {
                 await self.handleAuthStateChange(user)
             }
         }
+    }
+
+    private func logAuthDiagnostic(_ context: String, _ error: Error) {
+        let nsError = error as NSError
+        print("[Auth] \(context): domain=\(nsError.domain) code=\(nsError.code) userInfo=\(nsError.userInfo)")
     }
 
     private func handleAuthStateChange(_ user: User?) async {

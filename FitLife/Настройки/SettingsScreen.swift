@@ -1,11 +1,13 @@
 import SwiftUI
 import MessageUI
 import StoreKit
+import SwiftData
 
 // MARK: - Settings
 
 struct SettingsScreen: View {
     @EnvironmentObject private var sessionStore: AppSessionStore
+    @Environment(\.modelContext) private var modelContext
 
     // заполни под себя
     private let appStoreID = "1234567890"                                       // ← твой App Store ID
@@ -17,6 +19,10 @@ struct SettingsScreen: View {
     @State private var showMailView = false
     @State private var mailResult: MFMailComposeResult? = nil
     @State private var showMailErrorAlert = false
+    @State private var accountStatusMessage: String?
+    @State private var isSendingEmailVerification = false
+    @State private var showDeleteAccountConfirmation = false
+    @State private var isDeletingAccount = false
 
     private var appLanguage: AppLanguage {
         AppLanguage.from(rawValue: appLanguageRaw)
@@ -49,11 +55,58 @@ struct SettingsScreen: View {
                             }
                         }
 
+                        HStack {
+                            Text(appLanguage.localized("settings.account.email_status"))
+                            Spacer()
+                            Text(firebaseUser.isEmailVerified
+                                 ? appLanguage.localized("settings.account.email_verified")
+                                 : appLanguage.localized("settings.account.email_unverified"))
+                                .foregroundStyle(firebaseUser.isEmailVerified ? Color.secondary : Color.orange)
+                        }
+
+                        if firebaseUser.isEmailVerified == false {
+                            Button {
+                                sendEmailVerification()
+                            } label: {
+                                if isSendingEmailVerification {
+                                    ProgressView()
+                                } else {
+                                    Text(appLanguage.localized("settings.account.send_verification"))
+                                }
+                            }
+                            .disabled(isSendingEmailVerification)
+
+                            Button {
+                                Task {
+                                    await sessionStore.reloadCurrentUser()
+                                }
+                            } label: {
+                                Text(appLanguage.localized("settings.account.refresh_verification"))
+                            }
+                        }
+
+                        if let accountStatusMessage {
+                            Text(accountStatusMessage)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+
                         Button(role: .destructive) {
                             sessionStore.signOut()
                         } label: {
                             Text(appLanguage.localized("settings.account.sign_out"))
                         }
+
+                        Button(role: .destructive) {
+                            showDeleteAccountConfirmation = true
+                        } label: {
+                            if isDeletingAccount {
+                                ProgressView()
+                            } else {
+                                Text(appLanguage.localized("settings.account.delete"))
+                            }
+                        }
+                        .disabled(isDeletingAccount)
                     }
                 }
 
@@ -216,6 +269,69 @@ struct SettingsScreen: View {
             Button(AppLocalizer.string("common.ok"), role: .cancel) {}
         } message: {
             Text(String(format: appLanguage.localized("settings.mail.alert.message"), devEmail))
+        }
+        .alert(appLanguage.localized("settings.account.delete.alert.title"),
+               isPresented: $showDeleteAccountConfirmation) {
+            Button(AppLocalizer.string("common.cancel"), role: .cancel) {}
+            Button(appLanguage.localized("settings.account.delete.alert.confirm"), role: .destructive) {
+                deleteAccount()
+            }
+        } message: {
+            Text(appLanguage.localized("settings.account.delete.alert.message"))
+        }
+    }
+
+    private func sendEmailVerification() {
+        isSendingEmailVerification = true
+        accountStatusMessage = nil
+
+        Task {
+            let didSend = await sessionStore.sendEmailVerification()
+            if didSend {
+                accountStatusMessage = appLanguage.localized("settings.account.verification_sent")
+            } else {
+                accountStatusMessage = sessionStore.authErrorMessage ?? AppLocalizer.string("common.error.try_again")
+            }
+            isSendingEmailVerification = false
+        }
+    }
+
+    private func deleteAccount() {
+        guard let ownerId = sessionStore.firebaseUser?.uid else { return }
+        isDeletingAccount = true
+        accountStatusMessage = nil
+
+        Task {
+            deleteLocalData(for: ownerId)
+            let didDelete = await sessionStore.deleteCurrentAccount()
+            if didDelete == false {
+                accountStatusMessage = appLanguage.localized("settings.account.delete.failed")
+            }
+            isDeletingAccount = false
+        }
+    }
+
+    private func deleteLocalData(for ownerId: String) {
+        do {
+            try deleteSwiftDataItems(FetchDescriptor<FoodEntry>(), ownerId: ownerId) { $0.ownerId }
+            try deleteSwiftDataItems(FetchDescriptor<WaterIntake>(), ownerId: ownerId) { $0.ownerId }
+            try deleteSwiftDataItems(FetchDescriptor<BodyMeasurements>(), ownerId: ownerId) { $0.ownerId }
+            try deleteSwiftDataItems(FetchDescriptor<WorkoutSession>(), ownerId: ownerId) { $0.ownerId }
+            try deleteSwiftDataItems(FetchDescriptor<UserData>(), ownerId: ownerId) { $0.ownerId }
+            try modelContext.save()
+        } catch {
+            accountStatusMessage = AppErrorPresenter.message(for: error)
+        }
+    }
+
+    private func deleteSwiftDataItems<T>(
+        _ descriptor: FetchDescriptor<T>,
+        ownerId: String,
+        itemOwnerId: (T) -> String
+    ) throws where T: PersistentModel {
+        let items = try modelContext.fetch(descriptor)
+        for item in items where itemOwnerId(item) == ownerId {
+            modelContext.delete(item)
         }
     }
 
