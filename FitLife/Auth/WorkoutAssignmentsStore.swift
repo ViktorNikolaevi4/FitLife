@@ -194,6 +194,11 @@ final class ClientAssignedWorkoutsStore: ObservableObject {
                     .document(assignment.id)
                     .setData(["status": WorkoutAssignmentStatus.started.rawValue], merge: true)
             }
+            LocalReminderScheduler.rescheduleWorkoutRemindersIfEnabled(
+                modelContext: modelContext,
+                ownerId: existingWorkout.ownerId,
+                gender: existingWorkout.gender
+            )
             return existingWorkout
         }
 
@@ -249,6 +254,11 @@ final class ClientAssignedWorkoutsStore: ObservableObject {
 
             modelContext.insert(workout)
             try modelContext.save()
+            LocalReminderScheduler.rescheduleWorkoutRemindersIfEnabled(
+                modelContext: modelContext,
+                ownerId: workout.ownerId,
+                gender: workout.gender
+            )
 
             try await firestore
                 .collection("workout_assignments")

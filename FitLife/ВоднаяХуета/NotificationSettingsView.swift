@@ -9,8 +9,8 @@ struct NotificationSettingsView: View {
     @AppStorage(Gender.appStorageKey) private var activeGenderRaw = Gender.male.rawValue
 
     @AppStorage(LocalReminderScheduler.mealRemindersEnabledKey) private var mealRemindersEnabled = false
-    @AppStorage("notifications.workoutReminder.enabled") private var workoutReminderEnabled = false
-    @AppStorage("notifications.unfinishedWorkoutReminder.enabled") private var unfinishedWorkoutReminderEnabled = false
+    @AppStorage(LocalReminderScheduler.workoutReminderEnabledKey) private var workoutReminderEnabled = false
+    @AppStorage(LocalReminderScheduler.unfinishedWorkoutReminderEnabledKey) private var unfinishedWorkoutReminderEnabled = false
     @AppStorage("notifications.weeklyCheckInReminder.enabled") private var weeklyCheckInReminderEnabled = false
 
     @State private var isNotificationEnabled = false
@@ -90,26 +90,14 @@ struct NotificationSettingsView: View {
                     Toggle(AppLocalizer.string("notifications.workout.enable"), isOn: $workoutReminderEnabled)
                         .onChange(of: workoutReminderEnabled) { _, isEnabled in
                             handleReminderToggle(isEnabled: isEnabled, prefix: LocalReminderScheduler.workoutReminderPrefix) {
-                                scheduleDailyReminder(
-                                    id: "\(LocalReminderScheduler.workoutReminderPrefix)today",
-                                    hour: 18,
-                                    minute: 30,
-                                    title: AppLocalizer.string("notifications.workout.title"),
-                                    body: AppLocalizer.string("notifications.workout.body")
-                                )
+                                scheduleWorkoutReminders()
                             }
                         }
 
                     Toggle(AppLocalizer.string("notifications.unfinished_workout.enable"), isOn: $unfinishedWorkoutReminderEnabled)
                         .onChange(of: unfinishedWorkoutReminderEnabled) { _, isEnabled in
                             handleReminderToggle(isEnabled: isEnabled, prefix: LocalReminderScheduler.unfinishedWorkoutReminderPrefix) {
-                                scheduleDailyReminder(
-                                    id: "\(LocalReminderScheduler.unfinishedWorkoutReminderPrefix)evening",
-                                    hour: 21,
-                                    minute: 30,
-                                    title: AppLocalizer.string("notifications.unfinished_workout.title"),
-                                    body: AppLocalizer.string("notifications.unfinished_workout.body")
-                                )
+                                scheduleUnfinishedWorkoutReminders()
                             }
                         }
 
@@ -141,6 +129,15 @@ struct NotificationSettingsView: View {
             .tint(.blue)
             .onAppear {
                 refreshAuthorization()
+                if mealRemindersEnabled {
+                    scheduleMealReminders()
+                }
+                if workoutReminderEnabled {
+                    scheduleWorkoutReminders()
+                }
+                if unfinishedWorkoutReminderEnabled {
+                    scheduleUnfinishedWorkoutReminders()
+                }
                 UNUserNotificationCenter.current().getPendingNotificationRequests { reqs in
                     let anyWater = reqs.contains { $0.identifier.hasPrefix(LocalReminderScheduler.waterPrefix) }
                     DispatchQueue.main.async { self.isNotificationEnabled = anyWater }
@@ -237,6 +234,22 @@ struct NotificationSettingsView: View {
 
     private func scheduleMealReminders() {
         LocalReminderScheduler.rescheduleMealReminders(
+            modelContext: modelContext,
+            ownerId: sessionStore.firebaseUser?.uid ?? "",
+            gender: Gender(rawValue: activeGenderRaw) ?? .male
+        )
+    }
+
+    private func scheduleWorkoutReminders() {
+        LocalReminderScheduler.rescheduleWorkoutReminder(
+            modelContext: modelContext,
+            ownerId: sessionStore.firebaseUser?.uid ?? "",
+            gender: Gender(rawValue: activeGenderRaw) ?? .male
+        )
+    }
+
+    private func scheduleUnfinishedWorkoutReminders() {
+        LocalReminderScheduler.rescheduleUnfinishedWorkoutReminder(
             modelContext: modelContext,
             ownerId: sessionStore.firebaseUser?.uid ?? "",
             gender: Gender(rawValue: activeGenderRaw) ?? .male

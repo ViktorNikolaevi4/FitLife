@@ -205,6 +205,18 @@ struct SettingsScreen: View {
                 }
 
                 Section {
+                    NavigationLink {
+                        NotificationSettingsView()
+                    } label: {
+                        SettingsRow(
+                            icon: "bell.fill",
+                            iconBg: .red,
+                            title: appLanguage.localized("notifications.title")
+                        )
+                    }
+                }
+
+                Section {
                     // Поделиться
                     ShareLink(item: shareURL,
                               subject: Text(appLanguage.localized("settings.share.subject"))) {

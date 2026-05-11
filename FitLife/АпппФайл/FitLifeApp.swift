@@ -81,6 +81,12 @@ struct FitLifeApp: App {
             FirebaseApp.configure()
         }
 
+        UserDefaults.standard.register(defaults: [
+            LocalReminderScheduler.mealRemindersEnabledKey: true,
+            LocalReminderScheduler.workoutReminderEnabledKey: true,
+            LocalReminderScheduler.unfinishedWorkoutReminderEnabledKey: true
+        ])
+
         _sessionStore = StateObject(wrappedValue: AppSessionStore())
         _productCatalogStore = StateObject(wrappedValue: ProductCatalogStore())
         _notificationsStore = StateObject(wrappedValue: AppNotificationsStore())

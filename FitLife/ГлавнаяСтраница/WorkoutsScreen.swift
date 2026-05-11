@@ -45,15 +45,6 @@ struct WorkoutsScreen: View {
                         .font(.largeTitle.bold())
                         .padding(.horizontal)
 
-                    WorkoutsShortcutCard(
-                        title: AppLocalizer.string("workouts.history"),
-                        subtitle: AppLocalizer.string("workouts.last.subtitle"),
-                        systemImage: "clock.arrow.circlepath",
-                        theme: theme,
-                        action: openHistory
-                    )
-                    .padding(.horizontal)
-
                     WorkoutsFeatureCard(
                         title: AppLocalizer.string("workouts.last"),
                         subtitle: lastWorkoutSubtitle,
@@ -106,6 +97,15 @@ struct WorkoutsScreen: View {
                             }
                         )
                     }
+
+                    WorkoutsShortcutCard(
+                        title: AppLocalizer.string("workouts.history"),
+                        subtitle: AppLocalizer.string("workouts.last.subtitle"),
+                        systemImage: "clock.arrow.circlepath",
+                        theme: theme,
+                        action: openHistory
+                    )
+                    .padding(.horizontal)
 
                 }
                 .padding(.vertical, 16)
@@ -160,6 +160,7 @@ struct WorkoutsScreen: View {
 
         modelContext.insert(workout)
         try? modelContext.save()
+        refreshWorkoutReminders()
         selectedWorkout = workout
     }
 
@@ -173,6 +174,15 @@ struct WorkoutsScreen: View {
 
     private func openHistory() {
         historySelection = WorkoutHistorySelection(gender: selectedGender)
+    }
+
+    private func refreshWorkoutReminders() {
+        guard let ownerId = sessionStore.firebaseUser?.uid else { return }
+        LocalReminderScheduler.rescheduleWorkoutRemindersIfEnabled(
+            modelContext: modelContext,
+            ownerId: ownerId,
+            gender: selectedGender
+        )
     }
 }
 
@@ -215,18 +225,18 @@ private struct WorkoutsShortcutCard: View {
         Button(action: action) {
             HStack(spacing: 16) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 18)
+                    RoundedRectangle(cornerRadius: 14)
                         .fill(theme.subtleFill)
 
                     Image(systemName: systemImage)
-                        .font(.system(size: 28, weight: .semibold))
+                        .font(.system(size: 24, weight: .semibold))
                         .foregroundStyle(.primary)
                 }
-                .frame(width: 84, height: 84)
+                .frame(width: 64, height: 64)
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text(title)
-                        .font(.title3.weight(.semibold))
+                        .font(.headline.weight(.semibold))
                         .foregroundStyle(.primary)
                         .multilineTextAlignment(.leading)
 
@@ -243,10 +253,10 @@ private struct WorkoutsShortcutCard: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
-            .padding(18)
-            .background(RoundedRectangle(cornerRadius: 20).fill(theme.card))
-            .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(theme.border))
-            .shadow(color: theme.cardShadow.opacity(0.95), radius: 14, x: 0, y: 5)
+            .padding(16)
+            .background(RoundedRectangle(cornerRadius: 16).fill(theme.card))
+            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(theme.border))
+            .shadow(color: theme.cardShadow.opacity(0.95), radius: 10, x: 0, y: 4)
         }
         .buttonStyle(.plain)
     }
@@ -272,18 +282,18 @@ private struct WorkoutsFeatureCard: View {
     private var cardContent: some View {
         HStack(spacing: 16) {
             ZStack {
-                RoundedRectangle(cornerRadius: 18)
+                RoundedRectangle(cornerRadius: 14)
                     .fill(iconBackgroundColor)
 
                 Image(systemName: systemImage)
-                    .font(.system(size: 28, weight: .semibold))
+                    .font(.system(size: 24, weight: .semibold))
                     .foregroundStyle(iconForegroundColor)
             }
-            .frame(width: 84, height: 84)
+            .frame(width: 64, height: 64)
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(title)
-                    .font(.title3.weight(.semibold))
+                    .font(.headline.weight(.semibold))
                     .foregroundStyle(titleColor)
                 if isEmptyState {
                     Text(AppLocalizer.string("workouts.last.empty.title"))
@@ -303,9 +313,9 @@ private struct WorkoutsFeatureCard: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(chevronColor)
         }
-        .padding(18)
-        .background(RoundedRectangle(cornerRadius: 20).fill(backgroundColor))
-        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(borderColor))
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: 16).fill(backgroundColor))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(borderColor))
         .shadow(color: shadowColor, radius: shadowRadius, x: 0, y: shadowY)
         .padding(.horizontal)
     }

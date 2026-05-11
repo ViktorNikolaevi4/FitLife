@@ -10,6 +10,10 @@ enum LocalReminderScheduler {
     static let checkInReminderPrefix = "checkin-reminder-"
 
     static let mealRemindersEnabledKey = "notifications.mealReminders.enabled"
+    static let workoutReminderEnabledKey = "notifications.workoutReminder.enabled"
+    static let unfinishedWorkoutReminderEnabledKey = "notifications.unfinishedWorkoutReminder.enabled"
+
+    private static let reminderRollingDays = 7
 
     @MainActor
     static func rescheduleMealRemindersIfEnabled(
@@ -22,6 +26,21 @@ enum LocalReminderScheduler {
     }
 
     @MainActor
+    static func rescheduleWorkoutRemindersIfEnabled(
+        modelContext: ModelContext,
+        ownerId: String,
+        gender: Gender
+    ) {
+        if UserDefaults.standard.bool(forKey: workoutReminderEnabledKey) {
+            rescheduleWorkoutReminder(modelContext: modelContext, ownerId: ownerId, gender: gender)
+        }
+
+        if UserDefaults.standard.bool(forKey: unfinishedWorkoutReminderEnabledKey) {
+            rescheduleUnfinishedWorkoutReminder(modelContext: modelContext, ownerId: ownerId, gender: gender)
+        }
+    }
+
+    @MainActor
     static func rescheduleMealReminders(
         modelContext: ModelContext,
         ownerId: String,
@@ -31,16 +50,65 @@ enum LocalReminderScheduler {
 
         cancelNotifications(prefix: mealReminderPrefix) {
             for reminder in mealReminders {
-                let date = nextReminderDate(
-                    hour: reminder.hour,
-                    minute: reminder.minute,
-                    alreadyLoggedToday: loggedMeals.contains(reminder.mealType)
-                )
+                for timeSlot in reminder.timeSlots {
+                    let dates = reminderDates(
+                        hour: timeSlot.hour,
+                        minute: timeSlot.minute,
+                        alreadyLoggedToday: loggedMeals.contains(reminder.mealType)
+                    )
+
+                    for date in dates {
+                        scheduleOneTimeReminder(
+                            id: "\(mealReminderPrefix)\(reminder.id)-\(timeSlot.id)-\(notificationDateId(date))",
+                            date: date,
+                            title: AppLocalizer.string(reminder.titleKey),
+                            body: AppLocalizer.string(reminder.bodyKey)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @MainActor
+    static func rescheduleWorkoutReminder(
+        modelContext: ModelContext,
+        ownerId: String,
+        gender: Gender
+    ) {
+        let completedToday = hasCompletedWorkoutToday(modelContext: modelContext, ownerId: ownerId, gender: gender)
+
+        cancelNotifications(prefix: workoutReminderPrefix) {
+            let dates = reminderDates(hour: 18, minute: 30, skipToday: completedToday)
+            for date in dates {
                 scheduleOneTimeReminder(
-                    id: "\(mealReminderPrefix)\(reminder.id)",
+                    id: "\(workoutReminderPrefix)daily-\(notificationDateId(date))",
                     date: date,
-                    title: AppLocalizer.string(reminder.titleKey),
-                    body: AppLocalizer.string(reminder.bodyKey)
+                    title: AppLocalizer.string("notifications.workout.title"),
+                    body: AppLocalizer.string("notifications.workout.body")
+                )
+            }
+        }
+    }
+
+    @MainActor
+    static func rescheduleUnfinishedWorkoutReminder(
+        modelContext: ModelContext,
+        ownerId: String,
+        gender: Gender
+    ) {
+        let hasUnfinishedWorkout = hasUnfinishedWorkout(modelContext: modelContext, ownerId: ownerId, gender: gender)
+
+        cancelNotifications(prefix: unfinishedWorkoutReminderPrefix) {
+            guard hasUnfinishedWorkout else { return }
+
+            let dates = reminderDates(hour: 21, minute: 30, skipToday: false)
+            for date in dates {
+                scheduleOneTimeReminder(
+                    id: "\(unfinishedWorkoutReminderPrefix)evening-\(notificationDateId(date))",
+                    date: date,
+                    title: AppLocalizer.string("notifications.unfinished_workout.title"),
+                    body: AppLocalizer.string("notifications.unfinished_workout.body")
                 )
             }
         }
@@ -57,10 +125,15 @@ enum LocalReminderScheduler {
     }
 
     private struct MealReminder {
+        struct TimeSlot {
+            let id: String
+            let hour: Int
+            let minute: Int
+        }
+
         let id: String
         let mealType: MealType
-        let hour: Int
-        let minute: Int
+        let timeSlots: [TimeSlot]
         let titleKey: String
         let bodyKey: String
     }
@@ -69,24 +142,31 @@ enum LocalReminderScheduler {
         MealReminder(
             id: "breakfast",
             mealType: .breakfast,
-            hour: 9,
-            minute: 30,
+            timeSlots: [
+                MealReminder.TimeSlot(id: "main", hour: 9, minute: 30),
+                MealReminder.TimeSlot(id: "followup", hour: 10, minute: 30)
+            ],
             titleKey: "notifications.meal.breakfast.title",
             bodyKey: "notifications.meal.breakfast.body"
         ),
         MealReminder(
             id: "lunch",
             mealType: .lunch,
-            hour: 14,
-            minute: 0,
+            timeSlots: [
+                MealReminder.TimeSlot(id: "main", hour: 14, minute: 0),
+                MealReminder.TimeSlot(id: "followup-1", hour: 15, minute: 0),
+                MealReminder.TimeSlot(id: "followup-2", hour: 16, minute: 0)
+            ],
             titleKey: "notifications.meal.lunch.title",
             bodyKey: "notifications.meal.lunch.body"
         ),
         MealReminder(
             id: "dinner",
             mealType: .dinner,
-            hour: 20,
-            minute: 0,
+            timeSlots: [
+                MealReminder.TimeSlot(id: "main", hour: 20, minute: 0),
+                MealReminder.TimeSlot(id: "followup", hour: 21, minute: 0)
+            ],
             titleKey: "notifications.meal.dinner.title",
             bodyKey: "notifications.meal.dinner.body"
         )
@@ -119,17 +199,71 @@ enum LocalReminderScheduler {
         )
     }
 
-    private static func nextReminderDate(hour: Int, minute: Int, alreadyLoggedToday: Bool) -> Date {
+    private static func reminderDates(hour: Int, minute: Int, alreadyLoggedToday: Bool) -> [Date] {
+        reminderDates(hour: hour, minute: minute, skipToday: alreadyLoggedToday)
+    }
+
+    private static func reminderDates(hour: Int, minute: Int, skipToday: Bool) -> [Date] {
         let calendar = Calendar.current
         let now = Date()
-        let today = calendar.startOfDay(for: now)
-        let todayReminder = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: today) ?? now
+        let todayStart = calendar.startOfDay(for: now)
 
-        if alreadyLoggedToday || todayReminder <= now {
-            return calendar.date(byAdding: .day, value: 1, to: todayReminder) ?? todayReminder
+        return (0..<reminderRollingDays).compactMap { dayOffset in
+            if dayOffset == 0, skipToday {
+                return nil
+            }
+
+            guard
+                let day = calendar.date(byAdding: .day, value: dayOffset, to: todayStart),
+                let reminderDate = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day),
+                reminderDate > now
+            else {
+                return nil
+            }
+
+            return reminderDate
+        }
+    }
+
+    @MainActor
+    private static func hasCompletedWorkoutToday(
+        modelContext: ModelContext,
+        ownerId: String,
+        gender: Gender
+    ) -> Bool {
+        let calendar = Calendar.current
+        let dayStart = calendar.startOfDay(for: .now)
+        guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return false }
+
+        return workouts(modelContext: modelContext, ownerId: ownerId, gender: gender).contains { workout in
+            guard let endedAt = workout.endedAt else { return false }
+            return endedAt >= dayStart && endedAt < dayEnd
+        }
+    }
+
+    @MainActor
+    private static func hasUnfinishedWorkout(
+        modelContext: ModelContext,
+        ownerId: String,
+        gender: Gender
+    ) -> Bool {
+        workouts(modelContext: modelContext, ownerId: ownerId, gender: gender)
+            .contains { $0.endedAt == nil }
+    }
+
+    @MainActor
+    private static func workouts(
+        modelContext: ModelContext,
+        ownerId: String,
+        gender: Gender
+    ) -> [WorkoutSession] {
+        let predicate = #Predicate<WorkoutSession> {
+            $0.ownerId == ownerId
         }
 
-        return todayReminder
+        let descriptor = FetchDescriptor<WorkoutSession>(predicate: predicate)
+        let workouts = (try? modelContext.fetch(descriptor)) ?? []
+        return workouts.filter { $0.gender == gender }
     }
 
     private static func scheduleOneTimeReminder(id: String, date: Date, title: String, body: String) {
@@ -141,6 +275,20 @@ enum LocalReminderScheduler {
         let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: date)
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
         let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
-        UNUserNotificationCenter.current().add(request)
+        UNUserNotificationCenter.current().add(request) { error in
+            #if DEBUG
+            if let error {
+                print("Failed to schedule local notification \(id):", error.localizedDescription)
+            }
+            #endif
+        }
+    }
+
+    private static func notificationDateId(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyyMMdd-HHmm"
+        return formatter.string(from: date)
     }
 }

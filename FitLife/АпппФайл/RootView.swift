@@ -79,16 +79,24 @@ struct RootView: View {
             prepareLocalDataIfNeeded()
             notificationsStore.setCurrentUser(currentOwnerId)
             pushNotificationsManager.setCurrentUser(currentOwnerId)
+            refreshMealRemindersIfNeeded()
+            refreshWorkoutRemindersIfNeeded()
         }
         .onChange(of: currentOwnerId) { _, _ in
             prepareLocalDataIfNeeded()
             notificationsStore.setCurrentUser(currentOwnerId)
             pushNotificationsManager.setCurrentUser(currentOwnerId)
+            refreshMealRemindersIfNeeded()
+            refreshWorkoutRemindersIfNeeded()
         }
         .onChange(of: appLanguageRaw) { _, _ in
             Task {
                 await pushNotificationsManager.syncCurrentLanguagePreference()
             }
+        }
+        .onChange(of: activeGenderRaw) { _, _ in
+            refreshMealRemindersIfNeeded()
+            refreshWorkoutRemindersIfNeeded()
         }
     }
 
@@ -98,6 +106,24 @@ struct RootView: View {
         migrateLegacyLocalDataIfNeeded(to: currentOwnerId)
         preparedOwnerId = currentOwnerId
         isPreparingLocalData = false
+    }
+
+    private func refreshMealRemindersIfNeeded() {
+        guard let currentOwnerId else { return }
+        LocalReminderScheduler.rescheduleMealRemindersIfEnabled(
+            modelContext: modelContext,
+            ownerId: currentOwnerId,
+            gender: Gender(rawValue: activeGenderRaw) ?? .male
+        )
+    }
+
+    private func refreshWorkoutRemindersIfNeeded() {
+        guard let currentOwnerId else { return }
+        LocalReminderScheduler.rescheduleWorkoutRemindersIfEnabled(
+            modelContext: modelContext,
+            ownerId: currentOwnerId,
+            gender: Gender(rawValue: activeGenderRaw) ?? .male
+        )
     }
 
     private func migrateLegacyLocalDataIfNeeded(to ownerId: String) {

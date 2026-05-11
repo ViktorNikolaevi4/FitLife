@@ -401,6 +401,11 @@ struct ActiveWorkoutScreen: View {
         workout.isTimerRunning = false
         workout.endedAt = Date()
         try? modelContext.save()
+        LocalReminderScheduler.rescheduleWorkoutRemindersIfEnabled(
+            modelContext: modelContext,
+            ownerId: workout.ownerId,
+            gender: workout.gender
+        )
         syncCompletedAssignmentIfNeeded()
         dismiss()
     }
