@@ -471,11 +471,15 @@
 "workout.select.exercise.custom.placeholder" = "Например, Присед со штангой";
 "workout.select.exercise.add.custom" = "Добавить свое упражнение";
 "workout.create.title" = "Новое упражнение";
+"workout.create.edit.title" = "Редактировать упражнение";
 "workout.create.name" = "Название";
 "workout.create.name.placeholder" = "Например, Румынская тяга";
 "workout.create.color" = "Цвет";
 "workout.create.icon" = "Иконка";
 "workout.create.save" = "Сохранить упражнение";
+"workout.create.delete" = "Удалить упражнение";
+"workout.create.delete.title" = "Удалить упражнение?";
+"workout.create.delete.message" = "Шаблон исчезнет из списка «Мои упражнения». Уже добавленные тренировки не изменятся.";
 "workout.create.preview" = "Новое упражнение";
 "workout.create.preview.subtitle" = "Оно появится в списке выбора.";
 "workout.setup.title" = "Настройка упражнения";

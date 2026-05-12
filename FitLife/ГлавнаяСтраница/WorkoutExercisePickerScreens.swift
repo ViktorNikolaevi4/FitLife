@@ -80,6 +80,7 @@ struct AddWorkoutExerciseScreen: View {
 
     @State private var draftToConfigure: WorkoutExerciseDraft?
     @State private var isShowingCreateExercise = false
+    @State private var templateToEdit: CustomWorkoutExerciseTemplate?
     @State private var searchText = ""
 
     private var filteredTemplates: [WorkoutExerciseTemplate] {
@@ -144,8 +145,18 @@ struct AddWorkoutExerciseScreen: View {
             }
             .navigationDestination(isPresented: $isShowingCreateExercise) {
                 CreateWorkoutExerciseTemplateScreen { template in
-                    draftToConfigure = WorkoutExerciseDraft(customTemplate: template)
+                    isShowingCreateExercise = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        draftToConfigure = WorkoutExerciseDraft(customTemplate: template)
+                    }
                 }
+            }
+            .sheet(item: $templateToEdit) { template in
+                NavigationStack {
+                    CreateWorkoutExerciseTemplateScreen(templateToEdit: template) { _ in }
+                }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
             }
         }
     }
@@ -244,43 +255,56 @@ struct AddWorkoutExerciseScreen: View {
 
             VStack(spacing: 12) {
                 ForEach(filteredCustomTemplates) { template in
-                    Button(action: { draftToConfigure = WorkoutExerciseDraft(customTemplate: template) }) {
-                        HStack(spacing: 14) {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 18)
-                                    .fill(workoutAccentColor(template.accentName).opacity(0.14))
+                    HStack(spacing: 14) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 18)
+                                .fill(workoutAccentColor(template.accentName).opacity(0.14))
 
-                                workoutIconImage(
-                                    named: template.systemImage,
-                                    accentName: template.accentName,
-                                    size: 22
-                                )
-                            }
-                            .frame(width: 56, height: 56)
+                            workoutIconImage(
+                                named: template.systemImage,
+                                accentName: template.accentName,
+                                size: 22
+                            )
+                        }
+                        .frame(width: 56, height: 56)
 
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(template.name)
-                                    .font(.headline.weight(.semibold))
-                                    .foregroundStyle(.primary)
-                                Text(AppLocalizer.string("workout.select.exercise.saved.subtitle"))
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(template.name)
+                                .font(.headline.weight(.semibold))
+                                .foregroundStyle(.primary)
+                            Text(AppLocalizer.string("workout.select.exercise.saved.subtitle"))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
 
-                            Spacer()
+                        Spacer()
 
+                        Button {
+                            templateToEdit = template
+                        } label: {
+                            Image(systemName: "pencil.circle.fill")
+                                .font(.title3)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(AppLocalizer.string("common.edit"))
+
+                        Button {
+                            draftToConfigure = WorkoutExerciseDraft(customTemplate: template)
+                        } label: {
                             Image(systemName: "plus.circle.fill")
                                 .font(.title3)
                                 .foregroundStyle(.primary)
                         }
-                        .padding(16)
-                        .background(RoundedRectangle(cornerRadius: 22).fill(workoutPickerCardBackground))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 22)
-                                .strokeBorder(workoutPickerCardBorder)
-                        )
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(AppLocalizer.string("common.add"))
                     }
-                    .buttonStyle(.plain)
+                    .padding(16)
+                    .background(RoundedRectangle(cornerRadius: 22).fill(workoutPickerCardBackground))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 22)
+                            .strokeBorder(workoutPickerCardBorder)
+                    )
                 }
             }
         }
@@ -301,12 +325,25 @@ private struct CreateWorkoutExerciseTemplateScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
+    let templateToEdit: CustomWorkoutExerciseTemplate?
     let onCreated: (CustomWorkoutExerciseTemplate) -> Void
 
-    @State private var name = ""
-    @State private var selectedIcon = WorkoutExerciseIcon.run
-    @State private var selectedAccent = "blue"
+    @State private var name: String
+    @State private var selectedIcon: String
+    @State private var selectedAccent: String
+    @State private var isShowingDeleteConfirmation = false
     @FocusState private var isNameFieldFocused: Bool
+
+    init(
+        templateToEdit: CustomWorkoutExerciseTemplate? = nil,
+        onCreated: @escaping (CustomWorkoutExerciseTemplate) -> Void
+    ) {
+        self.templateToEdit = templateToEdit
+        self.onCreated = onCreated
+        _name = State(initialValue: templateToEdit?.name ?? "")
+        _selectedIcon = State(initialValue: templateToEdit?.systemImage ?? WorkoutExerciseIcon.run)
+        _selectedAccent = State(initialValue: templateToEdit?.accentName ?? "blue")
+    }
 
     private let iconOptions: [ExerciseIconOption] = [
         .init(systemImage: WorkoutExerciseIcon.cleanAndJerk),
@@ -427,7 +464,7 @@ private struct CreateWorkoutExerciseTemplateScreen: View {
                 }
 
                 Button(action: saveTemplate) {
-                    Text(AppLocalizer.string("workout.create.save"))
+                    Text(templateToEdit == nil ? AppLocalizer.string("workout.create.save") : AppLocalizer.string("common.save"))
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(Color(.systemBackground))
                         .frame(maxWidth: .infinity)
@@ -437,14 +474,40 @@ private struct CreateWorkoutExerciseTemplateScreen: View {
                 .buttonStyle(.plain)
                 .disabled(trimmedName.isEmpty)
                 .opacity(trimmedName.isEmpty ? 0.45 : 1)
+
+                if templateToEdit != nil {
+                    Button(role: .destructive) {
+                        isShowingDeleteConfirmation = true
+                    } label: {
+                        Text(AppLocalizer.string("workout.create.delete"))
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(.red)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(RoundedRectangle(cornerRadius: 18).fill(workoutPickerCardBackground))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 18)
+                                    .strokeBorder(workoutPickerCardBorder)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
             }
             .padding(.horizontal)
             .padding(.top, 20)
             .padding(.bottom, 32)
         }
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
-        .navigationTitle(AppLocalizer.string("workout.create.title"))
+        .navigationTitle(templateToEdit == nil ? AppLocalizer.string("workout.create.title") : AppLocalizer.string("workout.create.edit.title"))
         .navigationBarTitleDisplayMode(.inline)
+        .alert(AppLocalizer.string("workout.create.delete.title"), isPresented: $isShowingDeleteConfirmation) {
+            Button(AppLocalizer.string("common.cancel"), role: .cancel) {}
+            Button(AppLocalizer.string("workout.create.delete"), role: .destructive) {
+                deleteTemplate()
+            }
+        } message: {
+            Text(AppLocalizer.string("workout.create.delete.message"))
+        }
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                 isNameFieldFocused = true
@@ -492,6 +555,15 @@ private struct CreateWorkoutExerciseTemplateScreen: View {
 
     private func saveTemplate() {
         guard !trimmedName.isEmpty else { return }
+        if let templateToEdit {
+            templateToEdit.name = trimmedName
+            templateToEdit.systemImage = selectedIcon
+            templateToEdit.accentName = selectedAccent
+            try? modelContext.save()
+            dismiss()
+            return
+        }
+
         let template = CustomWorkoutExerciseTemplate(
             name: trimmedName,
             systemImage: selectedIcon,
@@ -500,6 +572,13 @@ private struct CreateWorkoutExerciseTemplateScreen: View {
         modelContext.insert(template)
         try? modelContext.save()
         onCreated(template)
+        dismiss()
+    }
+
+    private func deleteTemplate() {
+        guard let templateToEdit else { return }
+        modelContext.delete(templateToEdit)
+        try? modelContext.save()
         dismiss()
     }
 }

@@ -471,11 +471,15 @@
 "workout.select.exercise.custom.placeholder" = "For example, Barbell Squat";
 "workout.select.exercise.add.custom" = "Add custom exercise";
 "workout.create.title" = "New Exercise";
+"workout.create.edit.title" = "Edit Exercise";
 "workout.create.name" = "Name";
 "workout.create.name.placeholder" = "For example, Romanian Deadlift";
 "workout.create.color" = "Color";
 "workout.create.icon" = "Icon";
 "workout.create.save" = "Save Exercise";
+"workout.create.delete" = "Delete Exercise";
+"workout.create.delete.title" = "Delete Exercise?";
+"workout.create.delete.message" = "The template will disappear from My Exercises. Existing workouts will not change.";
 "workout.create.preview" = "New Exercise";
 "workout.create.preview.subtitle" = "It will appear in the selection list.";
 "workout.setup.title" = "Exercise Setup";
