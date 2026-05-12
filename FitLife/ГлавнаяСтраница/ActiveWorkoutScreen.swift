@@ -15,6 +15,7 @@ struct ActiveWorkoutScreen: View {
     @State private var isShowingExercisePicker = false
     @State private var editingSet: WorkoutSet?
     @State private var editingExerciseNote: WorkoutExercise?
+    @State private var isEditingWorkoutTitle = false
     @State private var isEditingWorkoutNote = false
     @State private var showFinishConfirmation = false
     private let firestore = Firestore.firestore()
@@ -23,6 +24,10 @@ struct ActiveWorkoutScreen: View {
         workout.exercises.sorted { $0.orderIndex < $1.orderIndex }
     }
     private var activeWorkoutCardShadow: Color { colorScheme == .dark ? .clear : .black.opacity(0.08) }
+    private var workoutTitle: String {
+        let trimmedTitle = workout.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedTitle.isEmpty ? AppLocalizer.string("workout.active.title") : trimmedTitle
+    }
 
     private var elapsedString: String {
         let interval = max(0, workout.elapsedSeconds)
@@ -101,6 +106,17 @@ struct ActiveWorkoutScreen: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
             .interactiveDismissDisabled()
+        }
+        .sheet(isPresented: $isEditingWorkoutTitle) {
+            EditWorkoutSessionTitleScreen(
+                workout: workout,
+                fallbackTitle: AppLocalizer.string("workout.active.title"),
+                onSave: { title in
+                    updateWorkoutTitle(title)
+                }
+            )
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
         }
         .sheet(item: $editingSet) { set in
             EditWorkoutSetScreen(
@@ -202,8 +218,21 @@ struct ActiveWorkoutScreen: View {
 
             Spacer()
 
-            Text(AppLocalizer.string("workout.active.title"))
-                .font(.headline.weight(.semibold))
+            Button(action: { isEditingWorkoutTitle = true }) {
+                HStack(spacing: 6) {
+                    Text(workoutTitle)
+                        .font(.headline.weight(.semibold))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+
+                    Image(systemName: "pencil")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .foregroundStyle(.primary)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
 
             Spacer()
 
@@ -336,6 +365,12 @@ struct ActiveWorkoutScreen: View {
         try? modelContext.save()
     }
 
+    private func updateWorkoutTitle(_ title: String) {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        workout.title = trimmedTitle.isEmpty ? AppLocalizer.string("workout.active.title") : trimmedTitle
+        try? modelContext.save()
+    }
+
     private func addExercise(draft: WorkoutExerciseDraft) {
         let index = workout.exercises.count
         let exercise = WorkoutExercise(
@@ -419,6 +454,76 @@ struct ActiveWorkoutScreen: View {
                 .document(assignmentId)
                 .setData(["status": WorkoutAssignmentStatus.completed.rawValue], merge: true)
         }
+    }
+}
+
+private struct EditWorkoutSessionTitleScreen: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let workout: WorkoutSession
+    let fallbackTitle: String
+    let onSave: (String) -> Void
+
+    @State private var title: String
+    @FocusState private var isTitleFocused: Bool
+
+    init(workout: WorkoutSession, fallbackTitle: String, onSave: @escaping (String) -> Void) {
+        self.workout = workout
+        self.fallbackTitle = fallbackTitle
+        self.onSave = onSave
+        _title = State(initialValue: workout.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? fallbackTitle : workout.title)
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(AppLocalizer.string("workout.title.edit"))
+                    .font(.title3.weight(.semibold))
+
+                TextField(
+                    AppLocalizer.string("workout.title.placeholder"),
+                    text: $title
+                )
+                .textInputAutocapitalization(.sentences)
+                .submitLabel(.done)
+                .focused($isTitleFocused)
+                .padding(14)
+                .background(RoundedRectangle(cornerRadius: 18).fill(activeWorkoutInsetBackground))
+                .onSubmit(save)
+
+                Button(action: save) {
+                    Text(AppLocalizer.string("workout.title.save"))
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(Color(.systemBackground))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(RoundedRectangle(cornerRadius: 18).fill(Color.primary))
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.top, 20)
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(AppLocalizer.string("common.cancel")) {
+                        dismiss()
+                    }
+                }
+            }
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    isTitleFocused = true
+                }
+            }
+        }
+    }
+
+    private func save() {
+        onSave(title)
+        dismiss()
     }
 }
 

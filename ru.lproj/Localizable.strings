@@ -444,6 +444,9 @@
 "coaching.workspace.connected_since" = "Связь активна с";
 "coaching.workspace.last_note" = "Последняя заметка";
 "workout.active.title" = "Активная тренировка";
+"workout.title.edit" = "Название тренировки";
+"workout.title.placeholder" = "Например, Ноги и пресс";
+"workout.title.save" = "Сохранить название";
 "workout.finish" = "Завершить";
 "workout.finish.confirm.title" = "Завершить тренировку?";
 "workout.finish.confirm.message" = "Тренировка будет сохранена как завершённая.";
