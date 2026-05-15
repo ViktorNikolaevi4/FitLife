@@ -31,8 +31,8 @@ enum ClientCoachingSex: String, CaseIterable, Codable, Identifiable {
 
     var localizationKey: String {
         switch self {
-        case .male: return "profile.gender.male"
-        case .female: return "profile.gender.female"
+        case .male: return "gender.male"
+        case .female: return "gender.female"
         }
     }
 }

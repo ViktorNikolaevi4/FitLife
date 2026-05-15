@@ -31,7 +31,13 @@ struct ProfileScreen: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(spacing: 16) {
-                    ProfileHeroCard()
+                    if let user {
+                        ProfileHeroCard {
+                            ProfileProgressScreen(userData: user, ownerId: currentOwnerId, gender: editingGender)
+                        }
+                    } else {
+                        ProfileHeroCard()
+                    }
 
                     SectionCard(title: AppLocalizer.string("profile.gender")) {
                         Picker("", selection: $editingGender) {
@@ -49,14 +55,6 @@ struct ProfileScreen: View {
                         .onChange(of: u.age) { _, _ in recalc(u) }
                         .onChange(of: u.weight) { _, _ in recalc(u) }
                         .onChange(of: u.height) { _, _ in recalc(u) }
-
-                        NavigationLink {
-                            ProfileProgressScreen(userData: u, ownerId: currentOwnerId, gender: editingGender)
-                        } label: {
-                            ProfileProgressEntryCard()
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal)
 
                         SectionCard(title: AppLocalizer.string("activity.title")) {
                             VStack(alignment: .leading, spacing: 12) {
@@ -590,8 +588,18 @@ private struct ManualNutritionGoalsEditor: View {
 }
 
 private struct ProfileHeroCard: View {
+    let progressDestination: AnyView?
+
+    init() {
+        progressDestination = nil
+    }
+
+    init<Destination: View>(@ViewBuilder progressDestination: () -> Destination) {
+        self.progressDestination = AnyView(progressDestination())
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             Text(AppLocalizer.string("tab.profile"))
                 .font(.system(size: 28, weight: .bold))
 
@@ -605,6 +613,48 @@ private struct ProfileHeroCard: View {
             }
             .font(.caption.weight(.semibold))
             .foregroundStyle(.secondary)
+
+            if let progressDestination {
+                NavigationLink {
+                    progressDestination
+                } label: {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(Color.blue.opacity(0.12))
+
+                            Image(systemName: "chart.line.uptrend.xyaxis")
+                                .font(.system(size: 19, weight: .semibold))
+                                .foregroundStyle(.blue)
+                        }
+                        .frame(width: 44, height: 44)
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(AppLocalizer.string("profile.progress.title"))
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.primary)
+
+                            Text(AppLocalizer.string("profile.progress.subtitle"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+
+                        Spacer(minLength: 8)
+
+                        Image(systemName: "chevron.right")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(.systemBackground))
+                    )
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 2)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)
@@ -773,50 +823,6 @@ private struct EditableSummaryMetricCardDoubleAsInt: View {
                 }
             )
         }
-    }
-}
-
-private struct ProfileProgressEntryCard: View {
-    var body: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.blue.opacity(0.12))
-
-                Image(systemName: "chart.line.uptrend.xyaxis")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(.blue)
-            }
-            .frame(width: 52, height: 52)
-
-            VStack(alignment: .leading, spacing: 5) {
-                Text(AppLocalizer.string("profile.progress.title"))
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-
-                Text(AppLocalizer.string("profile.progress.subtitle"))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.tertiary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(profileCardBackground)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(profileCardBorder)
-        )
-        .shadow(color: .black.opacity(0.03), radius: 10, x: 0, y: 4)
     }
 }
 
