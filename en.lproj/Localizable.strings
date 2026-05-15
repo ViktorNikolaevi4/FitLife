@@ -96,6 +96,7 @@
 "nutrition.goal.value" = "/ %d kcal";
 "nutrition.remaining.value" = "Remaining: %d kcal";
 "nutrition.macro.value" = "%d / %d g";
+"nutrition.macro.over_target" = "Over target";
 "nutrition.macro.detail.remaining" = "Remaining: %d g";
 "nutrition.macro.detail.exceeded" = "Exceeded by: %d g";
 "nutrition.macro.detail.empty.title" = "No products yet";

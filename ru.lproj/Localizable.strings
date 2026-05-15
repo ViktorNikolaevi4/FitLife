@@ -96,6 +96,7 @@
 "nutrition.goal.value" = "/ %d ккал";
 "nutrition.remaining.value" = "Осталось: %d ккал";
 "nutrition.macro.value" = "%d / %d г";
+"nutrition.macro.over_target" = "Выше цели";
 "nutrition.macro.detail.remaining" = "Осталось: %d г";
 "nutrition.macro.detail.exceeded" = "Превышено на: %d г";
 "nutrition.macro.detail.empty.title" = "Пока нет продуктов";

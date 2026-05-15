@@ -331,16 +331,30 @@ private struct NutritionMacroCard: View {
         return min(Double(current) / Double(target), 1)
     }
 
+    private var isOverTarget: Bool {
+        target > 0 && current > target
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text(title)
-                .font(.caption2.weight(.semibold))
+            HStack(spacing: 4) {
+                Text(title)
+                    .font(.caption2.weight(.semibold))
+
+                if isOverTarget {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.red)
+                        .accessibilityLabel(AppLocalizer.string("nutrition.macro.over_target"))
+                }
+            }
             Text(AppLocalizer.format("nutrition.macro.value", current, target))
                 .font(.caption.weight(.semibold))
+                .foregroundStyle(isOverTarget ? .red : .primary)
             ThickProgressBar(
                 fraction: fraction,
-                fill: tint,
-                track: tint.opacity(0.16),
+                fill: isOverTarget ? .red : tint,
+                track: (isOverTarget ? Color.red : tint).opacity(0.16),
                 height: 4
             )
             .frame(height: 4)
@@ -424,7 +438,7 @@ struct MacroNutrientDetailScreen: View {
 
     private var filteredMeals: [(MealType, [FoodEntry])] {
         MealType.allCases.compactMap { meal in
-            let entries = (entriesByMeal[meal] ?? []).filter { macro.value(for: $0) > 0 }
+            let entries = (entriesByMeal[meal] ?? []).filter { displayedMacroValue(for: $0) > 0 }
             return entries.isEmpty ? nil : (meal, entries)
         }
     }
@@ -571,7 +585,7 @@ struct MacroNutrientDetailScreen: View {
 
                         Spacer()
 
-                        Text("\(Int(macro.value(for: entry))) \(AppLocalizer.string("unit.grams.short"))")
+                        Text("\(displayedMacroValue(for: entry)) \(AppLocalizer.string("unit.grams.short"))")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -585,5 +599,9 @@ struct MacroNutrientDetailScreen: View {
             )
             .shadow(color: nutritionCardShadow.opacity(0.9), radius: 12, x: 0, y: 4)
         }
+    }
+
+    private func displayedMacroValue(for entry: FoodEntry) -> Int {
+        Int(macro.value(for: entry))
     }
 }
