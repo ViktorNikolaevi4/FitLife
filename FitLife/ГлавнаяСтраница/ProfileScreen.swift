@@ -607,13 +607,6 @@ private struct ProfileHeroCard: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            HStack(spacing: 10) {
-                Label(AppLocalizer.string("profile.hero.parameters"), systemImage: "slider.horizontal.3")
-                Label(AppLocalizer.string("profile.hero.progress"), systemImage: "chart.line.uptrend.xyaxis")
-            }
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
-
             if let progressDestination {
                 NavigationLink {
                     progressDestination
