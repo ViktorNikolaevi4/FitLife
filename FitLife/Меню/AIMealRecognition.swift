@@ -674,6 +674,8 @@ struct AIMealRecognitionFlowView: View {
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var isLoadingGalleryImage = false
     @State private var isSaving = false
+    @State private var isShowingTextFlow = false
+    @State private var isShowingVoiceFlow = false
 
     private let recognitionService = AIMealRecognitionService()
 
@@ -753,6 +755,30 @@ struct AIMealRecognitionFlowView: View {
             guard let newItem else { return }
             loadGalleryImage(from: newItem)
         }
+        .sheet(isPresented: $isShowingTextFlow) {
+            AITextMealRecognitionFlowView(
+                selectedDate: selectedDate,
+                selectedGender: selectedGender,
+                preselectedMeal: preselectedMeal,
+                preferredVoiceMode: false,
+                onSaved: {
+                    onSaved()
+                    dismiss()
+                }
+            )
+        }
+        .sheet(isPresented: $isShowingVoiceFlow) {
+            AITextMealRecognitionFlowView(
+                selectedDate: selectedDate,
+                selectedGender: selectedGender,
+                preselectedMeal: preselectedMeal,
+                preferredVoiceMode: true,
+                onSaved: {
+                    onSaved()
+                    dismiss()
+                }
+            )
+        }
     }
 
     @ViewBuilder
@@ -804,7 +830,7 @@ struct AIMealRecognitionFlowView: View {
 
     private var photoSourceContent: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(AppLocalizer.string("ai.meal.source.subtitle"))
+            Text(AppLocalizer.string("ai.meal.source.all.subtitle"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 4)
@@ -832,6 +858,30 @@ struct AIMealRecognitionFlowView: View {
             }
             .buttonStyle(.plain)
             .disabled(isLoadingGalleryImage)
+
+            Button {
+                isShowingTextFlow = true
+            } label: {
+                photoSourceCard(
+                    title: AppLocalizer.string("ai.quick.text.title"),
+                    subtitle: AppLocalizer.string("ai.quick.text.subtitle"),
+                    systemImage: "text.bubble.fill",
+                    tint: .green
+                )
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                isShowingVoiceFlow = true
+            } label: {
+                photoSourceCard(
+                    title: AppLocalizer.string("ai.quick.voice.title"),
+                    subtitle: AppLocalizer.string("ai.quick.voice.subtitle"),
+                    systemImage: "mic.fill",
+                    tint: .orange
+                )
+            }
+            .buttonStyle(.plain)
 
             AIDisclaimerCard()
 

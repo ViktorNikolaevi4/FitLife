@@ -30,6 +30,7 @@
 "ai.meal.retake" = "Retake";
 "ai.meal.choose_again" = "Choose Another";
 "ai.meal.source.subtitle" = "Add a meal photo: take a new shot or pick an existing photo from your gallery.";
+"ai.meal.source.all.subtitle" = "Add food in the way that is fastest: photo, text, or voice.";
 "ai.meal.source.camera.title" = "Take Photo";
 "ai.meal.source.camera.subtitle" = "Open the camera and send the shot for calories and macros analysis.";
 "ai.meal.source.gallery.title" = "Choose from Gallery";

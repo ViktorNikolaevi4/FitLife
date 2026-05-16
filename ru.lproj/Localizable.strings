@@ -30,6 +30,7 @@
 "ai.meal.retake" = "Переснять";
 "ai.meal.choose_again" = "Выбрать другое";
 "ai.meal.source.subtitle" = "Добавь фото еды: сделай снимок сейчас или выбери готовое фото из галереи.";
+"ai.meal.source.all.subtitle" = "Добавь еду удобным способом: фото, текстом или голосом.";
 "ai.meal.source.camera.title" = "Сделать фото";
 "ai.meal.source.camera.subtitle" = "Откроем камеру и сразу отправим снимок на анализ калорий и БЖУ.";
 "ai.meal.source.gallery.title" = "Выбрать из галереи";
