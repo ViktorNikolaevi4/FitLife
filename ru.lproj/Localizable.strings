@@ -101,6 +101,15 @@
 "nutrition.macro.detail.exceeded" = "Превышено на: %d г";
 "nutrition.macro.detail.empty.title" = "Пока нет продуктов";
 "nutrition.macro.detail.empty.subtitle" = "За выбранный день нет добавленных продуктов с этим макронутриентом.";
+"repeat_yesterday.action" = "Повторить вчера";
+"repeat_yesterday.action_short" = "Повторить";
+"repeat_yesterday.suggestion_title" = "Вчера";
+"repeat_yesterday.preview" = "%@ · %d ккал";
+"repeat_yesterday.preview_more" = "%@ и ещё %d · %d ккал";
+"repeat_yesterday.preview_short" = "%d ккал";
+"repeat_yesterday.title" = "Повторить: %@";
+"repeat_yesterday.subtitle" = "Проверь продукты и граммовки перед добавлением.";
+"repeat_yesterday.save" = "Добавить в сегодняшний приём";
 
 "about.app_name" = "Моё Питание!";
 "about.description" = "Моё Питание! — это приложение-ассистент. Мы даём советы и помогаем отслеживать прогресс, но не ставим диагнозы и не назначаем лечение. Для медицинских вопросов обращайся к врачу.";

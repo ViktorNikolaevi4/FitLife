@@ -101,6 +101,15 @@
 "nutrition.macro.detail.exceeded" = "Exceeded by: %d g";
 "nutrition.macro.detail.empty.title" = "No products yet";
 "nutrition.macro.detail.empty.subtitle" = "There are no added products with this macronutrient for the selected day.";
+"repeat_yesterday.action" = "Repeat Yesterday";
+"repeat_yesterday.action_short" = "Repeat";
+"repeat_yesterday.suggestion_title" = "Yesterday";
+"repeat_yesterday.preview" = "%@ · %d kcal";
+"repeat_yesterday.preview_more" = "%@ and %d more · %d kcal";
+"repeat_yesterday.preview_short" = "%d kcal";
+"repeat_yesterday.title" = "Repeat: %@";
+"repeat_yesterday.subtitle" = "Review products and portions before adding.";
+"repeat_yesterday.save" = "Add to today's meal";
 
 "about.app_name" = "My Nutrition!";
 "about.description" = "My Nutrition! is an assistant app. We provide guidance and help track progress, but we do not diagnose or prescribe treatment. For medical questions, consult a doctor.";

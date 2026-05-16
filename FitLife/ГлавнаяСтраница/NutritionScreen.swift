@@ -29,9 +29,14 @@ struct NutritionScreen: View {
     @State private var lunchItems: [FoodEntry] = []
     @State private var dinnerItems: [FoodEntry] = []
     @State private var snacksItems: [FoodEntry] = []
+    @State private var yesterdayBreakfastItems: [FoodEntry] = []
+    @State private var yesterdayLunchItems: [FoodEntry] = []
+    @State private var yesterdayDinnerItems: [FoodEntry] = []
+    @State private var yesterdaySnacksItems: [FoodEntry] = []
     @State private var expandedMeals: Set<MealType> = []
     @State private var sheet: RationSheet? = nil
     @State private var selectedMacroDetail: MacroDetailKind?
+    @State private var repeatYesterdayMeal: RepeatYesterdayMealSelection?
     @State private var isShowingAIMealRecognition = false
 
     private var selectedGender: Gender { Gender(rawValue: activeGenderRaw) ?? .male }
@@ -74,8 +79,10 @@ struct NutritionScreen: View {
                         calories: (breakfastKcal, lunchKcal, dinnerKcal, snacksKcal),
                         macros: (breakfastMacros, lunchMacros, dinnerMacros, snacksMacros),
                         entries: (breakfastItems, lunchItems, dinnerItems, snacksItems),
+                        yesterdayEntries: (yesterdayBreakfastItems, yesterdayLunchItems, yesterdayDinnerItems, yesterdaySnacksItems),
                         expanded: $expandedMeals,
                         onTapMeal: { meal in sheet = .quick(meal) },
+                        onRepeatYesterday: { meal in openRepeatYesterdayEditor(for: meal) },
                         onDeleteEntry: { entry in deleteEntry(entry) },
                         onDeleteEntries: { entries in deleteEntries(entries) },
                         onUpdateEntry: { _ in refreshDerivedState() }
@@ -120,6 +127,15 @@ struct NutritionScreen: View {
                     carbs: userData?.carbs ?? 0
                 ),
                 selectedDate: selectedDate
+            )
+        }
+        .sheet(item: $repeatYesterdayMeal) { selection in
+            RepeatYesterdayMealEditorScreen(
+                meal: selection.meal,
+                sourceEntries: selection.entries,
+                onSave: { drafts in
+                    saveRepeatedYesterdayMeal(selection.meal, drafts: drafts)
+                }
             )
         }
         .sheet(isPresented: $isShowingAIMealRecognition) {
@@ -190,6 +206,7 @@ struct NutritionScreen: View {
 
     private func recalcFor(_ date: Date) {
         loadEntries(for: date)
+        loadYesterdayEntries(for: date)
     }
 
     private func loadEntries(for date: Date) {
@@ -318,6 +335,138 @@ struct NutritionScreen: View {
     private func resetState() {
         apply(snapshot: FoodDaySnapshot.from(entries: []))
     }
+
+    private func loadYesterdayEntries(for date: Date) {
+        guard let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: date) else {
+            applyYesterday(snapshot: FoodDaySnapshot.from(entries: []))
+            return
+        }
+
+        let calendar = Calendar.current
+        let dayStart = calendar.startOfDay(for: yesterday)
+        guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart),
+              let currentOwnerId else {
+            applyYesterday(snapshot: FoodDaySnapshot.from(entries: []))
+            return
+        }
+
+        let predicate = #Predicate<FoodEntry> {
+            $0.date >= dayStart &&
+            $0.date < dayEnd &&
+            $0.ownerId == currentOwnerId
+        }
+
+        do {
+            let descriptor = FetchDescriptor<FoodEntry>(predicate: predicate)
+            let items = try modelContext.fetch(descriptor).filter { $0.gender == selectedGender }
+            applyYesterday(snapshot: FoodDaySnapshot.from(entries: items))
+        } catch {
+            applyYesterday(snapshot: FoodDaySnapshot.from(entries: []))
+        }
+    }
+
+    private func applyYesterday(snapshot: FoodDaySnapshot) {
+        yesterdayBreakfastItems = snapshot.breakfast
+        yesterdayLunchItems = snapshot.lunch
+        yesterdayDinnerItems = snapshot.dinner
+        yesterdaySnacksItems = snapshot.snacks
+    }
+
+    private func openRepeatYesterdayEditor(for meal: MealType) {
+        let entries: [FoodEntry]
+        switch meal {
+        case .breakfast:
+            entries = yesterdayBreakfastItems
+        case .lunch:
+            entries = yesterdayLunchItems
+        case .dinner:
+            entries = yesterdayDinnerItems
+        case .snacks:
+            entries = []
+        }
+
+        guard !entries.isEmpty else { return }
+        repeatYesterdayMeal = RepeatYesterdayMealSelection(meal: meal, entries: entries)
+    }
+
+    private func saveRepeatedYesterdayMeal(_ meal: MealType, drafts: [RepeatYesterdayMealDraftItem]) {
+        guard !drafts.isEmpty else { return }
+
+        var copiedEntries: [FoodEntry] = []
+        var copiedGroupIDs: [String: String] = [:]
+
+        for draft in drafts {
+            guard let sourceProduct = draft.sourceEntry.product else { continue }
+            let sourcePortion = max(1.0, draft.sourceEntry.portion)
+            let scale = draft.grams / sourcePortion
+            let copiedProduct = Product(
+                name: sourceProduct.name,
+                nameEN: sourceProduct.nameEN,
+                protein: sourceProduct.protein * scale,
+                fat: sourceProduct.fat * scale,
+                carbs: sourceProduct.carbs * scale,
+                calories: Int((Double(sourceProduct.calories) * scale).rounded()),
+                isFavorite: sourceProduct.isFavorite,
+                isCustom: sourceProduct.isCustom,
+                barcode: sourceProduct.barcode,
+                source: sourceProduct.source
+            )
+
+            let copiedGroupID: String?
+            if let sourceGroupID = draft.sourceEntry.aiMealGroupID, !sourceGroupID.isEmpty {
+                copiedGroupID = copiedGroupIDs[sourceGroupID, default: UUID().uuidString]
+            } else {
+                copiedGroupID = nil
+            }
+
+            if let sourceGroupID = draft.sourceEntry.aiMealGroupID, let copiedGroupID {
+                copiedGroupIDs[sourceGroupID] = copiedGroupID
+            }
+
+            let copiedEntry = FoodEntry(
+                date: selectedDate,
+                mealType: meal.rawValue,
+                product: copiedProduct,
+                portion: draft.grams,
+                gender: selectedGender,
+                ownerId: currentOwnerId ?? "",
+                isFavorite: draft.sourceEntry.isFavorite,
+                aiMealGroupID: copiedGroupID,
+                aiMealName: draft.sourceEntry.aiMealName,
+                customProductID: draft.sourceEntry.customProductID
+            )
+
+            modelContext.insert(copiedEntry)
+            copiedEntries.append(copiedEntry)
+        }
+
+        do {
+            try modelContext.save()
+            switch meal {
+            case .breakfast:
+                breakfastItems.append(contentsOf: copiedEntries)
+            case .lunch:
+                lunchItems.append(contentsOf: copiedEntries)
+            case .dinner:
+                dinnerItems.append(contentsOf: copiedEntries)
+            case .snacks:
+                snacksItems.append(contentsOf: copiedEntries)
+            }
+            expandedMeals.insert(meal)
+            refreshDerivedState()
+            LocalReminderScheduler.rescheduleMealRemindersIfEnabled(
+                modelContext: modelContext,
+                ownerId: currentOwnerId ?? "",
+                gender: selectedGender
+            )
+        } catch {}
+    }
+}
+
+struct RepeatYesterdayMealSelection: Identifiable {
+    let id = UUID()
+    let meal: MealType
+    let entries: [FoodEntry]
 }
 
 private struct NutritionMacroCard: View {

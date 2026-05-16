@@ -486,9 +486,16 @@ struct MealsSection: View {
         dinner:    [FoodEntry],
         snacks:    [FoodEntry]
     )
+    var yesterdayEntries: (
+        breakfast: [FoodEntry],
+        lunch:     [FoodEntry],
+        dinner:    [FoodEntry],
+        snacks:    [FoodEntry]
+    ) = ([], [], [], [])
 
     @Binding var expanded: Set<MealType>
     var onTapMeal: (MealType) -> Void
+    var onRepeatYesterday: ((MealType) -> Void)? = nil
     var onDeleteEntry: (FoodEntry) -> Void
     var onDeleteEntries: ([FoodEntry]) -> Void
     var onUpdateEntry: (FoodEntry) -> Void
@@ -517,6 +524,12 @@ struct MealsSection: View {
             .contentShape(Rectangle())
             .onTapGesture { onTapMeal(.breakfast) }
 
+            repeatYesterdayButton(
+                meal: .breakfast,
+                todayEntries: entries.breakfast,
+                yesterdayEntries: yesterdayEntries.breakfast
+            )
+
             if isExpanded(.breakfast) {
                 ProductsList(
                     entries.breakfast,
@@ -542,6 +555,12 @@ struct MealsSection: View {
             .contentShape(Rectangle())
             .onTapGesture { onTapMeal(.lunch) }
 
+            repeatYesterdayButton(
+                meal: .lunch,
+                todayEntries: entries.lunch,
+                yesterdayEntries: yesterdayEntries.lunch
+            )
+
             if isExpanded(.lunch) {
                 ProductsList(
                     entries.lunch,
@@ -566,6 +585,12 @@ struct MealsSection: View {
             )
             .contentShape(Rectangle())
             .onTapGesture { onTapMeal(.dinner) }
+
+            repeatYesterdayButton(
+                meal: .dinner,
+                todayEntries: entries.dinner,
+                yesterdayEntries: yesterdayEntries.dinner
+            )
 
             if isExpanded(.dinner) {
                 ProductsList(
@@ -602,6 +627,339 @@ struct MealsSection: View {
                 )
             }
         }
+    }
+
+    @ViewBuilder
+    private func repeatYesterdayButton(
+        meal: MealType,
+        todayEntries: [FoodEntry],
+        yesterdayEntries: [FoodEntry]
+    ) -> some View {
+        if todayEntries.isEmpty, !yesterdayEntries.isEmpty, onRepeatYesterday != nil {
+            Button {
+                onRepeatYesterday?(meal)
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.blue.opacity(0.12))
+
+                        Image(systemName: "arrow.uturn.backward")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.blue)
+                    }
+                    .frame(width: 30, height: 30)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(AppLocalizer.string("repeat_yesterday.suggestion_title"))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.primary)
+
+                        Text(repeatYesterdayPreview(for: yesterdayEntries))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    Spacer()
+
+                    Text(AppLocalizer.string("repeat_yesterday.action_short"))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.blue)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.blue.opacity(0.10), in: Capsule())
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+                .background(RoundedRectangle(cornerRadius: 14).fill(Color(.tertiarySystemBackground)))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .strokeBorder(Color(.separator).opacity(0.16), lineWidth: 0.5)
+                )
+            }
+            .buttonStyle(.plain)
+            .padding(.top, -4)
+            .padding(.horizontal, 8)
+        }
+    }
+
+    private func repeatYesterdayPreview(for entries: [FoodEntry]) -> String {
+        let names = entries
+            .prefix(2)
+            .compactMap { $0.product?.name.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
+        let calories = entries.reduce(0) { $0 + ($1.product?.calories ?? 0) }
+
+        if names.isEmpty {
+            return AppLocalizer.format("repeat_yesterday.preview_short", calories)
+        }
+
+        if entries.count > 2 {
+            return AppLocalizer.format("repeat_yesterday.preview_more", names, entries.count - 2, calories)
+        }
+
+        return AppLocalizer.format("repeat_yesterday.preview", names, calories)
+    }
+}
+
+struct RepeatYesterdayMealDraftItem: Identifiable, Hashable {
+    let id = UUID()
+    let sourceEntry: FoodEntry
+    var gramsText: String
+
+    init(sourceEntry: FoodEntry) {
+        self.sourceEntry = sourceEntry
+        self.gramsText = String(Int(max(1, sourceEntry.portion)))
+    }
+
+    var grams: Double {
+        max(1, Double(gramsText) ?? sourceEntry.portion)
+    }
+
+    private var scale: Double {
+        grams / max(1.0, sourceEntry.portion)
+    }
+
+    var name: String {
+        sourceEntry.product?.name ?? AppLocalizer.string("product.default")
+    }
+
+    var calories: Int {
+        Int((Double(sourceEntry.product?.calories ?? 0) * scale).rounded())
+    }
+
+    var macros: (protein: Double, fat: Double, carbs: Double) {
+        (
+            (sourceEntry.product?.protein ?? 0) * scale,
+            (sourceEntry.product?.fat ?? 0) * scale,
+            (sourceEntry.product?.carbs ?? 0) * scale
+        )
+    }
+
+    static func == (lhs: RepeatYesterdayMealDraftItem, rhs: RepeatYesterdayMealDraftItem) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+}
+
+struct RepeatYesterdayMealEditorScreen: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let meal: MealType
+    let sourceEntries: [FoodEntry]
+    var onSave: ([RepeatYesterdayMealDraftItem]) -> Void
+
+    @State private var drafts: [RepeatYesterdayMealDraftItem]
+
+    init(
+        meal: MealType,
+        sourceEntries: [FoodEntry],
+        onSave: @escaping ([RepeatYesterdayMealDraftItem]) -> Void
+    ) {
+        self.meal = meal
+        self.sourceEntries = sourceEntries
+        self.onSave = onSave
+        _drafts = State(initialValue: sourceEntries.map(RepeatYesterdayMealDraftItem.init))
+    }
+
+    private var totalCalories: Int {
+        drafts.reduce(0) { $0 + $1.calories }
+    }
+
+    private var totalMacros: (protein: Int, fat: Int, carbs: Int) {
+        let protein = drafts.reduce(0.0) { $0 + $1.macros.protein }
+        let fat = drafts.reduce(0.0) { $0 + $1.macros.fat }
+        let carbs = drafts.reduce(0.0) { $0 + $1.macros.carbs }
+        return (Int(protein), Int(fat), Int(carbs))
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 14) {
+                    headerCard
+
+                    VStack(spacing: 1) {
+                        ForEach($drafts) { $draft in
+                            RepeatYesterdayDraftRow(draft: $draft) {
+                                drafts.removeAll { $0.id == draft.id }
+                            }
+                        }
+                    }
+                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color(.separator).opacity(0.16), lineWidth: 0.5)
+                    )
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 96)
+            }
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .navigationTitle(AppLocalizer.format("repeat_yesterday.title", meal.displayName))
+            .navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .bottom) {
+                VStack(spacing: 0) {
+                    Divider().opacity(0.25)
+
+                    Button {
+                        onSave(drafts)
+                        dismiss()
+                    } label: {
+                        Text(AppLocalizer.string("repeat_yesterday.save"))
+                            .font(.headline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 52)
+                            .foregroundStyle(Color(.systemBackground))
+                            .background(
+                                Capsule()
+                                    .fill(drafts.isEmpty ? Color.secondary.opacity(0.45) : Color.primary)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(drafts.isEmpty)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 8)
+                }
+                .background(.regularMaterial)
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(AppLocalizer.string("common.cancel")) { dismiss() }
+                }
+            }
+        }
+    }
+
+    private var headerCard: some View {
+        HStack(alignment: .center, spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(Color.blue.opacity(0.12))
+
+                Image(systemName: "arrow.uturn.backward")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.blue)
+            }
+            .frame(width: 42, height: 42)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(AppLocalizer.string("repeat_yesterday.subtitle"))
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+
+                HStack(spacing: 8) {
+                    Text(AppLocalizer.format("unit.kcal.value", totalCalories))
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(.primary)
+
+                    Text(AppLocalizer.format("meal.macros.summary", totalMacros.protein, totalMacros.fat, totalMacros.carbs))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+private struct RepeatYesterdayDraftRow: View {
+    @Binding var draft: RepeatYesterdayMealDraftItem
+    var onDelete: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(draft.name)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(2)
+
+                    Spacer(minLength: 6)
+
+                    Text(AppLocalizer.format("unit.kcal.value", draft.calories))
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                HStack(spacing: 8) {
+                    gramsStepperButton(systemImage: "minus") {
+                        updateGrams(by: -10)
+                    }
+
+                    HStack(alignment: .firstTextBaseline, spacing: 3) {
+                        TextField("100", text: $draft.gramsText)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.center)
+                            .font(.headline.weight(.semibold))
+                            .frame(width: 52)
+                            .onChange(of: draft.gramsText) {
+                                draft.gramsText = draft.gramsText.filter(\.isNumber)
+                            }
+
+                        Text(AppLocalizer.string("unit.grams.short"))
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(width: 80, height: 34)
+                    .background(Color(.tertiarySystemGroupedBackground), in: Capsule())
+
+                    gramsStepperButton(systemImage: "plus") {
+                        updateGrams(by: 10)
+                    }
+
+                    Spacer()
+
+                    let macros = draft.macros
+                    Text(AppLocalizer.format("meal.macros.summary", Int(macros.protein), Int(macros.fat), Int(macros.carbs)))
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                }
+            }
+
+            Button(role: .destructive, action: onDelete) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title3)
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(Color(.secondarySystemGroupedBackground))
+    }
+
+    private func updateGrams(by delta: Int) {
+        let next = max(1, Int(draft.grams) + delta)
+        draft.gramsText = String(next)
+    }
+
+    private func gramsStepperButton(systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.caption.weight(.bold))
+                .frame(width: 30, height: 30)
+                .foregroundStyle(.primary)
+                .background(Color(.tertiarySystemGroupedBackground), in: Circle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
