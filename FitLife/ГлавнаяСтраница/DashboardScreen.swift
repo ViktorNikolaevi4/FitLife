@@ -189,11 +189,12 @@ struct DashboardScreen: View {
                 HStack(spacing: 8) {
                     Text(formattedToday(selectedDate))
                         .font(.largeTitle).fontWeight(.bold)
+                        .foregroundStyle(theme.primaryText)
                         .lineLimit(1).minimumScaleFactor(0.8)
 
                     Image(systemName: "chevron.down")
                         .font(.title3.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(theme.tertiaryText)
                         .padding(.top, 4)
                 }
                 .contentShape(Rectangle())
@@ -213,7 +214,7 @@ struct DashboardScreen: View {
 
                     Image(systemName: "gearshape.fill")
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(theme.primaryText)
                 }
             }
             .buttonStyle(.plain)

@@ -49,7 +49,7 @@ struct WorkoutsScreen: View {
                         title: AppLocalizer.string("workouts.last"),
                         subtitle: lastWorkoutSubtitle,
                         systemImage: "figure.strengthtraining.traditional",
-                        tint: .orange,
+                        tint: HomeDarkColors.orange,
                         isEmptyState: lastWorkout == nil,
                         isPrimary: false,
                         theme: theme,
@@ -62,7 +62,7 @@ struct WorkoutsScreen: View {
                             ? AppLocalizer.string("workouts.new.subtitle")
                             : AppLocalizer.string("workouts.new.resume"),
                         systemImage: "dumbbell.fill",
-                        tint: .blue,
+                        tint: HomeDarkColors.blue,
                         isEmptyState: false,
                         isPrimary: true,
                         theme: theme,
@@ -75,7 +75,7 @@ struct WorkoutsScreen: View {
                             title: AppLocalizer.string("workouts.online"),
                             subtitle: AppLocalizer.string("workouts.online.subtitle"),
                             systemImage: "list.bullet.clipboard.fill",
-                            tint: .pink,
+                            tint: HomeDarkColors.red,
                             isEmptyState: false,
                             isPrimary: false,
                             theme: theme,
@@ -88,7 +88,7 @@ struct WorkoutsScreen: View {
                             title: AppLocalizer.string("workouts.connection"),
                             subtitle: AppLocalizer.string("workouts.connection.subtitle"),
                             systemImage: "person.2.wave.2.fill",
-                            tint: .green,
+                            tint: HomeDarkColors.green,
                             isEmptyState: false,
                             isPrimary: false,
                             theme: theme,
@@ -214,6 +214,138 @@ private struct ClientCoachingSelection: Identifiable, Hashable {
     var id: String { clientId }
 }
 
+private struct WorkoutDiaryIconTile: View {
+    let systemImage: String
+    let tint: Color
+    let theme: AppTheme
+    var isPrimary = false
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: isPrimary
+                            ? [Color.white.opacity(0.22), Color.white.opacity(0.12)]
+                            : [
+                                tint.opacity(theme.isDark ? 0.22 : 0.14),
+                                tint.opacity(theme.isDark ? 0.10 : 0.06)
+                            ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            Image(systemName: systemImage)
+                .font(.system(size: 27, weight: .semibold))
+                .foregroundStyle(isPrimary ? Color.white : tint)
+        }
+        .frame(width: 64, height: 64)
+    }
+}
+
+private struct WorkoutDiaryCardModifier: ViewModifier {
+    let tint: Color
+    let theme: AppTheme
+
+    func body(content: Content) -> some View {
+        content
+            .padding(16)
+            .background {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: theme.isDark
+                                ? [HomeDarkColors.cardTop, HomeDarkColors.cardBottom]
+                                : [HomeColors.card, HomeColors.elevatedBackground],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(
+                        theme.isDark ? HomeDarkColors.strokeTop : HomeColors.border,
+                        lineWidth: HomeDarkMetrics.strokeWidth
+                    )
+            }
+            .shadow(
+                color: theme.isDark ? .black.opacity(0.45) : HomeColors.shadow,
+                radius: theme.isDark ? 24 : HomeMetrics.cardShadowRadius,
+                x: 0,
+                y: theme.isDark ? 14 : HomeMetrics.cardShadowY
+            )
+    }
+}
+
+private struct HighlightedWorkoutCardModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .padding(16)
+            .background {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(hex: "1E4FAE").opacity(0.55),
+                                Color(hex: "172B50"),
+                                Color(hex: "101A32")
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color(hex: "3A86FF").opacity(0.55),
+                                Color.white.opacity(0.08)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            }
+            .shadow(color: Color(hex: "0A84FF").opacity(0.18), radius: 18, x: 0, y: 8)
+            .shadow(
+                color: .black.opacity(0.45),
+                radius: 18,
+                x: 0,
+                y: 12
+            )
+    }
+}
+
+private enum AnyWorkoutDiaryCardModifier: ViewModifier {
+    case regular(Color, AppTheme)
+    case highlighted
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        switch self {
+        case .regular(let tint, let theme):
+            content.workoutDiaryCard(tint: tint, theme: theme)
+        case .highlighted:
+            content.highlightedWorkoutCard()
+        }
+    }
+}
+
+private extension View {
+    func workoutDiaryCard(tint: Color, theme: AppTheme) -> some View {
+        modifier(WorkoutDiaryCardModifier(tint: tint, theme: theme))
+    }
+
+    func highlightedWorkoutCard() -> some View {
+        modifier(HighlightedWorkoutCardModifier())
+    }
+}
+
 private struct WorkoutsShortcutCard: View {
     let title: String
     let subtitle: String
@@ -224,25 +356,21 @@ private struct WorkoutsShortcutCard: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 16) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(theme.subtleFill)
-
-                    Image(systemName: systemImage)
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(.primary)
-                }
-                .frame(width: 64, height: 64)
+                WorkoutDiaryIconTile(
+                    systemImage: systemImage,
+                    tint: theme.primaryText.opacity(0.88),
+                    theme: theme
+                )
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text(title)
                         .font(.headline.weight(.semibold))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(theme.primaryText)
                         .multilineTextAlignment(.leading)
 
                     Text(subtitle)
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(theme.secondaryText)
                         .multilineTextAlignment(.leading)
                         .lineLimit(3)
                 }
@@ -251,12 +379,9 @@ private struct WorkoutsShortcutCard: View {
 
                 Image(systemName: "chevron.right")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.tertiaryText)
             }
-            .padding(16)
-            .background(RoundedRectangle(cornerRadius: 16).fill(theme.card))
-            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(theme.border))
-            .shadow(color: theme.cardShadow.opacity(0.95), radius: 10, x: 0, y: 4)
+            .workoutDiaryCard(tint: theme.primaryText.opacity(0.88), theme: theme)
         }
         .buttonStyle(.plain)
     }
@@ -281,15 +406,7 @@ private struct WorkoutsFeatureCard: View {
 
     private var cardContent: some View {
         HStack(spacing: 16) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(iconBackgroundColor)
-
-                Image(systemName: systemImage)
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(iconForegroundColor)
-            }
-            .frame(width: 64, height: 64)
+            WorkoutDiaryIconTile(systemImage: systemImage, tint: tint, theme: theme, isPrimary: isPrimary)
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(title)
@@ -313,56 +430,20 @@ private struct WorkoutsFeatureCard: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(chevronColor)
         }
-        .padding(16)
-        .background(RoundedRectangle(cornerRadius: 16).fill(backgroundColor))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(borderColor))
-        .shadow(color: shadowColor, radius: shadowRadius, x: 0, y: shadowY)
+        .modifier(isPrimary ? AnyWorkoutDiaryCardModifier.highlighted : AnyWorkoutDiaryCardModifier.regular(tint, theme))
         .padding(.horizontal)
     }
 
-    private var backgroundColor: Color {
-        if isPrimary { return tint }
-        if isEmptyState { return theme.card.opacity(0.72) }
-        return theme.card
-    }
-
-    private var borderColor: Color {
-        if isPrimary { return tint.opacity(0.18) }
-        if isEmptyState { return theme.border.opacity(0.55) }
-        return theme.border
-    }
-
-    private var iconBackgroundColor: Color {
-        if isPrimary { return Color.white.opacity(0.15) }
-        return tint.opacity(isEmptyState ? 0.10 : 0.14)
-    }
-
-    private var iconForegroundColor: Color {
-        isPrimary ? .white : tint
-    }
-
     private var titleColor: Color {
-        isPrimary ? .white : .primary
+        isPrimary ? .white : theme.primaryText
     }
 
     private var subtitleColor: Color {
-        isPrimary ? .white.opacity(0.86) : .secondary
+        isPrimary ? .white.opacity(0.86) : theme.secondaryText
     }
 
     private var chevronColor: Color {
-        isPrimary ? .white.opacity(0.9) : .secondary
-    }
-
-    private var shadowColor: Color {
-        isPrimary ? tint.opacity(0.26) : theme.cardShadow
-    }
-
-    private var shadowRadius: CGFloat {
-        isPrimary ? max(theme.cardShadowRadius + 4, 14) : theme.cardShadowRadius
-    }
-
-    private var shadowY: CGFloat {
-        isPrimary ? max(theme.cardShadowY + 2, 6) : theme.cardShadowY
+        isPrimary ? .white.opacity(0.9) : theme.tertiaryText
     }
 }
 

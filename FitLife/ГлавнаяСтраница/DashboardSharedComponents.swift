@@ -8,6 +8,14 @@ struct AppTheme {
     let cardShadow: Color
     let cardShadowRadius: CGFloat
     let cardShadowY: CGFloat
+    let isDark: Bool
+    let primaryText: Color
+    let secondaryText: Color
+    let tertiaryText: Color
+    let accent: Color
+    let accentDeep: Color
+    let divider: Color
+    let orange: Color
 
     init(_ scheme: ColorScheme) {
         if scheme == .dark {
@@ -16,23 +24,59 @@ struct AppTheme {
             border = Color(.separator).opacity(0.28)
             subtleFill = Color(UIColor.tertiarySystemBackground)
             ringTrack = Color(.separator).opacity(0.22)
-            protein = .blue; fat = .red.opacity(0.8); carb = .green
-            ringGradient = .init(colors: [.blue.opacity(0.95), .cyan.opacity(0.9), .blue.opacity(0.95)])
+            protein = HomeDarkColors.blue; fat = HomeDarkColors.red; carb = HomeDarkColors.green
+            ringGradient = .init(colors: [HomeDarkColors.blue.opacity(0.95), HomeDarkColors.blueDeep.opacity(0.9), HomeDarkColors.blue.opacity(0.95)])
             cardShadow = .clear
             cardShadowRadius = 0
             cardShadowY = 0
+            isDark = true
+            primaryText = HomeDarkColors.primaryText
+            secondaryText = HomeDarkColors.secondaryText
+            tertiaryText = HomeDarkColors.tertiaryText
+            accent = HomeDarkColors.blue
+            accentDeep = HomeDarkColors.blueDeep
+            divider = HomeDarkColors.divider
+            orange = HomeDarkColors.orange
         } else {
-            bg = Color(UIColor.systemGroupedBackground)
-            card = Color(UIColor.secondarySystemBackground)
-            border = Color(.separator).opacity(0.42)
-            subtleFill = Color(UIColor.tertiarySystemBackground)
-            ringTrack = Color(.separator).opacity(0.24)
-            protein = .blue; fat = .red.opacity(0.8); carb = .green
-            ringGradient = .init(colors: [.blue, .cyan, .blue])
-            cardShadow = .black.opacity(0.08)
-            cardShadowRadius = 16
-            cardShadowY = 6
+            bg = HomeColors.background
+            card = HomeColors.card
+            border = HomeColors.border
+            subtleFill = HomeColors.subtleFill
+            ringTrack = HomeColors.accent.opacity(0.16)
+            protein = HomeColors.accent; fat = HomeDarkColors.red; carb = HomeDarkColors.green
+            ringGradient = .init(colors: [HomeColors.accent, HomeDarkColors.blueDeep, HomeColors.accent])
+            cardShadow = HomeColors.shadow
+            cardShadowRadius = HomeMetrics.cardShadowRadius
+            cardShadowY = HomeMetrics.cardShadowY
+            isDark = false
+            primaryText = HomeColors.primaryText
+            secondaryText = HomeColors.secondaryText
+            tertiaryText = HomeColors.tertiaryText
+            accent = HomeColors.accent
+            accentDeep = HomeDarkColors.blueDeep
+            divider = Color.black.opacity(0.08)
+            orange = HomeDarkColors.orange
         }
+    }
+}
+
+private struct AdaptiveHomeCardModifier: ViewModifier {
+    let theme: AppTheme
+    var cornerRadius: CGFloat = HomeDarkMetrics.cardCornerRadius
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if theme.isDark {
+            content.darkPremiumCard(cornerRadius: cornerRadius)
+        } else {
+            content.homePremiumLightCard(cornerRadius: cornerRadius, background: theme.card)
+        }
+    }
+}
+
+private extension View {
+    func adaptiveHomeCard(theme: AppTheme, cornerRadius: CGFloat = HomeDarkMetrics.cardCornerRadius) -> some View {
+        modifier(AdaptiveHomeCardModifier(theme: theme, cornerRadius: cornerRadius))
     }
 }
 
@@ -65,58 +109,75 @@ struct WaterSummaryCard: View {
         return min(intake / goal, 1)
     }
 
+    private func waterControlButton(systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 19, weight: .semibold))
+                .foregroundStyle(theme.primaryText)
+                .frame(width: 44, height: 44)
+                .background {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    theme.isDark ? Color.white.opacity(0.12) : Color.white.opacity(0.98),
+                                    theme.isDark ? Color.white.opacity(0.045) : Color.white.opacity(0.90)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                }
+                .overlay {
+                    Circle()
+                        .stroke(theme.isDark ? Color.white.opacity(0.14) : Color.black.opacity(0.07), lineWidth: HomeDarkMetrics.strokeWidth)
+                }
+                .shadow(color: theme.isDark ? .black.opacity(0.28) : .black.opacity(0.08), radius: 12, x: 0, y: 7)
+        }
+        .buttonStyle(.plain)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .center) {
                 HStack(spacing: 8) {
                     Image(systemName: "drop.fill")
-                        .foregroundStyle(.blue)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(theme.accent)
+
                     Text(AppLocalizer.string("tab.water"))
-                        .font(.headline)
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(theme.primaryText)
                 }
 
                 Spacer()
 
-                HStack(spacing: 10) {
-                    Button(action: onSubtract) {
-                        Image(systemName: "minus")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(.primary)
-                            .frame(width: 44, height: 44)
-                            .background(Circle().fill(theme.subtleFill))
-                    }
-                    .buttonStyle(.plain)
+                HStack(spacing: 12) {
+                    waterControlButton(systemImage: "minus", action: onSubtract)
 
                     Text(AppLocalizer.format("unit.ml.value", quickAddML))
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(theme.tertiaryText)
                         .frame(minWidth: 56)
 
-                    Button(action: onAdd) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 22, weight: .semibold))
-                            .foregroundStyle(.primary)
-                            .frame(width: 44, height: 44)
-                            .background(Circle().fill(theme.subtleFill))
-                    }
-                    .buttonStyle(.plain)
+                    waterControlButton(systemImage: "plus", action: onAdd)
                 }
             }
 
             Text(AppLocalizer.format("water.progress.liters", intake, goal))
-                .font(.system(size: 24, weight: .bold))
+                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .foregroundStyle(theme.primaryText)
+                .contentTransition(.numericText())
 
             ThickProgressBar(
                 fraction: progress,
-                fill: .blue,
-                track: theme.ringTrack,
-                height: 8
+                fill: theme.accent,
+                track: theme.accent.opacity(0.16),
+                height: 5
             )
         }
         .padding(20)
-        .background(RoundedRectangle(cornerRadius: 16).fill(theme.card))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(theme.border))
-        .shadow(color: theme.cardShadow, radius: theme.cardShadowRadius, x: 0, y: theme.cardShadowY)
+        .adaptiveHomeCard(theme: theme, cornerRadius: HomeDarkMetrics.cardCornerRadius)
         .padding(.horizontal)
     }
 }
@@ -130,33 +191,47 @@ struct TrainingDiaryCard: View {
         Button(action: onOpen) {
             HStack(spacing: 18) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 18)
+                    RoundedRectangle(cornerRadius: HomeDarkMetrics.iconTileCornerRadius, style: .continuous)
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    Color.blue.opacity(0.16),
-                                    Color.cyan.opacity(0.10)
+                                    theme.accent.opacity(0.92),
+                                    theme.accentDeep.opacity(0.48)
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: HomeDarkMetrics.iconTileCornerRadius, style: .continuous)
+                                .stroke(Color.white.opacity(0.16), lineWidth: HomeDarkMetrics.strokeWidth)
+                        }
+                        .shadow(color: theme.accent.opacity(0.28), radius: 18, x: 0, y: 8)
 
                     Image(systemName: "dumbbell.fill")
-                        .font(.system(size: 28, weight: .semibold))
-                        .foregroundStyle(.blue)
+                        .font(.system(size: 27, weight: .semibold))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [
+                                    .white,
+                                    Color.white.opacity(0.76)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
                 }
-                .frame(width: 84, height: 84)
+                .frame(width: 64, height: 64)
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text(title)
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.primary)
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(theme.primaryText)
                         .lineLimit(2)
 
                     Text(AppLocalizer.string("workouts.new.subtitle"))
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(theme.secondaryText)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                 }
@@ -165,16 +240,14 @@ struct TrainingDiaryCard: View {
 
                 Image(systemName: "chevron.right")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.tertiaryText)
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 20)
         .padding(.vertical, 24)
-        .background(RoundedRectangle(cornerRadius: 16).fill(theme.card))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(theme.border))
-        .shadow(color: theme.cardShadow, radius: theme.cardShadowRadius, x: 0, y: theme.cardShadowY)
+        .adaptiveHomeCard(theme: theme, cornerRadius: HomeDarkMetrics.cardCornerRadius)
     }
 }
 
@@ -235,48 +308,76 @@ struct BalanceCard: View {
         }
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(AppLocalizer.string("balance.title")).font(.headline)
-                Spacer()
-                Button(action: {
-                    withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) { cycleMode() }
-                }) {
-                    HStack(spacing: 8) {
-                        VStack(alignment: .trailing, spacing: 2) {
-                               Text(modeTitle)
-                                   .font(.subheadline.weight(.semibold))
-                                   .foregroundStyle(.secondary)
-                               Text(modeValueText)
-                                   .font(.subheadline.weight(.semibold))
-                                   .foregroundStyle(.secondary)
-                                   .lineLimit(1)
-                           }
-                           .multilineTextAlignment(.trailing)
-                          .fixedSize(horizontal: false, vertical: true)
-                        Image(systemName: "chevron.down")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .padding(.top, 1)
-                    }
+    private func balanceMacroRow(
+        title: String,
+        current: Int,
+        target: Int,
+        tint: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 8) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(theme.primaryText)
+
+                    Spacer(minLength: 8)
+
+                    Text(AppLocalizer.format("macro.progress.value", current, target))
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(theme.secondaryText)
+                        .lineLimit(1)
                 }
-                .buttonStyle(.plain)
+
+                ThickProgressBar(
+                    fraction: target > 0 ? min(Double(current) / Double(target), 1) : 0,
+                    fill: tint,
+                    track: theme.divider,
+                    height: 5
+                )
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .top) {
+                Text(AppLocalizer.string("balance.title"))
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(theme.primaryText)
+
+                Spacer()
             }
             .padding(.horizontal)
             .padding(.top, 12)
 
-            HStack(alignment: .center, spacing: 14) {
-                Donut(progress: progress, track: theme.ringTrack, gradient: theme.ringGradient)
-                    .frame(width: 124, height: 124)
+            HStack(alignment: .center, spacing: 22) {
+                Donut(
+                    progress: progress,
+                    lineWidth: 13,
+                    track: theme.accent.opacity(0.16),
+                    gradient: Gradient(colors: [
+                        theme.accent,
+                        theme.accentDeep,
+                        theme.accent
+                    ])
+                )
+                    .frame(width: 126, height: 126)
                     .overlay(
                         VStack(spacing: 2) {
                             Text(ringNumber.formatted(.number.grouping(.automatic)))
-                                .font(.title).fontWeight(.bold)
+                                .font(.system(size: 30, weight: .bold, design: .rounded))
+                                .foregroundStyle(theme.primaryText)
+                                .minimumScaleFactor(0.75)
+                                .lineLimit(1)
                                 .contentTransition(.numericText())
-                            Text(ringCaption)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
+
+                            Text("ккал")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(theme.tertiaryText)
                         }
                     )
                     .contentShape(Rectangle())
@@ -291,35 +392,62 @@ struct BalanceCard: View {
                         }
                     }
 
-                VStack(spacing: 10) {
-                    Button(action: onTapProtein) {
-                        MacroProgressRow(title: AppLocalizer.string("macro.protein"),
-                                         current: proteins.current, target: proteins.target,
-                                         tint: theme.protein, theme: theme, height: 8, horizontalPadding: 0, compactTitle: true)
+                VStack(alignment: .leading, spacing: 13) {
+                    Button(action: {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) { cycleMode() }
+                    }) {
+                        HStack(alignment: .top, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(modeTitle)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(theme.tertiaryText)
+
+                                Text(modeValueText)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(theme.secondaryText)
+                                    .lineLimit(1)
+                            }
+
+                            Spacer(minLength: 4)
+
+                            Image(systemName: "chevron.down")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(theme.tertiaryText)
+                                .padding(.top, 2)
+                        }
                     }
                     .buttonStyle(.plain)
-                    Button(action: onTapFat) {
-                        MacroProgressRow(title: AppLocalizer.string("macro.fat"),
-                                         current: fats.current, target: fats.target,
-                                         tint: theme.fat, theme: theme, height: 8, horizontalPadding: 0, compactTitle: true)
-                    }
-                    .buttonStyle(.plain)
-                    Button(action: onTapCarbs) {
-                        MacroProgressRow(title: AppLocalizer.string("macro.carbs"),
-                                         current: carbs.current, target: carbs.target,
-                                         tint: theme.carb, theme: theme, height: 8, horizontalPadding: 0, compactTitle: true)
-                    }
-                    .buttonStyle(.plain)
+
+                    balanceMacroRow(
+                        title: AppLocalizer.string("macro.protein"),
+                        current: proteins.current,
+                        target: proteins.target,
+                        tint: theme.protein,
+                        action: onTapProtein
+                    )
+
+                    balanceMacroRow(
+                        title: AppLocalizer.string("macro.fat"),
+                        current: fats.current,
+                        target: fats.target,
+                        tint: theme.fat,
+                        action: onTapFat
+                    )
+
+                    balanceMacroRow(
+                        title: AppLocalizer.string("macro.carbs"),
+                        current: carbs.current,
+                        target: carbs.target,
+                        tint: theme.carb,
+                        action: onTapCarbs
+                    )
                 }
-                .frame(maxWidth: 165)
                 .frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 8)
+            .padding(.horizontal)
+            .padding(.bottom, 14)
         }
-        .background(RoundedRectangle(cornerRadius: 16).fill(theme.card))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(theme.border))
-        .shadow(color: theme.cardShadow, radius: theme.cardShadowRadius, x: 0, y: theme.cardShadowY)
+        .adaptiveHomeCard(theme: theme, cornerRadius: HomeDarkMetrics.cardCornerRadius)
         .padding(.horizontal)
     }
 }
@@ -360,9 +488,9 @@ struct MacroProgressRow: View {
         guard target > 0 else { return 0 }
         return min(Double(current) / Double(target), 1)
     }
-    private var fillColor: Color  { isOver ? .red : tint }
-    private var trackColor: Color { isOver ? Color.red.opacity(0.25) : theme.ringTrack }
-    private var valueColor: Color { isOver ? .red : .secondary }
+    private var fillColor: Color  { isOver ? HomeDarkColors.red : tint }
+    private var trackColor: Color { isOver ? HomeDarkColors.red.opacity(0.25) : theme.ringTrack }
+    private var valueColor: Color { isOver ? HomeDarkColors.red : theme.secondaryText }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -370,10 +498,11 @@ struct MacroProgressRow: View {
                 if isOver {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.footnote)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(HomeDarkColors.red)
                 }
                 Text(title)
                     .font(compactTitle ? .subheadline.weight(.semibold) : .body)
+                    .foregroundStyle(theme.primaryText)
                 Spacer()
                 Text(AppLocalizer.format("macro.progress.value", current, target))
                     .font(.subheadline)
