@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 // MARK: - Хелперы
 
@@ -66,7 +67,7 @@ struct MainTabView: View {
                     .badge(notificationsStore.unreadCount)
             }
             .tint(colorScheme == .dark ? HomeDarkColors.blue : HomeColors.accent)
-            .toolbarBackground(colorScheme == .dark ? Color.black.opacity(0.62) : Color.white.opacity(0.88), for: .tabBar)
+            .toolbarBackground(colorScheme == .dark ? Color.black.opacity(0.62) : Color(.systemBackground), for: .tabBar)
             .toolbarBackground(.visible, for: .tabBar)
             .toolbarColorScheme(colorScheme == .dark ? .dark : .light, for: .tabBar)
 
@@ -122,20 +123,26 @@ struct MainTabView: View {
         }
     }
 
+    @MainActor
     private static func configurePremiumTabBar(for colorScheme: ColorScheme) {
         let isDark = colorScheme == .dark
         let appearance = UITabBarAppearance()
-        appearance.configureWithDefaultBackground()
-        appearance.backgroundEffect = UIBlurEffect(style: isDark ? .systemUltraThinMaterialDark : .systemUltraThinMaterialLight)
-        appearance.backgroundColor = isDark
-            ? UIColor.black.withAlphaComponent(0.62)
-            : UIColor.white.withAlphaComponent(0.88)
-        appearance.shadowColor = isDark
-            ? UIColor.white.withAlphaComponent(0.08)
-            : UIColor.black.withAlphaComponent(0.08)
-
         let selectedColor = UIColor(isDark ? HomeDarkColors.blue : HomeColors.accent)
-        let normalColor = UIColor(isDark ? HomeDarkColors.tertiaryText : HomeColors.tertiaryText)
+        let normalColor: UIColor
+
+        if isDark {
+            appearance.configureWithDefaultBackground()
+            appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterialDark)
+            appearance.backgroundColor = UIColor.black.withAlphaComponent(0.62)
+            appearance.shadowColor = UIColor.white.withAlphaComponent(0.08)
+            normalColor = UIColor(HomeDarkColors.tertiaryText)
+        } else {
+            appearance.configureWithDefaultBackground()
+            appearance.backgroundEffect = nil
+            appearance.backgroundColor = UIColor.systemBackground
+            appearance.shadowColor = UIColor.separator.withAlphaComponent(0.35)
+            normalColor = UIColor.secondaryLabel
+        }
 
         [appearance.stackedLayoutAppearance, appearance.inlineLayoutAppearance, appearance.compactInlineLayoutAppearance].forEach {
             $0.selected.iconColor = selectedColor
@@ -149,6 +156,43 @@ struct MainTabView: View {
         UITabBar.appearance().tintColor = selectedColor
         UITabBar.appearance().unselectedItemTintColor = normalColor
         UITabBar.appearance().isTranslucent = true
+
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .forEach {
+                applyTabBarAppearance(
+                    in: $0,
+                    appearance: appearance,
+                    selectedColor: selectedColor,
+                    normalColor: normalColor
+                )
+            }
+    }
+
+    @MainActor
+    private static func applyTabBarAppearance(
+        in view: UIView,
+        appearance: UITabBarAppearance,
+        selectedColor: UIColor,
+        normalColor: UIColor
+    ) {
+        if let tabBar = view as? UITabBar {
+            tabBar.standardAppearance = appearance
+            tabBar.scrollEdgeAppearance = appearance
+            tabBar.tintColor = selectedColor
+            tabBar.unselectedItemTintColor = normalColor
+            tabBar.isTranslucent = true
+        }
+
+        view.subviews.forEach {
+            applyTabBarAppearance(
+                in: $0,
+                appearance: appearance,
+                selectedColor: selectedColor,
+                normalColor: normalColor
+            )
+        }
     }
 }
 

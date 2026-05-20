@@ -333,7 +333,7 @@ struct BalanceCard: View {
                 ThickProgressBar(
                     fraction: target > 0 ? min(Double(current) / Double(target), 1) : 0,
                     fill: tint,
-                    track: theme.divider,
+                    track: tint.opacity(theme.isDark ? 0.16 : 0.14),
                     height: 5
                 )
             }

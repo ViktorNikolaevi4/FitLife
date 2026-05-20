@@ -149,7 +149,7 @@ struct NutritionScreen: View {
 
     private var caloriesCard: some View {
         VStack(spacing: 14) {
-            Donut(progress: progress, lineWidth: 12, track: theme.ringTrack, gradient: theme.ringGradient)
+            Donut(progress: progress, lineWidth: 12, track: theme.accent.opacity(0.16), gradient: theme.ringGradient)
                 .frame(width: 126, height: 126)
                 .overlay {
                     VStack(spacing: 2) {
