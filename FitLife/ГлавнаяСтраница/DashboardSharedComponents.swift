@@ -62,7 +62,7 @@ struct AppTheme {
     }
 }
 
-private struct AdaptiveHomeCardModifier: ViewModifier {
+struct AdaptiveHomeCardModifier: ViewModifier {
     let theme: AppTheme
     var cornerRadius: CGFloat = HomeDarkMetrics.cardCornerRadius
 
@@ -76,9 +76,36 @@ private struct AdaptiveHomeCardModifier: ViewModifier {
     }
 }
 
-private extension View {
+struct LightweightAdaptiveHomeCardModifier: ViewModifier {
+    let theme: AppTheme
+    var cornerRadius: CGFloat = HomeDarkMetrics.cardCornerRadius
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(theme.isDark ? Color.white.opacity(0.055) : theme.card)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(theme.border, lineWidth: HomeDarkMetrics.strokeWidth)
+            }
+            .shadow(
+                color: theme.isDark ? .clear : .black.opacity(0.05),
+                radius: theme.isDark ? 0 : 12,
+                x: 0,
+                y: theme.isDark ? 0 : 7
+            )
+    }
+}
+
+extension View {
     func adaptiveHomeCard(theme: AppTheme, cornerRadius: CGFloat = HomeDarkMetrics.cardCornerRadius) -> some View {
         modifier(AdaptiveHomeCardModifier(theme: theme, cornerRadius: cornerRadius))
+    }
+
+    func lightweightAdaptiveHomeCard(theme: AppTheme, cornerRadius: CGFloat = HomeDarkMetrics.cardCornerRadius) -> some View {
+        modifier(LightweightAdaptiveHomeCardModifier(theme: theme, cornerRadius: cornerRadius))
     }
 }
 
@@ -250,6 +277,7 @@ struct TrainingDiaryCard: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 24)
         .adaptiveHomeCard(theme: theme, cornerRadius: HomeDarkMetrics.cardCornerRadius)
+        .padding(.horizontal)
     }
 }
 

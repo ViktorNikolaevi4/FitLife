@@ -222,6 +222,9 @@ private struct EmptyMeasurementsState: View {
 struct SectionCard<Content: View>: View {
     let title: String?
     @ViewBuilder var content: Content
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var theme: AppTheme { AppTheme(colorScheme) }
 
     init(title: String? = nil, @ViewBuilder content: () -> Content) {
         self.title = title
@@ -233,19 +236,12 @@ struct SectionCard<Content: View>: View {
             if let title {
                 Text(title)
                     .font(.headline.weight(.semibold))
+                    .foregroundStyle(theme.primaryText)
             }
             content
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(Color(.secondarySystemBackground))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(Color(.separator).opacity(0.22))
-        )
-        .shadow(color: .black.opacity(0.03), radius: 6, x: 0, y: 2)
+        .padding(18)
+        .lightweightAdaptiveHomeCard(theme: theme, cornerRadius: HomeDarkMetrics.cardCornerRadius)
         .padding(.horizontal)
     }
 }

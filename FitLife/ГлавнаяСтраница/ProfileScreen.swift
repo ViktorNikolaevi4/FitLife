@@ -9,6 +9,7 @@ struct ProfileScreen: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var sessionStore: AppSessionStore
     @EnvironmentObject private var notificationsStore: AppNotificationsStore
+    @Environment(\.colorScheme) private var colorScheme
 
     @AppStorage(Gender.appStorageKey) private var activeGenderRaw: String = Gender.male.rawValue
     @State private var editingGender: Gender
@@ -26,7 +27,8 @@ struct ProfileScreen: View {
     }
 
     var body: some View {
-        let bg = Color(.systemGroupedBackground)
+        let theme = AppTheme(colorScheme)
+        let bg = theme.bg
 
         NavigationStack {
             ScrollView {
@@ -40,10 +42,10 @@ struct ProfileScreen: View {
                     }
 
                     SectionCard(title: AppLocalizer.string("profile.gender")) {
-                        Picker("", selection: $editingGender) {
-                            ForEach(Gender.allCases, id: \.self) { Text($0.displayName).tag($0) }
-                        }
-                        .pickerStyle(.segmented)
+                        ProfileSegmentedPicker(
+                            items: Gender.allCases.map { ($0, $0.displayName) },
+                            selection: $editingGender
+                        )
                     }
 
                     if let user {
@@ -58,10 +60,10 @@ struct ProfileScreen: View {
 
                         SectionCard(title: AppLocalizer.string("activity.title")) {
                             VStack(alignment: .leading, spacing: 12) {
-                                Picker("", selection: $u.activityLevel) {
-                                    ForEach(ActivityLevel.allCases, id: \.self) { Text($0.displayName).tag($0) }
-                                }
-                                .pickerStyle(.segmented)
+                                ProfileSegmentedPicker(
+                                    items: ActivityLevel.allCases.map { ($0, $0.displayName) },
+                                    selection: $u.activityLevel
+                                )
 
                                 Text(u.activityLevel.message)
                                     .font(.subheadline)
@@ -73,10 +75,10 @@ struct ProfileScreen: View {
 
                         SectionCard(title: AppLocalizer.string("goal.title")) {
                             VStack(alignment: .leading, spacing: 12) {
-                                Picker("", selection: $u.goal) {
-                                    ForEach(WeightGoal.allCases, id: \.self) { Text(goalDisplayName($0)).tag($0) }
-                                }
-                                .pickerStyle(.segmented)
+                                ProfileSegmentedPicker(
+                                    items: WeightGoal.allCases.map { ($0, goalDisplayName($0)) },
+                                    selection: $u.goal
+                                )
 
                                 Text(goalSubtitle(for: u.goal))
                                     .font(.subheadline)
@@ -88,34 +90,40 @@ struct ProfileScreen: View {
 
                         SectionCard(title: AppLocalizer.string("profile.nutrition_goals")) {
                             VStack(alignment: .leading, spacing: 14) {
-                                Picker("", selection: $u.nutritionGoalMode) {
-                                    ForEach(NutritionGoalMode.allCases, id: \.self) {
-                                        Text(AppLocalizer.string($0.titleKey)).tag($0)
-                                    }
-                                }
-                                .pickerStyle(.segmented)
+                                ProfileSegmentedPicker(
+                                    items: NutritionGoalMode.allCases.map { ($0, AppLocalizer.string($0.titleKey)) },
+                                    selection: $u.nutritionGoalMode
+                                )
 
                                 if u.nutritionGoalMode == .automatic {
                                     VStack(spacing: 12) {
                                         GoalMetricRow(
                                             title: AppLocalizer.string("nutrition.calories"),
                                             value: "\(u.calories)",
-                                            unit: AppLocalizer.string("unit.kcal")
+                                            unit: AppLocalizer.string("unit.kcal"),
+                                            systemImage: "flame.fill",
+                                            tint: HomeDarkColors.orange
                                         )
                                         GoalMetricRow(
                                             title: AppLocalizer.string("macro.protein"),
                                             value: "\(u.proteins)",
-                                            unit: AppLocalizer.string("unit.grams.short")
+                                            unit: AppLocalizer.string("unit.grams.short"),
+                                            systemImage: "leaf.fill",
+                                            tint: HomeDarkColors.green
                                         )
                                         GoalMetricRow(
                                             title: AppLocalizer.string("macro.fat"),
                                             value: "\(u.fats)",
-                                            unit: AppLocalizer.string("unit.grams.short")
+                                            unit: AppLocalizer.string("unit.grams.short"),
+                                            systemImage: "drop.fill",
+                                            tint: Color(hex: "FFD60A")
                                         )
                                         GoalMetricRow(
                                             title: AppLocalizer.string("macro.carbs"),
                                             value: "\(u.carbs)",
-                                            unit: AppLocalizer.string("unit.grams.short")
+                                            unit: AppLocalizer.string("unit.grams.short"),
+                                            systemImage: "water.waves",
+                                            tint: theme.accent
                                         )
                                     }
 
@@ -128,22 +136,30 @@ struct ProfileScreen: View {
                                         GoalMetricRow(
                                             title: AppLocalizer.string("nutrition.calories"),
                                             value: "\(u.calories)",
-                                            unit: AppLocalizer.string("unit.kcal")
+                                            unit: AppLocalizer.string("unit.kcal"),
+                                            systemImage: "flame.fill",
+                                            tint: HomeDarkColors.orange
                                         )
                                         GoalMetricRow(
                                             title: AppLocalizer.string("macro.protein"),
                                             value: "\(u.proteins)",
-                                            unit: AppLocalizer.string("unit.grams.short")
+                                            unit: AppLocalizer.string("unit.grams.short"),
+                                            systemImage: "leaf.fill",
+                                            tint: HomeDarkColors.green
                                         )
                                         GoalMetricRow(
                                             title: AppLocalizer.string("macro.fat"),
                                             value: "\(u.fats)",
-                                            unit: AppLocalizer.string("unit.grams.short")
+                                            unit: AppLocalizer.string("unit.grams.short"),
+                                            systemImage: "drop.fill",
+                                            tint: Color(hex: "FFD60A")
                                         )
                                         GoalMetricRow(
                                             title: AppLocalizer.string("macro.carbs"),
                                             value: "\(u.carbs)",
-                                            unit: AppLocalizer.string("unit.grams.short")
+                                            unit: AppLocalizer.string("unit.grams.short"),
+                                            systemImage: "water.waves",
+                                            tint: theme.accent
                                         )
                                     }
 
@@ -184,6 +200,8 @@ struct ProfileScreen: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarBackground(bg, for: .navigationBar)
+            .toolbarColorScheme(theme.isDark ? .dark : .light, for: .navigationBar)
+            .tint(theme.accent)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
@@ -412,20 +430,127 @@ struct ProfileScreen: View {
     }
 }
 
+private struct ProfileSegmentedPicker<Selection: Hashable>: View {
+    let items: [(value: Selection, title: String)]
+    @Binding var selection: Selection
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var theme: AppTheme { AppTheme(colorScheme) }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                Button {
+                    selection = item.value
+                } label: {
+                    Text(item.title)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.76)
+                        .foregroundStyle(selection == item.value ? Color.white : theme.primaryText.opacity(theme.isDark ? 0.86 : 0.70))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 9)
+                        .background {
+                            if selection == item.value {
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                Color(hex: "347DFF"),
+                                                Color(hex: "1257E8")
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .shadow(color: theme.accent.opacity(theme.isDark ? 0.28 : 0.18), radius: 10, x: 0, y: 5)
+                            }
+                        }
+                }
+                .buttonStyle(.plain)
+
+                if index < items.count - 1 {
+                    Rectangle()
+                        .fill(theme.border)
+                        .frame(width: 1)
+                        .padding(.vertical, 8)
+                        .opacity(selection == item.value || selection == items[index + 1].value ? 0 : 1)
+                }
+            }
+        }
+        .padding(3)
+        .background {
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .fill(theme.isDark ? Color.white.opacity(0.055) : Color.black.opacity(0.055))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .stroke(theme.border, lineWidth: 1)
+        }
+    }
+}
+
 private struct GoalMetricRow: View {
     let title: String
     let value: String
     let unit: String
+    let systemImage: String
+    let tint: Color
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var theme: AppTheme { AppTheme(colorScheme) }
 
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
+            ProfileIconTile(systemImage: systemImage, tint: tint, size: 34, cornerRadius: 10)
+
             Text(title)
                 .font(.body.weight(.medium))
+                .foregroundStyle(theme.primaryText)
+
             Spacer()
+
             Text("\(value) \(unit)")
                 .font(.body.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(tint)
         }
+    }
+}
+
+private struct ProfileIconTile: View {
+    let systemImage: String
+    let tint: Color
+    var size: CGFloat = 46
+    var cornerRadius: CGFloat = 14
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var theme: AppTheme { AppTheme(colorScheme) }
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: size * 0.38, weight: .semibold))
+            .foregroundStyle(tint)
+            .frame(width: size, height: size)
+            .background {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                tint.opacity(theme.isDark ? 0.26 : 0.16),
+                                tint.opacity(theme.isDark ? 0.10 : 0.07)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(tint.opacity(theme.isDark ? 0.18 : 0.12), lineWidth: 1)
+            }
     }
 }
 
@@ -590,6 +715,10 @@ private struct ManualNutritionGoalsEditor: View {
 private struct ProfileHeroCard: View {
     let progressDestination: AnyView?
 
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var theme: AppTheme { AppTheme(colorScheme) }
+
     init() {
         progressDestination = nil
     }
@@ -599,37 +728,37 @@ private struct ProfileHeroCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(AppLocalizer.string("tab.profile"))
-                .font(.system(size: 28, weight: .bold))
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(spacing: 16) {
+                ProfileIconTile(systemImage: "person.fill", tint: theme.accent, size: 58, cornerRadius: 29)
 
-            Text(AppLocalizer.string("profile.subtitle"))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(AppLocalizer.string("tab.profile"))
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundStyle(theme.primaryText)
+
+                    Text(AppLocalizer.string("profile.subtitle"))
+                        .font(.subheadline)
+                        .foregroundStyle(theme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
 
             if let progressDestination {
                 NavigationLink {
                     progressDestination
                 } label: {
                     HStack(spacing: 12) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 14)
-                                .fill(Color.blue.opacity(0.12))
-
-                            Image(systemName: "chart.line.uptrend.xyaxis")
-                                .font(.system(size: 19, weight: .semibold))
-                                .foregroundStyle(.blue)
-                        }
-                        .frame(width: 44, height: 44)
+                        ProfileIconTile(systemImage: "chart.line.uptrend.xyaxis", tint: theme.accent, size: 44, cornerRadius: 13)
 
                         VStack(alignment: .leading, spacing: 3) {
                             Text(AppLocalizer.string("profile.progress.title"))
                                 .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(theme.primaryText)
 
                             Text(AppLocalizer.string("profile.progress.subtitle"))
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(theme.secondaryText)
                                 .lineLimit(2)
                         }
 
@@ -637,29 +766,32 @@ private struct ProfileHeroCard: View {
 
                         Image(systemName: "chevron.right")
                             .font(.footnote.weight(.semibold))
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(theme.tertiaryText)
                     }
                     .padding(12)
                     .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color(.systemBackground))
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(theme.isDark ? Color.white.opacity(0.045) : Color.white.opacity(0.85))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(theme.border)
                     )
                 }
                 .buttonStyle(.plain)
-                .padding(.top, 2)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(profileCardBackground)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(profileCardBorder)
-        )
-        .shadow(color: .black.opacity(0.03), radius: 10, x: 0, y: 4)
+        .padding(20)
+        .background(alignment: .topTrailing) {
+            if theme.isDark {
+                Circle()
+                    .fill(theme.accent.opacity(0.16))
+                    .frame(width: 112, height: 112)
+                    .offset(x: 42, y: -24)
+            }
+        }
+        .lightweightAdaptiveHomeCard(theme: theme, cornerRadius: HomeDarkMetrics.cardCornerRadius)
         .padding(.horizontal)
     }
 }
@@ -703,29 +835,31 @@ private struct EditableSummaryMetricCardInt: View {
     let systemImage: String
     let range: ClosedRange<Int>
 
+    @Environment(\.colorScheme) private var colorScheme
     @State private var showSheet = false
+
+    private var theme: AppTheme { AppTheme(colorScheme) }
 
     var body: some View {
         Button {
             showSheet = true
         } label: {
             VStack(alignment: .leading, spacing: 8) {
-                Image(systemName: systemImage)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                ProfileIconTile(systemImage: systemImage, tint: metricTint, size: 28, cornerRadius: 8)
 
                 HStack(alignment: .firstTextBaseline, spacing: 3) {
                     Text("\(value)")
                         .font(.system(size: 24, weight: .bold))
+                        .foregroundStyle(theme.primaryText)
                     Text(unit)
                         .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(theme.secondaryText)
                 }
 
                 HStack(spacing: 6) {
                     Text(title)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(theme.secondaryText)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
 
@@ -733,15 +867,12 @@ private struct EditableSummaryMetricCardInt: View {
 
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(theme.tertiaryText)
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
             .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(profileCardBackground)
-            )
+            .lightweightAdaptiveHomeCard(theme: theme, cornerRadius: 16)
         }
         .buttonStyle(.plain)
         .sheet(isPresented: $showSheet) {
@@ -753,6 +884,15 @@ private struct EditableSummaryMetricCardInt: View {
             )
         }
     }
+
+    private var metricTint: Color {
+        switch systemImage {
+        case "calendar": return theme.accent
+        case "scalemass": return HomeDarkColors.green
+        case "ruler": return Color(hex: "7B61FF")
+        default: return theme.accent
+        }
+    }
 }
 
 private struct EditableSummaryMetricCardDoubleAsInt: View {
@@ -762,8 +902,11 @@ private struct EditableSummaryMetricCardDoubleAsInt: View {
     let systemImage: String
     let range: ClosedRange<Int>
 
+    @Environment(\.colorScheme) private var colorScheme
     @State private var showSheet = false
     @State private var temp = 0
+
+    private var theme: AppTheme { AppTheme(colorScheme) }
 
     var body: some View {
         Button {
@@ -771,22 +914,21 @@ private struct EditableSummaryMetricCardDoubleAsInt: View {
             showSheet = true
         } label: {
             VStack(alignment: .leading, spacing: 8) {
-                Image(systemName: systemImage)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                ProfileIconTile(systemImage: systemImage, tint: metricTint, size: 28, cornerRadius: 8)
 
                 HStack(alignment: .firstTextBaseline, spacing: 3) {
                     Text("\(Int(value.rounded()))")
                         .font(.system(size: 24, weight: .bold))
+                        .foregroundStyle(theme.primaryText)
                     Text(unit)
                         .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(theme.secondaryText)
                 }
 
                 HStack(spacing: 6) {
                     Text(title)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(theme.secondaryText)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
 
@@ -794,15 +936,12 @@ private struct EditableSummaryMetricCardDoubleAsInt: View {
 
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(theme.tertiaryText)
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
             .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(profileCardBackground)
-            )
+            .lightweightAdaptiveHomeCard(theme: theme, cornerRadius: 16)
         }
         .buttonStyle(.plain)
         .sheet(isPresented: $showSheet) {
@@ -815,6 +954,15 @@ private struct EditableSummaryMetricCardDoubleAsInt: View {
                     value = Double(temp)
                 }
             )
+        }
+    }
+
+    private var metricTint: Color {
+        switch systemImage {
+        case "calendar": return theme.accent
+        case "scalemass": return HomeDarkColors.green
+        case "ruler": return Color(hex: "7B61FF")
+        default: return theme.accent
         }
     }
 }

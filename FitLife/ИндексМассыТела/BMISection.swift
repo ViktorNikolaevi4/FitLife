@@ -19,6 +19,9 @@ struct BMISection: View {
 
 private struct BMICardView: View {
     @Bindable var userData: UserData
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var theme: AppTheme { AppTheme(colorScheme) }
 
     var body: some View {
         let value = bmi(for: userData)
@@ -29,10 +32,11 @@ private struct BMICardView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(AppLocalizer.string("bmi.title"))
                         .font(.headline)
+                        .foregroundStyle(theme.primaryText)
 
                     Text(AppLocalizer.string("bmi.caption"))
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(theme.secondaryText)
                 }
 
                 Spacer()
@@ -44,19 +48,20 @@ private struct BMICardView: View {
 
                     Text(AppLocalizer.string("bmi.short"))
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(theme.secondaryText)
                 }
             }
 
             HStack(alignment: .firstTextBaseline) {
                 Text(bmiMessage(value))
                     .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(color)
 
                 Spacer()
 
                 Text(bmiRangeText(value))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.secondaryText)
             }
 
             VStack(spacing: 8) {
@@ -71,19 +76,11 @@ private struct BMICardView: View {
                     Text("30")
                 }
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(theme.secondaryText)
             }
         }
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 18)
-                .fill(Color(.secondarySystemBackground))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18)
-                .stroke(Color(.separator).opacity(0.22))
-        )
-        .shadow(color: .black.opacity(0.03), radius: 6, x: 0, y: 2)
+        .lightweightAdaptiveHomeCard(theme: theme, cornerRadius: HomeDarkMetrics.cardCornerRadius)
     }
 }
 
