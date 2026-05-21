@@ -2,6 +2,8 @@
 import SwiftUI
 import SwiftData
 
+private let maxFoodPortionGrams = 10_000.0
+
 // MARK: — Тип приёма пищи
 enum MealType: String, CaseIterable, Identifiable {
     case breakfast = "Завтрак"
@@ -351,15 +353,13 @@ struct RationPopupView: View {
                 .keyboardType(.numberPad)
                 .textFieldStyle(.roundedBorder)
                 .padding(.horizontal)
-                .onChange(of: portionSize) { portionSize = portionSize.filter { $0.isNumber } }
+                .onChange(of: portionSize) { portionSize = sanitizedPortionText($0) }
 
             Text(AppLocalizer.string("portion.in_grams")).padding(.bottom, 8)
 
             HStack(spacing: 16) {
                 Button(AppLocalizer.string("common.add")) {
-                    if let p = Double(portionSize) {
-                        addGenericProductToMeal(prod, portion: p, gender: selectedGender)
-                    }
+                    addGenericProductToMeal(prod, portion: currentPortionValue, gender: selectedGender)
                 }
                 .frame(maxWidth: .infinity)
                 .padding()
@@ -416,14 +416,28 @@ struct RationPopupView: View {
     }
 
     private func calculateMacros(for product: Product) -> (protein: Double, fat: Double, carbs: Double) {
-        let portion = Double(portionSize) ?? 100
+        let portion = currentPortionValue
         let factor = portion / 100
         return (product.protein * factor, product.fat * factor, product.carbs * factor)
     }
 
     private func calculateCalories(for product: Product) -> Int {
-        let p = Double(portionSize) ?? 100
+        let p = currentPortionValue
         return Int(Double(product.calories) * p / 100)
+    }
+
+    private var currentPortionValue: Double {
+        clampedPortion(Double(portionSize) ?? 100)
+    }
+
+    private func sanitizedPortionText(_ text: String) -> String {
+        let digits = text.filter(\.isNumber)
+        guard let value = Double(digits), value > 0 else { return digits }
+        return String(Int(clampedPortion(value)))
+    }
+
+    private func clampedPortion(_ value: Double) -> Double {
+        min(max(value, 1), maxFoodPortionGrams)
     }
 
     // MARK: — Загрузка из SwiftData
@@ -451,7 +465,8 @@ struct RationPopupView: View {
     // MARK: — Добавление
     private func addGenericProductToMeal(_ product: Product, portion: Double, gender: Gender) {
         guard let meal = activeMeal else { return }
-        let factor = portion / 100
+        let safePortion = clampedPortion(portion)
+        let factor = safePortion / 100
         let adjusted = Product(
             name:     product.name,
             protein:  product.protein * factor,
@@ -466,7 +481,7 @@ struct RationPopupView: View {
             date:      selectedDate,
             mealType:  meal.rawValue,
             product:   adjusted,
-            portion:   portion,
+            portion:   safePortion,
             gender:    gender,
             ownerId:   sessionStore.firebaseUser?.uid ?? "",
             isFavorite: product.isFavorite,

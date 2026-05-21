@@ -1,6 +1,8 @@
 import SwiftUI
 import SwiftData
 
+private let maxFoodPortionGrams = 10_000.0
+
 struct AppTheme {
     let bg: Color, card: Color, border: Color, subtleFill: Color, ringTrack: Color
     let protein: Color, fat: Color, carb: Color
@@ -844,7 +846,7 @@ struct RepeatYesterdayMealDraftItem: Identifiable, Hashable {
     }
 
     var grams: Double {
-        max(1, Double(gramsText) ?? sourceEntry.portion)
+        min(max(1, Double(gramsText) ?? sourceEntry.portion), maxFoodPortionGrams)
     }
 
     private var scale: Double {
@@ -1036,7 +1038,7 @@ private struct RepeatYesterdayDraftRow: View {
                             .font(.headline.weight(.semibold))
                             .frame(width: 52)
                             .onChange(of: draft.gramsText) {
-                                draft.gramsText = draft.gramsText.filter(\.isNumber)
+                                draft.gramsText = sanitizeFoodPortionText(draft.gramsText)
                             }
 
                         Text(AppLocalizer.string("unit.grams.short"))
@@ -1076,7 +1078,7 @@ private struct RepeatYesterdayDraftRow: View {
     }
 
     private func updateGrams(by delta: Int) {
-        let next = max(1, Int(draft.grams) + delta)
+        let next = min(Int(maxFoodPortionGrams), max(1, Int(draft.grams) + delta))
         draft.gramsText = String(next)
     }
 
@@ -1429,7 +1431,7 @@ private struct PortionEditorScreen: View {
     }
 
     private var gramsValue: Double {
-        max(1, Double(gramsText) ?? entry.portion)
+        min(max(1, Double(gramsText) ?? entry.portion), maxFoodPortionGrams)
     }
 
     private struct CustomProductPortionEditorSelection: Identifiable {
@@ -1462,7 +1464,7 @@ private struct PortionEditorScreen: View {
                                 .keyboardType(.numberPad)
                                 .multilineTextAlignment(.center)
                                 .font(.system(size: 36, weight: .bold, design: .rounded))
-                                .onChange(of: gramsText) { gramsText = gramsText.filter(\.isNumber) }
+                                .onChange(of: gramsText) { gramsText = sanitizeFoodPortionText(gramsText) }
 
                             Text(AppLocalizer.string("unit.grams.short"))
                                 .font(.headline)
@@ -1547,7 +1549,7 @@ private struct PortionEditorScreen: View {
     }
 
     private func updateGrams(by delta: Int) {
-        let next = max(1, Int(gramsValue) + delta)
+        let next = min(Int(maxFoodPortionGrams), max(1, Int(gramsValue) + delta))
         gramsText = String(next)
     }
 
@@ -1624,7 +1626,7 @@ private struct GroupedAIMealPortionEditorScreen: View {
     }
 
     private var gramsValue: Double {
-        max(1, Double(gramsText) ?? totalPortion)
+        min(max(1, Double(gramsText) ?? totalPortion), maxFoodPortionGrams)
     }
 
     private var previewScale: Double {
@@ -1672,7 +1674,7 @@ private struct GroupedAIMealPortionEditorScreen: View {
                                 .keyboardType(.numberPad)
                                 .multilineTextAlignment(.center)
                                 .font(.system(size: 36, weight: .bold, design: .rounded))
-                                .onChange(of: gramsText) { gramsText = gramsText.filter(\.isNumber) }
+                                .onChange(of: gramsText) { gramsText = sanitizeFoodPortionText(gramsText) }
 
                             Text(AppLocalizer.string("unit.grams.short"))
                                 .font(.headline)
@@ -1732,7 +1734,7 @@ private struct GroupedAIMealPortionEditorScreen: View {
     }
 
     private func updateGrams(by delta: Int) {
-        let next = max(1, Int(gramsValue) + delta)
+        let next = min(Int(maxFoodPortionGrams), max(1, Int(gramsValue) + delta))
         gramsText = String(next)
     }
 
@@ -1745,4 +1747,10 @@ private struct GroupedAIMealPortionEditorScreen: View {
         }
         .buttonStyle(.plain)
     }
+}
+
+private func sanitizeFoodPortionText(_ text: String) -> String {
+    let digits = text.filter(\.isNumber)
+    guard let value = Double(digits), value > 0 else { return digits }
+    return String(Int(min(value, maxFoodPortionGrams)))
 }
