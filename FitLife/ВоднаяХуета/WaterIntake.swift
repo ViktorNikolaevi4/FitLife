@@ -13,12 +13,17 @@ class WaterIntake {
     var date: Date = Foundation.Date.now
     var intake: Double = 0
     var user: UserData? = nil
-    var gender: Gender = FitLife.Gender.male
+    var genderRawValue: String = FitLife.Gender.male.rawValue
+
+    var gender: Gender {
+        get { Gender(rawValue: genderRawValue) ?? .male }
+        set { genderRawValue = newValue.rawValue }
+    }
 
     init(date: Date, intake: Double, gender: Gender, ownerId: String = "") {
         self.ownerId = ownerId
         self.date = date
         self.intake = intake
-        self.gender = gender
+        self.genderRawValue = gender.rawValue
     }
 }

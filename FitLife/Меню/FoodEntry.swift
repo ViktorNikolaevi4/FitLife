@@ -8,13 +8,18 @@ class FoodEntry {
     var date: Date = Foundation.Date.now
     var mealType: String = ""
     var portion: Double = 0
-    var gender: Gender = FitLife.Gender.male
+    var genderRawValue: String = FitLife.Gender.male.rawValue
     var isFavorite: Bool = false
     var aiMealGroupID: String?
     var aiMealName: String?
     var customProductID: UUID?
 
     var product: Product?
+
+    var gender: Gender {
+        get { Gender(rawValue: genderRawValue) ?? .male }
+        set { genderRawValue = newValue.rawValue }
+    }
 
     init(
         date: Date,
@@ -33,7 +38,7 @@ class FoodEntry {
         self.mealType = mealType
         self.product = product
         self.portion = portion
-        self.gender = gender
+        self.genderRawValue = gender.rawValue
         self.isFavorite = isFavorite
         self.aiMealGroupID = aiMealGroupID
         self.aiMealName = aiMealName

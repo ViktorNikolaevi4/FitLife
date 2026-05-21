@@ -297,11 +297,11 @@ struct DashboardScreen: View {
         let day = Calendar.current.startOfDay(for: date)
         guard let dayEnd = Calendar.current.date(byAdding: .day, value: 1, to: day) else { return }
         let ownerId = user.ownerId
-        let gender = user.gender
+        let genderRawValue = user.gender.rawValue
         let predicate = #Predicate<WaterIntake> {
             $0.date >= day &&
             $0.date < dayEnd &&
-            $0.gender == gender
+            $0.genderRawValue == genderRawValue
         }
 
         do {
@@ -330,11 +330,11 @@ struct DashboardScreen: View {
             return
         }
         let ownerId = user.ownerId
-        let gender = user.gender
+        let genderRawValue = user.gender.rawValue
         let predicate = #Predicate<WaterIntake> {
             $0.date >= day &&
             $0.date < dayEnd &&
-            $0.gender == gender
+            $0.genderRawValue == genderRawValue
         }
 
         do {

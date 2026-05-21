@@ -25,15 +25,35 @@ class UserData {
     var weight: Double = 0
     var height: Double = 0
     var age: Int = 0
-    var activityLevel: ActivityLevel = FitLife.ActivityLevel.none
-    var goal: WeightGoal = FitLife.WeightGoal.currentWeight
-    var gender: Gender = FitLife.Gender.male
+    var activityLevelRawValue: String = FitLife.ActivityLevel.none.rawValue
+    var goalRawValue: String = FitLife.WeightGoal.currentWeight.rawValue
+    var genderRawValue: String = FitLife.Gender.male.rawValue
 
     var calories: Int = 0
     var proteins: Int = 0
     var fats: Int = 0
     var carbs: Int = 0
-    var nutritionGoalMode: NutritionGoalMode = FitLife.NutritionGoalMode.automatic
+    var nutritionGoalModeRawValue: String = FitLife.NutritionGoalMode.automatic.rawValue
+
+    var activityLevel: ActivityLevel {
+        get { ActivityLevel(rawValue: activityLevelRawValue) ?? .none }
+        set { activityLevelRawValue = newValue.rawValue }
+    }
+
+    var goal: WeightGoal {
+        get { WeightGoal(rawValue: goalRawValue) ?? .currentWeight }
+        set { goalRawValue = newValue.rawValue }
+    }
+
+    var gender: Gender {
+        get { Gender(rawValue: genderRawValue) ?? .male }
+        set { genderRawValue = newValue.rawValue }
+    }
+
+    var nutritionGoalMode: NutritionGoalMode {
+        get { NutritionGoalMode(rawValue: nutritionGoalModeRawValue) ?? .automatic }
+        set { nutritionGoalModeRawValue = newValue.rawValue }
+    }
 
     init(weight: Double = 0,
          height: Double = 0,
@@ -52,14 +72,14 @@ class UserData {
         self.weight = weight
         self.height = height
         self.age = age
-        self.activityLevel = activityLevel
-        self.goal = goal
-        self.gender = gender
+        self.activityLevelRawValue = activityLevel.rawValue
+        self.goalRawValue = goal.rawValue
+        self.genderRawValue = gender.rawValue
         self.calories = calories
         self.proteins = proteins
         self.fats = fats
         self.carbs = carbs
-        self.nutritionGoalMode = nutritionGoalMode
+        self.nutritionGoalModeRawValue = nutritionGoalMode.rawValue
     }
 }
 

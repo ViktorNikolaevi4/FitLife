@@ -13,7 +13,7 @@ final class WorkoutSession {
     var createdAt: Date = Foundation.Date.now
     var endedAt: Date?
     var title: String = ""
-    var gender: Gender = FitLife.Gender.male
+    var genderRawValue: String = FitLife.Gender.male.rawValue
     var elapsedSeconds: Int = 0
     var isTimerRunning: Bool = false
     var note: String = ""
@@ -27,6 +27,11 @@ final class WorkoutSession {
     var exerciseItems: [WorkoutExercise] {
         get { exercises ?? [] }
         set { exercises = newValue }
+    }
+
+    var gender: Gender {
+        get { Gender(rawValue: genderRawValue) ?? .male }
+        set { genderRawValue = newValue.rawValue }
     }
 
     init(
@@ -47,7 +52,7 @@ final class WorkoutSession {
         self.createdAt = createdAt
         self.endedAt = endedAt
         self.title = title
-        self.gender = gender
+        self.genderRawValue = gender.rawValue
         self.elapsedSeconds = elapsedSeconds
         self.isTimerRunning = isTimerRunning
         self.note = note

@@ -781,14 +781,6 @@ private struct ProfileHeroCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(20)
-        .background(alignment: .topTrailing) {
-            if theme.isDark {
-                Circle()
-                    .fill(theme.accent.opacity(0.16))
-                    .frame(width: 112, height: 112)
-                    .offset(x: 42, y: -24)
-            }
-        }
         .lightweightAdaptiveHomeCard(theme: theme, cornerRadius: HomeDarkMetrics.cardCornerRadius)
         .padding(.horizontal)
     }
