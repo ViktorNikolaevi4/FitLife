@@ -49,8 +49,7 @@ struct NutritionScreen: View {
     }
 
     private var progress: Double {
-        guard let target = userData?.calories, target > 0 else { return 0 }
-        return min(Double(consumedCalories) / Double(target), 1)
+        safeProgress(current: consumedCalories, goal: userData?.calories ?? 0)
     }
 
     var body: some View {
@@ -417,15 +416,16 @@ struct NutritionScreen: View {
 
         for draft in drafts {
             guard let sourceProduct = draft.sourceEntry.product else { continue }
-            let sourcePortion = max(1.0, draft.sourceEntry.portion)
-            let scale = draft.grams / sourcePortion
+            let sourcePortion = max(1.0, draft.sourceEntry.portionSafe)
+            let scale = (draft.grams.safeFinite / sourcePortion).safeFinite
+            let safeCalories = max(Int((Double(sourceProduct.calories).safeFinite * scale.safeFinite).rounded()), 0)
             let copiedProduct = Product(
                 name: sourceProduct.name,
                 nameEN: sourceProduct.nameEN,
-                protein: sourceProduct.protein * scale,
-                fat: sourceProduct.fat * scale,
-                carbs: sourceProduct.carbs * scale,
-                calories: Int((Double(sourceProduct.calories) * scale).rounded()),
+                protein: max(sourceProduct.protein.safeFinite * scale.safeFinite, 0),
+                fat: max(sourceProduct.fat.safeFinite * scale.safeFinite, 0),
+                carbs: max(sourceProduct.carbs.safeFinite * scale.safeFinite, 0),
+                calories: safeCalories,
                 isFavorite: sourceProduct.isFavorite,
                 isCustom: sourceProduct.isCustom,
                 barcode: sourceProduct.barcode,
@@ -496,8 +496,7 @@ private struct NutritionMacroCard: View {
     let tint: Color
 
     private var fraction: Double {
-        guard target > 0 else { return 0 }
-        return min(Double(current) / Double(target), 1)
+        safeProgress(current: current, goal: target)
     }
 
     private var isOverTarget: Bool {
@@ -613,8 +612,7 @@ struct MacroNutrientDetailScreen: View {
     }
 
     private var progress: Double {
-        guard target > 0 else { return 0 }
-        return min(Double(current) / Double(target), 1)
+        safeProgress(current: current, goal: target)
     }
 
     private var statusText: String {

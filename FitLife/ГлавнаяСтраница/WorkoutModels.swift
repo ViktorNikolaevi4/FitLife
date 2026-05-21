@@ -22,7 +22,12 @@ final class WorkoutSession {
     var remoteClientId: String?
     var source: String?
 
-    @Relationship(deleteRule: .cascade, inverse: \WorkoutExercise.session) var exercises: [WorkoutExercise] = []
+    @Relationship(deleteRule: .cascade, inverse: \WorkoutExercise.session) var exercises: [WorkoutExercise]?
+
+    var exerciseItems: [WorkoutExercise] {
+        get { exercises ?? [] }
+        set { exercises = newValue }
+    }
 
     init(
         ownerId: String = "",
@@ -65,7 +70,12 @@ final class WorkoutExercise {
 
     var session: WorkoutSession?
 
-    @Relationship(deleteRule: .cascade, inverse: \WorkoutSet.exercise) var sets: [WorkoutSet] = []
+    @Relationship(deleteRule: .cascade, inverse: \WorkoutSet.exercise) var sets: [WorkoutSet]?
+
+    var setItems: [WorkoutSet] {
+        get { sets ?? [] }
+        set { sets = newValue }
+    }
 
     init(
         name: String,

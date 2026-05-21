@@ -295,10 +295,19 @@ struct DashboardScreen: View {
     private func saveWaterIntake(for date: Date) {
         guard let user = userData else { return }
         let day = Calendar.current.startOfDay(for: date)
+        guard let dayEnd = Calendar.current.date(byAdding: .day, value: 1, to: day) else { return }
+        let ownerId = user.ownerId
+        let gender = user.gender
+        let predicate = #Predicate<WaterIntake> {
+            $0.date >= day &&
+            $0.date < dayEnd &&
+            $0.gender == gender
+        }
+
         do {
-            let all = try modelContext.fetch(FetchDescriptor<WaterIntake>())
+            let all = try modelContext.fetch(FetchDescriptor<WaterIntake>(predicate: predicate))
             if let existing = all.first(where: {
-                Calendar.current.isDate($0.date, inSameDayAs: day) && $0.user?.id == user.id
+                $0.ownerId == ownerId || $0.user?.id == user.id
             }) {
                 existing.intake = waterIntake
             } else {
@@ -316,10 +325,22 @@ struct DashboardScreen: View {
             return
         }
         let day = Calendar.current.startOfDay(for: date)
+        guard let dayEnd = Calendar.current.date(byAdding: .day, value: 1, to: day) else {
+            waterIntake = 0
+            return
+        }
+        let ownerId = user.ownerId
+        let gender = user.gender
+        let predicate = #Predicate<WaterIntake> {
+            $0.date >= day &&
+            $0.date < dayEnd &&
+            $0.gender == gender
+        }
+
         do {
-            let all = try modelContext.fetch(FetchDescriptor<WaterIntake>())
+            let all = try modelContext.fetch(FetchDescriptor<WaterIntake>(predicate: predicate))
             if let existing = all.first(where: {
-                Calendar.current.isDate($0.date, inSameDayAs: day) && $0.user?.id == user.id && $0.ownerId == user.ownerId
+                $0.ownerId == ownerId || $0.user?.id == user.id
             }) {
                 waterIntake = existing.intake
             } else {

@@ -328,21 +328,23 @@ private struct AIMealIngredientDraft: Identifiable, Hashable {
     }
 
     mutating func applyMultiplier(_ multiplier: Double) {
-        let scaledGrams = max(baseGrams * multiplier, 0)
+        let safeMultiplier = max(multiplier.safeFinite, 0)
+        let scaledGrams = max(baseGrams.safeFinite * safeMultiplier, 0)
         gramsText = Self.formattedDecimalString(scaledGrams)
-        calories = max(Int((Double(baseCalories) * multiplier).rounded()), 0)
-        protein = max(baseProtein * multiplier, 0)
-        fat = max(baseFat * multiplier, 0)
-        carbs = max(baseCarbs * multiplier, 0)
+        calories = max(Int((Double(baseCalories).safeFinite * safeMultiplier).rounded()), 0)
+        protein = max(baseProtein.safeFinite * safeMultiplier, 0)
+        fat = max(baseFat.safeFinite * safeMultiplier, 0)
+        carbs = max(baseCarbs.safeFinite * safeMultiplier, 0)
     }
 
     mutating func recalculateFromEnteredGrams() {
-        guard baseGrams > 0 else { return }
-        let multiplier = max(gramsValue / baseGrams, 0)
-        calories = max(Int((Double(baseCalories) * multiplier).rounded()), 0)
-        protein = max(baseProtein * multiplier, 0)
-        fat = max(baseFat * multiplier, 0)
-        carbs = max(baseCarbs * multiplier, 0)
+        let safeBaseGrams = baseGrams.safeFinite
+        guard safeBaseGrams > 0 else { return }
+        let multiplier = max((gramsValue.safeFinite / safeBaseGrams).safeFinite, 0)
+        calories = max(Int((Double(baseCalories).safeFinite * multiplier).rounded()), 0)
+        protein = max(baseProtein.safeFinite * multiplier, 0)
+        fat = max(baseFat.safeFinite * multiplier, 0)
+        carbs = max(baseCarbs.safeFinite * multiplier, 0)
     }
 
     private static func formattedDecimalString(_ value: Double) -> String {
@@ -1201,16 +1203,18 @@ struct AIMealRecognitionFlowView: View {
     private func preparedImageDataForRecognition(from image: UIImage) -> Data? {
         let maxLongSide: CGFloat = 1_600
         let originalSize = image.size
-        let longSide = max(originalSize.width, originalSize.height)
+        let originalWidth = safeDimension(originalSize.width, minimum: 1)
+        let originalHeight = safeDimension(originalSize.height, minimum: 1)
+        let longSide = max(originalWidth, originalHeight)
 
         guard longSide > maxLongSide else {
             return image.jpegData(compressionQuality: 0.82)
         }
 
-        let scale = maxLongSide / longSide
+        let scale = (maxLongSide / longSide).clamped(to: 0.01...1)
         let targetSize = CGSize(
-            width: originalSize.width * scale,
-            height: originalSize.height * scale
+            width: safeDimension(originalWidth * scale, minimum: 1),
+            height: safeDimension(originalHeight * scale, minimum: 1)
         )
 
         let renderer = UIGraphicsImageRenderer(size: targetSize)

@@ -41,8 +41,9 @@ class FoodEntry {
     }
 }
 extension FoodEntry {
-    var caloriesSafe: Int   { product?.calories ?? 0 }
-    var proteinSafe: Double { product?.protein  ?? 0 }
-    var fatSafe: Double     { product?.fat      ?? 0 }
-    var carbsSafe: Double   { product?.carbs    ?? 0 }
+    var caloriesSafe: Int { max(product?.calories ?? 0, 0) }
+    var proteinSafe: Double { max((product?.protein ?? 0).safeFinite, 0) }
+    var fatSafe: Double { max((product?.fat ?? 0).safeFinite, 0) }
+    var carbsSafe: Double { max((product?.carbs ?? 0).safeFinite, 0) }
+    var portionSafe: Double { max(portion.safeFinite, 0) }
 }

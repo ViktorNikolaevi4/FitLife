@@ -15,7 +15,7 @@ struct WorkoutExerciseCard: View {
     let onDeleteExercise: () -> Void
 
     private var sortedSets: [WorkoutSet] {
-        exercise.sets.sorted { $0.orderIndex < $1.orderIndex }
+        exercise.setItems.sorted { $0.orderIndex < $1.orderIndex }
     }
 
     private var completedCount: Int {

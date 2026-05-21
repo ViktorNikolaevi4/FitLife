@@ -315,7 +315,7 @@ struct CoachingWorkoutExerciseSnapshot: Identifiable, Hashable {
         accentName = exercise.accentName
         orderIndex = exercise.orderIndex
         note = exercise.note
-        sets = exercise.sets
+        sets = exercise.setItems
             .sorted { $0.orderIndex < $1.orderIndex }
             .map(CoachingWorkoutSetSnapshot.init(set:))
     }
@@ -371,7 +371,7 @@ struct CoachingWorkoutSnapshot: Identifiable, Hashable {
         endedAt = workout.endedAt
         elapsedSeconds = workout.elapsedSeconds
         note = workout.note
-        exercises = workout.exercises
+        exercises = workout.exerciseItems
             .sorted { $0.orderIndex < $1.orderIndex }
             .map(CoachingWorkoutExerciseSnapshot.init(exercise:))
     }
@@ -1382,8 +1382,8 @@ private struct ClientWorkoutReportComposerScreen: View {
                                     Text(
                                         AppLocalizer.format(
                                             "coaching.workouts.summary",
-                                            workout.exercises.count,
-                                            workout.exercises.reduce(0) { $0 + $1.sets.count }
+                                            workout.exerciseItems.count,
+                                            workout.exerciseItems.reduce(0) { $0 + $1.setItems.count }
                                         )
                                     )
                                     .font(.caption)

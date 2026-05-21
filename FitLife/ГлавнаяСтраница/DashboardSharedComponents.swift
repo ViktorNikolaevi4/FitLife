@@ -3,6 +3,41 @@ import SwiftData
 
 private let maxFoodPortionGrams = 10_000.0
 
+extension Double {
+    var safeFinite: Double {
+        isFinite ? self : 0
+    }
+
+    func clamped(to range: ClosedRange<Double>) -> Double {
+        Swift.min(Swift.max(safeFinite, range.lowerBound), range.upperBound)
+    }
+}
+
+extension CGFloat {
+    var safeFinite: CGFloat {
+        isFinite ? self : 0
+    }
+
+    func clamped(to range: ClosedRange<CGFloat>) -> CGFloat {
+        Swift.min(Swift.max(safeFinite, range.lowerBound), range.upperBound)
+    }
+}
+
+func safeProgress(current: Double, goal: Double) -> Double {
+    let safeCurrent = current.safeFinite
+    let safeGoal = goal.safeFinite
+    guard safeGoal > 0 else { return 0 }
+    return (safeCurrent / safeGoal).clamped(to: 0...1)
+}
+
+func safeProgress(current: Int, goal: Int) -> Double {
+    safeProgress(current: Double(current), goal: Double(goal))
+}
+
+func safeDimension(_ value: CGFloat, minimum: CGFloat = 0) -> CGFloat {
+    Swift.max(value.safeFinite, minimum)
+}
+
 struct AppTheme {
     let bg: Color, card: Color, border: Color, subtleFill: Color, ringTrack: Color
     let protein: Color, fat: Color, carb: Color
@@ -134,8 +169,7 @@ struct WaterSummaryCard: View {
     let onAdd: () -> Void
 
     private var progress: Double {
-        guard goal > 0 else { return 0 }
-        return min(intake / goal, 1)
+        safeProgress(current: intake, goal: goal)
     }
 
     private func waterControlButton(systemImage: String, action: @escaping () -> Void) -> some View {
@@ -299,8 +333,7 @@ struct BalanceCard: View {
     @State private var mode: RingDisplayMode = .target
 
     private var progress: Double {
-        guard target > 0 else { return 0 }
-        return min(Double(consumed) / Double(target), 1)
+        safeProgress(current: consumed, goal: target)
     }
 
     private var ringNumber: Int {
@@ -361,7 +394,7 @@ struct BalanceCard: View {
                 }
 
                 ThickProgressBar(
-                    fraction: target > 0 ? min(Double(current) / Double(target), 1) : 0,
+                    fraction: safeProgress(current: current, goal: target),
                     fill: tint,
                     track: tint.opacity(theme.isDark ? 0.16 : 0.14),
                     height: 5
@@ -488,13 +521,16 @@ struct Donut: View {
     var lineWidth: CGFloat = 12
     var track: Color
     var gradient: Gradient
+    private var safeProgressValue: Double { progress.clamped(to: 0...1) }
+    private var safeLineWidth: CGFloat { safeDimension(lineWidth, minimum: 0.5) }
+
     var body: some View {
         ZStack {
-            Circle().stroke(track, lineWidth: lineWidth)
+            Circle().stroke(track, lineWidth: safeLineWidth)
             Circle()
-                .trim(from: 0, to: progress)
+                .trim(from: 0, to: safeProgressValue)
                 .stroke(AngularGradient(gradient: gradient, center: .center),
-                        style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                        style: StrokeStyle(lineWidth: safeLineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
         }
     }
@@ -515,8 +551,7 @@ struct MacroProgressRow: View {
         warnEnabled && target > 0 && current > target
     }
     private var fraction: Double {
-        guard target > 0 else { return 0 }
-        return min(Double(current) / Double(target), 1)
+        safeProgress(current: current, goal: target)
     }
     private var fillColor: Color  { isOver ? HomeDarkColors.red : tint }
     private var trackColor: Color { isOver ? HomeDarkColors.red.opacity(0.25) : theme.ringTrack }
@@ -552,17 +587,20 @@ struct ThickProgressBar: View {
     var fill: Color
     var track: Color
     var height: CGFloat = 10
+    private var safeFraction: Double { fraction.clamped(to: 0...1) }
+    private var safeHeight: CGFloat { safeDimension(height, minimum: 1) }
 
     var body: some View {
         GeometryReader { geo in
+            let width = safeDimension(geo.size.width, minimum: 1)
             ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: height/2).fill(track)
-                RoundedRectangle(cornerRadius: height/2)
+                RoundedRectangle(cornerRadius: safeHeight / 2).fill(track)
+                RoundedRectangle(cornerRadius: safeHeight / 2)
                     .fill(fill)
-                    .frame(width: max(0, geo.size.width * fraction))
+                    .frame(width: safeDimension(width * CGFloat(safeFraction), minimum: 0))
             }
         }
-        .frame(height: height)
+        .frame(height: safeHeight)
     }
 }
 
@@ -870,15 +908,15 @@ struct RepeatYesterdayMealDraftItem: Identifiable, Hashable {
 
     init(sourceEntry: FoodEntry) {
         self.sourceEntry = sourceEntry
-        self.gramsText = String(Int(max(1, sourceEntry.portion)))
+        self.gramsText = String(Int(max(1, sourceEntry.portionSafe)))
     }
 
     var grams: Double {
-        min(max(1, Double(gramsText) ?? sourceEntry.portion), maxFoodPortionGrams)
+        min(max(1, (Double(gramsText) ?? sourceEntry.portionSafe).safeFinite), maxFoodPortionGrams)
     }
 
     private var scale: Double {
-        grams / max(1.0, sourceEntry.portion)
+        (grams / max(1.0, sourceEntry.portionSafe)).safeFinite
     }
 
     var name: String {
@@ -886,14 +924,14 @@ struct RepeatYesterdayMealDraftItem: Identifiable, Hashable {
     }
 
     var calories: Int {
-        Int((Double(sourceEntry.product?.calories ?? 0) * scale).rounded())
+        max(Int((Double(sourceEntry.product?.calories ?? 0).safeFinite * scale).rounded()), 0)
     }
 
     var macros: (protein: Double, fat: Double, carbs: Double) {
         (
-            (sourceEntry.product?.protein ?? 0) * scale,
-            (sourceEntry.product?.fat ?? 0) * scale,
-            (sourceEntry.product?.carbs ?? 0) * scale
+            max((sourceEntry.product?.protein ?? 0).safeFinite * scale, 0),
+            max((sourceEntry.product?.fat ?? 0).safeFinite * scale, 0),
+            max((sourceEntry.product?.carbs ?? 0).safeFinite * scale, 0)
         )
     }
 
@@ -1377,29 +1415,31 @@ private struct ProductsList: View {
 
     /// Масштабируем хранимые в `entry.product` значения ккал/БЖУ по отношению new/old.
     private func applyNewPortion(_ entry: FoodEntry, newPortion: Double) {
-        guard let product = entry.product, newPortion > 0 else { return }
-        let old = max(1.0, entry.portion)
-        let k = newPortion / old
-        product.protein *= k
-        product.fat     *= k
-        product.carbs   *= k
-        product.calories = Int(Double(product.calories) * k)
-        entry.portion = newPortion
+        let safeNewPortion = min(max(newPortion.safeFinite, 1), maxFoodPortionGrams)
+        guard let product = entry.product, safeNewPortion > 0 else { return }
+        let old = max(1.0, entry.portionSafe)
+        let k = (safeNewPortion / old).safeFinite
+        product.protein = max(product.protein.safeFinite * k, 0)
+        product.fat = max(product.fat.safeFinite * k, 0)
+        product.carbs = max(product.carbs.safeFinite * k, 0)
+        product.calories = max(Int((Double(product.calories).safeFinite * k).rounded()), 0)
+        entry.portion = safeNewPortion
         do { try modelContext.save() } catch {}
     }
 
     private func applyNewPortion(_ entries: [FoodEntry], newTotalPortion: Double) {
-        let oldTotal = max(1.0, entries.reduce(0.0) { $0 + $1.portion })
-        let k = newTotalPortion / oldTotal
+        let safeNewTotalPortion = min(max(newTotalPortion.safeFinite, 1), maxFoodPortionGrams)
+        let oldTotal = max(1.0, entries.reduce(0.0) { $0 + $1.portionSafe }.safeFinite)
+        let k = (safeNewTotalPortion / oldTotal).safeFinite
 
         for entry in entries {
             if let product = entry.product {
-                product.protein *= k
-                product.fat *= k
-                product.carbs *= k
-                product.calories = Int((Double(product.calories) * k).rounded())
+                product.protein = max(product.protein.safeFinite * k, 0)
+                product.fat = max(product.fat.safeFinite * k, 0)
+                product.carbs = max(product.carbs.safeFinite * k, 0)
+                product.calories = max(Int((Double(product.calories).safeFinite * k).rounded()), 0)
             }
-            entry.portion = max(1.0, entry.portion * k)
+            entry.portion = min(max(1.0, (entry.portionSafe * k).safeFinite), maxFoodPortionGrams)
         }
 
         do { try modelContext.save() } catch {}
@@ -1450,16 +1490,16 @@ private struct PortionEditorScreen: View {
         self.entry = entry
         self.onSave = onSave
         self.onDelete = onDelete
-        _gramsText = State(initialValue: String(Int(max(1, entry.portion))))
+        _gramsText = State(initialValue: String(Int(max(1, entry.portionSafe))))
     }
 
     private var previewScale: Double {
-        guard entry.portion > 0 else { return 1 }
-        return gramsValue / max(1.0, entry.portion)
+        guard entry.portionSafe > 0 else { return 1 }
+        return (gramsValue / max(1.0, entry.portionSafe)).safeFinite
     }
 
     private var gramsValue: Double {
-        min(max(1, Double(gramsText) ?? entry.portion), maxFoodPortionGrams)
+        min(max(1, (Double(gramsText) ?? entry.portionSafe).safeFinite), maxFoodPortionGrams)
     }
 
     private struct CustomProductPortionEditorSelection: Identifiable {
@@ -1510,13 +1550,13 @@ private struct PortionEditorScreen: View {
 
                 if let pr = entry.product {
                     VStack(alignment: .leading, spacing: 14) {
-                        Text(AppLocalizer.format("entry.will_be_kcal", Int(Double(pr.calories) * previewScale)))
+                        Text(AppLocalizer.format("entry.will_be_kcal", max(Int((Double(pr.calories).safeFinite * previewScale).rounded()), 0)))
                             .font(.system(size: 30, weight: .bold))
 
                         VStack(spacing: 10) {
-                            PortionMetricRow(title: AppLocalizer.string("macro.protein"), value: pr.protein * previewScale)
-                            PortionMetricRow(title: AppLocalizer.string("macro.fat"), value: pr.fat * previewScale)
-                            PortionMetricRow(title: AppLocalizer.string("macro.carbs"), value: pr.carbs * previewScale)
+                            PortionMetricRow(title: AppLocalizer.string("macro.protein"), value: max(pr.protein.safeFinite * previewScale, 0))
+                            PortionMetricRow(title: AppLocalizer.string("macro.fat"), value: max(pr.fat.safeFinite * previewScale, 0))
+                            PortionMetricRow(title: AppLocalizer.string("macro.carbs"), value: max(pr.carbs.safeFinite * previewScale, 0))
                         }
                     }
                     .padding(18)
@@ -1602,12 +1642,12 @@ private struct PortionEditorScreen: View {
 
     private func applyUpdatedCustomProduct(_ customProduct: CustomProduct) {
         guard let product = entry.product else { return }
-        let factor = max(1.0, entry.portion) / 100
+        let factor = (max(1.0, entry.portionSafe) / 100).safeFinite
         product.name = customProduct.name
-        product.calories = Int((Double(customProduct.calories) * factor).rounded())
-        product.protein = customProduct.protein * factor
-        product.fat = customProduct.fat * factor
-        product.carbs = customProduct.carbs * factor
+        product.calories = max(Int((Double(customProduct.calories).safeFinite * factor).rounded()), 0)
+        product.protein = max(customProduct.protein.safeFinite * factor, 0)
+        product.fat = max(customProduct.fat.safeFinite * factor, 0)
+        product.carbs = max(customProduct.carbs.safeFinite * factor, 0)
         do {
             try modelContext.save()
         } catch {}
@@ -1623,7 +1663,7 @@ private struct PortionMetricRow: View {
             Text(title)
                 .font(.body.weight(.medium))
             Spacer()
-            Text(String(format: "%.1f %@", value, AppLocalizer.string("unit.grams.short")))
+            Text(String(format: "%.1f %@", max(value.safeFinite, 0), AppLocalizer.string("unit.grams.short")))
                 .font(.body.weight(.semibold))
                 .foregroundStyle(.secondary)
         }
@@ -1645,20 +1685,20 @@ private struct GroupedAIMealPortionEditorScreen: View {
         self.entries = entries
         self.onSave = onSave
         self.onDelete = onDelete
-        let initialGrams = max(1, Int(entries.reduce(0.0) { $0 + $1.portion }))
+        let initialGrams = max(1, Int(entries.reduce(0.0) { $0 + $1.portionSafe }))
         _gramsText = State(initialValue: String(initialGrams))
     }
 
     private var totalPortion: Double {
-        max(1.0, entries.reduce(0.0) { $0 + $1.portion })
+        max(1.0, entries.reduce(0.0) { $0 + $1.portionSafe }.safeFinite)
     }
 
     private var gramsValue: Double {
-        min(max(1, Double(gramsText) ?? totalPortion), maxFoodPortionGrams)
+        min(max(1, (Double(gramsText) ?? totalPortion).safeFinite), maxFoodPortionGrams)
     }
 
     private var previewScale: Double {
-        gramsValue / totalPortion
+        (gramsValue / totalPortion).safeFinite
     }
 
     private var totalCalories: Int {
@@ -1666,15 +1706,15 @@ private struct GroupedAIMealPortionEditorScreen: View {
     }
 
     private var totalProtein: Double {
-        entries.reduce(0.0) { $0 + ($1.product?.protein ?? 0) }
+        entries.reduce(0.0) { $0 + ($1.product?.protein ?? 0).safeFinite }
     }
 
     private var totalFat: Double {
-        entries.reduce(0.0) { $0 + ($1.product?.fat ?? 0) }
+        entries.reduce(0.0) { $0 + ($1.product?.fat ?? 0).safeFinite }
     }
 
     private var totalCarbs: Double {
-        entries.reduce(0.0) { $0 + ($1.product?.carbs ?? 0) }
+        entries.reduce(0.0) { $0 + ($1.product?.carbs ?? 0).safeFinite }
     }
 
     var body: some View {
@@ -1719,13 +1759,13 @@ private struct GroupedAIMealPortionEditorScreen: View {
                 .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24))
 
                 VStack(alignment: .leading, spacing: 14) {
-                    Text(AppLocalizer.format("entry.will_be_kcal", Int(Double(totalCalories) * previewScale)))
+                    Text(AppLocalizer.format("entry.will_be_kcal", max(Int((Double(totalCalories).safeFinite * previewScale).rounded()), 0)))
                         .font(.system(size: 30, weight: .bold))
 
                     VStack(spacing: 10) {
-                        PortionMetricRow(title: AppLocalizer.string("macro.protein"), value: totalProtein * previewScale)
-                        PortionMetricRow(title: AppLocalizer.string("macro.fat"), value: totalFat * previewScale)
-                        PortionMetricRow(title: AppLocalizer.string("macro.carbs"), value: totalCarbs * previewScale)
+                        PortionMetricRow(title: AppLocalizer.string("macro.protein"), value: max(totalProtein * previewScale, 0))
+                        PortionMetricRow(title: AppLocalizer.string("macro.fat"), value: max(totalFat * previewScale, 0))
+                        PortionMetricRow(title: AppLocalizer.string("macro.carbs"), value: max(totalCarbs * previewScale, 0))
                     }
                 }
                 .padding(18)

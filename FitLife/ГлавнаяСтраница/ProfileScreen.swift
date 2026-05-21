@@ -728,7 +728,7 @@ private struct ProfileHeroCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 16) {
                 ProfileIconTile(systemImage: "person.fill", tint: theme.accent, size: 58, cornerRadius: 29)
 
@@ -745,11 +745,16 @@ private struct ProfileHeroCard: View {
             }
 
             if let progressDestination {
+                Rectangle()
+                    .fill(theme.border.opacity(theme.isDark ? 0.70 : 0.55))
+                    .frame(height: 1)
+                    .padding(.top, 2)
+
                 NavigationLink {
                     progressDestination
                 } label: {
                     HStack(spacing: 12) {
-                        ProfileIconTile(systemImage: "chart.line.uptrend.xyaxis", tint: theme.accent, size: 44, cornerRadius: 13)
+                        ProfileIconTile(systemImage: "chart.line.uptrend.xyaxis", tint: theme.accent, size: 40, cornerRadius: 12)
 
                         VStack(alignment: .leading, spacing: 3) {
                             Text(AppLocalizer.string("profile.progress.title"))
@@ -768,15 +773,8 @@ private struct ProfileHeroCard: View {
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(theme.tertiaryText)
                     }
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .fill(theme.isDark ? Color.white.opacity(0.045) : Color.white.opacity(0.85))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(theme.border)
-                    )
+                    .padding(.vertical, 2)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -985,110 +983,19 @@ private struct ProfileProgressScreen: View {
         calendar.date(byAdding: .day, value: -29, to: calendar.startOfDay(for: Date())) ?? calendar.startOfDay(for: Date())
     }
 
-    private var scopedWorkouts: [WorkoutSession] {
-        workouts.filter { $0.ownerId == ownerId && $0.gender == gender }
-    }
-
-    private var completedWorkouts: [WorkoutSession] {
-        scopedWorkouts.filter { $0.endedAt != nil }
-    }
-
-    private var weekWorkouts: [WorkoutSession] {
-        completedWorkouts.filter { $0.createdAt >= weekStart }
-    }
-
-    private var monthWorkouts: [WorkoutSession] {
-        completedWorkouts.filter { $0.createdAt >= monthStart }
-    }
-
-    private var scopedFoodEntries: [FoodEntry] {
-        foodEntries.filter { $0.ownerId == ownerId && $0.gender == gender && $0.date >= weekStart }
-    }
-
-    private var scopedWaterEntries: [WaterIntake] {
-        waterEntries.filter { entry in
-            let ownerMatches = entry.ownerId == ownerId || entry.user?.id == userData.id
-            return ownerMatches && entry.gender == gender && entry.date >= weekStart
-        }
-    }
-
-    private var scopedMeasurements: [BodyMeasurements] {
-        measurements.filter { measurement in
-            guard let ownerId else { return false }
-            return measurement.ownerId == ownerId
-        }
-    }
-
-    private var latestMeasurement: BodyMeasurements? {
-        scopedMeasurements.first
-    }
-
-    private var totalWorkoutMinutesThisMonth: Int {
-        monthWorkouts.reduce(0) { $0 + max(0, $1.elapsedSeconds) } / 60
-    }
-
-    private var completedSetsThisWeek: Int {
-        weekWorkouts.reduce(0) { total, workout in
-            total + workout.exercises.flatMap(\.sets).filter(\.isCompleted).count
-        }
-    }
-
-    private var trainingVolumeThisWeek: Int {
-        Int(weekWorkouts.reduce(0.0) { total, workout in
-            total + workout.exercises.flatMap(\.sets).reduce(0.0) { setTotal, set in
-                guard set.isCompleted, set.metricType == .reps else { return setTotal }
-                return setTotal + (set.weight * Double(set.reps))
-            }
-        })
-    }
-
-    private var averageCaloriesThisWeek: Int {
-        averageDailyCalories(entries: scopedFoodEntries)
-    }
-
-    private var proteinAverageThisWeek: Int {
-        let dailyProtein = groupedFoodEntriesByDay(scopedFoodEntries).values.map { entries in
-            Int(entries.reduce(0.0) { $0 + ($1.product?.protein ?? 0) })
-        }
-        guard dailyProtein.isEmpty == false else { return 0 }
-        return dailyProtein.reduce(0, +) / dailyProtein.count
-    }
-
-    private var nutritionDaysInTarget: Int {
-        guard userData.calories > 0 else { return 0 }
-        return groupedFoodEntriesByDay(scopedFoodEntries).values.filter { entries in
-            let total = entries.reduce(0) { $0 + ($1.product?.calories ?? 0) }
-            let lower = Int(Double(userData.calories) * 0.90)
-            let upper = Int(Double(userData.calories) * 1.10)
-            return total >= lower && total <= upper
-        }.count
-    }
-
     private var waterGoalLiters: Double {
-        max(userData.weight * 35.0 / 1000.0, 0)
-    }
-
-    private var averageWaterThisWeek: Double {
-        let grouped = groupedWaterEntriesByDay(scopedWaterEntries)
-        guard grouped.isEmpty == false else { return 0 }
-        let dailyTotals = grouped.values.map { $0.reduce(0.0) { $0 + $1.intake } }
-        return dailyTotals.reduce(0, +) / Double(dailyTotals.count)
-    }
-
-    private var waterGoalDays: Int {
-        guard waterGoalLiters > 0 else { return 0 }
-        return groupedWaterEntriesByDay(scopedWaterEntries).values.filter {
-            $0.reduce(0.0) { $0 + $1.intake } >= waterGoalLiters
-        }.count
+        max((userData.weight.safeFinite * 35.0 / 1000.0).safeFinite, 0)
     }
 
     var body: some View {
+        let snapshot = makeSnapshot()
+
         ScrollView(showsIndicators: false) {
             LazyVStack(spacing: 16) {
                 ProgressSummaryGrid(
-                    workouts: weekWorkouts.count,
-                    averageCalories: averageCaloriesThisWeek,
-                    waterGoalDays: waterGoalDays,
+                    workouts: snapshot.weekWorkoutsCount,
+                    averageCalories: snapshot.averageCaloriesThisWeek,
+                    waterGoalDays: snapshot.waterGoalDays,
                     weight: Int(userData.weight.rounded())
                 )
 
@@ -1100,7 +1007,7 @@ private struct ProfileProgressScreen: View {
                         subtitle: AppLocalizer.string("profile.progress.current_value")
                     )
 
-                    if let latestMeasurement {
+                    if let latestMeasurement = snapshot.latestMeasurement {
                         ProgressMetricRow(
                             icon: "ruler",
                             title: AppLocalizer.string("measurements.latest"),
@@ -1121,19 +1028,19 @@ private struct ProfileProgressScreen: View {
                     ProgressMetricRow(
                         icon: "dumbbell.fill",
                         title: AppLocalizer.string("profile.progress.workouts.week"),
-                        value: "\(weekWorkouts.count)",
-                        subtitle: AppLocalizer.format("profile.progress.workouts.month", monthWorkouts.count)
+                        value: "\(snapshot.weekWorkoutsCount)",
+                        subtitle: AppLocalizer.format("profile.progress.workouts.month", snapshot.monthWorkoutsCount)
                     )
                     ProgressMetricRow(
                         icon: "checkmark.circle",
                         title: AppLocalizer.string("profile.progress.sets.week"),
-                        value: "\(completedSetsThisWeek)",
-                        subtitle: AppLocalizer.format("profile.progress.volume.week", trainingVolumeThisWeek)
+                        value: "\(snapshot.completedSetsThisWeek)",
+                        subtitle: AppLocalizer.format("profile.progress.volume.week", snapshot.trainingVolumeThisWeek)
                     )
                     ProgressMetricRow(
                         icon: "timer",
                         title: AppLocalizer.string("profile.progress.duration.month"),
-                        value: formattedMinutes(totalWorkoutMinutesThisMonth),
+                        value: formattedMinutes(snapshot.totalWorkoutMinutesThisMonth),
                         subtitle: AppLocalizer.string("profile.progress.completed_only")
                     )
                 }
@@ -1142,19 +1049,19 @@ private struct ProfileProgressScreen: View {
                     ProgressMetricRow(
                         icon: "flame",
                         title: AppLocalizer.string("profile.progress.calories.average"),
-                        value: "\(averageCaloriesThisWeek) \(AppLocalizer.string("unit.kcal"))",
+                        value: "\(snapshot.averageCaloriesThisWeek) \(AppLocalizer.string("unit.kcal"))",
                         subtitle: AppLocalizer.format("profile.progress.target", userData.calories)
                     )
                     ProgressMetricRow(
                         icon: "target",
                         title: AppLocalizer.string("profile.progress.nutrition.target_days"),
-                        value: AppLocalizer.format("profile.progress.days.of_week", nutritionDaysInTarget),
+                        value: AppLocalizer.format("profile.progress.days.of_week", snapshot.nutritionDaysInTarget),
                         subtitle: AppLocalizer.string("profile.progress.nutrition.target_hint")
                     )
                     ProgressMetricRow(
                         icon: "fork.knife",
                         title: AppLocalizer.string("profile.progress.protein.average"),
-                        value: "\(proteinAverageThisWeek) \(AppLocalizer.string("unit.grams.short"))",
+                        value: "\(snapshot.proteinAverageThisWeek) \(AppLocalizer.string("unit.grams.short"))",
                         subtitle: AppLocalizer.format("profile.progress.target.grams", userData.proteins)
                     )
                 }
@@ -1163,13 +1070,13 @@ private struct ProfileProgressScreen: View {
                     ProgressMetricRow(
                         icon: "drop.fill",
                         title: AppLocalizer.string("profile.progress.water.average"),
-                        value: formattedLiters(averageWaterThisWeek),
+                        value: formattedLiters(snapshot.averageWaterThisWeek),
                         subtitle: AppLocalizer.format("profile.progress.water.goal", waterGoalLiters)
                     )
                     ProgressMetricRow(
                         icon: "checkmark.circle",
                         title: AppLocalizer.string("profile.progress.water.target_days"),
-                        value: AppLocalizer.format("profile.progress.days.of_week", waterGoalDays),
+                        value: AppLocalizer.format("profile.progress.days.of_week", snapshot.waterGoalDays),
                         subtitle: AppLocalizer.string("profile.progress.water.goal_hint")
                     )
                 }
@@ -1180,6 +1087,98 @@ private struct ProfileProgressScreen: View {
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .navigationTitle(AppLocalizer.string("profile.progress.title"))
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func makeSnapshot() -> ProfileProgressSnapshot {
+        var weekWorkoutsCount = 0
+        var monthWorkoutsCount = 0
+        var completedSetsThisWeek = 0
+        var trainingVolumeThisWeek = 0.0
+        var totalWorkoutSecondsThisMonth = 0
+
+        for workout in workouts where workout.ownerId == ownerId && workout.gender == gender && workout.endedAt != nil {
+            if workout.createdAt >= weekStart {
+                weekWorkoutsCount += 1
+
+                for exercise in workout.exerciseItems {
+                    for set in exercise.setItems where set.isCompleted {
+                        completedSetsThisWeek += 1
+                        if set.metricType == .reps {
+                            trainingVolumeThisWeek += set.weight.safeFinite * Double(set.reps)
+                        }
+                    }
+                }
+            }
+
+            if workout.createdAt >= monthStart {
+                monthWorkoutsCount += 1
+                totalWorkoutSecondsThisMonth += max(0, workout.elapsedSeconds)
+            }
+        }
+
+        var caloriesByDay: [Date: Int] = [:]
+        var proteinByDay: [Date: Double] = [:]
+
+        for entry in foodEntries where entry.ownerId == ownerId && entry.gender == gender && entry.date >= weekStart {
+            let day = calendar.startOfDay(for: entry.date)
+            caloriesByDay[day, default: 0] += entry.product?.calories ?? 0
+            proteinByDay[day, default: 0] += (entry.product?.protein ?? 0).safeFinite
+        }
+
+        let averageCaloriesThisWeek = average(values: Array(caloriesByDay.values))
+        let proteinAverageThisWeek = average(values: proteinByDay.values.map { Int(max($0.safeFinite, 0)) })
+        let nutritionDaysInTarget = nutritionTargetDays(from: caloriesByDay.values)
+
+        var waterByDay: [Date: Double] = [:]
+
+        for entry in waterEntries where entry.gender == gender && entry.date >= weekStart {
+            let ownerMatches = entry.ownerId == ownerId || entry.user?.id == userData.id
+            guard ownerMatches else { continue }
+            let day = calendar.startOfDay(for: entry.date)
+            waterByDay[day, default: 0] += entry.intake.safeFinite
+        }
+
+        let waterTotals = Array(waterByDay.values)
+        let averageWaterThisWeek = average(values: waterTotals)
+        let waterGoalDays = waterGoalLiters > 0
+            ? waterTotals.filter { $0 >= waterGoalLiters }.count
+            : 0
+
+        let latestMeasurement = measurements.first { measurement in
+            guard let ownerId else { return false }
+            return measurement.ownerId == ownerId
+        }
+
+        return ProfileProgressSnapshot(
+            weekWorkoutsCount: weekWorkoutsCount,
+            monthWorkoutsCount: monthWorkoutsCount,
+            completedSetsThisWeek: completedSetsThisWeek,
+            trainingVolumeThisWeek: Int(trainingVolumeThisWeek.safeFinite),
+            totalWorkoutMinutesThisMonth: totalWorkoutSecondsThisMonth / 60,
+            averageCaloriesThisWeek: averageCaloriesThisWeek,
+            proteinAverageThisWeek: proteinAverageThisWeek,
+            nutritionDaysInTarget: nutritionDaysInTarget,
+            averageWaterThisWeek: averageWaterThisWeek,
+            waterGoalDays: waterGoalDays,
+            latestMeasurement: latestMeasurement
+        )
+    }
+
+    private func average(values: [Int]) -> Int {
+        guard values.isEmpty == false else { return 0 }
+        return values.reduce(0, +) / values.count
+    }
+
+    private func average(values: [Double]) -> Double {
+        guard values.isEmpty == false else { return 0 }
+        return (values.reduce(0, +) / Double(values.count)).safeFinite
+    }
+
+    private func nutritionTargetDays(from caloriesByDay: Dictionary<Date, Int>.Values) -> Int {
+        guard userData.calories > 0 else { return 0 }
+        let lower = Int(Double(userData.calories) * 0.90)
+        let upper = Int(Double(userData.calories) * 1.10)
+        return caloriesByDay.filter { $0 >= lower && $0 <= upper }.count
     }
 
     private func progressSection<Content: View>(
@@ -1200,23 +1199,6 @@ private struct ProfileProgressScreen: View {
         .overlay(RoundedRectangle(cornerRadius: 20).stroke(profileCardBorder))
     }
 
-    private func groupedFoodEntriesByDay(_ entries: [FoodEntry]) -> [Date: [FoodEntry]] {
-        Dictionary(grouping: entries) { calendar.startOfDay(for: $0.date) }
-    }
-
-    private func groupedWaterEntriesByDay(_ entries: [WaterIntake]) -> [Date: [WaterIntake]] {
-        Dictionary(grouping: entries) { calendar.startOfDay(for: $0.date) }
-    }
-
-    private func averageDailyCalories(entries: [FoodEntry]) -> Int {
-        let grouped = groupedFoodEntriesByDay(entries)
-        guard grouped.isEmpty == false else { return 0 }
-        let dailyCalories = grouped.values.map { dayEntries in
-            dayEntries.reduce(0) { $0 + ($1.product?.calories ?? 0) }
-        }
-        return dailyCalories.reduce(0, +) / dailyCalories.count
-    }
-
     private func formattedMinutes(_ minutes: Int) -> String {
         if minutes >= 60 {
             let hours = minutes / 60
@@ -1232,6 +1214,20 @@ private struct ProfileProgressScreen: View {
 
     private func formattedDate(_ date: Date) -> String {
         date.formatted(.dateTime.day().month().year())
+    }
+
+    private struct ProfileProgressSnapshot {
+        let weekWorkoutsCount: Int
+        let monthWorkoutsCount: Int
+        let completedSetsThisWeek: Int
+        let trainingVolumeThisWeek: Int
+        let totalWorkoutMinutesThisMonth: Int
+        let averageCaloriesThisWeek: Int
+        let proteinAverageThisWeek: Int
+        let nutritionDaysInTarget: Int
+        let averageWaterThisWeek: Double
+        let waterGoalDays: Int
+        let latestMeasurement: BodyMeasurements?
     }
 }
 

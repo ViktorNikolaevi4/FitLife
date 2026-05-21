@@ -91,14 +91,16 @@ private struct BMIGauge: View {
     let tint: Color
 
     var fraction: CGFloat {
-        guard value.isFinite else { return 0 }
-        let clamped = Swift.min(Swift.max(value, minValue), maxValue)
-        return CGFloat((clamped - minValue) / (maxValue - minValue))
+        let range = (maxValue - minValue).safeFinite
+        guard range > 0 else { return 0 }
+        let clamped = value.clamped(to: minValue...maxValue)
+        return CGFloat((clamped - minValue) / range).clamped(to: 0...1)
     }
 
     var body: some View {
         GeometryReader { geo in
-            let w = geo.size.width
+            let w = safeDimension(geo.size.width, minimum: 1)
+            let markerX = (w * fraction).clamped(to: 8...(Swift.max(w - 8, 8))) - 8
 
             ZStack(alignment: .leading) {
                 HStack(spacing: 4) {
@@ -115,7 +117,7 @@ private struct BMIGauge: View {
                         Circle()
                             .stroke(Color(.systemBackground), lineWidth: 3)
                     )
-                    .offset(x: max(8, min(w * fraction, w - 8)) - 8)
+                    .offset(x: markerX)
                     .shadow(radius: 1, y: 0.5)
             }
         }
@@ -124,9 +126,11 @@ private struct BMIGauge: View {
 }
 
 private func bmi(for user: UserData) -> Double {
-    guard user.height > 0, user.weight > 0 else { return .infinity }
-    let h = user.height / 100
-    return user.weight / (h * h)
+    let height = user.height.safeFinite
+    let weight = user.weight.safeFinite
+    guard height > 0, weight > 0 else { return .infinity }
+    let h = height / 100
+    return (weight / (h * h)).safeFinite
 }
 
 private func bmiMessage(_ bmi: Double) -> String {

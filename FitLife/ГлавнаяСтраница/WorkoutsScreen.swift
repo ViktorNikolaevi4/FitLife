@@ -21,23 +21,13 @@ struct WorkoutsScreen: View {
 
     private var theme: AppTheme { AppTheme(colorScheme) }
     private var selectedGender: Gender { Gender(rawValue: activeGenderRaw) ?? .male }
-    private var relevantWorkouts: [WorkoutSession] {
-        workouts.filter { $0.gender == selectedGender && $0.ownerId == sessionStore.firebaseUser?.uid }
-    }
-    private var activeWorkout: WorkoutSession? {
-        relevantWorkouts
-            .filter { $0.endedAt == nil }
-            .sorted { $0.createdAt > $1.createdAt }
-            .first
-    }
-    private var lastWorkout: WorkoutSession? {
-        relevantWorkouts
-            .filter { $0.endedAt != nil }
-            .sorted { ($0.endedAt ?? .distantPast) > ($1.endedAt ?? .distantPast) }
-            .first
+    private var workoutSnapshot: WorkoutDiarySnapshot {
+        makeWorkoutSnapshot()
     }
 
     var body: some View {
+        let snapshot = workoutSnapshot
+
         NavigationStack {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
@@ -47,18 +37,18 @@ struct WorkoutsScreen: View {
 
                     WorkoutsFeatureCard(
                         title: AppLocalizer.string("workouts.last"),
-                        subtitle: lastWorkoutSubtitle,
+                        subtitle: lastWorkoutSubtitle(snapshot.lastWorkout),
                         systemImage: "figure.strengthtraining.traditional",
                         tint: HomeDarkColors.orange,
-                        isEmptyState: lastWorkout == nil,
+                        isEmptyState: snapshot.lastWorkout == nil,
                         isPrimary: false,
                         theme: theme,
-                        action: openLastWorkout
+                        action: { openLastWorkout(snapshot.lastWorkout) }
                     )
 
                     WorkoutsFeatureCard(
                         title: AppLocalizer.string("workouts.new"),
-                        subtitle: activeWorkout == nil
+                        subtitle: snapshot.activeWorkout == nil
                             ? AppLocalizer.string("workouts.new.subtitle")
                             : AppLocalizer.string("workouts.new.resume"),
                         systemImage: "dumbbell.fill",
@@ -66,7 +56,7 @@ struct WorkoutsScreen: View {
                         isEmptyState: false,
                         isPrimary: true,
                         theme: theme,
-                        action: openActiveWorkout
+                        action: { openActiveWorkout(snapshot.activeWorkout) }
                     )
 
                     if sessionStore.currentRole == .client,
@@ -139,14 +129,34 @@ struct WorkoutsScreen: View {
         }
     }
 
-    private var lastWorkoutSubtitle: String {
+    private func makeWorkoutSnapshot() -> WorkoutDiarySnapshot {
+        let ownerId = sessionStore.firebaseUser?.uid
+        var activeWorkout: WorkoutSession?
+        var lastWorkout: WorkoutSession?
+
+        for workout in workouts where workout.gender == selectedGender && workout.ownerId == ownerId {
+            if workout.endedAt == nil {
+                if activeWorkout == nil || workout.createdAt > (activeWorkout?.createdAt ?? .distantPast) {
+                    activeWorkout = workout
+                }
+            } else if let endedAt = workout.endedAt {
+                if lastWorkout == nil || endedAt > (lastWorkout?.endedAt ?? .distantPast) {
+                    lastWorkout = workout
+                }
+            }
+        }
+
+        return WorkoutDiarySnapshot(activeWorkout: activeWorkout, lastWorkout: lastWorkout)
+    }
+
+    private func lastWorkoutSubtitle(_ lastWorkout: WorkoutSession?) -> String {
         guard let lastWorkout else { return AppLocalizer.string("workouts.last.empty.subtitle") }
-        let exercisesCount = lastWorkout.exercises.count
-        let completedSets = lastWorkout.exercises.flatMap(\.sets).filter(\.isCompleted).count
+        let exercisesCount = lastWorkout.exerciseItems.count
+        let completedSets = lastWorkout.exerciseItems.flatMap(\.setItems).filter(\.isCompleted).count
         return AppLocalizer.format("workouts.last.summary", exercisesCount, completedSets)
     }
 
-    private func openActiveWorkout() {
+    private func openActiveWorkout(_ activeWorkout: WorkoutSession?) {
         if let activeWorkout {
             selectedWorkout = activeWorkout
             return
@@ -164,7 +174,7 @@ struct WorkoutsScreen: View {
         selectedWorkout = workout
     }
 
-    private func openLastWorkout() {
+    private func openLastWorkout(_ lastWorkout: WorkoutSession?) {
         guard let lastWorkout else {
             showLastWorkoutEmptyAlert = true
             return
@@ -183,6 +193,11 @@ struct WorkoutsScreen: View {
             ownerId: ownerId,
             gender: selectedGender
         )
+    }
+
+    private struct WorkoutDiarySnapshot {
+        let activeWorkout: WorkoutSession?
+        let lastWorkout: WorkoutSession?
     }
 }
 
@@ -661,11 +676,11 @@ private struct WorkoutHistoryRow: View {
     let workout: WorkoutSession
 
     private var exerciseCount: Int {
-        workout.exercises.count
+        workout.exerciseItems.count
     }
 
     private var completedSets: Int {
-        workout.exercises.flatMap(\.sets).filter(\.isCompleted).count
+        workout.exerciseItems.flatMap(\.setItems).filter(\.isCompleted).count
     }
 
     private var formattedDate: String {
@@ -764,15 +779,15 @@ private struct WorkoutDetailScreen: View {
     @State private var isEditingWorkoutNote = false
 
     private var sortedExercises: [WorkoutExercise] {
-        workout.exercises.sorted { $0.orderIndex < $1.orderIndex }
+        workout.exerciseItems.sorted { $0.orderIndex < $1.orderIndex }
     }
 
     private var completedSets: Int {
-        sortedExercises.flatMap(\.sets).filter(\.isCompleted).count
+        sortedExercises.flatMap(\.setItems).filter(\.isCompleted).count
     }
 
     private var totalSets: Int {
-        sortedExercises.flatMap(\.sets).count
+        sortedExercises.flatMap(\.setItems).count
     }
 
     private var formattedDate: String {
@@ -1103,7 +1118,7 @@ private struct LastWorkoutExerciseCard: View {
     let onToggleSet: (WorkoutSet) -> Void
 
     private var sortedSets: [WorkoutSet] {
-        exercise.sets.sorted { $0.orderIndex < $1.orderIndex }
+        exercise.setItems.sorted { $0.orderIndex < $1.orderIndex }
     }
 
     private var completedCount: Int {

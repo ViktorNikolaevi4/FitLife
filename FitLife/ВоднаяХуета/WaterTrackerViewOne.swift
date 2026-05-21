@@ -29,8 +29,7 @@ struct WaterTrackerViewOne: View {
 
     // прогресс для кольца 0...1
     private var ringProgress: Double {
-        guard dailyGoal > 0 else { return 0 }
-        return min(waterIntake / dailyGoal, 1)
+        safeProgress(current: waterIntake, goal: dailyGoal)
     }
 
     private var waterRingTrack: Color {
@@ -117,15 +116,17 @@ struct WaterTrackerViewOne: View {
     private var dailyGoal: Double {
         guard let user = userData else { return 0 }
         let m: Double = switch selectedTemperature { case .cold: 30; case .warm: 35; case .hot: 40 }
-        return (user.weight * m) / 1000.0
+        return ((user.weight.safeFinite * m) / 1000.0).safeFinite
     }
     private var waterPercentage: Double {
-        guard dailyGoal > 0 else { return 0 }
-        return min((waterIntake / dailyGoal) * 100, 100)
+        (safeProgress(current: waterIntake, goal: dailyGoal) * 100).clamped(to: 0...100)
     }
 
     // MARK: - Данные
-    private func addWater(amount: Double) { waterIntake += amount; saveWaterIntake() }
+    private func addWater(amount: Double) {
+        waterIntake = (waterIntake.safeFinite + amount.safeFinite).safeFinite
+        saveWaterIntake()
+    }
 
     private func ensureUserIfNeeded() {
         if userData == nil {
@@ -142,9 +143,9 @@ struct WaterTrackerViewOne: View {
             if let existing = all.first(where: {
                 Calendar.current.isDate($0.date, inSameDayAs: today) && $0.user?.id == user.id
             }) {
-                existing.intake = waterIntake
+                existing.intake = waterIntake.safeFinite
             } else {
-                let entry = WaterIntake(date: today, intake: waterIntake, gender: user.gender, ownerId: user.ownerId)
+                let entry = WaterIntake(date: today, intake: waterIntake.safeFinite, gender: user.gender, ownerId: user.ownerId)
                 entry.user = user; modelContext.insert(entry)
             }
             try? modelContext.save()
@@ -159,7 +160,7 @@ struct WaterTrackerViewOne: View {
             if let existing = all.first(where: {
                 Calendar.current.isDate($0.date, inSameDayAs: today) && $0.user?.id == user.id
             }) {
-                waterIntake = existing.intake
+                waterIntake = existing.intake.safeFinite
             } else { waterIntake = 0 }
         } catch { waterIntake = 0 }
     }

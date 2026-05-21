@@ -246,10 +246,10 @@ final class ClientAssignedWorkoutsStore: ObservableObject {
                         metricType: remoteSet.metricType
                     )
                     set.exercise = exercise
-                    exercise.sets.append(set)
+                    exercise.setItems.append(set)
                 }
 
-                workout.exercises.append(exercise)
+                workout.exerciseItems.append(exercise)
             }
 
             modelContext.insert(workout)

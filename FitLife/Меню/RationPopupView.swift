@@ -400,30 +400,34 @@ struct RationPopupView: View {
     private var totalProteins: Int {
         [breakfastEntries, lunchEntries, dinnerEntries, snacksEntries]
             .flatMap { $0 }
-            .reduce(0) { $0 + Int($1.product?.protein ?? 0) }
+            .reduce(0) { $0 + Int(max(($1.product?.protein ?? 0).safeFinite, 0)) }
     }
 
     private var totalFats: Int {
         [breakfastEntries, lunchEntries, dinnerEntries, snacksEntries]
             .flatMap { $0 }
-            .reduce(0) { $0 + Int($1.product?.fat ?? 0) }
+            .reduce(0) { $0 + Int(max(($1.product?.fat ?? 0).safeFinite, 0)) }
     }
 
     private var totalCarbs: Int {
         [breakfastEntries, lunchEntries, dinnerEntries, snacksEntries]
             .flatMap { $0 }
-            .reduce(0) { $0 + Int($1.product?.carbs ?? 0) }
+            .reduce(0) { $0 + Int(max(($1.product?.carbs ?? 0).safeFinite, 0)) }
     }
 
     private func calculateMacros(for product: Product) -> (protein: Double, fat: Double, carbs: Double) {
         let portion = currentPortionValue
-        let factor = portion / 100
-        return (product.protein * factor, product.fat * factor, product.carbs * factor)
+        let factor = (portion / 100).safeFinite
+        return (
+            max(product.protein.safeFinite * factor, 0),
+            max(product.fat.safeFinite * factor, 0),
+            max(product.carbs.safeFinite * factor, 0)
+        )
     }
 
     private func calculateCalories(for product: Product) -> Int {
         let p = currentPortionValue
-        return Int(Double(product.calories) * p / 100)
+        return max(Int((Double(product.calories).safeFinite * p.safeFinite / 100).rounded()), 0)
     }
 
     private var currentPortionValue: Double {
@@ -437,7 +441,7 @@ struct RationPopupView: View {
     }
 
     private func clampedPortion(_ value: Double) -> Double {
-        min(max(value, 1), maxFoodPortionGrams)
+        min(max(value.safeFinite, 1), maxFoodPortionGrams)
     }
 
     // MARK: — Загрузка из SwiftData
@@ -466,13 +470,13 @@ struct RationPopupView: View {
     private func addGenericProductToMeal(_ product: Product, portion: Double, gender: Gender) {
         guard let meal = activeMeal else { return }
         let safePortion = clampedPortion(portion)
-        let factor = safePortion / 100
+        let factor = (safePortion / 100).safeFinite
         let adjusted = Product(
             name:     product.name,
-            protein:  product.protein * factor,
-            fat:      product.fat * factor,
-            carbs:    product.carbs * factor,
-            calories: Int(Double(product.calories) * factor),
+            protein:  max(product.protein.safeFinite * factor, 0),
+            fat:      max(product.fat.safeFinite * factor, 0),
+            carbs:    max(product.carbs.safeFinite * factor, 0),
+            calories: max(Int((Double(product.calories).safeFinite * factor).rounded()), 0),
             isFavorite: product.isFavorite,
             isCustom:   product.isCustom
         )

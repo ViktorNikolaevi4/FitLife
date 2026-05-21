@@ -21,7 +21,7 @@ struct ActiveWorkoutScreen: View {
     private let firestore = Firestore.firestore()
 
     private var sortedExercises: [WorkoutExercise] {
-        workout.exercises.sorted { $0.orderIndex < $1.orderIndex }
+        workout.exerciseItems.sorted { $0.orderIndex < $1.orderIndex }
     }
     private var activeWorkoutCardShadow: Color { colorScheme == .dark ? .clear : .black.opacity(0.08) }
     private var workoutTitle: String {
@@ -312,7 +312,7 @@ struct ActiveWorkoutScreen: View {
 
     private func collapseExercisesIfNeeded() {
         var hasChanges = false
-        for exercise in workout.exercises where exercise.isExpanded {
+        for exercise in workout.exerciseItems where exercise.isExpanded {
             exercise.isExpanded = false
             hasChanges = true
         }
@@ -327,8 +327,8 @@ struct ActiveWorkoutScreen: View {
     }
 
     private func addSet(to exercise: WorkoutExercise) {
-        let nextIndex = exercise.sets.count
-        let lastSet = exercise.sets.sorted { $0.orderIndex < $1.orderIndex }.last
+        let nextIndex = exercise.setItems.count
+        let lastSet = exercise.setItems.sorted { $0.orderIndex < $1.orderIndex }.last
         let set = WorkoutSet(
             orderIndex: nextIndex,
             weight: lastSet?.weight ?? 20,
@@ -337,19 +337,19 @@ struct ActiveWorkoutScreen: View {
             metricType: lastSet?.metricType ?? .reps
         )
         set.exercise = exercise
-        exercise.sets.append(set)
+        exercise.setItems.append(set)
         try? modelContext.save()
     }
 
     private func deleteSet(_ set: WorkoutSet, from exercise: WorkoutExercise) {
-        exercise.sets.removeAll { $0.id == set.id }
+        exercise.setItems.removeAll { $0.id == set.id }
         modelContext.delete(set)
         reindexSets(in: exercise)
         try? modelContext.save()
     }
 
     private func deleteExercise(_ exercise: WorkoutExercise) {
-        workout.exercises.removeAll { $0.id == exercise.id }
+        workout.exerciseItems.removeAll { $0.id == exercise.id }
         modelContext.delete(exercise)
         reindexExercises()
         try? modelContext.save()
@@ -372,7 +372,7 @@ struct ActiveWorkoutScreen: View {
     }
 
     private func addExercise(draft: WorkoutExerciseDraft) {
-        let index = workout.exercises.count
+        let index = workout.exerciseItems.count
         let exercise = WorkoutExercise(
             name: draft.name,
             systemImage: draft.systemImage,
@@ -390,10 +390,10 @@ struct ActiveWorkoutScreen: View {
                 metricType: setPreset.metricType
             )
             set.exercise = exercise
-            exercise.sets.append(set)
+            exercise.setItems.append(set)
         }
 
-        workout.exercises.append(exercise)
+        workout.exerciseItems.append(exercise)
         try? modelContext.save()
     }
 
@@ -417,7 +417,7 @@ struct ActiveWorkoutScreen: View {
     }
 
     private func reindexExercises() {
-        for (index, exercise) in workout.exercises
+        for (index, exercise) in workout.exerciseItems
             .sorted(by: { $0.orderIndex < $1.orderIndex })
             .enumerated() {
             exercise.orderIndex = index
@@ -425,7 +425,7 @@ struct ActiveWorkoutScreen: View {
     }
 
     private func reindexSets(in exercise: WorkoutExercise) {
-        for (index, item) in exercise.sets
+        for (index, item) in exercise.setItems
             .sorted(by: { $0.orderIndex < $1.orderIndex })
             .enumerated() {
             item.orderIndex = index
