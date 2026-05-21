@@ -67,10 +67,30 @@ struct NutritionScreen: View {
                 } label: {
                     Label(AppLocalizer.string("ai.meal.action"), systemImage: "camera.viewfinder")
                         .font(.headline)
+                        .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
+                        .padding(.vertical, 18)
+                        .background {
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color(hex: "347DFF"),
+                                            Color(hex: "1257E8")
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                        }
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .stroke(Color.white.opacity(0.16), lineWidth: 1)
+                        }
+                        .shadow(color: HomeDarkColors.blue.opacity(colorScheme == .dark ? 0.30 : 0.22), radius: 20, x: 0, y: 10)
+                        .shadow(color: .black.opacity(colorScheme == .dark ? 0.34 : 0.12), radius: 14, x: 0, y: 8)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.plain)
                 .padding(.horizontal)
 
                 VStack(spacing: 12) {

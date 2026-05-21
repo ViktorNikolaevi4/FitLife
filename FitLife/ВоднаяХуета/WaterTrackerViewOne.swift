@@ -33,6 +33,10 @@ struct WaterTrackerViewOne: View {
         return min(waterIntake / dailyGoal, 1)
     }
 
+    private var waterRingTrack: Color {
+        theme.isDark ? HomeDarkColors.blue.opacity(0.16) : theme.ringTrack
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
@@ -52,7 +56,7 @@ struct WaterTrackerViewOne: View {
                         Donut(
                             progress: ringProgress,
                             lineWidth: 14,
-                            track: theme.ringTrack,
+                            track: waterRingTrack,
                             gradient: theme.ringGradient
                         )
                         .frame(width: 220, height: 220)
