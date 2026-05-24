@@ -40,10 +40,12 @@ struct WaterTrackerViewOne: View {
         NavigationStack {
             VStack(spacing: 16) {
 
-                Picker(AppLocalizer.string("water.temperature.title"), selection: $selectedTemperature) {
-                    ForEach(WaterTemperature.allCases, id: \.self) { Text($0.displayName).tag($0) }
-                }
-                .pickerStyle(.segmented)
+                PremiumSegmentedPicker(
+                    items: WaterTemperature.allCases.map { temperature in
+                        (value: temperature, title: temperature.displayName)
+                    },
+                    selection: $selectedTemperature
+                )
                 .padding(.horizontal)
 
                 Spacer()

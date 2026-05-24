@@ -42,7 +42,7 @@ struct ProfileScreen: View {
                     }
 
                     SectionCard(title: AppLocalizer.string("profile.gender")) {
-                        ProfileSegmentedPicker(
+                        PremiumSegmentedPicker(
                             items: Gender.allCases.map { ($0, $0.displayName) },
                             selection: $editingGender
                         )
@@ -60,7 +60,7 @@ struct ProfileScreen: View {
 
                         SectionCard(title: AppLocalizer.string("activity.title")) {
                             VStack(alignment: .leading, spacing: 12) {
-                                ProfileSegmentedPicker(
+                                PremiumSegmentedPicker(
                                     items: ActivityLevel.allCases.map { ($0, $0.displayName) },
                                     selection: $u.activityLevel
                                 )
@@ -75,7 +75,7 @@ struct ProfileScreen: View {
 
                         SectionCard(title: AppLocalizer.string("goal.title")) {
                             VStack(alignment: .leading, spacing: 12) {
-                                ProfileSegmentedPicker(
+                                PremiumSegmentedPicker(
                                     items: WeightGoal.allCases.map { ($0, goalDisplayName($0)) },
                                     selection: $u.goal
                                 )
@@ -90,7 +90,7 @@ struct ProfileScreen: View {
 
                         SectionCard(title: AppLocalizer.string("profile.nutrition_goals")) {
                             VStack(alignment: .leading, spacing: 14) {
-                                ProfileSegmentedPicker(
+                                PremiumSegmentedPicker(
                                     items: NutritionGoalMode.allCases.map { ($0, AppLocalizer.string($0.titleKey)) },
                                     selection: $u.nutritionGoalMode
                                 )
@@ -430,7 +430,7 @@ struct ProfileScreen: View {
     }
 }
 
-private struct ProfileSegmentedPicker<Selection: Hashable>: View {
+struct PremiumSegmentedPicker<Selection: Hashable>: View {
     let items: [(value: Selection, title: String)]
     @Binding var selection: Selection
 
@@ -474,7 +474,7 @@ private struct ProfileSegmentedPicker<Selection: Hashable>: View {
                     Rectangle()
                         .fill(theme.border)
                         .frame(width: 1)
-                        .padding(.vertical, 8)
+                        .frame(height: 22)
                         .opacity(selection == item.value || selection == items[index + 1].value ? 0 : 1)
                 }
             }
@@ -1229,6 +1229,10 @@ private struct ProgressSummaryGrid: View {
     let waterGoalDays: Int
     let weight: Int
 
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var theme: AppTheme { AppTheme(colorScheme) }
+
     var body: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 2), spacing: 10) {
             summaryCard(
@@ -1260,9 +1264,7 @@ private struct ProgressSummaryGrid: View {
 
     private func summaryCard(title: String, value: String, subtitle: String, icon: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: icon)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.secondary)
+            ProfileIconTile(systemImage: icon, tint: theme.accent, size: 34, cornerRadius: 10)
 
             Text(value)
                 .font(.system(size: 26, weight: .bold))
@@ -1292,13 +1294,13 @@ private struct ProgressMetricRow: View {
     let value: String
     let subtitle: String
 
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var theme: AppTheme { AppTheme(colorScheme) }
+
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .frame(width: 34, height: 34)
-                .background(Circle().fill(Color(.tertiarySystemBackground)))
+            ProfileIconTile(systemImage: icon, tint: theme.accent, size: 34, cornerRadius: 10)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)

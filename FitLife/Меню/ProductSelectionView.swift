@@ -266,12 +266,12 @@ struct ProductSelectionView: View {
                         }
                     }
 
-                    Picker(appLanguage.localized("search.category"), selection: $selectedFilter) {
-                        ForEach(FilterType.allCases, id: \.self) { filter in
-                            Text(title(for: filter)).tag(filter)
-                        }
-                    }
-                    .pickerStyle(.segmented)
+                    PremiumSegmentedPicker(
+                        items: FilterType.allCases.map { filter in
+                            (value: filter, title: title(for: filter))
+                        },
+                        selection: $selectedFilter
+                    )
 
                     HStack(spacing: 10) {
                         Image(systemName: "magnifyingglass")
