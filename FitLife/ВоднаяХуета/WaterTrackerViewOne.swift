@@ -140,10 +140,17 @@ struct WaterTrackerViewOne: View {
     private func saveWaterIntake() {
         guard let user = userData else { return }
         let today = Calendar.current.startOfDay(for: Date())
+        guard let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today) else { return }
+        let genderRawValue = user.gender.rawValue
         do {
-            let all = try modelContext.fetch(FetchDescriptor<WaterIntake>())
+            let predicate = #Predicate<WaterIntake> {
+                $0.date >= today &&
+                $0.date < tomorrow &&
+                $0.genderRawValue == genderRawValue
+            }
+            let all = try modelContext.fetch(FetchDescriptor<WaterIntake>(predicate: predicate))
             if let existing = all.first(where: {
-                Calendar.current.isDate($0.date, inSameDayAs: today) && $0.user?.id == user.id
+                $0.ownerId == user.ownerId || $0.user?.id == user.id
             }) {
                 existing.intake = waterIntake.safeFinite
             } else {
@@ -157,10 +164,20 @@ struct WaterTrackerViewOne: View {
     private func loadWaterIntake() {
         guard let user = userData else { waterIntake = 0; return }
         let today = Calendar.current.startOfDay(for: Date())
+        guard let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today) else {
+            waterIntake = 0
+            return
+        }
+        let genderRawValue = user.gender.rawValue
         do {
-            let all = try modelContext.fetch(FetchDescriptor<WaterIntake>())
+            let predicate = #Predicate<WaterIntake> {
+                $0.date >= today &&
+                $0.date < tomorrow &&
+                $0.genderRawValue == genderRawValue
+            }
+            let all = try modelContext.fetch(FetchDescriptor<WaterIntake>(predicate: predicate))
             if let existing = all.first(where: {
-                Calendar.current.isDate($0.date, inSameDayAs: today) && $0.user?.id == user.id
+                $0.ownerId == user.ownerId || $0.user?.id == user.id
             }) {
                 waterIntake = existing.intake.safeFinite
             } else { waterIntake = 0 }

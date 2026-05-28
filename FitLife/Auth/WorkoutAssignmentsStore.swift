@@ -297,13 +297,20 @@ final class ClientAssignedWorkoutsStore: ObservableObject {
         for assignment: WorkoutAssignment,
         modelContext: ModelContext
     ) -> WorkoutSession? {
-        let descriptor = FetchDescriptor<WorkoutSession>()
-        let workouts = (try? modelContext.fetch(descriptor)) ?? []
-        return workouts.first(where: {
-            $0.ownerId == assignment.clientId &&
-            $0.remoteAssignmentId == assignment.id &&
+        let clientId = assignment.clientId
+        let assignmentId = assignment.id
+        let predicate = #Predicate<WorkoutSession> {
+            $0.ownerId == clientId &&
+            $0.remoteAssignmentId == assignmentId &&
             $0.endedAt == nil
-        })
+        }
+        var descriptor = FetchDescriptor<WorkoutSession>(
+            predicate: predicate,
+            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+        )
+        descriptor.fetchLimit = 1
+        let workouts = (try? modelContext.fetch(descriptor)) ?? []
+        return workouts.first
     }
 }
 

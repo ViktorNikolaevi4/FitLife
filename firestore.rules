@@ -1,0 +1,325 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function currentUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isOwner() {
+      return isSignedIn()
+        && currentUserDoc().data.role == "owner"
+        && currentUserDoc().data.isActive == true;
+    }
+
+    function isTrainer() {
+      return isSignedIn()
+        && currentUserDoc().data.role == "trainer"
+        && currentUserDoc().data.isActive == true;
+    }
+
+    function isClient() {
+      return isSignedIn()
+        && currentUserDoc().data.role == "client"
+        && currentUserDoc().data.isActive == true;
+    }
+
+    function trainerHasClientAccess(userId) {
+      return isTrainer()
+        && exists(/databases/$(database)/documents/trainer_client_links/$(request.auth.uid + "_" + userId))
+        && get(/databases/$(database)/documents/trainer_client_links/$(request.auth.uid + "_" + userId)).data.status == "active";
+    }
+
+    function clientHasTrainerAccess(trainerId) {
+      return isClient()
+        && exists(/databases/$(database)/documents/trainer_client_links/$(trainerId + "_" + request.auth.uid))
+        && get(/databases/$(database)/documents/trainer_client_links/$(trainerId + "_" + request.auth.uid)).data.status == "active";
+    }
+
+    function trainerOwnsAssignment(assignmentId) {
+      return get(/databases/$(database)/documents/workout_assignments/$(assignmentId)).data.trainerId == request.auth.uid;
+    }
+
+    function trainerOwnsAssignmentAfter(assignmentId) {
+      return getAfter(/databases/$(database)/documents/workout_assignments/$(assignmentId)).data.trainerId == request.auth.uid;
+    }
+
+    function clientOwnsAssignment(assignmentId) {
+      return get(/databases/$(database)/documents/workout_assignments/$(assignmentId)).data.clientId == request.auth.uid;
+    }
+
+    match /users/{userId} {
+      function isSelf() {
+        return isSignedIn() && request.auth.uid == userId;
+      }
+
+      function isValidUserCreate() {
+        return isSelf()
+          && request.resource.data.keys().hasOnly([
+            "uid",
+            "email",
+            "displayName",
+            "role",
+            "createdAt",
+            "isActive"
+          ])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.email is string
+          && request.resource.data.displayName is string
+          && request.resource.data.role == "client"
+          && request.resource.data.createdAt is timestamp
+          && request.resource.data.isActive == true;
+      }
+
+      function isSafeSelfUserUpdate() {
+        return isSelf()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "displayName",
+            "preferredLanguage",
+            "fcmTokens",
+            "lastFCMToken",
+            "pushTokenUpdatedAt"
+          ]);
+      }
+
+      allow read: if isOwner()
+        || isSelf()
+        || trainerHasClientAccess(userId)
+        || (isClient() && resource.data.role == "trainer" && resource.data.isActive == true)
+        || (isTrainer() && resource.data.role == "trainer" && resource.data.isActive == true);
+
+      allow create: if isValidUserCreate();
+
+      allow update: if isOwner()
+        || isSafeSelfUserUpdate();
+
+      allow delete: if isOwner()
+        || isSelf();
+    }
+
+    match /trainer_client_links/{linkId} {
+      allow read: if isOwner()
+        || (isTrainer() && resource.data.trainerId == request.auth.uid)
+        || (isClient() && resource.data.clientId == request.auth.uid);
+
+      allow create, update: if isOwner();
+
+      allow delete: if isOwner();
+    }
+
+    match /client_intakes/{clientId} {
+      allow read: if isOwner()
+        || trainerHasClientAccess(clientId)
+        || (isSignedIn() && request.auth.uid == clientId);
+
+      allow create, update: if isSignedIn()
+        && request.auth.uid == clientId;
+
+      allow delete: if isOwner();
+    }
+
+    match /coaching_requests/{requestId} {
+      allow read: if isOwner()
+        || isTrainer()
+        || (isSignedIn() && request.auth.uid == requestId);
+
+      allow create: if isClient()
+        && request.auth.uid == requestId
+        && request.resource.data.clientId == request.auth.uid;
+
+      allow update: if isOwner()
+        || isTrainer()
+        || (
+          isClient()
+          && request.auth.uid == requestId
+          && request.resource.data.clientId == request.auth.uid
+        );
+
+      allow delete: if isOwner();
+    }
+
+    match /progress_checkins/{checkInId} {
+      allow read: if isOwner()
+        || (isTrainer() && resource.data.trainerId == request.auth.uid)
+        || (isClient() && resource.data.clientId == request.auth.uid);
+
+      allow create: if isClient()
+        && request.resource.data.clientId == request.auth.uid
+        && clientHasTrainerAccess(request.resource.data.trainerId);
+
+      allow update: if isOwner();
+
+      allow delete: if isOwner()
+        || (isClient() && resource.data.clientId == request.auth.uid);
+    }
+
+    match /profile_update_requests/{requestId} {
+      allow read: if isOwner()
+        || (isTrainer() && resource.data.trainerId == request.auth.uid)
+        || (isClient() && resource.data.clientId == request.auth.uid);
+
+      allow create: if isTrainer()
+        && request.resource.data.trainerId == request.auth.uid
+        && trainerHasClientAccess(request.resource.data.clientId);
+
+      allow update: if isOwner()
+        || (isTrainer() && resource.data.trainerId == request.auth.uid)
+        || (
+          isClient()
+          && resource.data.clientId == request.auth.uid
+          && request.resource.data.clientId == resource.data.clientId
+          && request.resource.data.trainerId == resource.data.trainerId
+          && request.resource.data.type == resource.data.type
+          && request.resource.data.message == resource.data.message
+        );
+
+      allow delete: if isOwner();
+    }
+
+    match /coaching_notes/{noteId} {
+      allow read: if isOwner()
+        || (isTrainer() && resource.data.trainerId == request.auth.uid)
+        || (isClient() && resource.data.clientId == request.auth.uid);
+
+      allow create: if isSignedIn()
+        && (
+          (
+            isTrainer()
+            && request.resource.data.trainerId == request.auth.uid
+            && request.resource.data.authorId == request.auth.uid
+            && request.resource.data.authorRole == "trainer"
+            && trainerHasClientAccess(request.resource.data.clientId)
+          )
+          || (
+            isClient()
+            && request.resource.data.clientId == request.auth.uid
+            && request.resource.data.authorId == request.auth.uid
+            && request.resource.data.authorRole == "client"
+            && clientHasTrainerAccess(request.resource.data.trainerId)
+          )
+        );
+
+      allow update: if isOwner();
+
+      allow delete: if isOwner()
+        || (
+          isTrainer()
+          && resource.data.trainerId == request.auth.uid
+          && resource.data.authorId == request.auth.uid
+          && resource.data.authorRole == "trainer"
+        )
+        || (
+          isClient()
+          && resource.data.clientId == request.auth.uid
+          && resource.data.authorId == request.auth.uid
+          && resource.data.authorRole == "client"
+        );
+    }
+
+    match /coaching_workout_reports/{reportId} {
+      allow read: if isOwner()
+        || (isTrainer() && resource.data.trainerId == request.auth.uid)
+        || (isClient() && resource.data.clientId == request.auth.uid);
+
+      allow create: if isClient()
+        && request.resource.data.clientId == request.auth.uid
+        && clientHasTrainerAccess(request.resource.data.trainerId);
+
+      allow update: if isOwner();
+
+      allow delete: if isOwner()
+        || (isClient() && resource.data.clientId == request.auth.uid);
+    }
+
+    match /coaching_nutrition_reports/{reportId} {
+      allow read: if isOwner()
+        || (isTrainer() && resource.data.trainerId == request.auth.uid)
+        || (isClient() && resource.data.clientId == request.auth.uid);
+
+      allow create: if isClient()
+        && request.resource.data.clientId == request.auth.uid
+        && clientHasTrainerAccess(request.resource.data.trainerId);
+
+      allow update: if isOwner();
+
+      allow delete: if isOwner()
+        || (isClient() && resource.data.clientId == request.auth.uid);
+    }
+
+    match /notification_events/{eventId} {
+      allow read: if isOwner()
+        || (isSignedIn() && resource.data.recipientId == request.auth.uid);
+
+      allow create: if isSignedIn()
+        && request.resource.data.senderId == request.auth.uid
+        && request.resource.data.recipientId is string
+        && request.resource.data.type is string;
+
+      allow update: if isOwner()
+        || (
+          isSignedIn()
+          && resource.data.recipientId == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "isRead",
+            "isArchived"
+          ])
+        );
+
+      allow delete: if isOwner();
+    }
+
+    match /workout_templates/{templateId} {
+      allow create: if isTrainer()
+        && request.auth.uid == request.resource.data.trainerId;
+
+      allow read, update, delete: if isTrainer()
+        && resource.data.trainerId == request.auth.uid;
+
+      match /exercises/{exerciseId} {
+        allow read, write: if isTrainer()
+          && get(/databases/$(database)/documents/workout_templates/$(templateId)).data.trainerId == request.auth.uid;
+      }
+    }
+
+    match /workout_assignments/{assignmentId} {
+      allow create: if isTrainer()
+        && request.auth.uid == request.resource.data.trainerId
+        && trainerHasClientAccess(request.resource.data.clientId);
+
+      allow read: if isOwner()
+        || (isTrainer() && resource.data.trainerId == request.auth.uid)
+        || (isClient() && resource.data.clientId == request.auth.uid);
+
+      allow update: if isOwner()
+        || (isTrainer() && resource.data.trainerId == request.auth.uid)
+        || (
+          isClient()
+          && resource.data.clientId == request.auth.uid
+          && request.resource.data.trainerId == resource.data.trainerId
+          && request.resource.data.clientId == resource.data.clientId
+          && request.resource.data.templateId == resource.data.templateId
+          && request.resource.data.titleSnapshot == resource.data.titleSnapshot
+          && request.resource.data.notesSnapshot == resource.data.notesSnapshot
+          && request.resource.data.exerciseCount == resource.data.exerciseCount
+          && request.resource.data.assignedAt == resource.data.assignedAt
+          && request.resource.data.status in ["started", "completed"]
+        );
+
+      allow delete: if isOwner()
+        || (isTrainer() && resource.data.trainerId == request.auth.uid);
+
+      match /exercises/{exerciseId} {
+        allow read: if isOwner()
+          || (isTrainer() && trainerOwnsAssignment(assignmentId))
+          || (isClient() && clientOwnsAssignment(assignmentId));
+
+        allow create, update, delete: if isTrainer()
+          && trainerOwnsAssignmentAfter(assignmentId);
+      }
+    }
+  }
+}
