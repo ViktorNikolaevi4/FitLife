@@ -160,6 +160,200 @@ enum RationSheet: Identifiable {
 
 // MARK: - Главный экран
 
+struct TodayFocusCard: View {
+    let focus: TodayFocus
+    let theme: AppTheme
+    let onAction: () -> Void
+
+    private var eyebrow: String {
+        AppLocalizer.currentLanguage == .russian ? "Фокус дня" : "Today focus"
+    }
+
+    var body: some View {
+        Button(action: onAction) {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    focus.tint.opacity(theme.isDark ? 0.92 : 0.18),
+                                    theme.accentDeep.opacity(theme.isDark ? 0.44 : 0.08)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(focus.tint.opacity(theme.isDark ? 0.18 : 0.12), lineWidth: HomeDarkMetrics.strokeWidth)
+                        }
+
+                    Image(systemName: focus.systemImage)
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(theme.isDark ? Color.white : focus.tint)
+                }
+                .frame(width: 52, height: 52)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(eyebrow)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(theme.tertiaryText)
+                        .textCase(.uppercase)
+
+                    Text(focus.title)
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(theme.primaryText)
+                        .lineLimit(1)
+
+                    Text(focus.subtitle)
+                        .font(.subheadline)
+                        .foregroundStyle(theme.secondaryText)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+
+                Spacer(minLength: 8)
+
+                Text(focus.actionTitle)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(Color.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background {
+                        Capsule(style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [theme.accent, theme.accentDeep],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    }
+                    .shadow(color: theme.accent.opacity(theme.isDark ? 0.22 : 0.16), radius: 12, x: 0, y: 6)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(16)
+        .adaptiveHomeCard(theme: theme, cornerRadius: HomeDarkMetrics.cardCornerRadius)
+        .padding(.horizontal)
+    }
+}
+
+struct WeekRhythmCard: View {
+    let snapshot: WeekRhythmSnapshot
+    let theme: AppTheme
+    var includesHorizontalPadding = true
+
+    private var legendText: String {
+        AppLocalizer.currentLanguage == .russian ? "Еда • вода • тренировки" : "Nutrition • water • workouts"
+    }
+
+    private var calendar: Calendar {
+        Calendar.current
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(theme.accent.opacity(theme.isDark ? 0.16 : 0.12))
+
+                    Image(systemName: "flame.fill")
+                        .font(.system(size: 21, weight: .semibold))
+                        .foregroundStyle(theme.accent)
+                }
+                .frame(width: 48, height: 48)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(snapshot.title)
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(theme.primaryText)
+
+                    Text(snapshot.subtitle)
+                        .font(.subheadline)
+                        .foregroundStyle(theme.secondaryText)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 8)
+
+                Text(snapshot.progressText)
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(theme.accent)
+                    .monospacedDigit()
+            }
+
+            HStack(spacing: 8) {
+                ForEach(snapshot.days) { day in
+                    VStack(spacing: 7) {
+                        ZStack {
+                            Circle()
+                                .fill(dotFill(for: day))
+                                .frame(width: 28, height: 28)
+                                .overlay {
+                                    Circle()
+                                        .stroke(dotStroke(for: day), lineWidth: HomeDarkMetrics.strokeWidth)
+                                }
+
+                            if day.score >= 3 {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(Color.white)
+                            } else if day.score > 0 {
+                                Text("\(day.score)")
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(theme.isDark ? Color.white.opacity(0.92) : theme.accent)
+                            }
+                        }
+
+                        Text(weekdayText(for: day.date))
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(calendar.isDateInToday(day.date) ? theme.accent : theme.tertiaryText)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+
+            Text(legendText)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(theme.tertiaryText)
+        }
+        .padding(18)
+        .adaptiveHomeCard(theme: theme, cornerRadius: HomeDarkMetrics.cardCornerRadius)
+        .padding(.horizontal, includesHorizontalPadding ? 16 : 0)
+    }
+
+    private func dotFill(for day: WeekRhythmDay) -> Color {
+        switch day.score {
+        case 3:
+            return theme.accent
+        case 2:
+            return theme.accent.opacity(theme.isDark ? 0.48 : 0.26)
+        case 1:
+            return theme.accent.opacity(theme.isDark ? 0.22 : 0.14)
+        default:
+            return theme.isDark ? Color.white.opacity(0.055) : Color.black.opacity(0.045)
+        }
+    }
+
+    private func dotStroke(for day: WeekRhythmDay) -> Color {
+        day.score > 0 ? theme.accent.opacity(0.26) : theme.border
+    }
+
+    private func weekdayText(for date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = AppLocalizer.currentLanguage.locale
+        formatter.setLocalizedDateFormatFromTemplate("EEEEE")
+        return formatter.string(from: date).uppercased()
+    }
+}
+
 struct WaterSummaryCard: View {
     let intake: Double
     let goal: Double

@@ -41,6 +41,7 @@ struct MainTabView: View {
                 DashboardScreen(
                     selectedDate: $selectedDate,
                     showsFloatingAddButton: $showsHomeFloatingAddButton,
+                    onOpenNutrition: { selectedTab = .nutrition },
                     onOpenWorkouts: { selectedTab = .workouts }
                 )
                     .id(refreshID)

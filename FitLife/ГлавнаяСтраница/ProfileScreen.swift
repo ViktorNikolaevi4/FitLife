@@ -966,6 +966,7 @@ private struct ProfileProgressScreen: View {
     @Query private var foodEntries: [FoodEntry]
     @Query private var waterEntries: [WaterIntake]
     @Query(sort: \BodyMeasurements.date, order: .reverse) private var measurements: [BodyMeasurements]
+    @Environment(\.colorScheme) private var colorScheme
 
     private var calendar: Calendar { .current }
     private var weekStart: Date {
@@ -981,9 +982,16 @@ private struct ProfileProgressScreen: View {
 
     var body: some View {
         let snapshot = makeSnapshot()
+        let theme = AppTheme(colorScheme)
 
         ScrollView(showsIndicators: false) {
             LazyVStack(spacing: 16) {
+                WeekRhythmCard(
+                    snapshot: snapshot.weekRhythm,
+                    theme: theme,
+                    includesHorizontalPadding: false
+                )
+
                 ProgressSummaryGrid(
                     workouts: snapshot.weekWorkoutsCount,
                     averageCalories: snapshot.averageCaloriesThisWeek,
@@ -1087,8 +1095,13 @@ private struct ProfileProgressScreen: View {
         var completedSetsThisWeek = 0
         var trainingVolumeThisWeek = 0.0
         var totalWorkoutSecondsThisMonth = 0
+        var workoutDays = Set<Date>()
 
         for workout in workouts where workout.ownerId == ownerId && workout.gender == gender && workout.endedAt != nil {
+            if let endedAt = workout.endedAt, endedAt >= weekStart {
+                workoutDays.insert(calendar.startOfDay(for: endedAt))
+            }
+
             if workout.createdAt >= weekStart {
                 weekWorkoutsCount += 1
 
@@ -1110,9 +1123,11 @@ private struct ProfileProgressScreen: View {
 
         var caloriesByDay: [Date: Int] = [:]
         var proteinByDay: [Date: Double] = [:]
+        var nutritionDays = Set<Date>()
 
         for entry in foodEntries where entry.ownerId == ownerId && entry.gender == gender && entry.date >= weekStart {
             let day = calendar.startOfDay(for: entry.date)
+            nutritionDays.insert(day)
             caloriesByDay[day, default: 0] += entry.product?.calories ?? 0
             proteinByDay[day, default: 0] += (entry.product?.protein ?? 0).safeFinite
         }
@@ -1122,6 +1137,7 @@ private struct ProfileProgressScreen: View {
         let nutritionDaysInTarget = nutritionTargetDays(from: caloriesByDay.values)
 
         var waterByDay: [Date: Double] = [:]
+        var waterGoalDaySet = Set<Date>()
 
         for entry in waterEntries where entry.gender == gender && entry.date >= weekStart {
             let ownerMatches = entry.ownerId == ownerId || entry.user?.id == userData.id
@@ -1135,11 +1151,21 @@ private struct ProfileProgressScreen: View {
         let waterGoalDays = waterGoalLiters > 0
             ? waterTotals.filter { $0 >= waterGoalLiters }.count
             : 0
+        if waterGoalLiters > 0 {
+            for (day, intake) in waterByDay where intake >= waterGoalLiters {
+                waterGoalDaySet.insert(day)
+            }
+        }
 
         let latestMeasurement = measurements.first { measurement in
             guard let ownerId else { return false }
             return measurement.ownerId == ownerId
         }
+        let weekRhythm = makeWeekRhythm(
+            nutritionDays: nutritionDays,
+            waterGoalDays: waterGoalDaySet,
+            workoutDays: workoutDays
+        )
 
         return ProfileProgressSnapshot(
             weekWorkoutsCount: weekWorkoutsCount,
@@ -1152,8 +1178,27 @@ private struct ProfileProgressScreen: View {
             nutritionDaysInTarget: nutritionDaysInTarget,
             averageWaterThisWeek: averageWaterThisWeek,
             waterGoalDays: waterGoalDays,
+            weekRhythm: weekRhythm,
             latestMeasurement: latestMeasurement
         )
+    }
+
+    private func makeWeekRhythm(
+        nutritionDays: Set<Date>,
+        waterGoalDays: Set<Date>,
+        workoutDays: Set<Date>
+    ) -> WeekRhythmSnapshot {
+        let days = (0..<7).compactMap { offset -> WeekRhythmDay? in
+            guard let day = calendar.date(byAdding: .day, value: offset, to: weekStart) else { return nil }
+            return WeekRhythmDay(
+                date: day,
+                hasNutrition: nutritionDays.contains(day),
+                hasWaterGoal: waterGoalDays.contains(day),
+                hasWorkout: workoutDays.contains(day)
+            )
+        }
+
+        return WeekRhythmSnapshot(days: days)
     }
 
     private func average(values: [Int]) -> Int {
@@ -1219,6 +1264,7 @@ private struct ProfileProgressScreen: View {
         let nutritionDaysInTarget: Int
         let averageWaterThisWeek: Double
         let waterGoalDays: Int
+        let weekRhythm: WeekRhythmSnapshot
         let latestMeasurement: BodyMeasurements?
     }
 }
