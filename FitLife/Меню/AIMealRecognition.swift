@@ -12,6 +12,7 @@ private enum AIMealRecognitionError: LocalizedError {
     case emptyIngredients
     case cameraUnavailable
     case apiError
+    case network
     case microphonePermissionDenied
     case speechPermissionDenied
     case speechUnavailable
@@ -30,6 +31,8 @@ private enum AIMealRecognitionError: LocalizedError {
             return AppLocalizer.string("ai.meal.error.camera")
         case .apiError:
             return AppLocalizer.string("ai.meal.error.request")
+        case .network:
+            return AppLocalizer.string("ai.meal.error.network")
         case .microphonePermissionDenied:
             return AppLocalizer.string("ai.voice.error.microphone_permission")
         case .speechPermissionDenied:
@@ -572,7 +575,14 @@ private actor AIMealRecognitionService {
             ]
         ])
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch is URLError {
+            throw AIMealRecognitionError.network
+        }
+
         guard let httpResponse = response as? HTTPURLResponse else {
             throw AIMealRecognitionError.invalidResponse
         }

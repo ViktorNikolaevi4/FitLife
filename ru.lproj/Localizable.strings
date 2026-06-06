@@ -26,6 +26,7 @@
 "ai.meal.error.empty" = "ИИ не смог выделить ингредиенты на фото.";
 "ai.meal.error.camera" = "Камера недоступна на этом устройстве.";
 "ai.meal.error.request" = "Ошибка запроса к OpenAI.";
+"ai.meal.error.network" = "Не удалось подключиться к OpenAI. Проверьте интернет, VPN или домашнюю сеть и попробуйте ещё раз.";
 "ai.meal.retry" = "Попробовать ещё раз";
 "ai.meal.retake" = "Переснять";
 "ai.meal.choose_again" = "Выбрать другое";

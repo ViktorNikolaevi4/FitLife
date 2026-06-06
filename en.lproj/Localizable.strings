@@ -26,6 +26,7 @@
 "ai.meal.error.empty" = "AI could not identify any ingredients in the photo.";
 "ai.meal.error.camera" = "The camera is not available on this device.";
 "ai.meal.error.request" = "OpenAI request failed.";
+"ai.meal.error.network" = "Could not connect to OpenAI. Check your internet connection, VPN, or home network and try again.";
 "ai.meal.retry" = "Try Again";
 "ai.meal.retake" = "Retake";
 "ai.meal.choose_again" = "Choose Another";
