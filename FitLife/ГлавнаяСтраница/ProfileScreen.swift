@@ -560,15 +560,15 @@ private struct ManualNutritionGoalsEditor: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
-    @State private var proteins: String
-    @State private var fats: String
-    @State private var carbs: String
+    @State private var proteins: Int
+    @State private var fats: Int
+    @State private var carbs: Int
 
     init(userData: UserData) {
         self.userData = userData
-        _proteins = State(initialValue: "\(userData.proteins)")
-        _fats = State(initialValue: "\(userData.fats)")
-        _carbs = State(initialValue: "\(userData.carbs)")
+        _proteins = State(initialValue: userData.proteins)
+        _fats = State(initialValue: userData.fats)
+        _carbs = State(initialValue: userData.carbs)
     }
 
     var body: some View {
@@ -609,9 +609,30 @@ private struct ManualNutritionGoalsEditor: View {
                         )
 
                         VStack(spacing: 12) {
-                            macroField(title: AppLocalizer.string("macro.protein"), text: $proteins, unit: AppLocalizer.string("unit.grams.short"))
-                            macroField(title: AppLocalizer.string("macro.fat"), text: $fats, unit: AppLocalizer.string("unit.grams.short"))
-                            macroField(title: AppLocalizer.string("macro.carbs"), text: $carbs, unit: AppLocalizer.string("unit.grams.short"))
+                            macroField(
+                                title: AppLocalizer.string("macro.protein"),
+                                value: $proteins,
+                                unit: AppLocalizer.string("unit.grams.short"),
+                                systemImage: "leaf.fill",
+                                tint: HomeDarkColors.green,
+                                range: 0...500
+                            )
+                            macroField(
+                                title: AppLocalizer.string("macro.fat"),
+                                value: $fats,
+                                unit: AppLocalizer.string("unit.grams.short"),
+                                systemImage: "drop.fill",
+                                tint: Color(hex: "FFD60A"),
+                                range: 0...300
+                            )
+                            macroField(
+                                title: AppLocalizer.string("macro.carbs"),
+                                value: $carbs,
+                                unit: AppLocalizer.string("unit.grams.short"),
+                                systemImage: "circle.grid.2x2.fill",
+                                tint: Color(hex: "7B61FF"),
+                                range: 0...700
+                            )
                         }
                     }
                     .padding(.horizontal, 20)
@@ -628,7 +649,6 @@ private struct ManualNutritionGoalsEditor: View {
                     .font(.body.weight(.semibold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .disabled(!isValid)
                 }
                 .background(Color(.systemBackground))
             }
@@ -646,69 +666,107 @@ private struct ManualNutritionGoalsEditor: View {
         .presentationDetents([.medium, .large])
     }
 
-    private var isValid: Bool {
-        parsedValue(proteins) != nil &&
-        parsedValue(fats) != nil &&
-        parsedValue(carbs) != nil
-    }
-
     private var calculatedCalories: Int {
-        let proteinsValue = parsedValue(proteins) ?? 0
-        let fatsValue = parsedValue(fats) ?? 0
-        let carbsValue = parsedValue(carbs) ?? 0
-        return (proteinsValue * 4) + (fatsValue * 9) + (carbsValue * 4)
+        (proteins * 4) + (fats * 9) + (carbs * 4)
     }
 
-    private func macroField(title: String, text: Binding<String>, unit: String) -> some View {
-        HStack(spacing: 14) {
-            Text(title)
-                .font(.body.weight(.medium))
-
-            Spacer()
-
-            TextField("0", text: text)
-                .keyboardType(.numberPad)
-                .multilineTextAlignment(.trailing)
-                .frame(width: 88)
-                .font(.body.weight(.semibold))
-
-            Text(unit)
-                .foregroundStyle(.secondary)
-                .frame(width: 18, alignment: .trailing)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 15)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(profileCardBackground)
+    private func macroField(
+        title: String,
+        value: Binding<Int>,
+        unit: String,
+        systemImage: String,
+        tint: Color,
+        range: ClosedRange<Int>
+    ) -> some View {
+        ManualMacroGoalRow(
+            title: title,
+            value: value,
+            unit: unit,
+            systemImage: systemImage,
+            tint: tint,
+            range: range
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(profileCardBorder)
-        )
-    }
-
-    private func parsedValue(_ text: String) -> Int? {
-        guard let value = Int(text.trimmingCharacters(in: .whitespacesAndNewlines)), value >= 0 else {
-            return nil
-        }
-        return value
     }
 
     private func save() {
-        guard
-            let proteinsValue = parsedValue(proteins),
-            let fatsValue = parsedValue(fats),
-            let carbsValue = parsedValue(carbs)
-        else { return }
-
         userData.nutritionGoalMode = .manual
-        userData.calories = (proteinsValue * 4) + (fatsValue * 9) + (carbsValue * 4)
-        userData.proteins = proteinsValue
-        userData.fats = fatsValue
-        userData.carbs = carbsValue
+        userData.calories = calculatedCalories
+        userData.proteins = proteins
+        userData.fats = fats
+        userData.carbs = carbs
         try? modelContext.save()
         dismiss()
+    }
+}
+
+private struct ManualMacroGoalRow: View {
+    let title: String
+    @Binding var value: Int
+    let unit: String
+    let systemImage: String
+    let tint: Color
+    let range: ClosedRange<Int>
+
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var showPicker = false
+
+    private var theme: AppTheme { AppTheme(colorScheme) }
+
+    var body: some View {
+        Button {
+            showPicker = true
+        } label: {
+            HStack(spacing: 14) {
+                ProfileIconTile(systemImage: systemImage, tint: tint, size: 34, cornerRadius: 10)
+
+                Text(title)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(theme.primaryText)
+
+                Spacer(minLength: 8)
+
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text("\(value)")
+                        .font(.title3.weight(.bold))
+                        .monospacedDigit()
+                        .foregroundStyle(theme.primaryText)
+
+                    Text(unit)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(theme.secondaryText)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background {
+                    Capsule(style: .continuous)
+                        .fill(theme.accent.opacity(theme.isDark ? 0.16 : 0.10))
+                }
+
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(theme.tertiaryText)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
+            .background {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(profileCardBackground)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(profileCardBorder)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showPicker) {
+            ProfileScreen.NumberWheelPickerInt(
+                title: title,
+                value: $value,
+                range: range,
+                unit: unit
+            )
+        }
     }
 }
 

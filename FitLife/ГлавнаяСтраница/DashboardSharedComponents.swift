@@ -540,9 +540,9 @@ struct BalanceCard: View {
 
     private var ringCaption: String {
         switch mode {
-        case .target:    return "ккал"
-        case .consumed:  return "съедено"
-        case .remaining: return "осталось"
+        case .target:    return AppLocalizer.string("unit.kcal")
+        case .consumed:  return AppLocalizer.string("balance.consumed")
+        case .remaining: return AppLocalizer.string("balance.remaining")
         }
     }
 
@@ -632,7 +632,7 @@ struct BalanceCard: View {
                                 .lineLimit(1)
                                 .contentTransition(.numericText())
 
-                            Text("ккал")
+                            Text(ringCaption)
                                 .font(.caption.weight(.medium))
                                 .foregroundStyle(theme.tertiaryText)
                         }

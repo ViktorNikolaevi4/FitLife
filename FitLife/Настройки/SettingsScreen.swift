@@ -193,15 +193,13 @@ struct SettingsScreen: View {
                 }
 
                 Section(appLanguage.localized("settings.language.section")) {
-                    Picker(
-                        appLanguage.localized("settings.language.label"),
+                    PremiumSegmentedPicker(
+                        items: AppLanguage.allCases.map { language in
+                            (value: language.rawValue, title: language.displayName)
+                        },
                         selection: $appLanguageRaw
-                    ) {
-                        ForEach(AppLanguage.allCases) { language in
-                            Text(language.displayName).tag(language.rawValue)
-                        }
-                    }
-                    .pickerStyle(.segmented)
+                    )
+                    .padding(.vertical, 2)
                 }
 
                 Section {
