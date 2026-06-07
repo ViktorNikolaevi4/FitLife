@@ -1672,6 +1672,7 @@ private struct GroupedAIMealEditorSelection: Identifiable, Hashable {
 private struct PortionEditorScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
 
     let entry: FoodEntry
     var onSave: (Double) -> Void
@@ -1696,6 +1697,8 @@ private struct PortionEditorScreen: View {
         min(max(1, (Double(gramsText) ?? entry.portionSafe).safeFinite), maxFoodPortionGrams)
     }
 
+    private var theme: AppTheme { AppTheme(colorScheme) }
+
     private struct CustomProductPortionEditorSelection: Identifiable {
         let product: CustomProduct
         var id: UUID { product.id }
@@ -1704,60 +1707,26 @@ private struct PortionEditorScreen: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 20) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(entry.product?.name ?? AppLocalizer.string("product.default"))
-                        .font(.title3.weight(.semibold))
-                        .multilineTextAlignment(.leading)
-                        .lineLimit(2)
+                PortionHeaderCard(
+                    title: entry.product?.name ?? AppLocalizer.string("product.default"),
+                    subtitle: AppLocalizer.string("search.per_100g"),
+                    theme: theme
+                )
 
-                    Text(AppLocalizer.string("search.per_100g"))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-
-                VStack(spacing: 16) {
-                    HStack(spacing: 14) {
-                        stepperButton(systemImage: "minus") {
-                            updateGrams(by: -10)
-                        }
-
-                        HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            TextField("100", text: $gramsText)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.center)
-                                .font(.system(size: 36, weight: .bold, design: .rounded))
-                                .onChange(of: gramsText) { gramsText = sanitizeFoodPortionText(gramsText) }
-
-                            Text(AppLocalizer.string("unit.grams.short"))
-                                .font(.headline)
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity)
-
-                        stepperButton(systemImage: "plus") {
-                            updateGrams(by: 10)
-                        }
-                    }
-                }
-                .padding(18)
-                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24))
+                PortionAmountControl(
+                    gramsText: $gramsText,
+                    theme: theme,
+                    onMinus: { updateGrams(by: -10) },
+                    onPlus: { updateGrams(by: 10) }
+                )
 
                 if let pr = entry.product {
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text(AppLocalizer.format("entry.will_be_kcal", max(Int((Double(pr.calories).safeFinite * previewScale).rounded()), 0)))
-                            .font(.system(size: 30, weight: .bold))
-
-                        VStack(spacing: 10) {
-                            PortionMetricRow(title: AppLocalizer.string("macro.protein"), value: max(pr.protein.safeFinite * previewScale, 0))
-                            PortionMetricRow(title: AppLocalizer.string("macro.fat"), value: max(pr.fat.safeFinite * previewScale, 0))
-                            PortionMetricRow(title: AppLocalizer.string("macro.carbs"), value: max(pr.carbs.safeFinite * previewScale, 0))
-                        }
-                    }
-                    .padding(18)
-                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 24)
-                            .stroke(Color(.separator).opacity(0.22))
+                    PortionNutritionSummaryCard(
+                        calories: max(Int((Double(pr.calories).safeFinite * previewScale).rounded()), 0),
+                        protein: max(pr.protein.safeFinite * previewScale, 0),
+                        fat: max(pr.fat.safeFinite * previewScale, 0),
+                        carbs: max(pr.carbs.safeFinite * previewScale, 0),
+                        theme: theme
                     )
                 }
 
@@ -1779,11 +1748,7 @@ private struct PortionEditorScreen: View {
                     onSave(gramsValue)
                     dismiss()
                 }
-                .font(.headline.weight(.semibold))
-                .foregroundStyle(Color(.systemBackground))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 18)
-                .background(RoundedRectangle(cornerRadius: 20).fill(Color.primary))
+                .buttonStyle(PortionPrimaryButtonStyle(theme: theme))
 
                 Button(AppLocalizer.string("common.delete"), role: .destructive) {
                     onDelete()
@@ -1815,16 +1780,6 @@ private struct PortionEditorScreen: View {
         gramsText = String(next)
     }
 
-    private func stepperButton(systemImage: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.headline.weight(.semibold))
-                .frame(width: 42, height: 42)
-                .background(Color(.secondarySystemBackground), in: Circle())
-        }
-        .buttonStyle(.plain)
-    }
-
     private var linkedCustomProduct: CustomProduct? {
         guard let customProductID = entry.customProductID else { return nil }
         let predicate = #Predicate<CustomProduct> { product in
@@ -1851,12 +1806,19 @@ private struct PortionEditorScreen: View {
 private struct PortionMetricRow: View {
     let title: String
     let value: Double
+    let tint: Color
 
     var body: some View {
-        HStack {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(tint)
+                .frame(width: 8, height: 8)
+
             Text(title)
                 .font(.body.weight(.medium))
+
             Spacer()
+
             Text(String(format: "%.1f %@", max(value.safeFinite, 0), AppLocalizer.string("unit.grams.short")))
                 .font(.body.weight(.semibold))
                 .foregroundStyle(.secondary)
@@ -1866,6 +1828,7 @@ private struct PortionMetricRow: View {
 
 private struct GroupedAIMealPortionEditorScreen: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
 
     let title: String
     let entries: [FoodEntry]
@@ -1911,73 +1874,37 @@ private struct GroupedAIMealPortionEditorScreen: View {
         entries.reduce(0.0) { $0 + ($1.product?.carbs ?? 0).safeFinite }
     }
 
+    private var theme: AppTheme { AppTheme(colorScheme) }
+
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 20) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(title)
-                        .font(.title3.weight(.semibold))
-                        .multilineTextAlignment(.leading)
-                        .lineLimit(2)
+                PortionHeaderCard(
+                    title: title,
+                    subtitle: AppLocalizer.string("search.per_100g"),
+                    theme: theme
+                )
 
-                    Text(AppLocalizer.string("search.per_100g"))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
+                PortionAmountControl(
+                    gramsText: $gramsText,
+                    theme: theme,
+                    onMinus: { updateGrams(by: -10) },
+                    onPlus: { updateGrams(by: 10) }
+                )
 
-                VStack(spacing: 16) {
-                    HStack(spacing: 14) {
-                        stepperButton(systemImage: "minus") {
-                            updateGrams(by: -10)
-                        }
-
-                        HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            TextField("100", text: $gramsText)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.center)
-                                .font(.system(size: 36, weight: .bold, design: .rounded))
-                                .onChange(of: gramsText) { gramsText = sanitizeFoodPortionText(gramsText) }
-
-                            Text(AppLocalizer.string("unit.grams.short"))
-                                .font(.headline)
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity)
-
-                        stepperButton(systemImage: "plus") {
-                            updateGrams(by: 10)
-                        }
-                    }
-                }
-                .padding(18)
-                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24))
-
-                VStack(alignment: .leading, spacing: 14) {
-                    Text(AppLocalizer.format("entry.will_be_kcal", max(Int((Double(totalCalories).safeFinite * previewScale).rounded()), 0)))
-                        .font(.system(size: 30, weight: .bold))
-
-                    VStack(spacing: 10) {
-                        PortionMetricRow(title: AppLocalizer.string("macro.protein"), value: max(totalProtein * previewScale, 0))
-                        PortionMetricRow(title: AppLocalizer.string("macro.fat"), value: max(totalFat * previewScale, 0))
-                        PortionMetricRow(title: AppLocalizer.string("macro.carbs"), value: max(totalCarbs * previewScale, 0))
-                    }
-                }
-                .padding(18)
-                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24)
-                        .stroke(Color(.separator).opacity(0.22))
+                PortionNutritionSummaryCard(
+                    calories: max(Int((Double(totalCalories).safeFinite * previewScale).rounded()), 0),
+                    protein: max(totalProtein * previewScale, 0),
+                    fat: max(totalFat * previewScale, 0),
+                    carbs: max(totalCarbs * previewScale, 0),
+                    theme: theme
                 )
 
                 Button(AppLocalizer.string("common.save")) {
                     onSave(gramsValue)
                     dismiss()
                 }
-                .font(.headline.weight(.semibold))
-                .foregroundStyle(Color(.systemBackground))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 18)
-                .background(RoundedRectangle(cornerRadius: 20).fill(Color.primary))
+                .buttonStyle(PortionPrimaryButtonStyle(theme: theme))
 
                 Button(AppLocalizer.string("common.delete"), role: .destructive) {
                     onDelete()
@@ -2000,14 +1927,170 @@ private struct GroupedAIMealPortionEditorScreen: View {
         gramsText = String(next)
     }
 
+}
+
+private struct PortionHeaderCard: View {
+    let title: String
+    let subtitle: String
+    let theme: AppTheme
+
+    var body: some View {
+        HStack(spacing: 14) {
+            PortionIconTile(systemImage: "fork.knife", tint: theme.accent)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title)
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(theme.primaryText)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.82)
+
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(theme.secondaryText)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .lightweightAdaptiveHomeCard(theme: theme, cornerRadius: 22)
+    }
+}
+
+private struct PortionIconTile: View {
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 18, weight: .semibold))
+            .foregroundStyle(tint)
+            .frame(width: 46, height: 46)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [tint.opacity(0.18), tint.opacity(0.08)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(tint.opacity(0.16), lineWidth: 1)
+            }
+    }
+}
+
+private struct PortionAmountControl: View {
+    @Binding var gramsText: String
+    let theme: AppTheme
+    let onMinus: () -> Void
+    let onPlus: () -> Void
+
+    var body: some View {
+        HStack(spacing: 14) {
+            stepperButton(systemImage: "minus", action: onMinus)
+
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                TextField("100", text: $gramsText)
+                    .keyboardType(.numberPad)
+                    .multilineTextAlignment(.center)
+                    .font(.system(size: 40, weight: .bold, design: .rounded))
+                    .foregroundStyle(theme.primaryText)
+                    .monospacedDigit()
+                    .frame(width: 134)
+                    .onChange(of: gramsText) { gramsText = sanitizeFoodPortionText(gramsText) }
+
+                Text(AppLocalizer.string("unit.grams.short"))
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(theme.secondaryText)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 11)
+            .background {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(theme.accent.opacity(theme.isDark ? 0.14 : 0.08))
+            }
+
+            stepperButton(systemImage: "plus", action: onPlus)
+        }
+        .padding(14)
+        .lightweightAdaptiveHomeCard(theme: theme, cornerRadius: 24)
+    }
+
     private func stepperButton(systemImage: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.headline.weight(.semibold))
-                .frame(width: 42, height: 42)
-                .background(Color(.secondarySystemBackground), in: Circle())
+                .font(.title3.weight(.bold))
+                .foregroundStyle(theme.accent)
+                .frame(width: 48, height: 48)
+                .background {
+                    Circle()
+                        .fill(theme.accent.opacity(theme.isDark ? 0.18 : 0.12))
+                }
+                .overlay {
+                    Circle()
+                        .stroke(theme.accent.opacity(theme.isDark ? 0.28 : 0.18), lineWidth: 1)
+                }
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct PortionNutritionSummaryCard: View {
+    let calories: Int
+    let protein: Double
+    let fat: Double
+    let carbs: Double
+    let theme: AppTheme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(AppLocalizer.format("entry.will_be_kcal", calories))
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .foregroundStyle(theme.primaryText)
+                    .minimumScaleFactor(0.76)
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+            }
+
+            VStack(spacing: 10) {
+                PortionMetricRow(title: AppLocalizer.string("macro.protein"), value: protein, tint: theme.protein)
+                PortionMetricRow(title: AppLocalizer.string("macro.fat"), value: fat, tint: theme.fat)
+                PortionMetricRow(title: AppLocalizer.string("macro.carbs"), value: carbs, tint: theme.carb)
+            }
+        }
+        .padding(18)
+        .lightweightAdaptiveHomeCard(theme: theme, cornerRadius: 24)
+    }
+}
+
+private struct PortionPrimaryButtonStyle: ButtonStyle {
+    let theme: AppTheme
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline.weight(.semibold))
+            .foregroundStyle(Color.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 18)
+            .background {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [theme.accent, theme.accentDeep],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+            .shadow(color: theme.accent.opacity(theme.isDark ? 0.22 : 0.16), radius: 14, x: 0, y: 7)
+            .opacity(configuration.isPressed ? 0.82 : 1)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
     }
 }
 
