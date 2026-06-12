@@ -113,8 +113,8 @@
 "repeat_yesterday.subtitle" = "Review products and portions before adding.";
 "repeat_yesterday.save" = "Add to today's meal";
 
-"about.app_name" = "My Nutrition!";
-"about.description" = "My Nutrition! is an assistant app. We provide guidance and help track progress, but we do not diagnose or prescribe treatment. For medical questions, consult a doctor.";
+"about.app_name" = "Welcome to FitLife!";
+"about.description" = "We are a team of coaches and nutrition specialists ready to help you build nutrition, training, and healthy habits.\n\nYour coaches will send workout assignments, track your progress, and help you move toward your goal. In the app, you can keep a food, water, and workout diary, follow your dynamics, and receive recommendations from our team.\n\nFitLife does not replace a doctor and does not diagnose medical conditions. For medical questions, consult a specialist.";
 
 "icloud.checking" = "Checking…";
 "icloud.title.checking" = "Checking iCloud…";
