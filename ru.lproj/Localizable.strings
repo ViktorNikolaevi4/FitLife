@@ -549,7 +549,8 @@
 "workout.exercise.battle_ropes" = "Канат";
 "workout.exercise.jump_rope" = "Скакалка";
 "workout.exercise.custom" = "Новое упражнение";
-"training.diary" = "Тренировочный дневник";
+"training.diary" = "Тренер и дневник";
+"training.diary.subtitle" = "Тренировки, задания и связь с тренером";
 "training.start" = "Начать";
 "dashboard.profile_auto_created" = "Профиль будет создан автоматически при первом запуске.";
 

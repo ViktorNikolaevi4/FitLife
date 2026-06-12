@@ -486,7 +486,7 @@ struct TrainingDiaryCard: View {
                         .foregroundStyle(theme.primaryText)
                         .lineLimit(2)
 
-                    Text(AppLocalizer.string("workouts.new.subtitle"))
+                    Text(AppLocalizer.string("training.diary.subtitle"))
                         .font(.subheadline)
                         .foregroundStyle(theme.secondaryText)
                         .lineLimit(2)

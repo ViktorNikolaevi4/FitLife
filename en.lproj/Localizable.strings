@@ -549,7 +549,8 @@
 "workout.exercise.battle_ropes" = "Battle Ropes";
 "workout.exercise.jump_rope" = "Jump Rope";
 "workout.exercise.custom" = "New Exercise";
-"training.diary" = "Training diary";
+"training.diary" = "Coach and diary";
+"training.diary.subtitle" = "Workouts, assignments, and coach connection";
 "training.start" = "Start";
 "dashboard.profile_auto_created" = "A profile will be created automatically on first launch.";
 
