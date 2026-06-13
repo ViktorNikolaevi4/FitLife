@@ -67,20 +67,27 @@ class Product {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else { return true }
 
-        if name.localizedCaseInsensitiveContains(needle) {
+        let searchableValues = [name, nameEN ?? "", barcode ?? ""]
+
+        if searchableValues.contains(where: { $0.localizedCaseInsensitiveContains(needle) }) {
             return true
         }
 
-        if let englishName = nameEN,
-           englishName.localizedCaseInsensitiveContains(needle) {
-            return true
-        }
+        let queryTokens = searchTokens(in: needle)
+        guard queryTokens.isEmpty == false else { return false }
 
-        if let barcode,
-           barcode.localizedCaseInsensitiveContains(needle) {
-            return true
+        return searchableValues.contains { value in
+            let valueWords = searchTokens(in: value)
+            return queryTokens.allSatisfy { token in
+                valueWords.contains { $0.hasPrefix(token) }
+            }
         }
+    }
 
-        return false
+    private func searchTokens(in value: String) -> [String] {
+        value
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
     }
 }

@@ -688,7 +688,7 @@ struct ProductSelectionView: View {
 
         let customMatches = trimmedSearch.isEmpty
             ? customProducts
-            : customProducts.filter { $0.name.localizedCaseInsensitiveContains(trimmedSearch) }
+            : customProducts.filter { searchRank(for: $0.name, query: trimmedSearch) < 6 }
 
         filteredCustomProductsCache = sortedCustomProducts(customMatches)
     }
@@ -712,7 +712,15 @@ struct ProductSelectionView: View {
     }
 
     private func sortedProducts(_ products: [Product]) -> [Product] {
-        products.sorted { a, b in
+        let trimmedSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return products.sorted { a, b in
+            if !trimmedSearch.isEmpty {
+                let rankA = searchRank(for: a, query: trimmedSearch)
+                let rankB = searchRank(for: b, query: trimmedSearch)
+                if rankA != rankB { return rankA < rankB }
+            }
+
             let ca = usageCounts[a.name] ?? 0
             let cb = usageCounts[b.name] ?? 0
             if ca != cb { return ca > cb }
@@ -721,12 +729,95 @@ struct ProductSelectionView: View {
     }
 
     private func sortedCustomProducts(_ products: [CustomProduct]) -> [CustomProduct] {
-        products.sorted { a, b in
+        let trimmedSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return products.sorted { a, b in
+            if !trimmedSearch.isEmpty {
+                let rankA = searchRank(for: a.name, query: trimmedSearch)
+                let rankB = searchRank(for: b.name, query: trimmedSearch)
+                if rankA != rankB { return rankA < rankB }
+            }
+
             let ca = usageCounts[a.name] ?? 0
             let cb = usageCounts[b.name] ?? 0
             if ca != cb { return ca > cb }
             return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
         }
+    }
+
+    private func searchRank(for product: Product, query: String) -> Int {
+        let names = [
+            product.displayName(preferredLanguageCode: searchLanguage.rawValue),
+            product.name,
+            product.nameEN ?? ""
+        ]
+
+        let bestNameRank = names
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .map { searchRank(for: $0, query: query) }
+            .min() ?? 7
+
+        if bestNameRank < 6 {
+            return bestNameRank
+        }
+
+        if let barcode = product.barcode,
+           barcode.localizedCaseInsensitiveContains(query) {
+            return 6
+        }
+
+        return 7
+    }
+
+    private func searchRank(for text: String, query: String) -> Int {
+        let normalizedText = normalizedSearchString(text)
+        let normalizedQuery = normalizedSearchString(query)
+        guard !normalizedQuery.isEmpty else { return 6 }
+
+        if normalizedText == normalizedQuery {
+            return 0
+        }
+
+        if normalizedText.hasPrefix(normalizedQuery) {
+            return 1
+        }
+
+        let words = normalizedText.components(separatedBy: CharacterSet.alphanumerics.inverted)
+        if words.contains(where: { $0.hasPrefix(normalizedQuery) }) {
+            return 2
+        }
+
+        if normalizedText.contains(normalizedQuery) {
+            return 3
+        }
+
+        let queryTokens = searchTokens(in: normalizedQuery)
+        let textWords = searchTokens(in: normalizedText)
+        if !queryTokens.isEmpty,
+           queryTokens.allSatisfy({ token in
+               textWords.contains { $0.hasPrefix(token) }
+           }) {
+            return 4
+        }
+
+        if !queryTokens.isEmpty,
+           queryTokens.allSatisfy({ token in normalizedText.contains(token) }) {
+            return 5
+        }
+
+        return 6
+    }
+
+    private func normalizedSearchString(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: locale)
+    }
+
+    private func searchTokens(in value: String) -> [String] {
+        normalizedSearchString(value)
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
     }
 
     // Частоты использования по FoodEntry (по имени продукта)
