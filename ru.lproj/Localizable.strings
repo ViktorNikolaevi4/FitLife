@@ -791,6 +791,7 @@
 "custom_product.subtitle" = "БЖУ указывайте на 100 г продукта";
 "custom_product.name" = "Наименование";
 "custom_product.calories" = "Энергия, ккал";
+"custom_product.macros_section" = "БЖУ";
 "custom_product.protein" = "Белки, г.";
 "custom_product.fat" = "Жиры, г.";
 "custom_product.carbs" = "Углеводы, г.";

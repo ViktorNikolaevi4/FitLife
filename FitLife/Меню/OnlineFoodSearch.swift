@@ -140,10 +140,71 @@ actor ProductSearchCoordinator {
 
 actor USDAFoodService {
     private var cache: [String: [Product]] = [:]
+    private var cacheAccessOrder: [String] = []
+    private let maxCacheEntries = 80
+    private let persistentCacheKey = "usda.food.search.cache.v1"
+
+    private struct PersistentCache: Codable {
+        let keys: [String]
+        let productsByKey: [String: [ProductSnapshot]]
+    }
+
+    private struct ProductSnapshot: Codable {
+        let name: String
+        let nameEN: String?
+        let protein: Double
+        let fat: Double
+        let carbs: Double
+        let calories: Int
+        let barcode: String?
+
+        init(product: Product) {
+            name = product.name
+            nameEN = product.nameEN
+            protein = product.protein
+            fat = product.fat
+            carbs = product.carbs
+            calories = product.calories
+            barcode = product.barcode
+        }
+
+        var product: Product {
+            Product(
+                name: name,
+                nameEN: nameEN,
+                protein: protein,
+                fat: fat,
+                carbs: carbs,
+                calories: calories,
+                barcode: barcode,
+                source: .usda
+            )
+        }
+    }
+
+    init() {
+        guard let data = UserDefaults.standard.data(forKey: persistentCacheKey),
+              let persistentCache = try? JSONDecoder().decode(PersistentCache.self, from: data) else {
+            return
+        }
+
+        cacheAccessOrder = Array(persistentCache.keys.suffix(maxCacheEntries))
+        cache = Dictionary<String, [Product]>(
+            uniqueKeysWithValues: cacheAccessOrder.compactMap { key -> (String, [Product])? in
+                guard let snapshots = persistentCache.productsByKey[key] else { return nil }
+                return (key, snapshots.map(\.product))
+            }
+        )
+    }
 
     func searchFoods(matching query: String) async -> Result<[Product], USDAServiceError> {
-        let cacheKey = query.lowercased()
+        let cacheKey = normalizedCacheKey(query)
         if let cached = cache[cacheKey] {
+            markCacheKeyAsUsed(cacheKey)
+            return .success(cached)
+        }
+
+        if let cached = cachedPrefixProducts(matching: cacheKey) {
             return .success(cached)
         }
 
@@ -181,12 +242,73 @@ actor USDAFoodService {
 
             let products = deduplicated(decoded.foods.compactMap { $0.makeProduct() })
             guard !products.isEmpty else {
+                if let cached = cachedPrefixProducts(matching: cacheKey) {
+                    return .success(cached)
+                }
                 return .failure(.emptyFoods)
             }
-            cache[cacheKey] = products
+            store(products, for: cacheKey)
             return .success(products)
         } catch {
+            if let cached = cachedPrefixProducts(matching: cacheKey) {
+                return .success(cached)
+            }
             return .failure(.invalidResponse)
+        }
+    }
+
+    private func normalizedCacheKey(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+    }
+
+    private func store(_ products: [Product], for key: String) {
+        cache[key] = products
+        markCacheKeyAsUsed(key)
+
+        while cacheAccessOrder.count > maxCacheEntries {
+            let oldestKey = cacheAccessOrder.removeFirst()
+            cache[oldestKey] = nil
+        }
+
+        persistCache()
+    }
+
+    private func markCacheKeyAsUsed(_ key: String) {
+        cacheAccessOrder.removeAll { $0 == key }
+        cacheAccessOrder.append(key)
+    }
+
+    private func cachedPrefixProducts(matching query: String) -> [Product]? {
+        guard query.count >= 3 else { return nil }
+
+        let matchingKeys = cacheAccessOrder
+            .reversed()
+            .filter { $0.hasPrefix(query) }
+
+        guard !matchingKeys.isEmpty else { return nil }
+
+        let products = matchingKeys.flatMap { cache[$0] ?? [] }
+        let deduplicatedProducts = deduplicated(products)
+        return deduplicatedProducts.isEmpty ? nil : Array(deduplicatedProducts.prefix(20))
+    }
+
+    private func persistCache() {
+        let productsByKey = Dictionary<String, [ProductSnapshot]>(
+            uniqueKeysWithValues: cacheAccessOrder.compactMap { key -> (String, [ProductSnapshot])? in
+                guard let products = cache[key] else { return nil }
+                return (key, products.map(ProductSnapshot.init))
+            }
+        )
+
+        let persistentCache = PersistentCache(
+            keys: cacheAccessOrder,
+            productsByKey: productsByKey
+        )
+
+        if let data = try? JSONEncoder().encode(persistentCache) {
+            UserDefaults.standard.set(data, forKey: persistentCacheKey)
         }
     }
 

@@ -791,6 +791,7 @@
 "custom_product.subtitle" = "Enter nutrition values per 100 g of product";
 "custom_product.name" = "Name";
 "custom_product.calories" = "Energy, kcal";
+"custom_product.macros_section" = "Macros";
 "custom_product.protein" = "Protein, g";
 "custom_product.fat" = "Fat, g";
 "custom_product.carbs" = "Carbs, g";
