@@ -469,7 +469,7 @@ private struct CreateWorkoutExerciseTemplateScreen: View {
                         .foregroundStyle(Color(.systemBackground))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(RoundedRectangle(cornerRadius: 18).fill(Color.primary))
+                        .background(RoundedRectangle(cornerRadius: 18).fill(HomeColors.primaryActionGradient))
                 }
                 .buttonStyle(.plain)
                 .disabled(trimmedName.isEmpty)
@@ -661,7 +661,7 @@ private struct WorkoutExerciseSetupScreen: View {
                         .foregroundStyle(Color(.systemBackground))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(RoundedRectangle(cornerRadius: 18).fill(Color.primary))
+                        .background(RoundedRectangle(cornerRadius: 18).fill(HomeColors.primaryActionGradient))
                 }
                 .buttonStyle(.plain)
             }

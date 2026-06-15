@@ -6,6 +6,16 @@ private let activeWorkoutCardBackground = Color(.secondarySystemBackground)
 private let activeWorkoutInsetBackground = Color(.tertiarySystemBackground)
 private let activeWorkoutCardBorder = Color(.separator).opacity(0.40)
 
+private func localizedWorkoutSessionTitle(_ title: String) -> String {
+    let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+    if trimmedTitle.isEmpty ||
+        trimmedTitle == "Активная тренировка" ||
+        trimmedTitle == "Active Workout" {
+        return AppLocalizer.string("workout.active.title")
+    }
+    return trimmedTitle
+}
+
 struct ActiveWorkoutScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -25,8 +35,7 @@ struct ActiveWorkoutScreen: View {
     }
     private var activeWorkoutCardShadow: Color { colorScheme == .dark ? .clear : .black.opacity(0.08) }
     private var workoutTitle: String {
-        let trimmedTitle = workout.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmedTitle.isEmpty ? AppLocalizer.string("workout.active.title") : trimmedTitle
+        localizedWorkoutSessionTitle(workout.title)
     }
 
     private var elapsedString: String {
@@ -80,7 +89,7 @@ struct ActiveWorkoutScreen: View {
                 .foregroundStyle(Color(.systemBackground))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 18)
-                .background(RoundedRectangle(cornerRadius: 20).fill(Color.primary))
+                .background(RoundedRectangle(cornerRadius: 20).fill(HomeColors.primaryActionGradient))
                 .padding(.horizontal)
                 .padding(.bottom, 8)
                 .background(Color(.systemGroupedBackground))
@@ -471,7 +480,7 @@ private struct EditWorkoutSessionTitleScreen: View {
         self.workout = workout
         self.fallbackTitle = fallbackTitle
         self.onSave = onSave
-        _title = State(initialValue: workout.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? fallbackTitle : workout.title)
+        _title = State(initialValue: localizedWorkoutSessionTitle(workout.title))
     }
 
     var body: some View {
@@ -497,7 +506,7 @@ private struct EditWorkoutSessionTitleScreen: View {
                         .foregroundStyle(Color(.systemBackground))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(RoundedRectangle(cornerRadius: 18).fill(Color.primary))
+                        .background(RoundedRectangle(cornerRadius: 18).fill(HomeColors.primaryActionGradient))
                 }
                 .buttonStyle(.plain)
 
@@ -564,7 +573,7 @@ private struct EditWorkoutExerciseNoteScreen: View {
                         .foregroundStyle(Color(.systemBackground))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(RoundedRectangle(cornerRadius: 18).fill(Color.primary))
+                        .background(RoundedRectangle(cornerRadius: 18).fill(HomeColors.primaryActionGradient))
                 }
                 .buttonStyle(.plain)
 
@@ -631,7 +640,7 @@ private struct EditWorkoutSessionNoteScreen: View {
                         .foregroundStyle(Color(.systemBackground))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(RoundedRectangle(cornerRadius: 18).fill(Color.primary))
+                        .background(RoundedRectangle(cornerRadius: 18).fill(HomeColors.primaryActionGradient))
                 }
                 .buttonStyle(.plain)
 
@@ -715,7 +724,7 @@ private struct EditWorkoutSetScreen: View {
                             .foregroundStyle(Color(.systemBackground))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
-                            .background(RoundedRectangle(cornerRadius: 18).fill(Color.primary))
+                            .background(RoundedRectangle(cornerRadius: 18).fill(HomeColors.primaryActionGradient))
                     }
                     .buttonStyle(.plain)
 

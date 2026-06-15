@@ -1398,7 +1398,7 @@ struct CustomProductCreationView: View {
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 16) {
                     customProductHeader(
                         title: AppLocalizer.string("custom_product.new"),
                         subtitle: AppLocalizer.string("custom_product.subtitle")
@@ -1424,41 +1424,46 @@ struct CustomProductCreationView: View {
                     )
                     .onSubmit { focusedField = .protein }
 
-                    VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 16) {
                         Text(AppLocalizer.string("custom_product.macros_section"))
-                            .font(.title3.weight(.bold))
+                            .font(.title2.weight(.bold))
+                            .foregroundStyle(HomeColors.primaryText)
 
-                        HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 10) {
+                            VStack(alignment: .leading, spacing: 10) {
                                 Text(AppLocalizer.string("custom_product.protein"))
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.secondary)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(HomeColors.secondaryText)
                                 field(AppLocalizer.string("custom_product.protein"), text: $protein, field: .protein, kb: .decimalPad, submit: .next)
                                     .onSubmit { focusedField = .fat }
                             }
                             .frame(maxWidth: .infinity)
 
-                            VStack(alignment: .leading, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 10) {
                                 Text(AppLocalizer.string("custom_product.fat"))
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.secondary)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(HomeColors.secondaryText)
                                 field(AppLocalizer.string("custom_product.fat"), text: $fat, field: .fat, kb: .decimalPad, submit: .next)
                                     .onSubmit { focusedField = .carbs }
                             }
                             .frame(maxWidth: .infinity)
 
-                            VStack(alignment: .leading, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 10) {
                                 Text(AppLocalizer.string("custom_product.carbs"))
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.secondary)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(HomeColors.secondaryText)
                                 field(AppLocalizer.string("custom_product.carbs"), text: $carbs, field: .carbs, kb: .decimalPad, submit: .done)
                                     .onSubmit { focusedField = nil }
                             }
                             .frame(maxWidth: .infinity)
                         }
                     }
-                    .padding(18)
-                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24))
+                    .padding(20)
+                    .background(HomeColors.card, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .strokeBorder(HomeColors.border, lineWidth: HomeMetrics.hairlineWidth)
+                    )
 
                     VStack(spacing: 12) {
                         primaryActionButton(title: AppLocalizer.string("common.create"), action: submit)
@@ -1469,10 +1474,13 @@ struct CustomProductCreationView: View {
                         }
                     }
                 }
-                .padding(20)
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 24)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(HomeColors.background)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(HomeColors.background, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -1502,12 +1510,12 @@ struct CustomProductCreationView: View {
             .submitLabel(submit)
             .font(.body.weight(.medium))
             .padding(.horizontal, 16)
-            .padding(.vertical, 16)
-            .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+            .padding(.vertical, 14)
+            .background(HomeColors.elevatedBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(focusedField == field ? Color.blue : productSelectionCardBorder,
-                            lineWidth: focusedField == field ? 2 : 1)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(focusedField == field ? HomeColors.accent : HomeColors.border,
+                                  lineWidth: focusedField == field ? 1.4 : HomeMetrics.hairlineWidth)
             )
             .animation(.easeInOut(duration: 0.15), value: focusedField == field)
     }
@@ -1595,7 +1603,7 @@ struct CustomProductEditorScreen: View {
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 16) {
                     customProductHeader(
                         title: AppLocalizer.string("custom_product.edit"),
                         subtitle: AppLocalizer.string("custom_product.subtitle")
@@ -1621,41 +1629,46 @@ struct CustomProductEditorScreen: View {
                     )
                     .onSubmit { focusedField = .protein }
 
-                    VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 16) {
                         Text(AppLocalizer.string("custom_product.macros_section"))
-                            .font(.title3.weight(.bold))
+                            .font(.title2.weight(.bold))
+                            .foregroundStyle(HomeColors.primaryText)
 
-                        HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 10) {
+                            VStack(alignment: .leading, spacing: 10) {
                                 Text(AppLocalizer.string("custom_product.protein"))
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.secondary)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(HomeColors.secondaryText)
                                 field(AppLocalizer.string("custom_product.protein"), text: $protein, field: .protein, kb: .decimalPad, submit: .next)
                                     .onSubmit { focusedField = .fat }
                             }
                             .frame(maxWidth: .infinity)
 
-                            VStack(alignment: .leading, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 10) {
                                 Text(AppLocalizer.string("custom_product.fat"))
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.secondary)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(HomeColors.secondaryText)
                                 field(AppLocalizer.string("custom_product.fat"), text: $fat, field: .fat, kb: .decimalPad, submit: .next)
                                     .onSubmit { focusedField = .carbs }
                             }
                             .frame(maxWidth: .infinity)
 
-                            VStack(alignment: .leading, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 10) {
                                 Text(AppLocalizer.string("custom_product.carbs"))
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.secondary)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(HomeColors.secondaryText)
                                 field(AppLocalizer.string("custom_product.carbs"), text: $carbs, field: .carbs, kb: .decimalPad, submit: .done)
                                     .onSubmit { focusedField = nil }
                             }
                             .frame(maxWidth: .infinity)
                         }
                     }
-                    .padding(18)
-                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24))
+                    .padding(20)
+                    .background(HomeColors.card, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .strokeBorder(HomeColors.border, lineWidth: HomeMetrics.hairlineWidth)
+                    )
 
                     VStack(spacing: 12) {
                         primaryActionButton(title: AppLocalizer.string("common.save"), action: save)
@@ -1666,10 +1679,13 @@ struct CustomProductEditorScreen: View {
                         }
                     }
                 }
-                .padding(20)
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 24)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(HomeColors.background)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(HomeColors.background, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -1699,12 +1715,12 @@ struct CustomProductEditorScreen: View {
             .submitLabel(submit)
             .font(.body.weight(.medium))
             .padding(.horizontal, 16)
-            .padding(.vertical, 16)
-            .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+            .padding(.vertical, 14)
+            .background(HomeColors.elevatedBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(focusedField == field ? Color.blue : productSelectionCardBorder,
-                            lineWidth: focusedField == field ? 2 : 1)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(focusedField == field ? HomeColors.accent : HomeColors.border,
+                                  lineWidth: focusedField == field ? 1.4 : HomeMetrics.hairlineWidth)
             )
             .animation(.easeInOut(duration: 0.15), value: focusedField == field)
     }
@@ -1777,13 +1793,16 @@ struct CustomProductEditorScreen: View {
 }
 
 private func customProductHeader(title: String, subtitle: String) -> some View {
-    VStack(alignment: .leading, spacing: 8) {
+    VStack(alignment: .leading, spacing: 10) {
         Text(title)
-            .font(.system(size: 36, weight: .bold))
+            .font(.system(size: 34, weight: .bold))
+            .foregroundStyle(HomeColors.primaryText)
         Text(subtitle)
-            .font(.subheadline.weight(.medium))
-            .foregroundStyle(.secondary)
+            .font(.body.weight(.medium))
+            .foregroundStyle(HomeColors.secondaryText)
+            .fixedSize(horizontal: false, vertical: true)
     }
+    .padding(.bottom, 2)
 }
 
 private func customProductNameSection<FieldType: Hashable>(
@@ -1797,8 +1816,8 @@ private func customProductNameSection<FieldType: Hashable>(
 ) -> some View {
     VStack(alignment: .leading, spacing: 12) {
         Text(title)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(HomeColors.secondaryText)
         TextField(placeholder, text: text)
             .keyboardType(kb)
             .textInputAutocapitalization(.words)
@@ -1806,14 +1825,20 @@ private func customProductNameSection<FieldType: Hashable>(
             .submitLabel(submit)
             .font(.body.weight(.medium))
             .padding(.horizontal, 16)
-            .padding(.vertical, 16)
-            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24))
+            .padding(.vertical, 14)
+            .background(HomeColors.elevatedBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 24)
-                    .stroke(focusedField.wrappedValue == field ? Color.blue : productSelectionCardBorder,
-                            lineWidth: focusedField.wrappedValue == field ? 2 : 1)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(focusedField.wrappedValue == field ? HomeColors.accent : HomeColors.border,
+                                  lineWidth: focusedField.wrappedValue == field ? 1.4 : HomeMetrics.hairlineWidth)
             )
     }
+    .padding(20)
+    .background(HomeColors.card, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+    .overlay(
+        RoundedRectangle(cornerRadius: 28, style: .continuous)
+            .strokeBorder(HomeColors.border, lineWidth: HomeMetrics.hairlineWidth)
+    )
 }
 
 private func customProductCaloriesSection<FieldType: Hashable>(
@@ -1825,34 +1850,38 @@ private func customProductCaloriesSection<FieldType: Hashable>(
 ) -> some View {
     VStack(alignment: .leading, spacing: 12) {
         Text(title)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(HomeColors.secondaryText)
         TextField(placeholder, text: text)
             .keyboardType(.decimalPad)
             .textInputAutocapitalization(.never)
             .focused(focusedField, equals: field)
             .submitLabel(.next)
-            .font(.system(size: 32, weight: .bold, design: .rounded))
+            .font(.title2.weight(.semibold))
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
-            .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+            .background(HomeColors.elevatedBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(focusedField.wrappedValue == field ? Color.blue : productSelectionCardBorder,
-                            lineWidth: focusedField.wrappedValue == field ? 2 : 1)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(focusedField.wrappedValue == field ? HomeColors.accent : HomeColors.border,
+                                  lineWidth: focusedField.wrappedValue == field ? 1.4 : HomeMetrics.hairlineWidth)
             )
     }
-    .padding(18)
-    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24))
+    .padding(20)
+    .background(HomeColors.card, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+    .overlay(
+        RoundedRectangle(cornerRadius: 28, style: .continuous)
+            .strokeBorder(HomeColors.border, lineWidth: HomeMetrics.hairlineWidth)
+    )
 }
 
 private func primaryActionButton(title: String, action: @escaping () -> Void) -> some View {
     Button(title, action: action)
         .font(.headline.weight(.semibold))
-        .foregroundStyle(Color(.systemBackground))
+        .foregroundStyle(Color.white)
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 18)
-        .background(RoundedRectangle(cornerRadius: 20).fill(Color.primary))
+        .padding(.vertical, 17)
+        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(HomeColors.primaryActionGradient))
 }
 
 private func secondaryDestructiveButton(title: String, action: @escaping () -> Void) -> some View {
@@ -1860,9 +1889,13 @@ private func secondaryDestructiveButton(title: String, action: @escaping () -> V
         .font(.headline.weight(.semibold))
         .foregroundStyle(.red)
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 18)
+        .padding(.vertical, 17)
         .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color.red.opacity(0.10))
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color.red.opacity(0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(Color.red.opacity(0.08), lineWidth: HomeMetrics.hairlineWidth)
         )
 }

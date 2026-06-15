@@ -1210,7 +1210,11 @@ struct RepeatYesterdayMealEditorScreen: View {
                             .foregroundStyle(Color(.systemBackground))
                             .background(
                                 Capsule()
-                                    .fill(drafts.isEmpty ? Color.secondary.opacity(0.45) : Color.primary)
+                                    .fill(
+                                        drafts.isEmpty
+                                        ? AnyShapeStyle(Color.secondary.opacity(0.45))
+                                        : AnyShapeStyle(HomeColors.primaryActionGradient)
+                                    )
                             )
                     }
                     .buttonStyle(.plain)

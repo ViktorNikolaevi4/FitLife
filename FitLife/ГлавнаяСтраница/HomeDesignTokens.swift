@@ -8,6 +8,14 @@ enum HomeColors {
     static let secondaryText = Color(red: 0.439, green: 0.451, blue: 0.482)
     static let tertiaryText = Color(red: 0.620, green: 0.631, blue: 0.659)
     static let accent = Color(red: 0.039, green: 0.518, blue: 1.000)
+    static let primaryActionGradient = LinearGradient(
+        colors: [
+            Color(hex: "347DFF"),
+            Color(hex: "1257E8")
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
     static let border = Color.black.opacity(0.06)
     static let subtleFill = Color.black.opacity(0.045)
     static let shadow = Color.black.opacity(0.08)

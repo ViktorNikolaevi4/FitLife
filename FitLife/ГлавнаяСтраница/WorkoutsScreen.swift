@@ -1292,7 +1292,7 @@ private struct EditCompletedWorkoutExerciseNoteScreen: View {
                         .foregroundStyle(Color(.systemBackground))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(RoundedRectangle(cornerRadius: 18).fill(Color.primary))
+                        .background(RoundedRectangle(cornerRadius: 18).fill(HomeColors.primaryActionGradient))
                 }
                 .buttonStyle(.plain)
 
@@ -1370,7 +1370,7 @@ private struct EditCompletedWorkoutSessionNoteScreen: View {
                         .foregroundStyle(Color(.systemBackground))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(RoundedRectangle(cornerRadius: 18).fill(Color.primary))
+                        .background(RoundedRectangle(cornerRadius: 18).fill(HomeColors.primaryActionGradient))
                 }
                 .buttonStyle(.plain)
 
@@ -1458,7 +1458,7 @@ private struct EditCompletedWorkoutSetScreen: View {
                             .foregroundStyle(Color(.systemBackground))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
-                            .background(RoundedRectangle(cornerRadius: 18).fill(Color.primary))
+                            .background(RoundedRectangle(cornerRadius: 18).fill(HomeColors.primaryActionGradient))
                     }
                     .buttonStyle(.plain)
                 }
