@@ -331,6 +331,8 @@ private struct CreateWorkoutExerciseTemplateScreen: View {
     @State private var name: String
     @State private var selectedIcon: String
     @State private var selectedAccent: String
+    @State private var isColorPickerExpanded = false
+    @State private var isIconPickerExpanded = false
     @State private var isShowingDeleteConfirmation = false
     @FocusState private var isNameFieldFocused: Bool
 
@@ -377,9 +379,35 @@ private struct CreateWorkoutExerciseTemplateScreen: View {
 
     private let colorOptions: [ExerciseColorOption] = [
         .init(accentName: "blue"),
+        .init(accentName: "sky"),
+        .init(accentName: "cyan"),
+        .init(accentName: "teal"),
         .init(accentName: "green"),
+        .init(accentName: "mint"),
+        .init(accentName: "lime"),
+        .init(accentName: "yellow"),
+        .init(accentName: "gold"),
         .init(accentName: "orange"),
-        .init(accentName: "purple")
+        .init(accentName: "coral"),
+        .init(accentName: "red"),
+        .init(accentName: "crimson"),
+        .init(accentName: "pink"),
+        .init(accentName: "rose"),
+        .init(accentName: "magenta"),
+        .init(accentName: "violet"),
+        .init(accentName: "purple"),
+        .init(accentName: "indigo"),
+        .init(accentName: "navy"),
+        .init(accentName: "aqua"),
+        .init(accentName: "emerald"),
+        .init(accentName: "olive"),
+        .init(accentName: "amber"),
+        .init(accentName: "peach"),
+        .init(accentName: "salmon"),
+        .init(accentName: "plum"),
+        .init(accentName: "brown"),
+        .init(accentName: "slate"),
+        .init(accentName: "graphite")
     ]
 
     var body: some View {
@@ -403,11 +431,15 @@ private struct CreateWorkoutExerciseTemplateScreen: View {
                         )
                 }
 
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(AppLocalizer.string("workout.create.color"))
-                        .font(.headline.weight(.semibold))
-
-                    HStack(spacing: 12) {
+                expandablePickerSection(
+                    title: AppLocalizer.string("workout.create.color"),
+                    isExpanded: $isColorPickerExpanded
+                ) {
+                    Circle()
+                        .fill(workoutAccentColor(selectedAccent))
+                        .frame(width: 26, height: 26)
+                } content: {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 6), spacing: 12) {
                         ForEach(colorOptions) { option in
                             Button(action: { selectedAccent = option.accentName }) {
                                 ZStack {
@@ -427,10 +459,22 @@ private struct CreateWorkoutExerciseTemplateScreen: View {
                     }
                 }
 
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(AppLocalizer.string("workout.create.icon"))
-                        .font(.headline.weight(.semibold))
+                expandablePickerSection(
+                    title: AppLocalizer.string("workout.create.icon"),
+                    isExpanded: $isIconPickerExpanded
+                ) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(workoutAccentColor(selectedAccent).opacity(0.14))
+                            .frame(width: 34, height: 34)
 
+                        workoutIconImage(
+                            named: selectedIcon,
+                            accentName: selectedAccent,
+                            size: 18
+                        )
+                    }
+                } content: {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 4), spacing: 12) {
                         ForEach(iconOptions) { option in
                             Button(action: { selectedIcon = option.systemImage }) {
@@ -511,6 +555,49 @@ private struct CreateWorkoutExerciseTemplateScreen: View {
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                 isNameFieldFocused = true
+            }
+        }
+    }
+
+    private func expandablePickerSection<Summary: View, Content: View>(
+        title: String,
+        isExpanded: Binding<Bool>,
+        @ViewBuilder summary: () -> Summary,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isExpanded.wrappedValue.toggle()
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    Text(title)
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.primary)
+
+                    Spacer()
+
+                    summary()
+
+                    Image(systemName: "chevron.down")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded.wrappedValue ? 180 : 0))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(RoundedRectangle(cornerRadius: 18).fill(workoutPickerCardBackground))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18)
+                        .strokeBorder(workoutPickerCardBorder)
+                )
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded.wrappedValue {
+                content()
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
     }
