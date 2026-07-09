@@ -43,6 +43,12 @@ struct ActiveWorkoutScreen: View {
             ?? users.first { $0.gender == workout.gender }?.weight
             ?? 70
     }
+    private var currentEstimatedCalories: Int {
+        WorkoutCalorieEstimator.estimateWorkoutCalories(
+            workout: workout,
+            userWeightKg: currentUserWeight
+        )
+    }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -253,7 +259,7 @@ struct ActiveWorkoutScreen: View {
     }
 
     private var workoutControlsCard: some View {
-        HStack {
+        HStack(spacing: 10) {
             Button(action: { isEditingWorkoutNote = true }) {
                 HStack(spacing: 8) {
                     Image(systemName: workout.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "note.text" : "note.text.badge.plus")
@@ -273,6 +279,23 @@ struct ActiveWorkoutScreen: View {
                 .background(Capsule().fill(activeWorkoutInsetBackground))
             }
             .buttonStyle(.plain)
+
+            HStack(spacing: 7) {
+                Image(systemName: "flame.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.orange)
+
+                Text(formattedWorkoutCalories(currentEstimatedCalories))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+            }
+            .padding(.horizontal, 12)
+            .frame(minHeight: 44)
+            .background(Capsule().fill(activeWorkoutInsetBackground))
+            .accessibilityLabel(AppLocalizer.string("workout.last.calories"))
+            .accessibilityValue(formattedWorkoutCalories(currentEstimatedCalories))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)

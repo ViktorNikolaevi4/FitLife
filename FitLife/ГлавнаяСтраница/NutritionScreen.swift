@@ -168,19 +168,29 @@ struct NutritionScreen: View {
 
     private var caloriesCard: some View {
         VStack(spacing: 14) {
-            Donut(progress: progress, lineWidth: 12, track: theme.accent.opacity(0.16), gradient: theme.ringGradient)
-                .frame(width: 126, height: 126)
-                .overlay {
-                    VStack(spacing: 2) {
-                        Text(consumedCalories.formatted(.number.grouping(.automatic)))
-                            .font(.system(size: 20, weight: .bold))
-                        Text(AppLocalizer.format("nutrition.goal.value", userData?.calories ?? 0))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(AppLocalizer.format("nutrition.remaining.value", max((userData?.calories ?? 0) - consumedCalories, 0)))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+            VStack(spacing: 8) {
+                Donut(progress: progress, lineWidth: 10, track: theme.accent.opacity(0.16), gradient: theme.ringGradient)
+                    .frame(width: 136, height: 136)
+                    .overlay {
+                        VStack(spacing: 3) {
+                            Text(consumedCalories.formatted(.number.grouping(.automatic)))
+                                .font(.system(size: 24, weight: .bold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.72)
+                            Text(AppLocalizer.format("nutrition.goal.value", userData?.calories ?? 0))
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.78)
+                        }
+                        .padding(.horizontal, 24)
                     }
+
+                Text(AppLocalizer.format("nutrition.remaining.value", max((userData?.calories ?? 0) - consumedCalories, 0)))
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
                 }
 
             HStack(spacing: 8) {
