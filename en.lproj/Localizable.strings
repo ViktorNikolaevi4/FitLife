@@ -58,6 +58,7 @@
 "ai.meal.sugar.ingredient" = "Sugar";
 "ai.meal.badge" = "AI";
 "ai.meal.disclaimer" = "AI estimates calories and macros approximately. Results may differ from the actual meal composition and are not medical advice.";
+"ai.meal.availability_notice" = "AI features may be unavailable in some regions. If recognition does not work, add the meal manually.";
 "ai.quick.title" = "Add meal";
 "ai.quick.photo.title" = "Photo";
 "ai.quick.photo.subtitle" = "Take a meal photo and let AI estimate calories and macros.";

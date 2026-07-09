@@ -2159,10 +2159,16 @@ private struct AIDisclaimerCard: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.orange)
 
-            Text(AppLocalizer.string("ai.meal.disclaimer"))
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(AppLocalizer.string("ai.meal.disclaimer"))
+
+                if AppLocalizer.currentLanguage == .russian {
+                    Text(AppLocalizer.string("ai.meal.availability_notice"))
+                }
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)

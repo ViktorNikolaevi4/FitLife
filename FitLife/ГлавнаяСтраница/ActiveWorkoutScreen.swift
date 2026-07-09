@@ -38,14 +38,6 @@ struct ActiveWorkoutScreen: View {
         localizedWorkoutSessionTitle(workout.title)
     }
 
-    private var elapsedString: String {
-        let interval = max(0, workout.elapsedSeconds)
-        let hours = interval / 3600
-        let minutes = (interval % 3600) / 60
-        let seconds = interval % 60
-        return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
-    }
-
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 16) {
@@ -96,12 +88,8 @@ struct ActiveWorkoutScreen: View {
             }
             .buttonStyle(.plain)
         }
-        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
-            guard workout.isTimerRunning else { return }
-            workout.elapsedSeconds += 1
-            try? modelContext.save()
-        }
         .onAppear {
+            stopLegacyTimerIfNeeded()
             collapseExercisesIfNeeded()
         }
         .sheet(isPresented: $isShowingExercisePicker) {
@@ -259,29 +247,7 @@ struct ActiveWorkoutScreen: View {
     }
 
     private var workoutControlsCard: some View {
-        HStack(spacing: 12) {
-            Button(action: toggleTimer) {
-                Image(systemName: workout.isTimerRunning ? "pause.fill" : "play.fill")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.primary)
-                    .frame(width: 38, height: 38)
-                    .background(Circle().fill(Color(.tertiarySystemFill)))
-            }
-            .buttonStyle(.plain)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(AppLocalizer.string("workout.timer"))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-
-                Text(elapsedString)
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(.primary)
-            }
-
-            Spacer(minLength: 8)
-
+        HStack {
             Button(action: { isEditingWorkoutNote = true }) {
                 HStack(spacing: 8) {
                     Image(systemName: workout.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "note.text" : "note.text.badge.plus")
@@ -297,7 +263,7 @@ struct ActiveWorkoutScreen: View {
                 }
                 .foregroundStyle(.primary)
                 .padding(.horizontal, 12)
-                .frame(height: 38)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                 .background(Capsule().fill(activeWorkoutInsetBackground))
             }
             .buttonStyle(.plain)
@@ -328,6 +294,12 @@ struct ActiveWorkoutScreen: View {
         if hasChanges {
             try? modelContext.save()
         }
+    }
+
+    private func stopLegacyTimerIfNeeded() {
+        guard workout.isTimerRunning else { return }
+        workout.isTimerRunning = false
+        try? modelContext.save()
     }
 
     private func toggleSet(_ set: WorkoutSet) {
@@ -417,11 +389,6 @@ struct ActiveWorkoutScreen: View {
         set.metricType = metricType
         set.reps = reps
         set.durationSeconds = durationSeconds
-        try? modelContext.save()
-    }
-
-    private func toggleTimer() {
-        workout.isTimerRunning.toggle()
         try? modelContext.save()
     }
 
