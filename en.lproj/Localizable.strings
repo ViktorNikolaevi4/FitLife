@@ -313,6 +313,7 @@
 "workouts.last.empty.subtitle" = "Finish your first workout and it will appear here.";
 "workouts.last.summary" = "%d exercises • %d completed";
 "workout.last.duration" = "Duration";
+"workout.last.calories" = "Calories";
 "workout.last.exercises" = "Exercises";
 "workout.last.completed" = "Sets";
 "workout.last.empty.title" = "No completed workout";
@@ -486,6 +487,11 @@
 "workout.select.exercise.custom.title" = "Custom exercise";
 "workout.select.exercise.custom.placeholder" = "For example, Barbell Squat";
 "workout.select.exercise.add.custom" = "Add custom exercise";
+"workout.create.activity" = "Activity Type";
+"workout.activity.strength" = "Strength";
+"workout.activity.cardio" = "Cardio";
+"workout.activity.hiit" = "HIIT";
+"workout.activity.core" = "Core";
 "workout.create.title" = "New Exercise";
 "workout.create.edit.title" = "Edit Exercise";
 "workout.create.name" = "Name";

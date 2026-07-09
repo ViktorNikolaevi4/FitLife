@@ -20,6 +20,7 @@ struct ActiveWorkoutScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
+    @Query private var users: [UserData]
 
     let workout: WorkoutSession
     @State private var isShowingExercisePicker = false
@@ -36,6 +37,11 @@ struct ActiveWorkoutScreen: View {
     private var activeWorkoutCardShadow: Color { colorScheme == .dark ? .clear : .black.opacity(0.08) }
     private var workoutTitle: String {
         localizedWorkoutSessionTitle(workout.title)
+    }
+    private var currentUserWeight: Double {
+        users.first { $0.ownerId == workout.ownerId && $0.gender == workout.gender }?.weight
+            ?? users.first { $0.gender == workout.gender }?.weight
+            ?? 70
     }
 
     var body: some View {
@@ -358,7 +364,9 @@ struct ActiveWorkoutScreen: View {
             name: draft.name,
             systemImage: draft.systemImage,
             accentName: draft.accentName,
-            orderIndex: index
+            orderIndex: index,
+            activityType: draft.activityType,
+            metValue: draft.metValue
         )
         exercise.session = workout
 
@@ -410,6 +418,10 @@ struct ActiveWorkoutScreen: View {
 
     private func finishWorkout() {
         workout.isTimerRunning = false
+        workout.estimatedCalories = WorkoutCalorieEstimator.estimateWorkoutCalories(
+            workout: workout,
+            userWeightKg: currentUserWeight
+        )
         workout.endedAt = Date()
         try? modelContext.save()
         LocalReminderScheduler.rescheduleWorkoutRemindersIfEnabled(

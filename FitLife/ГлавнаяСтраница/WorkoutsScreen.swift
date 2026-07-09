@@ -691,15 +691,8 @@ private struct WorkoutHistoryRow: View {
         return formatter.string(from: workout.endedAt ?? workout.createdAt)
     }
 
-    private var durationText: String {
-        let totalMinutes = workout.elapsedSeconds / 60
-        let hours = totalMinutes / 60
-        let minutes = totalMinutes % 60
-
-        if hours > 0 {
-            return "\(hours)ч \(minutes)м"
-        }
-        return "\(max(1, minutes)) мин"
+    private var caloriesText: String {
+        formattedWorkoutCalories(workout.estimatedCalories)
     }
 
     private var trimmedNote: String {
@@ -752,7 +745,7 @@ private struct WorkoutHistoryRow: View {
             Spacer()
 
             VStack(alignment: .trailing, spacing: 6) {
-                Text(durationText)
+                Text(caloriesText)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
 
@@ -798,15 +791,8 @@ private struct WorkoutDetailScreen: View {
         return formatter.string(from: workout.endedAt ?? workout.createdAt)
     }
 
-    private var durationText: String {
-        let totalMinutes = workout.elapsedSeconds / 60
-        let hours = totalMinutes / 60
-        let minutes = totalMinutes % 60
-
-        if hours > 0 {
-            return "\(hours)ч \(minutes)м"
-        }
-        return "\(max(1, minutes)) мин"
+    private var caloriesText: String {
+        formattedWorkoutCalories(workout.estimatedCalories)
     }
 
     private var trimmedWorkoutNote: String {
@@ -977,8 +963,8 @@ private struct WorkoutDetailScreen: View {
 
             HStack(spacing: 12) {
                 workoutStatCard(
-                    title: AppLocalizer.string("workout.last.duration"),
-                    value: durationText
+                    title: AppLocalizer.string("workout.last.calories"),
+                    value: caloriesText
                 )
                 workoutStatCard(
                     title: AppLocalizer.string("workout.last.exercises"),

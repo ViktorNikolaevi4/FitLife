@@ -313,6 +313,7 @@
 "workouts.last.empty.subtitle" = "Заверши первую тренировку, и она появится здесь.";
 "workouts.last.summary" = "%d упражнений • %d выполнено";
 "workout.last.duration" = "Длительность";
+"workout.last.calories" = "Калории";
 "workout.last.exercises" = "Упражнения";
 "workout.last.completed" = "Подходы";
 "workout.last.empty.title" = "Нет завершённой тренировки";
@@ -486,6 +487,11 @@
 "workout.select.exercise.custom.title" = "Свое упражнение";
 "workout.select.exercise.custom.placeholder" = "Например, Присед со штангой";
 "workout.select.exercise.add.custom" = "Добавить свое упражнение";
+"workout.create.activity" = "Тип активности";
+"workout.activity.strength" = "Силовое";
+"workout.activity.cardio" = "Кардио";
+"workout.activity.hiit" = "HIIT";
+"workout.activity.core" = "Кор";
 "workout.create.title" = "Новое упражнение";
 "workout.create.edit.title" = "Редактировать упражнение";
 "workout.create.name" = "Название";

@@ -10,7 +10,25 @@ struct WorkoutExerciseTemplate: Identifiable {
     let name: String
     let systemImage: String
     let accentName: String
+    let activityType: WorkoutActivityType
+    let metValue: Double
     let defaultSets: [WorkoutDraftSet]
+
+    init(
+        name: String,
+        systemImage: String,
+        accentName: String,
+        activityType: WorkoutActivityType = .strength,
+        metValue: Double = 5.0,
+        defaultSets: [WorkoutDraftSet]
+    ) {
+        self.name = name
+        self.systemImage = systemImage
+        self.accentName = accentName
+        self.activityType = activityType
+        self.metValue = metValue
+        self.defaultSets = defaultSets
+    }
 }
 
 struct WorkoutExerciseDraft: Identifiable, Hashable {
@@ -18,12 +36,23 @@ struct WorkoutExerciseDraft: Identifiable, Hashable {
     var name: String
     var systemImage: String
     var accentName: String
+    var activityType: WorkoutActivityType
+    var metValue: Double
     var sets: [WorkoutDraftSet]
 
-    init(name: String, systemImage: String, accentName: String, sets: [WorkoutDraftSet]) {
+    init(
+        name: String,
+        systemImage: String,
+        accentName: String,
+        activityType: WorkoutActivityType = .strength,
+        metValue: Double = 5.0,
+        sets: [WorkoutDraftSet]
+    ) {
         self.name = name
         self.systemImage = systemImage
         self.accentName = accentName
+        self.activityType = activityType
+        self.metValue = metValue
         self.sets = sets
     }
 
@@ -31,6 +60,8 @@ struct WorkoutExerciseDraft: Identifiable, Hashable {
         self.name = template.name
         self.systemImage = template.systemImage
         self.accentName = template.accentName
+        self.activityType = template.activityType
+        self.metValue = template.metValue
         self.sets = template.defaultSets
     }
 
@@ -38,6 +69,8 @@ struct WorkoutExerciseDraft: Identifiable, Hashable {
         self.name = customTemplate.name
         self.systemImage = customTemplate.systemImage
         self.accentName = customTemplate.accentName
+        self.activityType = customTemplate.activityType
+        self.metValue = customTemplate.metValue
         self.sets = [
             WorkoutDraftSet(weight: 20, reps: 10)
         ]
@@ -321,6 +354,14 @@ private struct ExerciseColorOption: Identifiable, Hashable {
     let accentName: String
 }
 
+private struct ExerciseActivityOption: Identifiable, Hashable {
+    let id = UUID()
+    let activityType: WorkoutActivityType
+    let metValue: Double
+    let iconName: String
+    let titleKey: String
+}
+
 private struct CreateWorkoutExerciseTemplateScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -331,6 +372,8 @@ private struct CreateWorkoutExerciseTemplateScreen: View {
     @State private var name: String
     @State private var selectedIcon: String
     @State private var selectedAccent: String
+    @State private var selectedActivityType: WorkoutActivityType
+    @State private var selectedMetValue: Double
     @State private var isColorPickerExpanded = false
     @State private var isIconPickerExpanded = false
     @State private var isShowingDeleteConfirmation = false
@@ -345,7 +388,36 @@ private struct CreateWorkoutExerciseTemplateScreen: View {
         _name = State(initialValue: templateToEdit?.name ?? "")
         _selectedIcon = State(initialValue: templateToEdit?.systemImage ?? WorkoutExerciseIcon.run)
         _selectedAccent = State(initialValue: templateToEdit?.accentName ?? "blue")
+        _selectedActivityType = State(initialValue: templateToEdit?.activityType ?? .strength)
+        _selectedMetValue = State(initialValue: templateToEdit?.metValue ?? 5.0)
     }
+
+    private let activityOptions: [ExerciseActivityOption] = [
+        .init(
+            activityType: .strength,
+            metValue: 5.0,
+            iconName: "dumbbell.fill",
+            titleKey: "workout.activity.strength"
+        ),
+        .init(
+            activityType: .cardio,
+            metValue: 8.0,
+            iconName: "figure.run",
+            titleKey: "workout.activity.cardio"
+        ),
+        .init(
+            activityType: .hiit,
+            metValue: 9.0,
+            iconName: "bolt.heart.fill",
+            titleKey: "workout.activity.hiit"
+        ),
+        .init(
+            activityType: .core,
+            metValue: 4.0,
+            iconName: "figure.core.training",
+            titleKey: "workout.activity.core"
+        )
+    ]
 
     private let iconOptions: [ExerciseIconOption] = [
         .init(systemImage: WorkoutExerciseIcon.cleanAndJerk),
@@ -429,6 +501,17 @@ private struct CreateWorkoutExerciseTemplateScreen: View {
                             RoundedRectangle(cornerRadius: 18)
                                 .strokeBorder(workoutPickerCardBorder)
                         )
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(AppLocalizer.string("workout.create.activity"))
+                        .font(.headline.weight(.semibold))
+
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 2), spacing: 10) {
+                        ForEach(activityOptions) { option in
+                            activityOptionButton(option)
+                        }
+                    }
                 }
 
                 expandablePickerSection(
@@ -621,7 +704,7 @@ private struct CreateWorkoutExerciseTemplateScreen: View {
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.primary)
 
-                Text(AppLocalizer.string("workout.create.preview.subtitle"))
+                Text(selectedActivityTitle)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -646,6 +729,8 @@ private struct CreateWorkoutExerciseTemplateScreen: View {
             templateToEdit.name = trimmedName
             templateToEdit.systemImage = selectedIcon
             templateToEdit.accentName = selectedAccent
+            templateToEdit.activityType = selectedActivityType
+            templateToEdit.metValue = selectedMetValue
             try? modelContext.save()
             dismiss()
             return
@@ -654,7 +739,9 @@ private struct CreateWorkoutExerciseTemplateScreen: View {
         let template = CustomWorkoutExerciseTemplate(
             name: trimmedName,
             systemImage: selectedIcon,
-            accentName: selectedAccent
+            accentName: selectedAccent,
+            activityType: selectedActivityType,
+            metValue: selectedMetValue
         )
         modelContext.insert(template)
         try? modelContext.save()
@@ -667,6 +754,54 @@ private struct CreateWorkoutExerciseTemplateScreen: View {
         modelContext.delete(templateToEdit)
         try? modelContext.save()
         dismiss()
+    }
+
+    private var selectedActivityTitle: String {
+        activityOptions
+            .first { $0.activityType == selectedActivityType }?
+            .title
+        ?? AppLocalizer.string("workout.activity.strength")
+    }
+
+    private func activityOptionButton(_ option: ExerciseActivityOption) -> some View {
+        let isSelected = selectedActivityType == option.activityType
+
+        return Button {
+            selectedActivityType = option.activityType
+            selectedMetValue = option.metValue
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: option.iconName)
+                    .font(.subheadline.weight(.semibold))
+                    .frame(width: 18)
+
+                Text(option.title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(isSelected ? Color(.systemBackground) : .primary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(isSelected ? workoutAccentColor(selectedAccent) : workoutPickerCardBackground)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(isSelected ? workoutAccentColor(selectedAccent).opacity(0.35) : workoutPickerCardBorder)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private extension ExerciseActivityOption {
+    var title: String {
+        AppLocalizer.string(titleKey)
     }
 }
 

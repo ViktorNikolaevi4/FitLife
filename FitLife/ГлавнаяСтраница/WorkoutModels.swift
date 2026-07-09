@@ -6,6 +6,14 @@ enum WorkoutSetMetricType: String, Codable {
     case duration
 }
 
+enum WorkoutActivityType: String, Codable {
+    case strength
+    case cardio
+    case hiit
+    case core
+    case mobility
+}
+
 @Model
 final class WorkoutSession {
     var id: UUID = UUID()
@@ -16,6 +24,7 @@ final class WorkoutSession {
     var genderRawValue: String = FitLife.Gender.male.rawValue
     var elapsedSeconds: Int = 0
     var isTimerRunning: Bool = false
+    var estimatedCalories: Int = 0
     var note: String = ""
     var remoteAssignmentId: String?
     var remoteTrainerId: String?
@@ -42,6 +51,7 @@ final class WorkoutSession {
         gender: Gender,
         elapsedSeconds: Int = 0,
         isTimerRunning: Bool = false,
+        estimatedCalories: Int = 0,
         note: String = "",
         remoteAssignmentId: String? = nil,
         remoteTrainerId: String? = nil,
@@ -55,6 +65,7 @@ final class WorkoutSession {
         self.genderRawValue = gender.rawValue
         self.elapsedSeconds = elapsedSeconds
         self.isTimerRunning = isTimerRunning
+        self.estimatedCalories = estimatedCalories
         self.note = note
         self.remoteAssignmentId = remoteAssignmentId
         self.remoteTrainerId = remoteTrainerId
@@ -72,6 +83,8 @@ final class WorkoutExercise {
     var orderIndex: Int = 0
     var isExpanded: Bool = false
     var note: String = ""
+    var activityTypeRaw: String = WorkoutActivityType.strength.rawValue
+    var metValue: Double = 5.0
 
     var session: WorkoutSession?
 
@@ -82,13 +95,20 @@ final class WorkoutExercise {
         set { sets = newValue }
     }
 
+    var activityType: WorkoutActivityType {
+        get { WorkoutActivityType(rawValue: activityTypeRaw) ?? .strength }
+        set { activityTypeRaw = newValue.rawValue }
+    }
+
     init(
         name: String,
         systemImage: String,
         accentName: String,
         orderIndex: Int,
         isExpanded: Bool = false,
-        note: String = ""
+        note: String = "",
+        activityType: WorkoutActivityType = .strength,
+        metValue: Double = 5.0
     ) {
         self.name = name
         self.systemImage = systemImage
@@ -96,6 +116,8 @@ final class WorkoutExercise {
         self.orderIndex = orderIndex
         self.isExpanded = isExpanded
         self.note = note
+        self.activityTypeRaw = activityType.rawValue
+        self.metValue = metValue
     }
 }
 
@@ -140,12 +162,72 @@ final class CustomWorkoutExerciseTemplate {
     var name: String = ""
     var systemImage: String = ""
     var accentName: String = ""
+    var activityTypeRaw: String = WorkoutActivityType.strength.rawValue
+    var metValue: Double = 5.0
 
-    init(name: String, systemImage: String, accentName: String, createdAt: Date = .now) {
+    var activityType: WorkoutActivityType {
+        get { WorkoutActivityType(rawValue: activityTypeRaw) ?? .strength }
+        set { activityTypeRaw = newValue.rawValue }
+    }
+
+    init(
+        name: String,
+        systemImage: String,
+        accentName: String,
+        activityType: WorkoutActivityType = .strength,
+        metValue: Double = 5.0,
+        createdAt: Date = .now
+    ) {
         self.name = name
         self.systemImage = systemImage
         self.accentName = accentName
+        self.activityTypeRaw = activityType.rawValue
+        self.metValue = metValue
         self.createdAt = createdAt
+    }
+}
+
+enum WorkoutCalorieEstimator {
+    static func estimateWorkoutCalories(workout: WorkoutSession, userWeightKg: Double) -> Int {
+        let safeWeight = userWeightKg > 0 ? userWeightKg : 70
+        let exercises = workout.exerciseItems
+        let hasCompletedSets = exercises
+            .flatMap(\.setItems)
+            .contains { $0.isCompleted }
+
+        let totalCalories = exercises.reduce(0.0) { total, exercise in
+            let sets = exercise.setItems.filter { hasCompletedSets ? $0.isCompleted : true }
+            guard sets.isEmpty == false else { return total }
+
+            let activeSeconds = sets.reduce(0) { partial, set in
+                partial + estimatedActiveSeconds(for: set)
+            }
+            let activeCalories = calories(
+                met: max(exercise.metValue, 1.0),
+                weightKg: safeWeight,
+                seconds: activeSeconds
+            )
+
+            let restSeconds = max(0, sets.count - 1) * 60
+            let restCalories = calories(met: 1.8, weightKg: safeWeight, seconds: restSeconds)
+
+            return total + activeCalories + restCalories
+        }
+
+        return max(0, Int(totalCalories.rounded()))
+    }
+
+    private static func estimatedActiveSeconds(for set: WorkoutSet) -> Int {
+        switch set.metricType {
+        case .duration:
+            return max(0, set.durationSeconds)
+        case .reps:
+            return max(0, set.reps) * 4
+        }
+    }
+
+    private static func calories(met: Double, weightKg: Double, seconds: Int) -> Double {
+        met * weightKg * (Double(seconds) / 3600.0)
     }
 }
 
@@ -178,4 +260,8 @@ func formattedWorkoutSetValue(
     metricType: WorkoutSetMetricType
 ) -> String {
     "\(formattedWorkoutWeight(weight)) kg × \(formattedWorkoutMetricValue(reps: reps, durationSeconds: durationSeconds, metricType: metricType))"
+}
+
+func formattedWorkoutCalories(_ calories: Int) -> String {
+    "\(max(0, calories)) \(AppLocalizer.string("unit.kcal"))"
 }
