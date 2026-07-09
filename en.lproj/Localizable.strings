@@ -179,6 +179,7 @@
 "common.today" = "Today";
 "common.select_date" = "Select Date";
 "common.add" = "Add";
+"common.online" = "Online";
 "common.copy" = "Copy";
 "common.cannot_undo" = "This action cannot be undone.";
 "common.sign_out" = "Sign Out";
@@ -378,6 +379,7 @@
 "coaching.action.submit" = "Submit request";
 "coaching.action.edit" = "Update intake";
 "coaching.action.fix" = "Fix and resubmit";
+"coaching.quick_action.send" = "Send";
 "coaching.status.title" = "Request Status";
 "coaching.status.comment" = "Comment";
 "coaching.status.comment.clarification" = "What needs clarification";
@@ -440,7 +442,7 @@
 "coaching.update_request.type.limitations" = "Clarify limitations";
 "coaching.update_request.type.equipment" = "Clarify equipment";
 "coaching.update_request.type.general" = "General clarification";
-"coaching.notes.section" = "Coaching notes";
+"coaching.notes.section" = "Trainer chat";
 "coaching.notes.empty" = "There are no notes yet.";
 "coaching.notes.action.send" = "Send note";
 "coaching.notes.placeholder.client" = "Tell your trainer what matters right now";

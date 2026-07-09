@@ -179,6 +179,7 @@
 "common.today" = "Сегодня";
 "common.select_date" = "Выберите дату";
 "common.add" = "Добавить";
+"common.online" = "Онлайн";
 "common.copy" = "Скопировать";
 "common.cannot_undo" = "Это действие нельзя отменить.";
 "common.sign_out" = "Выйти";
@@ -378,6 +379,7 @@
 "coaching.action.submit" = "Отправить заявку";
 "coaching.action.edit" = "Обновить анкету";
 "coaching.action.fix" = "Исправить по замечаниям";
+"coaching.quick_action.send" = "Отправить";
 "coaching.status.title" = "Статус заявки";
 "coaching.status.comment" = "Комментарий";
 "coaching.status.comment.clarification" = "Что нужно уточнить";
@@ -440,7 +442,7 @@
 "coaching.update_request.type.limitations" = "Уточнить ограничения";
 "coaching.update_request.type.equipment" = "Уточнить оборудование";
 "coaching.update_request.type.general" = "Общее уточнение";
-"coaching.notes.section" = "Заметки по сопровождению";
+"coaching.notes.section" = "Чат с тренером";
 "coaching.notes.empty" = "Пока нет заметок.";
 "coaching.notes.action.send" = "Отправить заметку";
 "coaching.notes.placeholder.client" = "Напишите тренеру, что важно учесть сейчас";
