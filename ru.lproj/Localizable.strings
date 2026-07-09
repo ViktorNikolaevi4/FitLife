@@ -459,6 +459,8 @@
 "coaching.workspace.metric.open_requests" = "Открытые запросы";
 "coaching.workspace.connected_since" = "Связь активна с";
 "coaching.workspace.last_note" = "Последняя заметка";
+"coaching.workspace.client_chat" = "Чат с клиентом";
+"coaching.workspace.open_requests" = "Открытые запросы";
 "workout.active.title" = "Активная тренировка";
 "workout.title.edit" = "Название тренировки";
 "workout.title.placeholder" = "Например, Ноги и пресс";

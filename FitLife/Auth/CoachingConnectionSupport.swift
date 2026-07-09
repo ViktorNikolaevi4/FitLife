@@ -1387,51 +1387,23 @@ private struct ClientCoachingChatScreen: View {
     }
 
     var body: some View {
-        List {
-            Section {
-                TextField(AppLocalizer.string("coaching.notes.placeholder.client"), text: $noteMessage, axis: .vertical)
-                    .lineLimit(2...5)
-
-                Button {
-                    Task {
-                        await store.sendNote(
-                            noteMessage,
-                            senderName: sessionStore.profile?.displayName ?? ""
-                        )
-                        if store.errorMessage == nil {
-                            noteMessage = ""
-                        }
-                    }
-                } label: {
-                    HStack {
-                        Text(AppLocalizer.string("coaching.notes.action.send"))
-                        if store.isSubmitting {
-                            Spacer()
-                            ProgressView()
-                        }
-                    }
+        CoachingChatContent(
+            notes: store.notes,
+            outgoingRole: .client,
+            placeholder: AppLocalizer.string("coaching.notes.placeholder.client"),
+            message: $noteMessage,
+            isSubmitting: store.isSubmitting,
+            onSend: {
+                await store.sendNote(
+                    noteMessage,
+                    senderName: sessionStore.profile?.displayName ?? ""
+                )
+                if store.errorMessage == nil {
+                    noteMessage = ""
                 }
-                .disabled(store.isSubmitting || trimmedMessage.isEmpty)
-            }
-
-            Section {
-                if store.notes.isEmpty {
-                    Text(AppLocalizer.string("coaching.notes.empty"))
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(store.notes) { note in
-                        CoachingNoteRow(note: note)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button(role: .destructive) {
-                                    pendingDelete = note
-                                } label: {
-                                    Label(AppLocalizer.string("common.delete"), systemImage: "trash")
-                                }
-                            }
-                    }
-                }
-            }
-        }
+            },
+            onRequestDelete: { pendingDelete = $0 }
+        )
         .navigationTitle(AppLocalizer.string("coaching.notes.section"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -1672,6 +1644,7 @@ struct TrainerClientSupportScreen: View {
     let trainerId: String
     let client: AppUserProfile
 
+    @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var sessionStore: AppSessionStore
     @StateObject private var store: TrainerClientSupportStore
     @State private var requestType: ProfileUpdateRequestType = .generalUpdate
@@ -1683,7 +1656,7 @@ struct TrainerClientSupportScreen: View {
     @State private var showAllWorkoutReports = false
     @State private var showAllNutritionReports = false
     @State private var showAllNotes = false
-    @FocusState private var focusedField: TrainerWorkspaceField?
+    @State private var showRequestComposer = false
 
     init(trainerId: String, client: AppUserProfile) {
         self.trainerId = trainerId
@@ -1692,243 +1665,55 @@ struct TrainerClientSupportScreen: View {
     }
 
     var body: some View {
-        List {
-            if let errorMessage = store.errorMessage, errorMessage.isEmpty == false {
-                Section {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 16) {
+                if let errorMessage = store.errorMessage, errorMessage.isEmpty == false {
                     Text(errorMessage)
                         .font(.footnote)
                         .foregroundStyle(.red)
-                }
-            }
-
-            Section {
-                TrainerClientWorkspaceSummary(
-                    client: client,
-                    intake: store.intake,
-                    activeLink: store.activeLink,
-                    lastCheckIn: store.checkIns.first,
-                    openRequestCount: openRequests.count,
-                    lastNote: store.notes.first
-                )
-            }
-
-            Section(AppLocalizer.string("coaching.workspace.quick_actions")) {
-                Button {
-                    focusedField = .updateRequest
-                } label: {
-                    Label(AppLocalizer.string("coaching.workspace.action.request_update"), systemImage: "arrow.triangle.2.circlepath")
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.red.opacity(0.10), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
 
-                Button {
-                    focusedField = .note
-                } label: {
-                    Label(AppLocalizer.string("coaching.workspace.action.add_note"), systemImage: "square.and.pencil")
-                }
-            }
+                trainerClientSummaryCard
+                quickActionsCard
 
-            if let intake = store.intake {
-                Section(AppLocalizer.string("coaching.workspace.intake")) {
-                    TrainerWorkspaceInfoRow(
-                        title: AppLocalizer.string("coaching.intake.goal"),
-                        value: AppLocalizer.string(intake.goal.localizationKey)
-                    )
-                    TrainerWorkspaceInfoRow(
-                        title: AppLocalizer.string("coaching.intake.weight"),
-                        value: "\(String(format: "%.1f", intake.weight)) \(AppLocalizer.string("coaching.unit.kg"))"
-                    )
-                    TrainerWorkspaceInfoRow(
-                        title: AppLocalizer.string("coaching.intake.height"),
-                        value: "\(String(format: "%.0f", intake.height)) \(AppLocalizer.string("coaching.unit.cm"))"
-                    )
-                    TrainerWorkspaceInfoRow(
-                        title: AppLocalizer.string("coaching.intake.activity"),
-                        value: AppLocalizer.string(intake.activity.localizationKey)
-                    )
-                    TrainerWorkspaceInfoRow(
-                        title: AppLocalizer.string("coaching.intake.experience"),
-                        value: AppLocalizer.string(intake.experience.localizationKey)
-                    )
-
-                    if intake.limitations.isEmpty == false {
-                        TrainerWorkspaceTextBlock(
-                            title: AppLocalizer.string("coaching.intake.limitations"),
-                            value: intake.limitations
-                        )
-                    }
-
-                    if intake.equipment.isEmpty == false {
-                        TrainerWorkspaceTextBlock(
-                            title: AppLocalizer.string("coaching.intake.equipment"),
-                            value: intake.equipment
-                        )
-                    }
-
-                    if intake.schedule.isEmpty == false {
-                        TrainerWorkspaceTextBlock(
-                            title: AppLocalizer.string("coaching.intake.schedule"),
-                            value: intake.schedule
-                        )
-                    }
-
-                    if intake.notes.isEmpty == false {
-                        TrainerWorkspaceTextBlock(
-                            title: AppLocalizer.string("coaching.intake.notes"),
-                            value: intake.notes
-                        )
-                    }
-                }
-            }
-
-            Section(AppLocalizer.string("coaching.update_request.section")) {
-                Picker(AppLocalizer.string("coaching.update_request.type"), selection: $requestType) {
-                    ForEach(ProfileUpdateRequestType.allCases) { type in
-                        Text(AppLocalizer.string(type.localizationKey)).tag(type)
-                    }
+                if store.intake != nil {
+                    intakeCard
                 }
 
-                TextField(AppLocalizer.string("coaching.update_request.message"), text: $requestMessage, axis: .vertical)
-                    .lineLimit(3...6)
-                    .focused($focusedField, equals: .updateRequest)
-
-                Button {
-                    Task {
-                        await store.createUpdateRequest(
-                            type: requestType,
-                            message: requestMessage,
-                            senderName: sessionStore.profile?.displayName ?? ""
-                        )
-                        if store.errorMessage == nil {
-                            requestMessage = ""
-                            requestType = .generalUpdate
-                        }
-                    }
-                } label: {
-                    HStack {
-                        Text(AppLocalizer.string("coaching.update_request.action.send"))
-                        Spacer()
-                        if store.isSubmitting {
-                            ProgressView()
-                        }
-                    }
-                }
-                .disabled(store.isSubmitting || requestMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                if openRequests.isEmpty == false {
-                    ForEach(openRequests) { request in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(AppLocalizer.string(request.type.localizationKey))
-                                .font(.headline)
-                            Text(request.message)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.vertical, 4)
-                    }
-                }
-            }
-
-            Section(
-                header: coachingSectionHeader(
+                updateRequestsCard
+                trainerNavigationCard(
+                    icon: "clock",
                     title: AppLocalizer.string("coaching.checkin.history"),
-                    showsViewAll: store.checkIns.count > 2,
+                    subtitle: checkInSubtitle,
                     action: { showAllCheckIns = true }
                 )
-            ) {
-                if store.checkIns.isEmpty {
-                    Text(AppLocalizer.string("coaching.checkin.empty"))
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(store.checkIns.prefix(2)) { checkIn in
-                        CoachingCheckInRow(checkIn: checkIn, isTrainerView: true)
-                    }
-                }
-            }
-
-            Section(
-                header: coachingSectionHeader(
+                trainerNavigationCard(
+                    icon: "dumbbell.fill",
                     title: AppLocalizer.string("coaching.workouts.section"),
-                    showsViewAll: store.workoutReports.count > 2,
+                    subtitle: workoutReportsSubtitle,
                     action: { showAllWorkoutReports = true }
                 )
-            ) {
-                if store.workoutReports.isEmpty {
-                    Text(AppLocalizer.string("coaching.workouts.empty.received"))
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(store.workoutReports.prefix(2)) { report in
-                        Button {
-                            selectedWorkoutReport = report
-                        } label: {
-                            CoachingWorkoutReportRow(report: report)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-
-            Section(
-                header: coachingSectionHeader(
+                trainerNavigationCard(
+                    icon: "fork.knife",
                     title: AppLocalizer.string("coaching.nutrition.section"),
-                    showsViewAll: store.nutritionReports.count > 2,
+                    subtitle: nutritionReportsSubtitle,
                     action: { showAllNutritionReports = true }
                 )
-            ) {
-                if store.nutritionReports.isEmpty {
-                    Text(AppLocalizer.string("coaching.nutrition.empty.received"))
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(store.nutritionReports.prefix(2)) { report in
-                        Button {
-                            selectedNutritionReport = report
-                        } label: {
-                            CoachingNutritionReportRow(report: report)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-
-            Section(
-                header: coachingSectionHeader(
-                    title: AppLocalizer.string("coaching.notes.section"),
-                    showsViewAll: store.notes.count > 1,
+                trainerNavigationCard(
+                    icon: "bubble.left.and.bubble.right",
+                    title: AppLocalizer.string("coaching.workspace.client_chat"),
+                    subtitle: chatSubtitle,
                     action: { showAllNotes = true }
                 )
-            ) {
-                TextField(AppLocalizer.string("coaching.notes.placeholder.trainer"), text: $noteMessage, axis: .vertical)
-                    .lineLimit(2...5)
-                    .focused($focusedField, equals: .note)
-
-                Button {
-                    Task {
-                        await store.sendNote(
-                            noteMessage,
-                            senderName: sessionStore.profile?.displayName ?? ""
-                        )
-                        if store.errorMessage == nil {
-                            noteMessage = ""
-                        }
-                    }
-                } label: {
-                    HStack {
-                        Text(AppLocalizer.string("coaching.notes.action.send"))
-                        Spacer()
-                        if store.isSubmitting {
-                            ProgressView()
-                        }
-                    }
-                }
-                .disabled(store.isSubmitting || noteMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                if store.notes.isEmpty {
-                    Text(AppLocalizer.string("coaching.notes.empty"))
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(store.notes.prefix(1)) { note in
-                        CoachingNoteRow(note: note)
-                    }
-                }
             }
+            .padding(.horizontal, 18)
+            .padding(.top, 18)
+            .padding(.bottom, 30)
         }
+        .background(trainerBackground.ignoresSafeArea())
         .navigationTitle(client.displayName)
         .task {
             await store.load()
@@ -1977,12 +1762,18 @@ struct TrainerClientSupportScreen: View {
         }
         .sheet(isPresented: $showAllNotes) {
             NavigationStack {
-                CoachingNotesHistoryScreen(
-                    notes: store.notes,
-                    canDelete: true,
-                    onDelete: { note in
-                        await store.deleteNote(note)
-                    }
+                TrainerClientChatScreen(
+                    store: store,
+                    noteMessage: $noteMessage
+                )
+            }
+        }
+        .sheet(isPresented: $showRequestComposer) {
+            NavigationStack {
+                TrainerUpdateRequestComposerScreen(
+                    store: store,
+                    requestType: $requestType,
+                    requestMessage: $requestMessage
                 )
             }
         }
@@ -1990,6 +1781,449 @@ struct TrainerClientSupportScreen: View {
 
     private var openRequests: [ProfileUpdateRequest] {
         store.updateRequests.filter { $0.status == "open" }
+    }
+
+    private var trainerBackground: Color {
+        colorScheme == .dark ? Color(.systemGroupedBackground) : HomeColors.background
+    }
+
+    private var trainerCardShadow: Color {
+        colorScheme == .dark ? .clear : HomeColors.shadow
+    }
+
+    private var checkInSubtitle: String {
+        guard let checkIn = store.checkIns.first else {
+            return AppLocalizer.string("coaching.checkin.empty")
+        }
+        return "\(checkIn.createdAt.formatted(date: .abbreviated, time: .shortened)) • \(String(format: "%.1f", checkIn.weight)) \(AppLocalizer.string("coaching.unit.kg"))"
+    }
+
+    private var workoutReportsSubtitle: String {
+        guard let report = store.workoutReports.first else {
+            return AppLocalizer.string("coaching.workouts.empty.received")
+        }
+        return report.createdAt.formatted(date: .abbreviated, time: .shortened)
+    }
+
+    private var nutritionReportsSubtitle: String {
+        guard let report = store.nutritionReports.first else {
+            return AppLocalizer.string("coaching.nutrition.empty.received")
+        }
+        return report.createdAt.formatted(date: .abbreviated, time: .shortened)
+    }
+
+    private var chatSubtitle: String {
+        guard let note = store.notes.first else {
+            return AppLocalizer.string("coaching.notes.empty")
+        }
+        return note.message
+    }
+
+    private var trainerClientSummaryCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(client.displayName)
+                    .font(.title2.weight(.bold))
+                Text(client.email)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 12) {
+                trainerMetricTile(
+                    title: AppLocalizer.string("coaching.workspace.metric.goal"),
+                    value: store.intake.map { AppLocalizer.string($0.goal.localizationKey) } ?? "—"
+                )
+                trainerMetricTile(
+                    title: AppLocalizer.string("coaching.workspace.metric.weight"),
+                    value: store.intake.map { "\(String(format: "%.1f", $0.weight)) \(AppLocalizer.string("coaching.unit.kg"))" } ?? "—"
+                )
+                trainerMetricTile(
+                    title: AppLocalizer.string("coaching.workspace.metric.last_checkin"),
+                    value: store.checkIns.first.map { $0.createdAt.formatted(date: .abbreviated, time: .omitted) } ?? "—"
+                )
+                trainerMetricTile(
+                    title: AppLocalizer.string("coaching.workspace.metric.open_requests"),
+                    value: "\(openRequests.count)"
+                )
+            }
+
+            if let activeLink = store.activeLink {
+                Label(
+                    "\(AppLocalizer.string("coaching.workspace.connected_since")) \(activeLink.createdAt.formatted(date: .abbreviated, time: .omitted))",
+                    systemImage: "link"
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .padding(16)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(Color(.separator).opacity(0.16))
+        )
+        .shadow(color: trainerCardShadow, radius: 14, x: 0, y: 6)
+    }
+
+    private func trainerMetricTile(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+        }
+        .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+        .padding(12)
+        .background(HomeColors.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private var quickActionsCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(AppLocalizer.string("coaching.workspace.quick_actions"))
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(.primary)
+
+            HStack(spacing: 0) {
+                trainerQuickAction(
+                    icon: "arrow.triangle.2.circlepath",
+                    title: AppLocalizer.string("coaching.workspace.action.request_update"),
+                    action: { showRequestComposer = true }
+                )
+                Divider().frame(height: 44)
+                trainerQuickAction(
+                    icon: "bubble.left.and.bubble.right",
+                    title: AppLocalizer.string("coaching.workspace.client_chat"),
+                    action: { showAllNotes = true }
+                )
+                Divider().frame(height: 44)
+                trainerQuickAction(
+                    icon: "dumbbell.fill",
+                    title: AppLocalizer.string("coaching.workouts.section"),
+                    action: { showAllWorkoutReports = true }
+                )
+            }
+        }
+        .padding(14)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(Color(.separator).opacity(0.16))
+        )
+        .shadow(color: trainerCardShadow, radius: 14, x: 0, y: 6)
+    }
+
+    private func trainerQuickAction(icon: String, title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 7) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(HomeColors.accent.opacity(0.12))
+                    Image(systemName: icon)
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(HomeColors.accent)
+                }
+                .frame(width: 38, height: 38)
+
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.78)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var intakeCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            trainerCardTitle(icon: "person.text.rectangle", title: AppLocalizer.string("coaching.workspace.intake"))
+
+            if let intake = store.intake {
+                trainerInfoRow(AppLocalizer.string("coaching.intake.goal"), AppLocalizer.string(intake.goal.localizationKey))
+                trainerInfoRow(AppLocalizer.string("coaching.intake.height"), "\(String(format: "%.0f", intake.height)) \(AppLocalizer.string("coaching.unit.cm"))")
+                trainerInfoRow(AppLocalizer.string("coaching.intake.activity"), AppLocalizer.string(intake.activity.localizationKey))
+                trainerInfoRow(AppLocalizer.string("coaching.intake.experience"), AppLocalizer.string(intake.experience.localizationKey))
+
+                if intake.limitations.isEmpty == false {
+                    trainerTextBlock(AppLocalizer.string("coaching.intake.limitations"), intake.limitations)
+                }
+                if intake.equipment.isEmpty == false {
+                    trainerTextBlock(AppLocalizer.string("coaching.intake.equipment"), intake.equipment)
+                }
+                if intake.schedule.isEmpty == false {
+                    trainerTextBlock(AppLocalizer.string("coaching.intake.schedule"), intake.schedule)
+                }
+                if intake.notes.isEmpty == false {
+                    trainerTextBlock(AppLocalizer.string("coaching.intake.notes"), intake.notes)
+                }
+            }
+        }
+        .padding(16)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(Color(.separator).opacity(0.16))
+        )
+        .shadow(color: trainerCardShadow, radius: 14, x: 0, y: 6)
+    }
+
+    private var updateRequestsCard: some View {
+        Button {
+            showRequestComposer = true
+        } label: {
+            trainerNavigationContent(
+                icon: "arrow.triangle.2.circlepath",
+                title: AppLocalizer.string("coaching.update_request.section"),
+                subtitle: openRequests.first?.message ?? AppLocalizer.string("coaching.update_request.empty"),
+                showsChevron: true
+            )
+            .padding(16)
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .strokeBorder(Color(.separator).opacity(0.16))
+            )
+            .shadow(color: trainerCardShadow, radius: 14, x: 0, y: 6)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func trainerNavigationCard(
+        icon: String,
+        title: String,
+        subtitle: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            trainerNavigationContent(icon: icon, title: title, subtitle: subtitle, showsChevron: true)
+                .padding(16)
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .strokeBorder(Color(.separator).opacity(0.16))
+                )
+                .shadow(color: trainerCardShadow, radius: 14, x: 0, y: 6)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func trainerNavigationContent(
+        icon: String,
+        title: String,
+        subtitle: String,
+        showsChevron: Bool
+    ) -> some View {
+        HStack(spacing: 16) {
+            ZStack {
+                Circle()
+                    .fill(HomeColors.accent.opacity(0.12))
+                Image(systemName: icon)
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(HomeColors.accent)
+            }
+            .frame(width: 56, height: 56)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 0)
+
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    private func trainerCardTitle(icon: String, title: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(HomeColors.accent)
+            Text(title)
+                .font(.headline.weight(.semibold))
+            Spacer()
+        }
+    }
+
+    private func trainerInfoRow(_ title: String, _ value: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(title)
+                .foregroundStyle(.primary)
+            Spacer(minLength: 12)
+            Text(value)
+                .multilineTextAlignment(.trailing)
+                .foregroundStyle(.secondary)
+        }
+        .font(.subheadline)
+        .padding(.vertical, 7)
+        .overlay(alignment: .bottom) {
+            Divider().opacity(0.55)
+        }
+    }
+
+    private func trainerTextBlock(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+            Text(value)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.top, 6)
+    }
+}
+
+private struct TrainerUpdateRequestComposerScreen: View {
+    @ObservedObject var store: TrainerClientSupportStore
+    @Binding var requestType: ProfileUpdateRequestType
+    @Binding var requestMessage: String
+
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var sessionStore: AppSessionStore
+
+    private var trimmedMessage: String {
+        requestMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var body: some View {
+        List {
+            Section(AppLocalizer.string("coaching.update_request.section")) {
+                Picker(AppLocalizer.string("coaching.update_request.type"), selection: $requestType) {
+                    ForEach(ProfileUpdateRequestType.allCases) { type in
+                        Text(AppLocalizer.string(type.localizationKey)).tag(type)
+                    }
+                }
+
+                TextField(AppLocalizer.string("coaching.update_request.message"), text: $requestMessage, axis: .vertical)
+                    .lineLimit(3...6)
+
+                Button {
+                    Task {
+                        await store.createUpdateRequest(
+                            type: requestType,
+                            message: requestMessage,
+                            senderName: sessionStore.profile?.displayName ?? ""
+                        )
+                        if store.errorMessage == nil {
+                            requestMessage = ""
+                            requestType = .generalUpdate
+                            dismiss()
+                        }
+                    }
+                } label: {
+                    HStack {
+                        Text(AppLocalizer.string("coaching.update_request.action.send"))
+                        Spacer()
+                        if store.isSubmitting {
+                            ProgressView()
+                        }
+                    }
+                }
+                .disabled(store.isSubmitting || trimmedMessage.isEmpty)
+            }
+
+            if store.updateRequests.contains(where: { $0.status == "open" }) {
+                Section(AppLocalizer.string("coaching.workspace.open_requests")) {
+                    ForEach(store.updateRequests.filter { $0.status == "open" }) { request in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(AppLocalizer.string(request.type.localizationKey))
+                                .font(.headline)
+                            Text(request.message)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+            }
+        }
+        .navigationTitle(AppLocalizer.string("coaching.update_request.section"))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(AppLocalizer.string("common.cancel")) {
+                    dismiss()
+                }
+            }
+        }
+    }
+}
+
+private struct TrainerClientChatScreen: View {
+    @ObservedObject var store: TrainerClientSupportStore
+    @Binding var noteMessage: String
+
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var sessionStore: AppSessionStore
+    @State private var pendingDelete: CoachingNote?
+
+    private var trimmedMessage: String {
+        noteMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var body: some View {
+        CoachingChatContent(
+            notes: store.notes,
+            outgoingRole: .trainer,
+            placeholder: AppLocalizer.string("coaching.notes.placeholder.trainer"),
+            message: $noteMessage,
+            isSubmitting: store.isSubmitting,
+            onSend: {
+                await store.sendNote(
+                    noteMessage,
+                    senderName: sessionStore.profile?.displayName ?? ""
+                )
+                if store.errorMessage == nil {
+                    noteMessage = ""
+                }
+            },
+            onRequestDelete: { pendingDelete = $0 }
+        )
+        .navigationTitle(AppLocalizer.string("coaching.workspace.client_chat"))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(AppLocalizer.string("common.close")) {
+                    dismiss()
+                }
+            }
+        }
+        .alert(AppLocalizer.string("coaching.history.delete.title"), isPresented: Binding(
+            get: { pendingDelete != nil },
+            set: { if !$0 { pendingDelete = nil } }
+        )) {
+            Button(AppLocalizer.string("common.cancel"), role: .cancel) {
+                pendingDelete = nil
+            }
+            Button(AppLocalizer.string("common.delete"), role: .destructive) {
+                guard let pendingDelete else { return }
+                Task {
+                    await store.deleteNote(pendingDelete)
+                }
+                self.pendingDelete = nil
+            }
+        } message: {
+            Text(AppLocalizer.string("coaching.history.delete.message"))
+        }
     }
 }
 
@@ -2264,6 +2498,185 @@ private struct CoachingNotesHistoryScreen: View {
         } message: {
             Text(AppLocalizer.string("coaching.history.delete.message"))
         }
+    }
+}
+
+private struct CoachingChatContent: View {
+    let notes: [CoachingNote]
+    let outgoingRole: CoachingNoteAuthorRole
+    let placeholder: String
+    @Binding var message: String
+    let isSubmitting: Bool
+    let onSend: () async -> Void
+    let onRequestDelete: (CoachingNote) -> Void
+
+    private var sortedNotes: [CoachingNote] {
+        notes.sorted { $0.createdAt < $1.createdAt }
+    }
+
+    private var trimmedMessage: String {
+        message.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 10) {
+                    if sortedNotes.isEmpty {
+                        VStack(spacing: 10) {
+                            Image(systemName: "bubble.left.and.bubble.right")
+                                .font(.title2.weight(.semibold))
+                                .foregroundStyle(HomeColors.accent)
+                            Text(AppLocalizer.string("coaching.notes.empty"))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 80)
+                    } else {
+                        ForEach(sortedNotes) { note in
+                            CoachingChatBubble(
+                                note: note,
+                                isOutgoing: note.authorRole == outgoingRole,
+                                onRequestDelete: { onRequestDelete(note) }
+                            )
+                            .id(note.id)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 12)
+            }
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .safeAreaInset(edge: .bottom) {
+                chatComposer
+                    .background(.ultraThinMaterial)
+            }
+            .onAppear {
+                scrollToLatest(proxy)
+            }
+            .onChange(of: notes.count) { _, _ in
+                scrollToLatest(proxy)
+            }
+        }
+    }
+
+    private var chatComposer: some View {
+        HStack(alignment: .bottom, spacing: 10) {
+            TextField(placeholder, text: $message, axis: .vertical)
+                .lineLimit(1...5)
+                .textFieldStyle(.plain)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(Color(.secondarySystemGroupedBackground))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .strokeBorder(Color(.separator).opacity(0.18))
+                )
+
+            Button {
+                Task {
+                    await onSend()
+                }
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(trimmedMessage.isEmpty ? Color(.systemGray4) : HomeColors.accent)
+                    if isSubmitting {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Image(systemName: "paperplane.fill")
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(.white)
+                    }
+                }
+                .frame(width: 42, height: 42)
+            }
+            .disabled(isSubmitting || trimmedMessage.isEmpty)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+    }
+
+    private func scrollToLatest(_ proxy: ScrollViewProxy) {
+        guard let lastId = sortedNotes.last?.id else { return }
+        DispatchQueue.main.async {
+            withAnimation(.easeOut(duration: 0.22)) {
+                proxy.scrollTo(lastId, anchor: .bottom)
+            }
+        }
+    }
+}
+
+private struct CoachingChatBubble: View {
+    let note: CoachingNote
+    let isOutgoing: Bool
+    let onRequestDelete: () -> Void
+
+    private var authorTitle: String {
+        AppLocalizer.string(note.authorRole == .trainer ? "coaching.notes.author.trainer" : "coaching.notes.author.client")
+    }
+
+    var body: some View {
+        HStack {
+            if isOutgoing {
+                Spacer(minLength: 48)
+            }
+
+            VStack(alignment: isOutgoing ? .trailing : .leading, spacing: 4) {
+                if isOutgoing == false {
+                    Text(authorTitle)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(HomeColors.accent)
+                }
+
+                Text(note.message)
+                    .font(.body)
+                    .foregroundStyle(isOutgoing ? .white : .primary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(note.createdAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(.caption2)
+                    .foregroundStyle(isOutgoing ? Color.white.opacity(0.72) : .secondary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(isOutgoing ? HomeColors.accent : Color(.secondarySystemGroupedBackground))
+            )
+            .overlay(alignment: isOutgoing ? .bottomTrailing : .bottomLeading) {
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 0,
+                    bottomLeadingRadius: isOutgoing ? 0 : 3,
+                    bottomTrailingRadius: isOutgoing ? 3 : 0,
+                    topTrailingRadius: 0,
+                    style: .continuous
+                )
+                .fill(isOutgoing ? HomeColors.accent : Color(.secondarySystemGroupedBackground))
+                .frame(width: 14, height: 14)
+                .offset(x: isOutgoing ? 5 : -5, y: 1)
+            }
+            .frame(maxWidth: 310, alignment: isOutgoing ? .trailing : .leading)
+            .contextMenu {
+                Button(role: .destructive) {
+                    onRequestDelete()
+                } label: {
+                    Label(AppLocalizer.string("common.delete"), systemImage: "trash")
+                }
+            }
+
+            if isOutgoing == false {
+                Spacer(minLength: 48)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: isOutgoing ? .trailing : .leading)
     }
 }
 

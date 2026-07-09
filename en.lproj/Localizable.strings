@@ -459,6 +459,8 @@
 "coaching.workspace.metric.open_requests" = "Open requests";
 "coaching.workspace.connected_since" = "Connected since";
 "coaching.workspace.last_note" = "Latest note";
+"coaching.workspace.client_chat" = "Client chat";
+"coaching.workspace.open_requests" = "Open requests";
 "workout.active.title" = "Active Workout";
 "workout.title.edit" = "Workout Title";
 "workout.title.placeholder" = "For example, Legs and Core";
