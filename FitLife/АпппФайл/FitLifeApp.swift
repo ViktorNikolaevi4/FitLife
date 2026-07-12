@@ -21,6 +21,7 @@ struct FitLifeApp: App {
             WaterIntake.self,
             BodyMeasurements.self,
             WorkoutSession.self,
+            WorkoutBlock.self,
             WorkoutExercise.self,
             WorkoutSet.self,
             CustomWorkoutExerciseTemplate.self

@@ -89,8 +89,23 @@ final class WorkoutTemplateAssignmentStore: ObservableObject {
                 .order(by: "orderIndex")
                 .getDocuments()
 
+            let templateBlocks = try await firestore
+                .collection("workout_templates")
+                .document(template.id)
+                .collection("blocks")
+                .order(by: "orderIndex")
+                .getDocuments()
+
             let exerciseItems = templateExercises.documents.compactMap { document in
                 WorkoutTemplateExerciseItem(
+                    id: document.documentID,
+                    templateId: template.id,
+                    data: document.data()
+                )
+            }
+
+            let blockItems = templateBlocks.documents.compactMap { document in
+                WorkoutTemplateBlockItem(
                     id: document.documentID,
                     templateId: template.id,
                     data: document.data()
@@ -103,6 +118,11 @@ final class WorkoutTemplateAssignmentStore: ObservableObject {
             for exercise in exerciseItems {
                 let exerciseRef = documentRef.collection("exercises").document(exercise.id)
                 batch.setData(exercise.firestoreData, forDocument: exerciseRef)
+            }
+
+            for block in blockItems {
+                let blockRef = documentRef.collection("blocks").document(block.id)
+                batch.setData(block.firestoreData, forDocument: blockRef)
             }
 
             try await batch.commit()
@@ -210,8 +230,23 @@ final class ClientAssignedWorkoutsStore: ObservableObject {
                 .order(by: "orderIndex")
                 .getDocuments()
 
+            let blocksSnapshot = try await firestore
+                .collection("workout_assignments")
+                .document(assignment.id)
+                .collection("blocks")
+                .order(by: "orderIndex")
+                .getDocuments()
+
             let remoteExercises = exercisesSnapshot.documents.compactMap { document in
                 WorkoutTemplateExerciseItem(
+                    id: document.documentID,
+                    templateId: assignment.id,
+                    data: document.data()
+                )
+            }
+
+            let remoteBlocks = blocksSnapshot.documents.compactMap { document in
+                WorkoutTemplateBlockItem(
                     id: document.documentID,
                     templateId: assignment.id,
                     data: document.data()
@@ -228,6 +263,20 @@ final class ClientAssignedWorkoutsStore: ObservableObject {
                 source: "assigned"
             )
 
+            var localBlocksByRemoteId: [String: WorkoutBlock] = [:]
+            for remoteBlock in remoteBlocks {
+                let block = WorkoutBlock(
+                    title: remoteBlock.displayTitle,
+                    type: remoteBlock.type,
+                    orderIndex: remoteBlock.orderIndex,
+                    rounds: remoteBlock.rounds,
+                    restBetweenRoundsSeconds: remoteBlock.restBetweenRoundsSeconds
+                )
+                block.session = workout
+                workout.blockItems.append(block)
+                localBlocksByRemoteId[remoteBlock.id] = block
+            }
+
             for remoteExercise in remoteExercises {
                 let exercise = WorkoutExercise(
                     name: remoteExercise.name,
@@ -236,6 +285,11 @@ final class ClientAssignedWorkoutsStore: ObservableObject {
                     orderIndex: remoteExercise.orderIndex
                 )
                 exercise.session = workout
+                if let blockId = remoteExercise.blockId,
+                   let block = localBlocksByRemoteId[blockId] {
+                    exercise.block = block
+                    block.exerciseItems.append(exercise)
+                }
 
                 for (index, remoteSet) in remoteExercise.sets.enumerated() {
                     let set = WorkoutSet(
@@ -316,6 +370,7 @@ final class ClientAssignedWorkoutsStore: ObservableObject {
 
 @MainActor
 final class ClientAssignmentDetailStore: ObservableObject {
+    @Published private(set) var blocks: [WorkoutTemplateBlockItem] = []
     @Published private(set) var exercises: [WorkoutTemplateExerciseItem] = []
     @Published private(set) var isLoading = false
     @Published var errorMessage: String?
@@ -333,14 +388,31 @@ final class ClientAssignmentDetailStore: ObservableObject {
         errorMessage = nil
 
         do {
-            let snapshot = try await firestore
+            async let blocksSnapshot = firestore
+                .collection("workout_assignments")
+                .document(assignment.id)
+                .collection("blocks")
+                .order(by: "orderIndex")
+                .getDocuments()
+
+            async let exercisesSnapshot = firestore
                 .collection("workout_assignments")
                 .document(assignment.id)
                 .collection("exercises")
                 .order(by: "orderIndex")
                 .getDocuments()
 
-            exercises = snapshot.documents.compactMap { document in
+            let (blockDocs, exerciseDocs) = try await (blocksSnapshot, exercisesSnapshot)
+
+            blocks = blockDocs.documents.compactMap { document in
+                WorkoutTemplateBlockItem(
+                    id: document.documentID,
+                    templateId: assignment.id,
+                    data: document.data()
+                )
+            }
+
+            exercises = exerciseDocs.documents.compactMap { document in
                 WorkoutTemplateExerciseItem(
                     id: document.documentID,
                     templateId: assignment.id,

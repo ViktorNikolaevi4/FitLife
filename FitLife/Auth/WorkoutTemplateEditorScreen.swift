@@ -9,6 +9,8 @@ struct WorkoutTemplateEditorScreen: View {
 
     @StateObject private var store: WorkoutTemplateContentStore
     @State private var showAddExercise = false
+    @State private var showAddBlock = false
+    @State private var targetBlockId: String?
     @State private var showAssignSheet = false
     @State private var expandedExerciseIds: Set<String> = []
     @State private var pendingDeleteExercise: WorkoutTemplateExerciseItem?
@@ -26,6 +28,42 @@ struct WorkoutTemplateEditorScreen: View {
 
     private var templates: [WorkoutExerciseTemplate] {
         workoutTemplates()
+    }
+
+    private var templateBlockGroups: [WorkoutTemplateBlockGroup] {
+        var groups = store.blocks
+            .sorted { $0.orderIndex < $1.orderIndex }
+            .map { block in
+                let exercises = store.exercises
+                    .filter { $0.blockId == block.id }
+                    .sorted { $0.orderIndex < $1.orderIndex }
+                return WorkoutTemplateBlockGroup(
+                    id: block.id,
+                    block: block,
+                    title: block.displayTitle,
+                    subtitle: block.subtitle(exerciseCount: exercises.count),
+                    exercises: exercises
+                )
+            }
+
+        let groupedIds = Set(groups.flatMap { $0.exercises.map(\.id) })
+        let legacyExercises = store.exercises
+            .filter { groupedIds.contains($0.id) == false }
+            .sorted { $0.orderIndex < $1.orderIndex }
+        if legacyExercises.isEmpty == false {
+            groups.insert(
+                WorkoutTemplateBlockGroup(
+                    id: "legacy-strength",
+                    block: nil,
+                    title: AppLocalizer.string("workout.block.strength.title"),
+                    subtitle: AppLocalizer.format("workout.block.exercise_count", legacyExercises.count),
+                    exercises: legacyExercises
+                ),
+                at: 0
+            )
+        }
+
+        return groups
     }
 
     var body: some View {
@@ -47,23 +85,39 @@ struct WorkoutTemplateEditorScreen: View {
             }
 
             Section(appLanguage.localized("trainer.templates.exercises.section")) {
-                ForEach(store.exercises) { exercise in
-                    WorkoutTemplateExerciseCard(
-                        exercise: exercise,
-                        isExpanded: expandedExerciseIds.contains(exercise.id),
-                        onToggleExpanded: {
-                            toggleExpanded(exercise.id)
+                ForEach(templateBlockGroups) { group in
+                    WorkoutTemplateBlockHeader(
+                        title: group.title,
+                        subtitle: group.subtitle,
+                        onAddExercise: group.block.map { block in
+                            {
+                                targetBlockId = block.id
+                                showAddExercise = true
+                            }
                         }
                     )
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button(role: .destructive) {
-                            pendingDeleteExercise = exercise
-                        } label: {
-                            Label(AppLocalizer.string("common.delete"), systemImage: "trash")
-                        }
-                    }
-                    .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                    .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 2, trailing: 0))
                     .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+
+                    ForEach(group.exercises) { exercise in
+                        WorkoutTemplateExerciseCard(
+                            exercise: exercise,
+                            isExpanded: expandedExerciseIds.contains(exercise.id),
+                            onToggleExpanded: {
+                                toggleExpanded(exercise.id)
+                            }
+                        )
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                pendingDeleteExercise = exercise
+                            } label: {
+                                Label(AppLocalizer.string("common.delete"), systemImage: "trash")
+                            }
+                        }
+                        .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                        .listRowBackground(Color.clear)
+                    }
                 }
             }
         }
@@ -81,6 +135,15 @@ struct WorkoutTemplateEditorScreen: View {
 
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
+                    showAddBlock = true
+                } label: {
+                    Image(systemName: "square.stack.3d.up.fill")
+                }
+            }
+
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    targetBlockId = nil
                     showAddExercise = true
                 } label: {
                     Image(systemName: "plus")
@@ -104,11 +167,27 @@ struct WorkoutTemplateEditorScreen: View {
         .sheet(isPresented: $showAddExercise) {
             AddWorkoutExerciseScreen(templates: templates) { draft in
                 Task {
-                    await store.addExercise(draft)
+                    await store.addExercise(draft, blockId: targetBlockId)
+                    targetBlockId = nil
                     showAddExercise = false
                 }
             }
             .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showAddBlock) {
+            AddWorkoutTemplateBlockScreen { draft in
+                Task {
+                    await store.addBlock(
+                        title: draft.resolvedTitle,
+                        type: draft.type,
+                        rounds: draft.rounds,
+                        restBetweenRoundsSeconds: draft.restBetweenRoundsSeconds
+                    )
+                    showAddBlock = false
+                }
+            }
+            .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showAssignSheet) {
@@ -149,6 +228,144 @@ struct WorkoutTemplateEditorScreen: View {
                 expandedExerciseIds.insert(id)
             }
         }
+    }
+}
+
+private struct WorkoutTemplateBlockGroup: Identifiable {
+    let id: String
+    let block: WorkoutTemplateBlockItem?
+    let title: String
+    let subtitle: String
+    let exercises: [WorkoutTemplateExerciseItem]
+}
+
+private struct WorkoutTemplateBlockHeader: View {
+    let title: String
+    let subtitle: String
+    var onAddExercise: (() -> Void)?
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color.blue.opacity(0.14))
+
+                Image(systemName: "square.stack.3d.up.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Color.blue)
+            }
+            .frame(width: 44, height: 44)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.primary)
+
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            if let onAddExercise {
+                Button(action: onAddExercise) {
+                    Image(systemName: "plus")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(Color.blue)
+                        .frame(width: 34, height: 34)
+                        .background(Circle().fill(Color.blue.opacity(0.12)))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(AppLocalizer.string("workout.add.exercise"))
+            }
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 4)
+    }
+}
+
+private struct WorkoutTemplateBlockDraft {
+    var title: String
+    var type: WorkoutBlockType
+    var rounds: Int
+    var restBetweenRoundsSeconds: Int
+
+    var resolvedTitle: String {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedTitle.isEmpty {
+            return type.title
+        }
+        return trimmedTitle
+    }
+}
+
+private struct AddWorkoutTemplateBlockScreen: View {
+    @Environment(\.dismiss) private var dismiss
+    let onSave: (WorkoutTemplateBlockDraft) -> Void
+
+    @State private var type: WorkoutBlockType = .circuit
+    @State private var title = ""
+    @State private var rounds = 3
+    @State private var restBetweenRoundsSeconds = 60
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Picker(AppLocalizer.string("workout.block.type"), selection: $type) {
+                        ForEach(WorkoutBlockType.templateCases, id: \.self) { blockType in
+                            Text(blockType.title).tag(blockType)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    TextField(AppLocalizer.string("workout.block.title.placeholder"), text: $title)
+                }
+
+                if type == .circuit {
+                    Section(AppLocalizer.string("workout.block.circuit.settings")) {
+                        Stepper(
+                            AppLocalizer.format("workout.block.rounds.value", rounds),
+                            value: $rounds,
+                            in: 1...20
+                        )
+                        Stepper(
+                            AppLocalizer.format("workout.block.round_rest.value", restBetweenRoundsSeconds),
+                            value: $restBetweenRoundsSeconds,
+                            in: 0...600,
+                            step: 5
+                        )
+                    }
+                }
+            }
+            .navigationTitle(AppLocalizer.string("workout.block.add.title"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(AppLocalizer.string("common.cancel")) {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(AppLocalizer.string("common.save")) {
+                        save()
+                    }
+                }
+            }
+        }
+    }
+
+    private func save() {
+        onSave(
+            WorkoutTemplateBlockDraft(
+                title: title,
+                type: type,
+                rounds: type == .circuit ? rounds : 1,
+                restBetweenRoundsSeconds: type == .circuit ? restBetweenRoundsSeconds : 0
+            )
+        )
+        dismiss()
     }
 }
 

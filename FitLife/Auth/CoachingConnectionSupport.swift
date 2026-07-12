@@ -428,6 +428,98 @@ struct CoachingWorkoutExerciseSnapshot: Identifiable, Hashable {
     }
 }
 
+struct CoachingWorkoutBlockSnapshot: Identifiable, Hashable {
+    let id: String
+    let title: String
+    let typeRawValue: String
+    let orderIndex: Int
+    let rounds: Int
+    let restBetweenRoundsSeconds: Int
+    let exercises: [CoachingWorkoutExerciseSnapshot]
+
+    init(block: WorkoutBlock) {
+        id = block.id.uuidString
+        title = block.title
+        typeRawValue = block.typeRawValue
+        orderIndex = block.orderIndex
+        rounds = block.rounds
+        restBetweenRoundsSeconds = block.restBetweenRoundsSeconds
+        exercises = block.exerciseItems
+            .sorted { $0.orderIndex < $1.orderIndex }
+            .map(CoachingWorkoutExerciseSnapshot.init(exercise:))
+    }
+
+    init(legacyExercises: [CoachingWorkoutExerciseSnapshot]) {
+        id = "legacy-strength"
+        title = AppLocalizer.string("workout.block.strength.title")
+        typeRawValue = WorkoutBlockType.strength.rawValue
+        orderIndex = 0
+        rounds = 1
+        restBetweenRoundsSeconds = 0
+        exercises = legacyExercises.sorted { $0.orderIndex < $1.orderIndex }
+    }
+
+    init?(_ data: [String: Any]) {
+        guard
+            let id = data["id"] as? String,
+            let title = data["title"] as? String,
+            let typeRawValue = data["typeRawValue"] as? String,
+            let orderIndex = data["orderIndex"] as? Int,
+            let rounds = data["rounds"] as? Int,
+            let restBetweenRoundsSeconds = data["restBetweenRoundsSeconds"] as? Int,
+            let exercisesData = data["exercises"] as? [[String: Any]]
+        else {
+            return nil
+        }
+
+        self.id = id
+        self.title = title
+        self.typeRawValue = typeRawValue
+        self.orderIndex = orderIndex
+        self.rounds = rounds
+        self.restBetweenRoundsSeconds = restBetweenRoundsSeconds
+        self.exercises = exercisesData.compactMap(CoachingWorkoutExerciseSnapshot.init)
+    }
+
+    var firestoreData: [String: Any] {
+        [
+            "id": id,
+            "title": title,
+            "typeRawValue": typeRawValue,
+            "orderIndex": orderIndex,
+            "rounds": rounds,
+            "restBetweenRoundsSeconds": restBetweenRoundsSeconds,
+            "exercises": exercises.map(\.firestoreData)
+        ]
+    }
+
+    var type: WorkoutBlockType {
+        WorkoutBlockType(rawValue: typeRawValue) ?? .strength
+    }
+
+    var displayTitle: String {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedTitle.isEmpty {
+            return type.title
+        }
+        return trimmedTitle
+    }
+
+    var subtitle: String {
+        switch type {
+        case .circuit:
+            return AppLocalizer.format(
+                "workout.block.circuit.summary",
+                rounds,
+                exercises.count,
+                restBetweenRoundsSeconds
+            )
+        default:
+            return AppLocalizer.format("workout.block.exercise_count", exercises.count)
+        }
+    }
+}
+
 struct CoachingWorkoutSnapshot: Identifiable, Hashable {
     let id: String
     let title: String
@@ -437,6 +529,7 @@ struct CoachingWorkoutSnapshot: Identifiable, Hashable {
     let estimatedCalories: Int
     let note: String
     let exercises: [CoachingWorkoutExerciseSnapshot]
+    let blocks: [CoachingWorkoutBlockSnapshot]
 
     init(workout: WorkoutSession) {
         id = workout.id.uuidString
@@ -449,6 +542,9 @@ struct CoachingWorkoutSnapshot: Identifiable, Hashable {
         exercises = workout.exerciseItems
             .sorted { $0.orderIndex < $1.orderIndex }
             .map(CoachingWorkoutExerciseSnapshot.init(exercise:))
+        blocks = workout.blockItems
+            .sorted { $0.orderIndex < $1.orderIndex }
+            .map(CoachingWorkoutBlockSnapshot.init(block:))
     }
 
     init?(_ data: [String: Any]) {
@@ -478,6 +574,11 @@ struct CoachingWorkoutSnapshot: Identifiable, Hashable {
             self.endedAt = data["endedAt"] as? Date
         }
         self.exercises = exercisesData.compactMap(CoachingWorkoutExerciseSnapshot.init)
+        if let blocksData = data["blocks"] as? [[String: Any]] {
+            self.blocks = blocksData.compactMap(CoachingWorkoutBlockSnapshot.init)
+        } else {
+            self.blocks = []
+        }
     }
 
     var firestoreData: [String: Any] {
@@ -489,7 +590,8 @@ struct CoachingWorkoutSnapshot: Identifiable, Hashable {
             "elapsedSeconds": elapsedSeconds,
             "estimatedCalories": estimatedCalories,
             "note": note,
-            "exercises": exercises.map(\.firestoreData)
+            "exercises": exercises.map(\.firestoreData),
+            "blocks": blocks.map(\.firestoreData)
         ]
     }
 
@@ -497,6 +599,9 @@ struct CoachingWorkoutSnapshot: Identifiable, Hashable {
     var setCount: Int { exercises.reduce(0) { $0 + $1.sets.count } }
     var completedSetCount: Int { exercises.reduce(0) { $0 + $1.sets.filter(\.isCompleted).count } }
     var exerciseNoteCount: Int { exercises.filter { $0.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }.count }
+    var displayBlocks: [CoachingWorkoutBlockSnapshot] {
+        blocks.isEmpty ? [CoachingWorkoutBlockSnapshot(legacyExercises: exercises)] : blocks
+    }
 }
 
 struct CoachingWorkoutReport: Identifiable, Hashable {
@@ -2326,6 +2431,9 @@ private struct CoachingWorkoutReportRow: View {
                     HStack(spacing: 10) {
                         Text((workout.endedAt ?? workout.createdAt).formatted(date: .abbreviated, time: .omitted))
                         Text(formattedWorkoutCalories(workout.estimatedCalories))
+                        if workout.displayBlocks.count > 1 {
+                            Text(AppLocalizer.format("coaching.workouts.blocks", workout.displayBlocks.count))
+                        }
                         Text(AppLocalizer.format("coaching.workouts.summary", workout.exerciseCount, workout.setCount))
                         Text(AppLocalizer.format("coaching.workouts.completed_sets", workout.completedSetCount))
                     }
@@ -2859,28 +2967,24 @@ struct CoachingWorkoutReportDetailScreen: View {
                         .padding(.vertical, 4)
                     }
 
-                    ForEach(workout.exercises.sorted { $0.orderIndex < $1.orderIndex }, id: \.id) { exercise in
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(exercise.name)
-                                .font(.headline)
-
-                            ForEach(exercise.sets.sorted { $0.orderIndex < $1.orderIndex }, id: \.orderIndex) { set in
-                                HStack {
-                                    Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
-                                        .foregroundStyle(set.isCompleted ? Color.green : .secondary)
-                                    Text(formattedSnapshotSetValue(set))
-                                        .font(.subheadline)
-                                    Spacer()
-                                }
-                            }
-
-                            if exercise.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-                                Text(exercise.note)
+                    ForEach(workout.displayBlocks.sorted { $0.orderIndex < $1.orderIndex }, id: \.id) { block in
+                        VStack(alignment: .leading, spacing: 10) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(block.displayTitle)
+                                    .font(.headline.weight(.semibold))
+                                Text(block.subtitle)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
+
+                            ForEach(block.exercises.sorted { $0.orderIndex < $1.orderIndex }, id: \.id) { exercise in
+                                CoachingWorkoutReportExerciseDetail(
+                                    exercise: exercise,
+                                    formattedSetValue: formattedSnapshotSetValue
+                                )
+                            }
                         }
-                        .padding(.vertical, 4)
+                        .padding(.vertical, 6)
                     }
                 }
             }
@@ -2914,6 +3018,35 @@ struct CoachingWorkoutReportDetailScreen: View {
             durationSeconds: set.durationSeconds,
             metricType: metricType
         )
+    }
+}
+
+private struct CoachingWorkoutReportExerciseDetail: View {
+    let exercise: CoachingWorkoutExerciseSnapshot
+    let formattedSetValue: (CoachingWorkoutSetSnapshot) -> String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(exercise.name)
+                .font(.subheadline.weight(.semibold))
+
+            ForEach(exercise.sets.sorted { $0.orderIndex < $1.orderIndex }, id: \.orderIndex) { set in
+                HStack {
+                    Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(set.isCompleted ? Color.green : .secondary)
+                    Text(formattedSetValue(set))
+                        .font(.subheadline)
+                    Spacer()
+                }
+            }
+
+            if exercise.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                Text(exercise.note)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
 

@@ -221,6 +221,40 @@ struct ClientAssignmentDetailScreen: View {
             .first
     }
 
+    private var assignmentBlockGroups: [WorkoutAssignmentBlockGroup] {
+        var groups = store.blocks
+            .sorted { $0.orderIndex < $1.orderIndex }
+            .map { block in
+                let exercises = store.exercises
+                    .filter { $0.blockId == block.id }
+                    .sorted { $0.orderIndex < $1.orderIndex }
+                return WorkoutAssignmentBlockGroup(
+                    id: block.id,
+                    title: block.displayTitle,
+                    subtitle: block.subtitle(exerciseCount: exercises.count),
+                    exercises: exercises
+                )
+            }
+
+        let groupedIds = Set(groups.flatMap { $0.exercises.map(\.id) })
+        let legacyExercises = store.exercises
+            .filter { groupedIds.contains($0.id) == false }
+            .sorted { $0.orderIndex < $1.orderIndex }
+        if legacyExercises.isEmpty == false {
+            groups.insert(
+                WorkoutAssignmentBlockGroup(
+                    id: "legacy-strength",
+                    title: AppLocalizer.string("workout.block.strength.title"),
+                    subtitle: AppLocalizer.format("workout.block.exercise_count", legacyExercises.count),
+                    exercises: legacyExercises
+                ),
+                at: 0
+            )
+        }
+
+        return groups
+    }
+
     var body: some View {
         List {
             if let errorMessage = store.errorMessage, errorMessage.isEmpty == false {
@@ -232,14 +266,21 @@ struct ClientAssignmentDetailScreen: View {
             }
 
             Section {
-                ForEach(Array(store.exercises.enumerated()), id: \.element.id) { index, exercise in
-                    ClientAssignmentExerciseCard(
-                        exercise: exercise,
-                        displayIndex: index + 1
-                    )
-                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
+                ForEach(assignmentBlockGroups) { group in
+                    WorkoutAssignmentBlockHeader(title: group.title, subtitle: group.subtitle)
+                        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 2, trailing: 16))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+
+                    ForEach(Array(group.exercises.enumerated()), id: \.element.id) { index, exercise in
+                        ClientAssignmentExerciseCard(
+                            exercise: exercise,
+                            displayIndex: index + 1
+                        )
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                    }
                 }
             } header: {
                 Text(appLanguage.localized("client.assignment.detail.exercises"))
@@ -302,6 +343,45 @@ struct ClientAssignmentDetailScreen: View {
             .padding(.bottom, 8)
         }
         .background(.ultraThinMaterial)
+    }
+}
+
+private struct WorkoutAssignmentBlockGroup: Identifiable {
+    let id: String
+    let title: String
+    let subtitle: String
+    let exercises: [WorkoutTemplateExerciseItem]
+}
+
+private struct WorkoutAssignmentBlockHeader: View {
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color.blue.opacity(0.14))
+
+                Image(systemName: "square.stack.3d.up.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Color.blue)
+            }
+            .frame(width: 44, height: 44)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.primary)
+
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+        }
+        .padding(.vertical, 4)
     }
 }
 

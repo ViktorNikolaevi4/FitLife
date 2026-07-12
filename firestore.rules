@@ -283,6 +283,11 @@ service cloud.firestore {
         allow read, write: if isTrainer()
           && get(/databases/$(database)/documents/workout_templates/$(templateId)).data.trainerId == request.auth.uid;
       }
+
+      match /blocks/{blockId} {
+        allow read, write: if isTrainer()
+          && get(/databases/$(database)/documents/workout_templates/$(templateId)).data.trainerId == request.auth.uid;
+      }
     }
 
     match /workout_assignments/{assignmentId} {
@@ -313,6 +318,15 @@ service cloud.firestore {
         || (isTrainer() && resource.data.trainerId == request.auth.uid);
 
       match /exercises/{exerciseId} {
+        allow read: if isOwner()
+          || (isTrainer() && trainerOwnsAssignment(assignmentId))
+          || (isClient() && clientOwnsAssignment(assignmentId));
+
+        allow create, update, delete: if isTrainer()
+          && trainerOwnsAssignmentAfter(assignmentId);
+      }
+
+      match /blocks/{blockId} {
         allow read: if isOwner()
           || (isTrainer() && trainerOwnsAssignment(assignmentId))
           || (isClient() && clientOwnsAssignment(assignmentId));

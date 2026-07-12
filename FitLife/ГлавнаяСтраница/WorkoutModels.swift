@@ -14,6 +14,41 @@ enum WorkoutActivityType: String, Codable {
     case mobility
 }
 
+enum WorkoutBlockType: String, Codable {
+    case warmup
+    case strength
+    case main
+    case circuit
+    case stretching
+    case cooldown
+
+    var title: String {
+        switch self {
+        case .warmup:
+            return AppLocalizer.string("workout.block.warmup.title")
+        case .strength:
+            return AppLocalizer.string("workout.block.strength.title")
+        case .main:
+            return AppLocalizer.string("workout.block.main.title")
+        case .circuit:
+            return AppLocalizer.string("workout.block.circuit.title")
+        case .stretching:
+            return AppLocalizer.string("workout.block.stretching.title")
+        case .cooldown:
+            return AppLocalizer.string("workout.block.cooldown.title")
+        }
+    }
+
+    static let templateCases: [WorkoutBlockType] = [
+        .warmup,
+        .strength,
+        .main,
+        .circuit,
+        .stretching,
+        .cooldown
+    ]
+}
+
 @Model
 final class WorkoutSession {
     var id: UUID = UUID()
@@ -32,10 +67,16 @@ final class WorkoutSession {
     var source: String?
 
     @Relationship(deleteRule: .cascade, inverse: \WorkoutExercise.session) var exercises: [WorkoutExercise]?
+    @Relationship(deleteRule: .cascade, inverse: \WorkoutBlock.session) var blocks: [WorkoutBlock]?
 
     var exerciseItems: [WorkoutExercise] {
         get { exercises ?? [] }
         set { exercises = newValue }
+    }
+
+    var blockItems: [WorkoutBlock] {
+        get { blocks ?? [] }
+        set { blocks = newValue }
     }
 
     var gender: Gender {
@@ -75,6 +116,50 @@ final class WorkoutSession {
 }
 
 @Model
+final class WorkoutBlock {
+    var id: UUID = UUID()
+    var title: String = ""
+    var typeRawValue: String = WorkoutBlockType.strength.rawValue
+    var orderIndex: Int = 0
+    var rounds: Int = 1
+    var workSeconds: Int = 0
+    var restSeconds: Int = 0
+    var restBetweenRoundsSeconds: Int = 0
+
+    var session: WorkoutSession?
+
+    @Relationship(deleteRule: .nullify, inverse: \WorkoutExercise.block) var exercises: [WorkoutExercise]?
+
+    var exerciseItems: [WorkoutExercise] {
+        get { exercises ?? [] }
+        set { exercises = newValue }
+    }
+
+    var type: WorkoutBlockType {
+        get { WorkoutBlockType(rawValue: typeRawValue) ?? .strength }
+        set { typeRawValue = newValue.rawValue }
+    }
+
+    init(
+        title: String,
+        type: WorkoutBlockType = .strength,
+        orderIndex: Int,
+        rounds: Int = 1,
+        workSeconds: Int = 0,
+        restSeconds: Int = 0,
+        restBetweenRoundsSeconds: Int = 0
+    ) {
+        self.title = title
+        self.typeRawValue = type.rawValue
+        self.orderIndex = orderIndex
+        self.rounds = rounds
+        self.workSeconds = workSeconds
+        self.restSeconds = restSeconds
+        self.restBetweenRoundsSeconds = restBetweenRoundsSeconds
+    }
+}
+
+@Model
 final class WorkoutExercise {
     var id: UUID = UUID()
     var name: String = ""
@@ -87,6 +172,7 @@ final class WorkoutExercise {
     var metValue: Double = 5.0
 
     var session: WorkoutSession?
+    var block: WorkoutBlock?
 
     @Relationship(deleteRule: .cascade, inverse: \WorkoutSet.exercise) var sets: [WorkoutSet]?
 
