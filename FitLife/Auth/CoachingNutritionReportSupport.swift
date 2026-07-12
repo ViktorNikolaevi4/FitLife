@@ -614,16 +614,61 @@ struct CoachingNutritionReportHistoryScreen: View {
     let onDelete: ((CoachingNutritionReport) async -> Void)?
 
     @Environment(\.dismiss) private var dismiss
+    @State private var selectedRange: CoachingReportDateRange = .all
+    @State private var customStartDate = Calendar.current.date(byAdding: .month, value: -1, to: Date()) ?? Date()
+    @State private var customEndDate = Date()
+    @State private var visibleReportCount = 50
     @State private var selectedReport: CoachingNutritionReport?
     @State private var pendingDelete: CoachingNutritionReport?
 
+    private var filteredReports: [CoachingNutritionReport] {
+        reports.filter {
+            selectedRange.contains(
+                $0.createdAt,
+                customStart: customStartDate,
+                customEnd: customEndDate
+            )
+        }
+    }
+
+    private var visibleReports: [CoachingNutritionReport] {
+        Array(filteredReports.prefix(visibleReportCount))
+    }
+
     var body: some View {
         List {
+            Section {
+                Picker(AppLocalizer.string("coaching.reports.range.title"), selection: $selectedRange) {
+                    ForEach(CoachingReportDateRange.allCases) { range in
+                        Text(range.title).tag(range)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                if selectedRange == .custom {
+                    DatePicker(
+                        AppLocalizer.string("coaching.reports.range.start"),
+                        selection: $customStartDate,
+                        in: ...customEndDate,
+                        displayedComponents: .date
+                    )
+                    DatePicker(
+                        AppLocalizer.string("coaching.reports.range.end"),
+                        selection: $customEndDate,
+                        in: customStartDate...Date(),
+                        displayedComponents: .date
+                    )
+                }
+            }
+
             if reports.isEmpty {
                 Text(AppLocalizer.string("coaching.nutrition.empty.received"))
                     .foregroundStyle(.secondary)
+            } else if filteredReports.isEmpty {
+                Text(AppLocalizer.string("coaching.reports.range.empty"))
+                    .foregroundStyle(.secondary)
             } else {
-                ForEach(reports) { report in
+                ForEach(visibleReports) { report in
                     Button {
                         selectedReport = report
                     } label: {
@@ -640,8 +685,20 @@ struct CoachingNutritionReportHistoryScreen: View {
                         }
                     }
                 }
+
+                if filteredReports.count > visibleReports.count {
+                    Button {
+                        visibleReportCount += 50
+                    } label: {
+                        Text(AppLocalizer.format("coaching.reports.show_more", filteredReports.count - visibleReports.count))
+                            .frame(maxWidth: .infinity, alignment: .center)
+                    }
+                }
             }
         }
+        .onChange(of: selectedRange) { _, _ in visibleReportCount = 50 }
+        .onChange(of: customStartDate) { _, _ in visibleReportCount = 50 }
+        .onChange(of: customEndDate) { _, _ in visibleReportCount = 50 }
         .navigationTitle(AppLocalizer.string("coaching.nutrition.section"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

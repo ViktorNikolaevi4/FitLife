@@ -819,7 +819,7 @@
 "profile.nutrition_goals.calories_hint" = "Калории рассчитываются автоматически по БЖУ.";
 "entry.portion.title" = "Порция";
 "entry.preview.title" = "Итог";
-"coaching.workouts.section" = "Тренировки для тренера";
+"coaching.workouts.section" = "Выполненные тренировки";
 "coaching.workouts.action.send" = "Отправить тренировки";
 "coaching.workouts.action.submit" = "Отправить тренеру";
 "coaching.workouts.compose.title" = "Выбрать тренировки";
@@ -835,6 +835,7 @@
 "coaching.workouts.detail.title" = "Отчёт по тренировкам";
 "coaching.workouts.detail.date" = "Дата";
 "coaching.workouts.detail.duration" = "Длительность";
+"coaching.workouts.detail.calories" = "Калории";
 "coaching.workouts.detail.summary" = "Сводка";
 "coaching.workouts.detail.workout_note" = "Заметка к тренировке";
 "coaching.nutrition.section" = "Отчёты по питанию";
@@ -865,6 +866,20 @@
 "coaching.history.view_all" = "Смотреть все";
 "coaching.history.delete.title" = "Удалить запись?";
 "coaching.history.delete.message" = "Запись будет удалена без возможности восстановления.";
+"coaching.reports.range.title" = "Период";
+"coaching.reports.range.all" = "Все";
+"coaching.reports.range.today" = "Сегодня";
+"coaching.reports.range.yesterday" = "Вчера";
+"coaching.reports.range.week" = "Эта неделя";
+"coaching.reports.range.month" = "Этот месяц";
+"coaching.reports.range.three_months" = "3 месяца";
+"coaching.reports.range.half_year" = "Полгода";
+"coaching.reports.range.year" = "Год";
+"coaching.reports.range.custom" = "Выбрать период";
+"coaching.reports.range.start" = "Начало";
+"coaching.reports.range.end" = "Конец";
+"coaching.reports.range.empty" = "За выбранный период отчётов нет.";
+"coaching.reports.show_more" = "Показать ещё (%d)";
 "common.error.network" = "Проверьте подключение к интернету и попробуйте снова.";
 "common.error.timeout" = "Сервер отвечает слишком долго. Попробуйте ещё раз.";
 "common.error.permission" = "Недостаточно прав для этого действия.";

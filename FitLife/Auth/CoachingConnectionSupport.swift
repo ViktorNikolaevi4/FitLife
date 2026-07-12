@@ -2,6 +2,79 @@ import SwiftUI
 import FirebaseFirestore
 import SwiftData
 
+enum CoachingReportDateRange: String, CaseIterable, Identifiable {
+    case all
+    case today
+    case yesterday
+    case week
+    case month
+    case threeMonths
+    case halfYear
+    case year
+    case custom
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all:
+            return AppLocalizer.string("coaching.reports.range.all")
+        case .today:
+            return AppLocalizer.string("coaching.reports.range.today")
+        case .yesterday:
+            return AppLocalizer.string("coaching.reports.range.yesterday")
+        case .week:
+            return AppLocalizer.string("coaching.reports.range.week")
+        case .month:
+            return AppLocalizer.string("coaching.reports.range.month")
+        case .threeMonths:
+            return AppLocalizer.string("coaching.reports.range.three_months")
+        case .halfYear:
+            return AppLocalizer.string("coaching.reports.range.half_year")
+        case .year:
+            return AppLocalizer.string("coaching.reports.range.year")
+        case .custom:
+            return AppLocalizer.string("coaching.reports.range.custom")
+        }
+    }
+
+    func contains(
+        _ date: Date,
+        customStart: Date,
+        customEnd: Date,
+        calendar: Calendar = .current,
+        now: Date = Date()
+    ) -> Bool {
+        switch self {
+        case .all:
+            return true
+        case .today:
+            return calendar.isDateInToday(date)
+        case .yesterday:
+            return calendar.isDateInYesterday(date)
+        case .week:
+            guard let interval = calendar.dateInterval(of: .weekOfYear, for: now) else { return true }
+            return interval.contains(date)
+        case .month:
+            guard let interval = calendar.dateInterval(of: .month, for: now) else { return true }
+            return interval.contains(date)
+        case .threeMonths:
+            guard let start = calendar.date(byAdding: .month, value: -3, to: now) else { return true }
+            return date >= start && date <= now
+        case .halfYear:
+            guard let start = calendar.date(byAdding: .month, value: -6, to: now) else { return true }
+            return date >= start && date <= now
+        case .year:
+            guard let start = calendar.date(byAdding: .year, value: -1, to: now) else { return true }
+            return date >= start && date <= now
+        case .custom:
+            let start = calendar.startOfDay(for: customStart)
+            let end = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: customEnd) ?? customEnd
+            return date >= start && date <= end
+        }
+    }
+}
+
 enum ProfileUpdateRequestType: String, CaseIterable, Codable, Identifiable {
     case weightUpdate = "weight_update"
     case measurementsUpdate = "measurements_update"
@@ -361,6 +434,7 @@ struct CoachingWorkoutSnapshot: Identifiable, Hashable {
     let createdAt: Date
     let endedAt: Date?
     let elapsedSeconds: Int
+    let estimatedCalories: Int
     let note: String
     let exercises: [CoachingWorkoutExerciseSnapshot]
 
@@ -370,6 +444,7 @@ struct CoachingWorkoutSnapshot: Identifiable, Hashable {
         createdAt = workout.createdAt
         endedAt = workout.endedAt
         elapsedSeconds = workout.elapsedSeconds
+        estimatedCalories = workout.estimatedCalories
         note = workout.note
         exercises = workout.exerciseItems
             .sorted { $0.orderIndex < $1.orderIndex }
@@ -390,6 +465,7 @@ struct CoachingWorkoutSnapshot: Identifiable, Hashable {
         self.id = id
         self.title = title
         self.elapsedSeconds = elapsedSeconds
+        self.estimatedCalories = (data["estimatedCalories"] as? Int) ?? 0
         self.note = note
         if let createdTimestamp = data["createdAt"] as? Timestamp {
             self.createdAt = createdTimestamp.dateValue()
@@ -411,6 +487,7 @@ struct CoachingWorkoutSnapshot: Identifiable, Hashable {
             "createdAt": createdAt,
             "endedAt": endedAt as Any,
             "elapsedSeconds": elapsedSeconds,
+            "estimatedCalories": estimatedCalories,
             "note": note,
             "exercises": exercises.map(\.firestoreData)
         ]
@@ -2248,6 +2325,7 @@ private struct CoachingWorkoutReportRow: View {
 
                     HStack(spacing: 10) {
                         Text((workout.endedAt ?? workout.createdAt).formatted(date: .abbreviated, time: .omitted))
+                        Text(formattedWorkoutCalories(workout.estimatedCalories))
                         Text(AppLocalizer.format("coaching.workouts.summary", workout.exerciseCount, workout.setCount))
                         Text(AppLocalizer.format("coaching.workouts.completed_sets", workout.completedSetCount))
                     }
@@ -2382,16 +2460,61 @@ private struct CoachingWorkoutReportHistoryScreen: View {
     let onDelete: ((CoachingWorkoutReport) async -> Void)?
 
     @Environment(\.dismiss) private var dismiss
+    @State private var selectedRange: CoachingReportDateRange = .all
+    @State private var customStartDate = Calendar.current.date(byAdding: .month, value: -1, to: Date()) ?? Date()
+    @State private var customEndDate = Date()
+    @State private var visibleReportCount = 50
     @State private var selectedWorkoutReport: CoachingWorkoutReport?
     @State private var pendingDelete: CoachingWorkoutReport?
 
+    private var filteredReports: [CoachingWorkoutReport] {
+        reports.filter {
+            selectedRange.contains(
+                $0.createdAt,
+                customStart: customStartDate,
+                customEnd: customEndDate
+            )
+        }
+    }
+
+    private var visibleReports: [CoachingWorkoutReport] {
+        Array(filteredReports.prefix(visibleReportCount))
+    }
+
     var body: some View {
         List {
+            Section {
+                Picker(AppLocalizer.string("coaching.reports.range.title"), selection: $selectedRange) {
+                    ForEach(CoachingReportDateRange.allCases) { range in
+                        Text(range.title).tag(range)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                if selectedRange == .custom {
+                    DatePicker(
+                        AppLocalizer.string("coaching.reports.range.start"),
+                        selection: $customStartDate,
+                        in: ...customEndDate,
+                        displayedComponents: .date
+                    )
+                    DatePicker(
+                        AppLocalizer.string("coaching.reports.range.end"),
+                        selection: $customEndDate,
+                        in: customStartDate...Date(),
+                        displayedComponents: .date
+                    )
+                }
+            }
+
             if reports.isEmpty {
                 Text(AppLocalizer.string("coaching.workouts.empty.received"))
                     .foregroundStyle(.secondary)
+            } else if filteredReports.isEmpty {
+                Text(AppLocalizer.string("coaching.reports.range.empty"))
+                    .foregroundStyle(.secondary)
             } else {
-                ForEach(reports) { report in
+                ForEach(visibleReports) { report in
                     Button {
                         selectedWorkoutReport = report
                     } label: {
@@ -2408,8 +2531,20 @@ private struct CoachingWorkoutReportHistoryScreen: View {
                         }
                     }
                 }
+
+                if filteredReports.count > visibleReports.count {
+                    Button {
+                        visibleReportCount += 50
+                    } label: {
+                        Text(AppLocalizer.format("coaching.reports.show_more", filteredReports.count - visibleReports.count))
+                            .frame(maxWidth: .infinity, alignment: .center)
+                    }
+                }
             }
         }
+        .onChange(of: selectedRange) { _, _ in visibleReportCount = 50 }
+        .onChange(of: customStartDate) { _, _ in visibleReportCount = 50 }
+        .onChange(of: customEndDate) { _, _ in visibleReportCount = 50 }
         .navigationTitle(AppLocalizer.string("coaching.workouts.section"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -2705,8 +2840,8 @@ struct CoachingWorkoutReportDetailScreen: View {
                         value: (workout.endedAt ?? workout.createdAt).formatted(date: .abbreviated, time: .omitted)
                     )
                     LabeledContent(
-                        AppLocalizer.string("coaching.workouts.detail.duration"),
-                        value: formattedElapsed(workout.elapsedSeconds)
+                        AppLocalizer.string("coaching.workouts.detail.calories"),
+                        value: formattedWorkoutCalories(workout.estimatedCalories)
                     )
                     LabeledContent(
                         AppLocalizer.string("coaching.workouts.detail.summary"),

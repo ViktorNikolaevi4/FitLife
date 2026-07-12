@@ -819,7 +819,7 @@
 "profile.nutrition_goals.calories_hint" = "Calories are calculated automatically from macros.";
 "entry.portion.title" = "Portion";
 "entry.preview.title" = "Preview";
-"coaching.workouts.section" = "Workouts for coach";
+"coaching.workouts.section" = "Completed workouts";
 "coaching.workouts.action.send" = "Send workouts";
 "coaching.workouts.action.submit" = "Send to coach";
 "coaching.workouts.compose.title" = "Select Workouts";
@@ -835,6 +835,7 @@
 "coaching.workouts.detail.title" = "Workout Report";
 "coaching.workouts.detail.date" = "Date";
 "coaching.workouts.detail.duration" = "Duration";
+"coaching.workouts.detail.calories" = "Calories";
 "coaching.workouts.detail.summary" = "Summary";
 "coaching.workouts.detail.workout_note" = "Workout note";
 "coaching.nutrition.section" = "Nutrition reports";
@@ -865,6 +866,20 @@
 "coaching.history.view_all" = "View all";
 "coaching.history.delete.title" = "Delete entry?";
 "coaching.history.delete.message" = "This entry will be deleted permanently.";
+"coaching.reports.range.title" = "Period";
+"coaching.reports.range.all" = "All";
+"coaching.reports.range.today" = "Today";
+"coaching.reports.range.yesterday" = "Yesterday";
+"coaching.reports.range.week" = "This week";
+"coaching.reports.range.month" = "This month";
+"coaching.reports.range.three_months" = "3 months";
+"coaching.reports.range.half_year" = "6 months";
+"coaching.reports.range.year" = "Year";
+"coaching.reports.range.custom" = "Choose period";
+"coaching.reports.range.start" = "Start";
+"coaching.reports.range.end" = "End";
+"coaching.reports.range.empty" = "No reports for the selected period.";
+"coaching.reports.show_more" = "Show more (%d)";
 "common.error.network" = "Check your internet connection and try again.";
 "common.error.timeout" = "The server is taking too long to respond. Try again.";
 "common.error.permission" = "You do not have permission to do that.";
