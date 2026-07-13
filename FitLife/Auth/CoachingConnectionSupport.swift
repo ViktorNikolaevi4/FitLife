@@ -432,8 +432,12 @@ struct CoachingWorkoutBlockSnapshot: Identifiable, Hashable {
     let id: String
     let title: String
     let typeRawValue: String
+    let modeRawValue: String
     let orderIndex: Int
     let rounds: Int
+    let durationMinutes: Int
+    let workSeconds: Int
+    let restSeconds: Int
     let restBetweenRoundsSeconds: Int
     let exercises: [CoachingWorkoutExerciseSnapshot]
 
@@ -441,8 +445,12 @@ struct CoachingWorkoutBlockSnapshot: Identifiable, Hashable {
         id = block.id.uuidString
         title = block.title
         typeRawValue = block.typeRawValue
+        modeRawValue = block.modeRawValue
         orderIndex = block.orderIndex
         rounds = block.rounds
+        durationMinutes = block.durationMinutes
+        workSeconds = block.workSeconds
+        restSeconds = block.restSeconds
         restBetweenRoundsSeconds = block.restBetweenRoundsSeconds
         exercises = block.exerciseItems
             .sorted { $0.orderIndex < $1.orderIndex }
@@ -453,8 +461,12 @@ struct CoachingWorkoutBlockSnapshot: Identifiable, Hashable {
         id = "legacy-strength"
         title = AppLocalizer.string("workout.block.strength.title")
         typeRawValue = WorkoutBlockType.strength.rawValue
+        modeRawValue = WorkoutBlockMode.rounds.rawValue
         orderIndex = 0
         rounds = 1
+        durationMinutes = 0
+        workSeconds = 0
+        restSeconds = 0
         restBetweenRoundsSeconds = 0
         exercises = legacyExercises.sorted { $0.orderIndex < $1.orderIndex }
     }
@@ -475,8 +487,12 @@ struct CoachingWorkoutBlockSnapshot: Identifiable, Hashable {
         self.id = id
         self.title = title
         self.typeRawValue = typeRawValue
+        self.modeRawValue = (data["modeRawValue"] as? String) ?? WorkoutBlockMode.rounds.rawValue
         self.orderIndex = orderIndex
         self.rounds = rounds
+        self.durationMinutes = (data["durationMinutes"] as? Int) ?? 12
+        self.workSeconds = (data["workSeconds"] as? Int) ?? 0
+        self.restSeconds = (data["restSeconds"] as? Int) ?? 0
         self.restBetweenRoundsSeconds = restBetweenRoundsSeconds
         self.exercises = exercisesData.compactMap(CoachingWorkoutExerciseSnapshot.init)
     }
@@ -486,8 +502,12 @@ struct CoachingWorkoutBlockSnapshot: Identifiable, Hashable {
             "id": id,
             "title": title,
             "typeRawValue": typeRawValue,
+            "modeRawValue": modeRawValue,
             "orderIndex": orderIndex,
             "rounds": rounds,
+            "durationMinutes": durationMinutes,
+            "workSeconds": workSeconds,
+            "restSeconds": restSeconds,
             "restBetweenRoundsSeconds": restBetweenRoundsSeconds,
             "exercises": exercises.map(\.firestoreData)
         ]
@@ -495,6 +515,10 @@ struct CoachingWorkoutBlockSnapshot: Identifiable, Hashable {
 
     var type: WorkoutBlockType {
         WorkoutBlockType(rawValue: typeRawValue) ?? .strength
+    }
+
+    var mode: WorkoutBlockMode {
+        WorkoutBlockMode(rawValue: modeRawValue) ?? .rounds
     }
 
     var displayTitle: String {
@@ -508,11 +532,14 @@ struct CoachingWorkoutBlockSnapshot: Identifiable, Hashable {
     var subtitle: String {
         switch type {
         case .circuit:
-            return AppLocalizer.format(
-                "workout.block.circuit.summary",
-                rounds,
-                exercises.count,
-                restBetweenRoundsSeconds
+            return circuitSubtitle(
+                mode: mode,
+                rounds: rounds,
+                exerciseCount: exercises.count,
+                durationMinutes: durationMinutes,
+                workSeconds: workSeconds,
+                restSeconds: restSeconds,
+                restBetweenRoundsSeconds: restBetweenRoundsSeconds
             )
         default:
             return AppLocalizer.format("workout.block.exercise_count", exercises.count)

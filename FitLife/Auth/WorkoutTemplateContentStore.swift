@@ -8,6 +8,8 @@ struct WorkoutTemplateExerciseItem: Identifiable, Hashable {
     let name: String
     let systemImage: String
     let accentName: String
+    let activityTypeRaw: String
+    let metValue: Double
     let orderIndex: Int
     let sets: [WorkoutDraftSet]
 
@@ -18,6 +20,8 @@ struct WorkoutTemplateExerciseItem: Identifiable, Hashable {
         name: String,
         systemImage: String,
         accentName: String,
+        activityType: WorkoutActivityType = .strength,
+        metValue: Double = 5.0,
         orderIndex: Int,
         sets: [WorkoutDraftSet]
     ) {
@@ -27,6 +31,8 @@ struct WorkoutTemplateExerciseItem: Identifiable, Hashable {
         self.name = name
         self.systemImage = systemImage
         self.accentName = accentName
+        self.activityTypeRaw = activityType.rawValue
+        self.metValue = metValue
         self.orderIndex = orderIndex
         self.sets = sets
     }
@@ -48,6 +54,8 @@ struct WorkoutTemplateExerciseItem: Identifiable, Hashable {
         self.name = name
         self.systemImage = systemImage
         self.accentName = accentName
+        self.activityTypeRaw = (data["activityTypeRaw"] as? String) ?? WorkoutActivityType.strength.rawValue
+        self.metValue = (data["metValue"] as? Double) ?? 5.0
         self.orderIndex = orderIndex
         self.sets = rawSets.map { raw in
             WorkoutDraftSet(
@@ -64,6 +72,8 @@ struct WorkoutTemplateExerciseItem: Identifiable, Hashable {
             "name": name,
             "systemImage": systemImage,
             "accentName": accentName,
+            "activityTypeRaw": activityTypeRaw,
+            "metValue": metValue,
             "orderIndex": orderIndex,
             "sets": sets.map {
                 [
@@ -79,6 +89,10 @@ struct WorkoutTemplateExerciseItem: Identifiable, Hashable {
         }
         return data
     }
+
+    var activityType: WorkoutActivityType {
+        WorkoutActivityType(rawValue: activityTypeRaw) ?? .strength
+    }
 }
 
 struct WorkoutTemplateBlockItem: Identifiable, Hashable {
@@ -86,8 +100,12 @@ struct WorkoutTemplateBlockItem: Identifiable, Hashable {
     let templateId: String
     let title: String
     let typeRawValue: String
+    let modeRawValue: String
     let orderIndex: Int
     let rounds: Int
+    let durationMinutes: Int
+    let workSeconds: Int
+    let restSeconds: Int
     let restBetweenRoundsSeconds: Int
 
     init(
@@ -95,16 +113,24 @@ struct WorkoutTemplateBlockItem: Identifiable, Hashable {
         templateId: String,
         title: String,
         type: WorkoutBlockType,
+        mode: WorkoutBlockMode = .rounds,
         orderIndex: Int,
         rounds: Int = 1,
+        durationMinutes: Int = 12,
+        workSeconds: Int = 0,
+        restSeconds: Int = 0,
         restBetweenRoundsSeconds: Int = 0
     ) {
         self.id = id
         self.templateId = templateId
         self.title = title
         self.typeRawValue = type.rawValue
+        self.modeRawValue = mode.rawValue
         self.orderIndex = orderIndex
         self.rounds = rounds
+        self.durationMinutes = durationMinutes
+        self.workSeconds = workSeconds
+        self.restSeconds = restSeconds
         self.restBetweenRoundsSeconds = restBetweenRoundsSeconds
     }
 
@@ -121,8 +147,12 @@ struct WorkoutTemplateBlockItem: Identifiable, Hashable {
         self.templateId = templateId
         self.title = title
         self.typeRawValue = typeRawValue
+        self.modeRawValue = (data["modeRawValue"] as? String) ?? WorkoutBlockMode.rounds.rawValue
         self.orderIndex = orderIndex
         self.rounds = (data["rounds"] as? Int) ?? 1
+        self.durationMinutes = (data["durationMinutes"] as? Int) ?? 12
+        self.workSeconds = (data["workSeconds"] as? Int) ?? 0
+        self.restSeconds = (data["restSeconds"] as? Int) ?? 0
         self.restBetweenRoundsSeconds = (data["restBetweenRoundsSeconds"] as? Int) ?? 0
     }
 
@@ -130,14 +160,22 @@ struct WorkoutTemplateBlockItem: Identifiable, Hashable {
         [
             "title": title,
             "typeRawValue": typeRawValue,
+            "modeRawValue": modeRawValue,
             "orderIndex": orderIndex,
             "rounds": rounds,
+            "durationMinutes": durationMinutes,
+            "workSeconds": workSeconds,
+            "restSeconds": restSeconds,
             "restBetweenRoundsSeconds": restBetweenRoundsSeconds
         ]
     }
 
     var type: WorkoutBlockType {
         WorkoutBlockType(rawValue: typeRawValue) ?? .strength
+    }
+
+    var mode: WorkoutBlockMode {
+        WorkoutBlockMode(rawValue: modeRawValue) ?? .rounds
     }
 
     var displayTitle: String {
@@ -151,7 +189,15 @@ struct WorkoutTemplateBlockItem: Identifiable, Hashable {
     func subtitle(exerciseCount: Int) -> String {
         switch type {
         case .circuit:
-            return AppLocalizer.format("workout.block.circuit.summary", rounds, exerciseCount, restBetweenRoundsSeconds)
+            return circuitSubtitle(
+                mode: mode,
+                rounds: rounds,
+                exerciseCount: exerciseCount,
+                durationMinutes: durationMinutes,
+                workSeconds: workSeconds,
+                restSeconds: restSeconds,
+                restBetweenRoundsSeconds: restBetweenRoundsSeconds
+            )
         default:
             return AppLocalizer.format("workout.block.exercise_count", exerciseCount)
         }
@@ -236,6 +282,8 @@ final class WorkoutTemplateContentStore: ObservableObject {
                 name: draft.name,
                 systemImage: draft.systemImage,
                 accentName: draft.accentName,
+                activityType: draft.activityType,
+                metValue: draft.metValue,
                 orderIndex: exercises.count,
                 sets: draft.sets
             )
@@ -250,7 +298,11 @@ final class WorkoutTemplateContentStore: ObservableObject {
     func addBlock(
         title: String,
         type: WorkoutBlockType,
+        mode: WorkoutBlockMode,
         rounds: Int,
+        durationMinutes: Int,
+        workSeconds: Int,
+        restSeconds: Int,
         restBetweenRoundsSeconds: Int
     ) async {
         errorMessage = nil
@@ -266,8 +318,12 @@ final class WorkoutTemplateContentStore: ObservableObject {
                 templateId: template.id,
                 title: title,
                 type: type,
+                mode: mode,
                 orderIndex: blocks.count,
                 rounds: rounds,
+                durationMinutes: durationMinutes,
+                workSeconds: workSeconds,
+                restSeconds: restSeconds,
                 restBetweenRoundsSeconds: restBetweenRoundsSeconds
             )
 
@@ -304,6 +360,8 @@ final class WorkoutTemplateContentStore: ObservableObject {
                 name: item.name,
                 systemImage: item.systemImage,
                 accentName: item.accentName,
+                activityType: item.activityType,
+                metValue: item.metValue,
                 orderIndex: index,
                 sets: item.sets
             )
@@ -320,5 +378,33 @@ final class WorkoutTemplateContentStore: ObservableObject {
         }
         try await batch.commit()
         exercises = ordered
+    }
+}
+
+extension WorkoutCalorieEstimator {
+    static func estimateTemplateCalories(
+        exercises: [WorkoutTemplateExerciseItem],
+        userWeightKg: Double = 70
+    ) -> Int {
+        let safeWeight = userWeightKg > 0 ? userWeightKg : 70
+        let totalCalories = exercises.reduce(0.0) { total, exercise in
+            guard exercise.sets.isEmpty == false else { return total }
+
+            let activeSeconds = exercise.sets.reduce(0) { partial, set in
+                switch set.metricType {
+                case .duration:
+                    return partial + max(0, set.durationSeconds)
+                case .reps:
+                    return partial + max(0, set.reps) * 4
+                }
+            }
+            let activeCalories = max(exercise.metValue, 1.0) * safeWeight * (Double(activeSeconds) / 3600.0)
+            let restSeconds = max(0, exercise.sets.count - 1) * 60
+            let restCalories = 1.8 * safeWeight * (Double(restSeconds) / 3600.0)
+
+            return total + activeCalories + restCalories
+        }
+
+        return max(0, Int(totalCalories.rounded()))
     }
 }

@@ -49,6 +49,25 @@ enum WorkoutBlockType: String, Codable {
     ]
 }
 
+enum WorkoutBlockMode: String, Codable {
+    case rounds
+    case amrap
+    case tabata
+
+    var title: String {
+        switch self {
+        case .rounds:
+            return AppLocalizer.string("workout.block.mode.rounds")
+        case .amrap:
+            return AppLocalizer.string("workout.block.mode.amrap")
+        case .tabata:
+            return AppLocalizer.string("workout.block.mode.tabata")
+        }
+    }
+
+    static let circuitCases: [WorkoutBlockMode] = [.rounds, .amrap, .tabata]
+}
+
 @Model
 final class WorkoutSession {
     var id: UUID = UUID()
@@ -120,8 +139,10 @@ final class WorkoutBlock {
     var id: UUID = UUID()
     var title: String = ""
     var typeRawValue: String = WorkoutBlockType.strength.rawValue
+    var modeRawValue: String = WorkoutBlockMode.rounds.rawValue
     var orderIndex: Int = 0
     var rounds: Int = 1
+    var durationMinutes: Int = 12
     var workSeconds: Int = 0
     var restSeconds: Int = 0
     var restBetweenRoundsSeconds: Int = 0
@@ -140,19 +161,28 @@ final class WorkoutBlock {
         set { typeRawValue = newValue.rawValue }
     }
 
+    var mode: WorkoutBlockMode {
+        get { WorkoutBlockMode(rawValue: modeRawValue) ?? .rounds }
+        set { modeRawValue = newValue.rawValue }
+    }
+
     init(
         title: String,
         type: WorkoutBlockType = .strength,
+        mode: WorkoutBlockMode = .rounds,
         orderIndex: Int,
         rounds: Int = 1,
+        durationMinutes: Int = 12,
         workSeconds: Int = 0,
         restSeconds: Int = 0,
         restBetweenRoundsSeconds: Int = 0
     ) {
         self.title = title
         self.typeRawValue = type.rawValue
+        self.modeRawValue = mode.rawValue
         self.orderIndex = orderIndex
         self.rounds = rounds
+        self.durationMinutes = durationMinutes
         self.workSeconds = workSeconds
         self.restSeconds = restSeconds
         self.restBetweenRoundsSeconds = restBetweenRoundsSeconds
@@ -350,4 +380,38 @@ func formattedWorkoutSetValue(
 
 func formattedWorkoutCalories(_ calories: Int) -> String {
     "\(max(0, calories)) \(AppLocalizer.string("unit.kcal"))"
+}
+
+func circuitSubtitle(
+    mode: WorkoutBlockMode,
+    rounds: Int,
+    exerciseCount: Int,
+    durationMinutes: Int,
+    workSeconds: Int,
+    restSeconds: Int,
+    restBetweenRoundsSeconds: Int
+) -> String {
+    switch mode {
+    case .rounds:
+        return AppLocalizer.format(
+            "workout.block.circuit.summary",
+            rounds,
+            exerciseCount,
+            restBetweenRoundsSeconds
+        )
+    case .amrap:
+        return AppLocalizer.format(
+            "workout.block.amrap.summary",
+            durationMinutes,
+            exerciseCount
+        )
+    case .tabata:
+        return AppLocalizer.format(
+            "workout.block.tabata.summary",
+            rounds,
+            workSeconds,
+            restSeconds,
+            exerciseCount
+        )
+    }
 }

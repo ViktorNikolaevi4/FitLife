@@ -257,9 +257,13 @@ struct AddWorkoutExerciseScreen: View {
                                 Text(template.name)
                                     .font(.headline.weight(.semibold))
                                     .foregroundStyle(.primary)
-                                Text(AppLocalizer.format("workout.exercise.summary", template.defaultSets.count, 0))
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
+                                HStack(spacing: 8) {
+                                    WorkoutActivityBadge(activityType: template.activityType)
+
+                                    Text(AppLocalizer.format("workout.exercise.summary", template.defaultSets.count, 0))
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
 
                             Spacer()
@@ -305,9 +309,13 @@ struct AddWorkoutExerciseScreen: View {
                             Text(template.name)
                                 .font(.headline.weight(.semibold))
                                 .foregroundStyle(.primary)
-                            Text(AppLocalizer.string("workout.select.exercise.saved.subtitle"))
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                            HStack(spacing: 8) {
+                                WorkoutActivityBadge(activityType: template.activityType)
+
+                                Text(AppLocalizer.string("workout.select.exercise.saved.subtitle"))
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
 
                         Spacer()
@@ -360,6 +368,27 @@ private struct ExerciseActivityOption: Identifiable, Hashable {
     let metValue: Double
     let iconName: String
     let titleKey: String
+}
+
+private struct WorkoutActivityBadge: View {
+    let activityType: WorkoutActivityType
+
+    var body: some View {
+        Label {
+            Text(activityType.title)
+        } icon: {
+            Image(systemName: activityType.iconName)
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(activityType.tint)
+        .lineLimit(1)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            Capsule()
+                .fill(activityType.tint.opacity(0.14))
+        )
+    }
 }
 
 private struct CreateWorkoutExerciseTemplateScreen: View {
@@ -805,6 +834,53 @@ private extension ExerciseActivityOption {
     }
 }
 
+private extension WorkoutActivityType {
+    var title: String {
+        switch self {
+        case .strength:
+            return AppLocalizer.string("workout.activity.strength")
+        case .cardio:
+            return AppLocalizer.string("workout.activity.cardio")
+        case .hiit:
+            return AppLocalizer.string("workout.activity.hiit")
+        case .core:
+            return AppLocalizer.string("workout.activity.core")
+        case .mobility:
+            return AppLocalizer.string("workout.activity.mobility")
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .strength:
+            return "dumbbell.fill"
+        case .cardio:
+            return "figure.run"
+        case .hiit:
+            return "bolt.heart.fill"
+        case .core:
+            return "figure.core.training"
+        case .mobility:
+            return "figure.flexibility"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .strength:
+            return .blue
+        case .cardio:
+            return .green
+        case .hiit:
+            return .orange
+        case .core:
+            return .purple
+        case .mobility:
+            return .teal
+        }
+    }
+}
+
 private struct WorkoutExerciseSetupScreen: View {
     @Environment(\.dismiss) private var dismiss
 
@@ -812,11 +888,63 @@ private struct WorkoutExerciseSetupScreen: View {
     let onSave: (WorkoutExerciseDraft) -> Void
 
     @State private var sets: [WorkoutDraftSet]
+    @State private var selectedActivityType: WorkoutActivityType
+    @State private var selectedMetValue: Double
 
     init(draft: WorkoutExerciseDraft, onSave: @escaping (WorkoutExerciseDraft) -> Void) {
         self.draft = draft
         self.onSave = onSave
         _sets = State(initialValue: draft.sets)
+        _selectedActivityType = State(initialValue: draft.activityType)
+        _selectedMetValue = State(initialValue: draft.metValue)
+    }
+
+    private let activityOptions: [ExerciseActivityOption] = [
+        .init(
+            activityType: .strength,
+            metValue: 5.0,
+            iconName: "dumbbell.fill",
+            titleKey: "workout.activity.strength"
+        ),
+        .init(
+            activityType: .cardio,
+            metValue: 8.0,
+            iconName: "figure.run",
+            titleKey: "workout.activity.cardio"
+        ),
+        .init(
+            activityType: .hiit,
+            metValue: 9.0,
+            iconName: "bolt.heart.fill",
+            titleKey: "workout.activity.hiit"
+        ),
+        .init(
+            activityType: .core,
+            metValue: 4.0,
+            iconName: "figure.core.training",
+            titleKey: "workout.activity.core"
+        ),
+        .init(
+            activityType: .mobility,
+            metValue: 3.0,
+            iconName: "figure.flexibility",
+            titleKey: "workout.activity.mobility"
+        )
+    ]
+
+    private var estimatedCalories: Int {
+        let activeSeconds = sets.reduce(0) { partial, set in
+            switch set.metricType {
+            case .duration:
+                return partial + max(0, set.durationSeconds)
+            case .reps:
+                return partial + max(0, set.reps) * 4
+            }
+        }
+        let activeCalories = max(selectedMetValue, 1.0) * 70 * (Double(activeSeconds) / 3600.0)
+        let restSeconds = max(0, sets.count - 1) * 60
+        let restCalories = 1.8 * 70 * (Double(restSeconds) / 3600.0)
+        return max(0, Int((activeCalories + restCalories).rounded()))
     }
 
     var body: some View {
@@ -838,11 +966,44 @@ private struct WorkoutExerciseSetupScreen: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(draft.name)
                             .font(.title3.weight(.semibold))
-                        Text(AppLocalizer.string("workout.setup.subtitle"))
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 8) {
+                            WorkoutActivityBadge(activityType: selectedActivityType)
+
+                            Text(AppLocalizer.string("workout.setup.subtitle"))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text(AppLocalizer.string("workout.setup.activity"))
+                            .font(.headline.weight(.semibold))
+
+                        Spacer()
+
+                        Label(AppLocalizer.format("trainer.templates.estimated_calories.value", estimatedCalories), systemImage: "flame.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.orange)
+                    }
+
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 2), spacing: 10) {
+                        ForEach(activityOptions) { option in
+                            setupActivityOptionButton(option)
+                        }
+                    }
+
+                    Text(AppLocalizer.string("workout.setup.activity.hint"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(16)
+                .background(RoundedRectangle(cornerRadius: 22).fill(workoutPickerCardBackground))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22)
+                        .strokeBorder(workoutPickerCardBorder)
+                )
 
                 VStack(spacing: 12) {
                     ForEach(Array(sets.enumerated()), id: \.element.id) { index, set in
@@ -931,9 +1092,46 @@ private struct WorkoutExerciseSetupScreen: View {
         DispatchQueue.main.async {
             var configuredDraft = draft
             configuredDraft.sets = sets
+            configuredDraft.activityType = selectedActivityType
+            configuredDraft.metValue = selectedMetValue
             onSave(configuredDraft)
             dismiss()
         }
+    }
+
+    private func setupActivityOptionButton(_ option: ExerciseActivityOption) -> some View {
+        let isSelected = selectedActivityType == option.activityType
+
+        return Button {
+            selectedActivityType = option.activityType
+            selectedMetValue = option.metValue
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: option.iconName)
+                    .font(.subheadline.weight(.semibold))
+                    .frame(width: 18)
+
+                Text(option.title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(isSelected ? Color(.systemBackground) : .primary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(isSelected ? option.activityType.tint : workoutPickerInsetBackground)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(isSelected ? option.activityType.tint.opacity(0.35) : workoutPickerCardBorder)
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 

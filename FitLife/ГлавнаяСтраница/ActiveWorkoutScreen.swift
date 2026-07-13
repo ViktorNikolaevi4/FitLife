@@ -31,6 +31,7 @@ struct ActiveWorkoutScreen: View {
     @State private var isEditingWorkoutTitle = false
     @State private var isEditingWorkoutNote = false
     @State private var showFinishConfirmation = false
+    @State private var isShowingEffortPicker = false
     private let firestore = Firestore.firestore()
 
     private var sortedExercises: [WorkoutExercise] {
@@ -247,12 +248,23 @@ struct ActiveWorkoutScreen: View {
             isPresented: $showFinishConfirmation,
             titleVisibility: .visible
         ) {
-            Button(AppLocalizer.string("workout.finish.confirm.action"), role: .destructive) {
-                finishWorkout()
+            Button(AppLocalizer.string("workout.finish.confirm.action")) {
+                isShowingEffortPicker = true
             }
             Button(AppLocalizer.string("common.cancel"), role: .cancel) {}
         } message: {
             Text(AppLocalizer.string("workout.finish.confirm.message"))
+        }
+        .sheet(isPresented: $isShowingEffortPicker) {
+            WorkoutEffortPickerSheet(
+                baseCalories: currentEstimatedCalories,
+                onSelect: { effort in
+                    finishWorkout(effort: effort)
+                    isShowingEffortPicker = false
+                }
+            )
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
         }
     }
 
@@ -512,8 +524,12 @@ struct ActiveWorkoutScreen: View {
         let block = WorkoutBlock(
             title: draft.resolvedTitle,
             type: draft.type,
+            mode: draft.mode,
             orderIndex: workout.blockItems.count,
             rounds: draft.rounds,
+            durationMinutes: draft.durationMinutes,
+            workSeconds: draft.workSeconds,
+            restSeconds: draft.restSeconds,
             restBetweenRoundsSeconds: draft.restBetweenRoundsSeconds
         )
         block.session = workout
@@ -552,11 +568,14 @@ struct ActiveWorkoutScreen: View {
     private func subtitle(for block: WorkoutBlock) -> String {
         switch block.type {
         case .circuit:
-            return AppLocalizer.format(
-                "workout.block.circuit.summary",
-                block.rounds,
-                block.exerciseItems.count,
-                block.restBetweenRoundsSeconds
+            return circuitSubtitle(
+                mode: block.mode,
+                rounds: block.rounds,
+                exerciseCount: block.exerciseItems.count,
+                durationMinutes: block.durationMinutes,
+                workSeconds: block.workSeconds,
+                restSeconds: block.restSeconds,
+                restBetweenRoundsSeconds: block.restBetweenRoundsSeconds
             )
         default:
             return AppLocalizer.format("workout.block.exercise_count", block.exerciseItems.count)
@@ -593,12 +612,13 @@ struct ActiveWorkoutScreen: View {
         }
     }
 
-    private func finishWorkout() {
+    private func finishWorkout(effort: WorkoutEffortLevel) {
         workout.isTimerRunning = false
-        workout.estimatedCalories = WorkoutCalorieEstimator.estimateWorkoutCalories(
+        let baseCalories = WorkoutCalorieEstimator.estimateWorkoutCalories(
             workout: workout,
             userWeightKg: currentUserWeight
         )
+        workout.estimatedCalories = effort.adjustedCalories(baseCalories)
         workout.endedAt = Date()
         try? modelContext.save()
         LocalReminderScheduler.rescheduleWorkoutRemindersIfEnabled(
@@ -628,6 +648,161 @@ private struct WorkoutBlockExerciseGroup: Identifiable {
     let title: String
     let subtitle: String
     let exercises: [WorkoutExercise]
+}
+
+private enum WorkoutEffortLevel: String, CaseIterable, Identifiable {
+    case easy
+    case moderate
+    case hard
+    case max
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .easy:
+            return AppLocalizer.string("workout.effort.easy")
+        case .moderate:
+            return AppLocalizer.string("workout.effort.moderate")
+        case .hard:
+            return AppLocalizer.string("workout.effort.hard")
+        case .max:
+            return AppLocalizer.string("workout.effort.max")
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .easy:
+            return AppLocalizer.string("workout.effort.easy.subtitle")
+        case .moderate:
+            return AppLocalizer.string("workout.effort.moderate.subtitle")
+        case .hard:
+            return AppLocalizer.string("workout.effort.hard.subtitle")
+        case .max:
+            return AppLocalizer.string("workout.effort.max.subtitle")
+        }
+    }
+
+    var multiplier: Double {
+        switch self {
+        case .easy:
+            return 0.85
+        case .moderate:
+            return 1.0
+        case .hard:
+            return 1.18
+        case .max:
+            return 1.35
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .easy:
+            return "leaf.fill"
+        case .moderate:
+            return "flame.fill"
+        case .hard:
+            return "bolt.fill"
+        case .max:
+            return "bolt.heart.fill"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .easy:
+            return .green
+        case .moderate:
+            return .orange
+        case .hard:
+            return .red
+        case .max:
+            return .purple
+        }
+    }
+
+    func adjustedCalories(_ baseCalories: Int) -> Int {
+        Swift.max(0, Int((Double(baseCalories) * multiplier).rounded()))
+    }
+}
+
+private struct WorkoutEffortPickerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let baseCalories: Int
+    let onSelect: (WorkoutEffortLevel) -> Void
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(AppLocalizer.string("workout.effort.title"))
+                        .font(.title2.weight(.bold))
+                    Text(AppLocalizer.format("workout.effort.base", baseCalories))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                VStack(spacing: 10) {
+                    ForEach(WorkoutEffortLevel.allCases) { effort in
+                        Button {
+                            onSelect(effort)
+                        } label: {
+                            HStack(spacing: 14) {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(effort.tint.opacity(0.16))
+
+                                    Image(systemName: effort.iconName)
+                                        .font(.system(size: 20, weight: .semibold))
+                                        .foregroundStyle(effort.tint)
+                                }
+                                .frame(width: 52, height: 52)
+
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(effort.title)
+                                        .font(.headline.weight(.semibold))
+                                        .foregroundStyle(.primary)
+                                    Text(effort.subtitle)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                }
+
+                                Spacer()
+
+                                Text(formattedWorkoutCalories(effort.adjustedCalories(baseCalories)))
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.primary)
+                            }
+                            .padding(14)
+                            .background(RoundedRectangle(cornerRadius: 20).fill(activeWorkoutCardBackground))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 20)
+                                    .strokeBorder(activeWorkoutCardBorder)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal)
+            .padding(.top, 18)
+            .padding(.bottom, 24)
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(AppLocalizer.string("common.cancel")) {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
 }
 
 private struct WorkoutBlockSectionHeader: View {
@@ -679,7 +854,11 @@ private struct WorkoutBlockSectionHeader: View {
 private struct WorkoutBlockDraft {
     var title: String
     var type: WorkoutBlockType
+    var mode: WorkoutBlockMode
     var rounds: Int
+    var durationMinutes: Int
+    var workSeconds: Int
+    var restSeconds: Int
     var restBetweenRoundsSeconds: Int
 
     var resolvedTitle: String {
@@ -697,8 +876,12 @@ private struct AddWorkoutBlockScreen: View {
     let onSave: (WorkoutBlockDraft) -> Void
 
     @State private var type: WorkoutBlockType = .circuit
+    @State private var mode: WorkoutBlockMode = .rounds
     @State private var title = ""
     @State private var rounds = 3
+    @State private var durationMinutes = 12
+    @State private var workSeconds = 20
+    @State private var restSeconds = 10
     @State private var restBetweenRoundsSeconds = 60
 
     var body: some View {
@@ -717,17 +900,51 @@ private struct AddWorkoutBlockScreen: View {
 
                 if type == .circuit {
                     Section(AppLocalizer.string("workout.block.circuit.settings")) {
-                        Stepper(
-                            AppLocalizer.format("workout.block.rounds.value", rounds),
-                            value: $rounds,
-                            in: 1...20
-                        )
-                        Stepper(
-                            AppLocalizer.format("workout.block.round_rest.value", restBetweenRoundsSeconds),
-                            value: $restBetweenRoundsSeconds,
-                            in: 0...600,
-                            step: 5
-                        )
+                        Picker(AppLocalizer.string("workout.block.mode"), selection: $mode) {
+                            ForEach(WorkoutBlockMode.circuitCases, id: \.self) { mode in
+                                Text(mode.title).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+
+                        switch mode {
+                        case .rounds:
+                            Stepper(
+                                AppLocalizer.format("workout.block.rounds.value", rounds),
+                                value: $rounds,
+                                in: 1...20
+                            )
+                            Stepper(
+                                AppLocalizer.format("workout.block.round_rest.value", restBetweenRoundsSeconds),
+                                value: $restBetweenRoundsSeconds,
+                                in: 0...600,
+                                step: 5
+                            )
+                        case .amrap:
+                            Stepper(
+                                AppLocalizer.format("workout.block.duration.value", durationMinutes),
+                                value: $durationMinutes,
+                                in: 1...90
+                            )
+                        case .tabata:
+                            Stepper(
+                                AppLocalizer.format("workout.block.rounds.value", rounds),
+                                value: $rounds,
+                                in: 1...40
+                            )
+                            Stepper(
+                                AppLocalizer.format("workout.block.work.value", workSeconds),
+                                value: $workSeconds,
+                                in: 5...120,
+                                step: 5
+                            )
+                            Stepper(
+                                AppLocalizer.format("workout.block.rest.value", restSeconds),
+                                value: $restSeconds,
+                                in: 0...120,
+                                step: 5
+                            )
+                        }
                     }
                 }
             }
@@ -753,8 +970,12 @@ private struct AddWorkoutBlockScreen: View {
             WorkoutBlockDraft(
                 title: title,
                 type: type,
+                mode: type == .circuit ? mode : .rounds,
                 rounds: type == .circuit ? rounds : 1,
-                restBetweenRoundsSeconds: type == .circuit ? restBetweenRoundsSeconds : 0
+                durationMinutes: type == .circuit ? durationMinutes : 0,
+                workSeconds: type == .circuit && mode == .tabata ? workSeconds : 0,
+                restSeconds: type == .circuit && mode == .tabata ? restSeconds : 0,
+                restBetweenRoundsSeconds: type == .circuit && mode == .rounds ? restBetweenRoundsSeconds : 0
             )
         )
         dismiss()

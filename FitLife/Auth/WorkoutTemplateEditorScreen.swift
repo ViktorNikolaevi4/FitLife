@@ -66,6 +66,10 @@ struct WorkoutTemplateEditorScreen: View {
         return groups
     }
 
+    private var estimatedCalories: Int {
+        WorkoutCalorieEstimator.estimateTemplateCalories(exercises: store.exercises)
+    }
+
     var body: some View {
         List {
             if let errorMessage = store.errorMessage, errorMessage.isEmpty == false {
@@ -81,6 +85,31 @@ struct WorkoutTemplateEditorScreen: View {
                     Text(template.notes)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                }
+            }
+
+            if store.exercises.isEmpty == false {
+                Section {
+                    HStack(spacing: 12) {
+                        Label {
+                            Text(AppLocalizer.format("trainer.templates.estimated_calories.value", estimatedCalories))
+                        } icon: {
+                            Image(systemName: "flame.fill")
+                                .foregroundStyle(.orange)
+                        }
+                        .font(.headline)
+
+                        Spacer()
+
+                        Text(AppLocalizer.format("workout.block.exercise_count", store.exercises.count))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                } header: {
+                    Text(AppLocalizer.string("trainer.templates.summary"))
+                } footer: {
+                    Text(AppLocalizer.string("trainer.templates.estimated_calories.hint"))
                 }
             }
 
@@ -123,6 +152,7 @@ struct WorkoutTemplateEditorScreen: View {
         }
         .listStyle(.insetGrouped)
         .navigationTitle(template.title)
+        .hidesHomeFloatingAddButton()
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -181,7 +211,11 @@ struct WorkoutTemplateEditorScreen: View {
                     await store.addBlock(
                         title: draft.resolvedTitle,
                         type: draft.type,
+                        mode: draft.mode,
                         rounds: draft.rounds,
+                        durationMinutes: draft.durationMinutes,
+                        workSeconds: draft.workSeconds,
+                        restSeconds: draft.restSeconds,
                         restBetweenRoundsSeconds: draft.restBetweenRoundsSeconds
                     )
                     showAddBlock = false
@@ -288,7 +322,11 @@ private struct WorkoutTemplateBlockHeader: View {
 private struct WorkoutTemplateBlockDraft {
     var title: String
     var type: WorkoutBlockType
+    var mode: WorkoutBlockMode
     var rounds: Int
+    var durationMinutes: Int
+    var workSeconds: Int
+    var restSeconds: Int
     var restBetweenRoundsSeconds: Int
 
     var resolvedTitle: String {
@@ -305,8 +343,12 @@ private struct AddWorkoutTemplateBlockScreen: View {
     let onSave: (WorkoutTemplateBlockDraft) -> Void
 
     @State private var type: WorkoutBlockType = .circuit
+    @State private var mode: WorkoutBlockMode = .rounds
     @State private var title = ""
     @State private var rounds = 3
+    @State private var durationMinutes = 12
+    @State private var workSeconds = 20
+    @State private var restSeconds = 10
     @State private var restBetweenRoundsSeconds = 60
 
     var body: some View {
@@ -325,17 +367,51 @@ private struct AddWorkoutTemplateBlockScreen: View {
 
                 if type == .circuit {
                     Section(AppLocalizer.string("workout.block.circuit.settings")) {
-                        Stepper(
-                            AppLocalizer.format("workout.block.rounds.value", rounds),
-                            value: $rounds,
-                            in: 1...20
-                        )
-                        Stepper(
-                            AppLocalizer.format("workout.block.round_rest.value", restBetweenRoundsSeconds),
-                            value: $restBetweenRoundsSeconds,
-                            in: 0...600,
-                            step: 5
-                        )
+                        Picker(AppLocalizer.string("workout.block.mode"), selection: $mode) {
+                            ForEach(WorkoutBlockMode.circuitCases, id: \.self) { mode in
+                                Text(mode.title).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+
+                        switch mode {
+                        case .rounds:
+                            Stepper(
+                                AppLocalizer.format("workout.block.rounds.value", rounds),
+                                value: $rounds,
+                                in: 1...20
+                            )
+                            Stepper(
+                                AppLocalizer.format("workout.block.round_rest.value", restBetweenRoundsSeconds),
+                                value: $restBetweenRoundsSeconds,
+                                in: 0...600,
+                                step: 5
+                            )
+                        case .amrap:
+                            Stepper(
+                                AppLocalizer.format("workout.block.duration.value", durationMinutes),
+                                value: $durationMinutes,
+                                in: 1...90
+                            )
+                        case .tabata:
+                            Stepper(
+                                AppLocalizer.format("workout.block.rounds.value", rounds),
+                                value: $rounds,
+                                in: 1...40
+                            )
+                            Stepper(
+                                AppLocalizer.format("workout.block.work.value", workSeconds),
+                                value: $workSeconds,
+                                in: 5...120,
+                                step: 5
+                            )
+                            Stepper(
+                                AppLocalizer.format("workout.block.rest.value", restSeconds),
+                                value: $restSeconds,
+                                in: 0...120,
+                                step: 5
+                            )
+                        }
                     }
                 }
             }
@@ -361,8 +437,12 @@ private struct AddWorkoutTemplateBlockScreen: View {
             WorkoutTemplateBlockDraft(
                 title: title,
                 type: type,
+                mode: type == .circuit ? mode : .rounds,
                 rounds: type == .circuit ? rounds : 1,
-                restBetweenRoundsSeconds: type == .circuit ? restBetweenRoundsSeconds : 0
+                durationMinutes: type == .circuit ? durationMinutes : 0,
+                workSeconds: type == .circuit && mode == .tabata ? workSeconds : 0,
+                restSeconds: type == .circuit && mode == .tabata ? restSeconds : 0,
+                restBetweenRoundsSeconds: type == .circuit && mode == .rounds ? restBetweenRoundsSeconds : 0
             )
         )
         dismiss()

@@ -268,8 +268,12 @@ final class ClientAssignedWorkoutsStore: ObservableObject {
                 let block = WorkoutBlock(
                     title: remoteBlock.displayTitle,
                     type: remoteBlock.type,
+                    mode: remoteBlock.mode,
                     orderIndex: remoteBlock.orderIndex,
                     rounds: remoteBlock.rounds,
+                    durationMinutes: remoteBlock.durationMinutes,
+                    workSeconds: remoteBlock.workSeconds,
+                    restSeconds: remoteBlock.restSeconds,
                     restBetweenRoundsSeconds: remoteBlock.restBetweenRoundsSeconds
                 )
                 block.session = workout
@@ -282,7 +286,9 @@ final class ClientAssignedWorkoutsStore: ObservableObject {
                     name: remoteExercise.name,
                     systemImage: remoteExercise.systemImage,
                     accentName: remoteExercise.accentName,
-                    orderIndex: remoteExercise.orderIndex
+                    orderIndex: remoteExercise.orderIndex,
+                    activityType: remoteExercise.activityType,
+                    metValue: remoteExercise.metValue
                 )
                 exercise.session = workout
                 if let blockId = remoteExercise.blockId,

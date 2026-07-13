@@ -21,6 +21,7 @@ struct MainTabView: View {
     @State private var refreshID = UUID()
     @State private var selectedTab: MainTab = .home
     @State private var showsHomeFloatingAddButton = true
+    @State private var childHidesHomeFloatingAddButton = false
     @State private var isShowingAIQuickAdd = false
 
     private var appLanguage: AppLanguage {
@@ -32,7 +33,7 @@ struct MainTabView: View {
     }
 
     private var showsFloatingAddButton: Bool {
-        selectedTab == .home && showsHomeFloatingAddButton
+        selectedTab == .home && showsHomeFloatingAddButton && childHidesHomeFloatingAddButton == false
     }
 
     var body: some View {
@@ -71,6 +72,9 @@ struct MainTabView: View {
             .toolbarBackground(colorScheme == .dark ? Color.black.opacity(0.62) : Color(.systemBackground), for: .tabBar)
             .toolbarBackground(.visible, for: .tabBar)
             .toolbarColorScheme(colorScheme == .dark ? .dark : .light, for: .tabBar)
+            .onPreferenceChange(HomeFloatingAddButtonHiddenPreferenceKey.self) { isHidden in
+                childHidesHomeFloatingAddButton = isHidden
+            }
 
             if showsFloatingAddButton {
                 Button(action: { isShowingAIQuickAdd = true }) {
@@ -194,6 +198,20 @@ struct MainTabView: View {
                 normalColor: normalColor
             )
         }
+    }
+}
+
+private struct HomeFloatingAddButtonHiddenPreferenceKey: PreferenceKey {
+    static var defaultValue = false
+
+    static func reduce(value: inout Bool, nextValue: () -> Bool) {
+        value = value || nextValue()
+    }
+}
+
+extension View {
+    func hidesHomeFloatingAddButton(_ hidden: Bool = true) -> some View {
+        preference(key: HomeFloatingAddButtonHiddenPreferenceKey.self, value: hidden)
     }
 }
 

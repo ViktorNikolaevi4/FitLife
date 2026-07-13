@@ -71,6 +71,7 @@ struct WorkoutTemplatesScreen: View {
             }
         }
         .navigationTitle(appLanguage.localized("trainer.templates.title"))
+        .hidesHomeFloatingAddButton()
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
