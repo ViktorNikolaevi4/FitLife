@@ -151,6 +151,16 @@ struct SettingsScreen: View {
                    let currentUser = sessionStore.profile {
                     Section(appLanguage.localized("settings.trainer.section")) {
                         NavigationLink {
+                            TrainerAttentionScreen(trainerId: trainerId)
+                        } label: {
+                            SettingsRow(
+                                icon: "exclamationmark.bubble.fill",
+                                iconBg: .red,
+                                title: appLanguage.localized("settings.trainer.attention")
+                            )
+                        }
+
+                        NavigationLink {
                             TrainerAssignedClientsScreen(trainerId: trainerId)
                         } label: {
                             SettingsRow(
