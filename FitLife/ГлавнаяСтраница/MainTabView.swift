@@ -215,7 +215,7 @@ extension View {
     }
 }
 
-private enum MainTab: Hashable {
+enum MainTab: Hashable {
     case home
     case nutrition
     case workouts

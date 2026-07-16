@@ -37,7 +37,7 @@ struct RootView: View {
                     .background(Color(.systemGroupedBackground))
             } else {
                 if didOnboard, currentUserData.isEmpty == false {
-                    MainTabView()
+                    AdaptiveMainView()
                 } else {
                     OnboardingView { payload in
                         let calories = MacrosCalculator.calculateCaloriesMifflin(
