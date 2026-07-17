@@ -1866,6 +1866,7 @@ struct TrainerClientSupportScreen: View {
     @State private var showAllNutritionReports = false
     @State private var showAllNotes = false
     @State private var showRequestComposer = false
+    @State private var selectedProgressPeriod: TrainerClientProgressPeriod = .sevenDays
 
     init(trainerId: String, client: AppUserProfile) {
         self.trainerId = trainerId
@@ -1886,6 +1887,7 @@ struct TrainerClientSupportScreen: View {
                 }
 
                 trainerClientSummaryCard
+                trainerClientProgressCard
                 quickActionsCard
 
                 if store.intake != nil {
@@ -2028,6 +2030,15 @@ struct TrainerClientSupportScreen: View {
         return note.message
     }
 
+    private var progressSnapshot: TrainerClientProgressSnapshot {
+        TrainerClientProgressSnapshot(
+            checkIns: store.checkIns,
+            workoutReports: store.workoutReports,
+            nutritionReports: store.nutritionReports,
+            period: selectedProgressPeriod
+        )
+    }
+
     private var trainerClientSummaryCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
@@ -2077,6 +2088,65 @@ struct TrainerClientSupportScreen: View {
         .shadow(color: trainerCardShadow, radius: 14, x: 0, y: 6)
     }
 
+    private var trainerClientProgressCard: some View {
+        let progress = progressSnapshot
+
+        return VStack(alignment: .leading, spacing: 14) {
+            trainerCardTitle(icon: "chart.line.uptrend.xyaxis", title: AppLocalizer.string("coaching.progress.title"))
+
+            if progress.hasAnyData {
+                Picker("", selection: $selectedProgressPeriod) {
+                    ForEach(TrainerClientProgressPeriod.allCases) { period in
+                        Text(AppLocalizer.string(period.localizationKey))
+                            .tag(period)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 12) {
+                    trainerProgressTile(
+                        title: AppLocalizer.string("coaching.progress.weight"),
+                        value: progress.weightChangeText,
+                        subtitle: progress.weightCurrentText
+                    )
+                    trainerProgressTile(
+                        title: AppLocalizer.string("coaching.progress.waist"),
+                        value: progress.waistChangeText,
+                        subtitle: progress.waistCurrentText
+                    )
+                    trainerProgressTile(
+                        title: AppLocalizer.string("coaching.progress.workouts"),
+                        value: "\(progress.workoutReportsCount)",
+                        subtitle: AppLocalizer.string("coaching.progress.reports")
+                    )
+                    trainerProgressTile(
+                        title: AppLocalizer.string("coaching.progress.nutrition"),
+                        value: progress.nutritionReportDaysText,
+                        subtitle: progress.averageCaloriesText
+                    )
+                }
+
+                Text(progress.summaryText)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                Label(
+                    AppLocalizer.string("coaching.progress.empty"),
+                    systemImage: "chart.line.uptrend.xyaxis"
+                )
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .padding(16)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(Color(.separator).opacity(0.16))
+        )
+        .shadow(color: trainerCardShadow, radius: 14, x: 0, y: 6)
+    }
+
     private func trainerMetricTile(title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(title)
@@ -2091,6 +2161,27 @@ struct TrainerClientSupportScreen: View {
         .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
         .padding(12)
         .background(HomeColors.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func trainerProgressTile(title: String, value: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+            Text(subtitle)
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+        }
+        .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
+        .padding(12)
+        .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var quickActionsCard: some View {
@@ -2299,6 +2390,156 @@ struct TrainerClientSupportScreen: View {
                 .foregroundStyle(.secondary)
         }
         .padding(.top, 6)
+    }
+}
+
+private enum TrainerClientProgressPeriod: String, CaseIterable, Identifiable {
+    case sevenDays
+    case thirtyDays
+    case allTime
+
+    var id: String { rawValue }
+
+    var dayCount: Int? {
+        switch self {
+        case .sevenDays:
+            return 7
+        case .thirtyDays:
+            return 30
+        case .allTime:
+            return nil
+        }
+    }
+
+    var localizationKey: String {
+        switch self {
+        case .sevenDays:
+            return "coaching.progress.period_7d"
+        case .thirtyDays:
+            return "coaching.progress.period_30d"
+        case .allTime:
+            return "coaching.progress.period_all"
+        }
+    }
+}
+
+private struct TrainerClientProgressSnapshot {
+    let checkIns: [ProgressCheckIn]
+    let workoutReports: [CoachingWorkoutReport]
+    let nutritionReports: [CoachingNutritionReport]
+    let period: TrainerClientProgressPeriod
+
+    private var periodStart: Date? {
+        guard let dayCount = period.dayCount else { return nil }
+        return Calendar.current.date(byAdding: .day, value: -dayCount, to: Date()) ?? Date()
+    }
+
+    private var periodCheckIns: [ProgressCheckIn] {
+        guard let periodStart else { return checkIns }
+        return checkIns.filter { $0.createdAt >= periodStart }
+    }
+
+    private var periodWorkoutReports: [CoachingWorkoutReport] {
+        guard let periodStart else { return workoutReports }
+        return workoutReports.filter { $0.createdAt >= periodStart }
+    }
+
+    private var periodNutritionReports: [CoachingNutritionReport] {
+        guard let periodStart else { return nutritionReports }
+        return nutritionReports.filter { $0.createdAt >= periodStart || $0.dateTo >= periodStart }
+    }
+
+    private var latestCheckIn: ProgressCheckIn? {
+        periodCheckIns.sorted { $0.createdAt > $1.createdAt }.first
+    }
+
+    private var previousCheckIn: ProgressCheckIn? {
+        let sorted = periodCheckIns.sorted { $0.createdAt > $1.createdAt }
+        guard sorted.count > 1 else { return nil }
+        return sorted[1]
+    }
+
+    var hasAnyData: Bool {
+        checkIns.isEmpty == false || workoutReports.isEmpty == false || nutritionReports.isEmpty == false
+    }
+
+    var workoutReportsCount: Int {
+        periodWorkoutReports.count
+    }
+
+    var nutritionReportsCount: Int {
+        periodNutritionReports.count
+    }
+
+    var nutritionReportDaysCount: Int {
+        let days = periodNutritionReports.map { Calendar.current.startOfDay(for: $0.dateFrom) }
+        return Set(days).count
+    }
+
+    var nutritionReportDaysText: String {
+        guard let dayCount = period.dayCount else {
+            return "\(nutritionReportDaysCount)"
+        }
+        return "\(nutritionReportDaysCount)/\(dayCount)"
+    }
+
+    var averageCaloriesText: String {
+        guard periodNutritionReports.isEmpty == false else {
+            return AppLocalizer.string("coaching.progress.no_nutrition")
+        }
+        let average = periodNutritionReports.reduce(0) { $0 + $1.totalCalories } / periodNutritionReports.count
+        return AppLocalizer.format("coaching.progress.avg_calories", average)
+    }
+
+    var weightChangeText: String {
+        guard let latestCheckIn else { return "—" }
+        guard let previousCheckIn else {
+            return AppLocalizer.format("coaching.progress.current_kg", latestCheckIn.weight)
+        }
+        return signedMeasurement(latestCheckIn.weight - previousCheckIn.weight, unit: AppLocalizer.string("coaching.unit.kg"))
+    }
+
+    var weightCurrentText: String {
+        latestCheckIn.map { AppLocalizer.format("coaching.progress.current_kg", $0.weight) }
+            ?? AppLocalizer.string("coaching.progress.no_checkin")
+    }
+
+    var waistChangeText: String {
+        guard let latestCheckIn else { return "—" }
+        guard let previousCheckIn else {
+            return AppLocalizer.format("coaching.progress.current_cm", latestCheckIn.waist)
+        }
+        return signedMeasurement(latestCheckIn.waist - previousCheckIn.waist, unit: AppLocalizer.string("coaching.unit.cm"))
+    }
+
+    var waistCurrentText: String {
+        latestCheckIn.map { AppLocalizer.format("coaching.progress.current_cm", $0.waist) }
+            ?? AppLocalizer.string("coaching.progress.no_checkin")
+    }
+
+    var summaryText: String {
+        if let dayCount = period.dayCount {
+            return AppLocalizer.format(
+                "coaching.progress.summary_period",
+                dayCount,
+                periodCheckIns.count,
+                workoutReportsCount,
+                nutritionReportDaysCount,
+                dayCount
+            )
+        }
+
+        return AppLocalizer.format(
+            "coaching.progress.summary_all",
+            checkIns.count,
+            workoutReportsCount,
+            nutritionReportDaysCount
+        )
+    }
+
+    private func signedMeasurement(_ value: Double, unit: String) -> String {
+        let sign = value > 0 ? "+" : ""
+        return "\(sign)\(String(format: "%.1f", value)) \(unit)"
     }
 }
 
