@@ -6,7 +6,7 @@ enum WorkoutExerciseIcon {
     static let cleanAndJerk = "CleanAndJerk"
     static let jumpingJack = "JumpingJack"
     static let run = "Бег"
-    static let bench = "ЖимЛежа"
+    static let bench = "bench_press_bold"
     static let inclineBench = "Жим на наклонной скамье"
     static let shoulderPress = "ЖимНаПлечи"
     static let legPress = "ЖимНогами"

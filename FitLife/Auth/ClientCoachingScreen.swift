@@ -1,15 +1,22 @@
 import SwiftUI
+import SwiftData
 
 struct ClientCoachingEntryScreen: View {
     let clientId: String
 
     @EnvironmentObject private var sessionStore: AppSessionStore
+    @Query private var users: [UserData]
+    @Query(sort: \BodyMeasurements.date, order: .reverse) private var measurements: [BodyMeasurements]
     @StateObject private var store: ClientCoachingStore
     @State private var isEditing = false
+    @State private var didAcknowledgeApprovedConnection: Bool
 
     init(clientId: String) {
         self.clientId = clientId
         _store = StateObject(wrappedValue: ClientCoachingStore(clientId: clientId))
+        _didAcknowledgeApprovedConnection = State(
+            initialValue: UserDefaults.standard.bool(forKey: Self.approvedIntroSeenKey(for: clientId))
+        )
     }
 
     var body: some View {
@@ -18,6 +25,11 @@ struct ClientCoachingEntryScreen: View {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color(.systemGroupedBackground))
+            } else if store.activeLink != nil && didAcknowledgeApprovedConnection == false {
+                ClientCoachingApprovedScreen(trainer: store.trainerProfile) {
+                    UserDefaults.standard.set(true, forKey: Self.approvedIntroSeenKey(for: clientId))
+                    didAcknowledgeApprovedConnection = true
+                }
             } else if store.activeLink != nil {
                 ClientCoachingLinkedScreen(
                     clientId: clientId,
@@ -36,8 +48,20 @@ struct ClientCoachingEntryScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .task(id: sessionStore.profile?.id) {
             guard let profile = sessionStore.profile else { return }
-            await store.load(profile: profile)
+            await store.load(
+                profile: profile,
+                localUserData: localUserData,
+                latestMeasurements: latestMeasurements
+            )
         }
+    }
+
+    private var localUserData: UserData? {
+        users.first { $0.ownerId == clientId }
+    }
+
+    private var latestMeasurements: BodyMeasurements? {
+        measurements.first { $0.ownerId == clientId }
     }
 
     private var isInitialLoading: Bool {
@@ -48,6 +72,10 @@ struct ClientCoachingEntryScreen: View {
         if isEditing { return true }
         guard let request = store.request else { return true }
         return request.status == .draft || request.status == .needsClarification || request.status == .rejected
+    }
+
+    private static func approvedIntroSeenKey(for clientId: String) -> String {
+        "coaching.approved_intro_seen.\(clientId)"
     }
 }
 
@@ -591,6 +619,75 @@ private struct ClientCoachingStatusScreen: View {
         }
 
         return Color(.secondarySystemGroupedBackground)
+    }
+}
+
+private struct ClientCoachingApprovedScreen: View {
+    let trainer: AppUserProfile?
+    let onContinue: () -> Void
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Spacer(minLength: 40)
+
+            VStack(spacing: 18) {
+                ZStack {
+                    Circle()
+                        .fill(Color.accentColor.opacity(0.14))
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 50, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                }
+                .frame(width: 104, height: 104)
+
+                VStack(spacing: 10) {
+                    Text(AppLocalizer.string("coaching.approved.title"))
+                        .font(.largeTitle.weight(.bold))
+                        .multilineTextAlignment(.center)
+
+                    Text(approvedMessage)
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(.horizontal, 24)
+
+            Button {
+                onContinue()
+            } label: {
+                HStack(spacing: 10) {
+                    Text(AppLocalizer.string("coaching.approved.action"))
+                    Image(systemName: "arrow.right")
+                }
+                .font(.headline.weight(.semibold))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 15)
+            }
+            .buttonStyle(.borderedProminent)
+            .padding(.horizontal, 24)
+
+            Text(AppLocalizer.string("coaching.approved.hint"))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 30)
+
+            Spacer(minLength: 80)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .navigationTitle(AppLocalizer.string("workouts.connection"))
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var approvedMessage: String {
+        if let trainer {
+            return AppLocalizer.format("coaching.approved.message.trainer", trainer.displayName)
+        }
+
+        return AppLocalizer.string("coaching.approved.message")
     }
 }
 

@@ -183,7 +183,7 @@ struct WorkoutTemplateEditorScreen: View {
         .overlay {
             if store.isLoading {
                 ProgressView()
-            } else if store.exercises.isEmpty {
+            } else if store.blocks.isEmpty && store.exercises.isEmpty {
                 ContentUnavailableView(
                     appLanguage.localized("trainer.templates.exercises.empty.title"),
                     systemImage: "dumbbell",

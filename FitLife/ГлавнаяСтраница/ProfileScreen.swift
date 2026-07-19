@@ -457,8 +457,8 @@ struct PremiumSegmentedPicker<Selection: Hashable>: View {
                                     .fill(
                                         LinearGradient(
                                             colors: [
-                                                Color(hex: "347DFF"),
-                                                Color(hex: "1257E8")
+                                                theme.accent.opacity(theme.isDark ? 0.92 : 0.86),
+                                                theme.accent
                                             ],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing

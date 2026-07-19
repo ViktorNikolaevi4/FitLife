@@ -20,15 +20,18 @@ final class ClientCoachingStore: ObservableObject {
         self.firestore = firestore
     }
 
-    func load(profile: AppUserProfile) async {
+    func load(
+        profile: AppUserProfile,
+        localUserData: UserData? = nil,
+        latestMeasurements: BodyMeasurements? = nil
+    ) async {
         isLoading = true
         errorMessage = nil
         if intake == nil {
-            intake = ClientIntakeProfile(
-                id: clientId,
-                clientId: clientId,
-                clientEmail: profile.email,
-                clientDisplayName: profile.displayName
+            intake = makeIntake(
+                profile: profile,
+                localUserData: localUserData,
+                latestMeasurements: latestMeasurements
             )
         }
 
@@ -47,11 +50,10 @@ final class ClientCoachingStore: ObservableObject {
                let intake = ClientIntakeProfile(id: intakeDocument.documentID, data: data) {
                 self.intake = intake
             } else {
-                self.intake = ClientIntakeProfile(
-                    id: clientId,
-                    clientId: clientId,
-                    clientEmail: profile.email,
-                    clientDisplayName: profile.displayName
+                self.intake = makeIntake(
+                    profile: profile,
+                    localUserData: localUserData,
+                    latestMeasurements: latestMeasurements
                 )
             }
 
@@ -155,5 +157,70 @@ final class ClientCoachingStore: ObservableObject {
             request.status = .draft
             self.request = request
         }
+    }
+
+    private func makeIntake(
+        profile: AppUserProfile,
+        localUserData: UserData?,
+        latestMeasurements: BodyMeasurements?
+    ) -> ClientIntakeProfile {
+        ClientIntakeProfile(
+            id: clientId,
+            clientId: clientId,
+            clientEmail: profile.email,
+            clientDisplayName: profile.displayName,
+            goal: localUserData.map(coachingGoal) ?? .maintain,
+            age: positive(localUserData?.age) ?? 25,
+            height: positive(localUserData?.height) ?? 175,
+            weight: positive(localUserData?.weight) ?? 70,
+            sex: localUserData.map(coachingSex) ?? .male,
+            activity: localUserData.map(coachingActivity) ?? .medium,
+            measurements: ClientCoachingMeasurements(
+                waist: positive(latestMeasurements?.waist) ?? 0,
+                chest: positive(latestMeasurements?.chest) ?? 0,
+                hips: positive(latestMeasurements?.hips) ?? 0
+            )
+        )
+    }
+
+    private func coachingGoal(for userData: UserData) -> ClientCoachingGoal {
+        switch userData.goal {
+        case .loseWeight:
+            return .loseWeight
+        case .currentWeight:
+            return .maintain
+        case .gainWeight:
+            return .gainMass
+        }
+    }
+
+    private func coachingSex(for userData: UserData) -> ClientCoachingSex {
+        switch userData.gender {
+        case .male:
+            return .male
+        case .female:
+            return .female
+        }
+    }
+
+    private func coachingActivity(for userData: UserData) -> ClientCoachingActivity {
+        switch userData.activityLevel {
+        case .none, .light:
+            return .low
+        case .moderate:
+            return .medium
+        case .pro:
+            return .high
+        }
+    }
+
+    private func positive(_ value: Double?) -> Double? {
+        guard let value, value > 0 else { return nil }
+        return value
+    }
+
+    private func positive(_ value: Int?) -> Int? {
+        guard let value, value > 0 else { return nil }
+        return value
     }
 }

@@ -1866,6 +1866,7 @@ struct TrainerClientSupportScreen: View {
     @State private var showAllNutritionReports = false
     @State private var showAllNotes = false
     @State private var showRequestComposer = false
+    @State private var isIntakeExpanded = false
     @State private var selectedProgressPeriod: TrainerClientProgressPeriod = .sevenDays
 
     init(trainerId: String, client: AppUserProfile) {
@@ -2245,25 +2246,51 @@ struct TrainerClientSupportScreen: View {
 
     private var intakeCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            trainerCardTitle(icon: "person.text.rectangle", title: AppLocalizer.string("coaching.workspace.intake"))
+            Button {
+                withAnimation(.snappy) {
+                    isIntakeExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "person.text.rectangle")
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(HomeColors.accent)
+                    Text(AppLocalizer.string("coaching.workspace.intake"))
+                        .font(.headline.weight(.semibold))
+                    Spacer()
+                    Image(systemName: isIntakeExpanded ? "chevron.up" : "chevron.down")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
 
             if let intake = store.intake {
-                trainerInfoRow(AppLocalizer.string("coaching.intake.goal"), AppLocalizer.string(intake.goal.localizationKey))
-                trainerInfoRow(AppLocalizer.string("coaching.intake.height"), "\(String(format: "%.0f", intake.height)) \(AppLocalizer.string("coaching.unit.cm"))")
-                trainerInfoRow(AppLocalizer.string("coaching.intake.activity"), AppLocalizer.string(intake.activity.localizationKey))
-                trainerInfoRow(AppLocalizer.string("coaching.intake.experience"), AppLocalizer.string(intake.experience.localizationKey))
+                if isIntakeExpanded {
+                    trainerInfoRow(AppLocalizer.string("coaching.intake.goal"), AppLocalizer.string(intake.goal.localizationKey))
+                    trainerInfoRow(AppLocalizer.string("coaching.intake.height"), "\(String(format: "%.0f", intake.height)) \(AppLocalizer.string("coaching.unit.cm"))")
+                    trainerInfoRow(AppLocalizer.string("coaching.intake.activity"), AppLocalizer.string(intake.activity.localizationKey))
+                    trainerInfoRow(AppLocalizer.string("coaching.intake.experience"), AppLocalizer.string(intake.experience.localizationKey))
 
-                if intake.limitations.isEmpty == false {
-                    trainerTextBlock(AppLocalizer.string("coaching.intake.limitations"), intake.limitations)
-                }
-                if intake.equipment.isEmpty == false {
-                    trainerTextBlock(AppLocalizer.string("coaching.intake.equipment"), intake.equipment)
-                }
-                if intake.schedule.isEmpty == false {
-                    trainerTextBlock(AppLocalizer.string("coaching.intake.schedule"), intake.schedule)
-                }
-                if intake.notes.isEmpty == false {
-                    trainerTextBlock(AppLocalizer.string("coaching.intake.notes"), intake.notes)
+                    if intake.limitations.isEmpty == false {
+                        trainerTextBlock(AppLocalizer.string("coaching.intake.limitations"), intake.limitations)
+                    }
+                    if intake.equipment.isEmpty == false {
+                        trainerTextBlock(AppLocalizer.string("coaching.intake.equipment"), intake.equipment)
+                    }
+                    if intake.schedule.isEmpty == false {
+                        trainerTextBlock(AppLocalizer.string("coaching.intake.schedule"), intake.schedule)
+                    }
+                    if intake.notes.isEmpty == false {
+                        trainerTextBlock(AppLocalizer.string("coaching.intake.notes"), intake.notes)
+                    }
+                } else {
+                    Text(intakeSummary(intake))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -2274,6 +2301,14 @@ struct TrainerClientSupportScreen: View {
                 .strokeBorder(Color(.separator).opacity(0.16))
         )
         .shadow(color: trainerCardShadow, radius: 14, x: 0, y: 6)
+    }
+
+    private func intakeSummary(_ intake: ClientIntakeProfile) -> String {
+        [
+            AppLocalizer.string(intake.goal.localizationKey),
+            "\(String(format: "%.0f", intake.height)) \(AppLocalizer.string("coaching.unit.cm"))",
+            AppLocalizer.string(intake.activity.localizationKey)
+        ].joined(separator: " • ")
     }
 
     private var updateRequestsCard: some View {
