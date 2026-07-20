@@ -39,7 +39,8 @@ struct WorkoutExerciseCard: View {
                         workoutIconImage(
                             named: exercise.systemImage,
                             accentName: exercise.accentName,
-                            size: 18
+                            size: 18,
+                            customAssetScale: 2.5
                         )
                     }
                     .frame(width: 40, height: 40)
