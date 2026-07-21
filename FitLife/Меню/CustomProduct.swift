@@ -22,10 +22,10 @@ class CustomProduct {
         isAIGenerated: Bool = false
     ) {
         self.name = name
-        self.protein = protein
-        self.fat = fat
-        self.carbs = carbs
-        self.calories = calories
+        self.protein = max(protein.safeFinite, 0)
+        self.fat = max(fat.safeFinite, 0)
+        self.carbs = max(carbs.safeFinite, 0)
+        self.calories = max(calories, 0)
         self.isFavorite = isFavorite
         self.isAIGenerated = isAIGenerated
     }

@@ -87,6 +87,7 @@ struct ProductSelectionView: View {
     @State private var expandsResultsTask: Task<Void, Never>?
     @State private var localSearchTask: Task<Void, Never>?
     @State private var showsExpandedResults = false
+    @State private var allProductSearchSnapshots: [ProductSearchSnapshot] = []
 
     var onProductSelected: (Product) -> Void
     var onCustomProductSelected: (CustomProduct) -> Void
@@ -147,6 +148,49 @@ struct ProductSelectionView: View {
         let nameEN: String
         let barcode: String
         let usageCount: Int
+        let normalizedDisplayName: String
+        let normalizedName: String
+        let normalizedNameEN: String
+        let normalizedBarcode: String
+        let displayNameWords: [String]
+        let nameWords: [String]
+        let nameENWords: [String]
+
+        init(
+            id: UUID,
+            displayName: String,
+            name: String,
+            nameEN: String,
+            barcode: String,
+            usageCount: Int
+        ) {
+            self.id = id
+            self.displayName = displayName
+            self.name = name
+            self.nameEN = nameEN
+            self.barcode = barcode
+            self.usageCount = usageCount
+
+            normalizedDisplayName = Self.normalizedSearchString(displayName)
+            normalizedName = Self.normalizedSearchString(name)
+            normalizedNameEN = Self.normalizedSearchString(nameEN)
+            normalizedBarcode = Self.normalizedSearchString(barcode)
+            displayNameWords = Self.searchTokens(in: normalizedDisplayName)
+            nameWords = Self.searchTokens(in: normalizedName)
+            nameENWords = Self.searchTokens(in: normalizedNameEN)
+        }
+
+        private static func normalizedSearchString(_ value: String) -> String {
+            value
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+        }
+
+        private static func searchTokens(in value: String) -> [String] {
+            value
+                .components(separatedBy: CharacterSet.alphanumerics.inverted)
+                .filter { !$0.isEmpty }
+        }
     }
 
     private struct CustomProductSearchSnapshot: Sendable {
@@ -458,7 +502,11 @@ struct ProductSelectionView: View {
             .onChange(of: searchText) { _, _ in
                 scheduleLocalSearch()
                 scheduleExpandedResults()
-                scheduleHybridSearch()
+                if searchLanguage == .en {
+                    scheduleHybridSearch()
+                } else {
+                    clearRemoteSearchResults()
+                }
             }
             .onChange(of: selectedFilter) { _, _ in
                 ensureLazyLoadedDataForCurrentContext()
@@ -699,69 +747,76 @@ struct ProductSelectionView: View {
 
         let filter = selectedFilter
         let languageCode = searchLanguage.rawValue
-        let productModels: [Product]
-        if filter == .favorites {
-            productModels = cachedFilteredProducts + remoteFavoriteProducts
-        } else {
-            productModels = productCatalogStore.products
-        }
+        let delayNanoseconds: UInt64 = immediate ? 0 : 400_000_000
+        let resultLimit = immediate ? 300 : 80
 
-        let productSnapshots = productModels.map {
-            ProductSearchSnapshot(
-                id: $0.id,
-                displayName: $0.displayName(preferredLanguageCode: languageCode),
-                name: $0.name,
-                nameEN: $0.nameEN ?? "",
-                barcode: $0.barcode ?? "",
-                usageCount: usageCounts[$0.name] ?? 0
-            )
-        }
-
-        let customSnapshots = customProducts.map {
-            CustomProductSearchSnapshot(
-                id: $0.id,
-                name: $0.name,
-                usageCount: usageCounts[$0.name] ?? 0
-            )
-        }
-
-        let delayNanoseconds: UInt64 = immediate ? 0 : 120_000_000
-
-        localSearchTask = Task.detached {
+        localSearchTask = Task {
             if delayNanoseconds > 0 {
                 try? await Task.sleep(nanoseconds: delayNanoseconds)
             }
             guard !Task.isCancelled else { return }
 
-            let productIds = Self.rankedProductIds(
-                snapshots: productSnapshots,
-                query: trimmedSearch,
-                limit: 300
-            )
-            let customProductIds = Self.rankedCustomProductIds(
-                snapshots: customSnapshots,
-                query: trimmedSearch
-            )
+            guard searchText.trimmingCharacters(in: .whitespacesAndNewlines) == trimmedSearch,
+                  selectedFilter == filter else { return }
+
+            let productSnapshots: [ProductSearchSnapshot]
+            if filter == .favorites {
+                let productModels = cachedFilteredProducts + remoteFavoriteProducts
+                productSnapshots = productModels.map {
+                    ProductSearchSnapshot(
+                        id: $0.id,
+                        displayName: $0.displayName(preferredLanguageCode: languageCode),
+                        name: $0.name,
+                        nameEN: $0.nameEN ?? "",
+                        barcode: $0.barcode ?? "",
+                        usageCount: usageCounts[$0.name] ?? 0
+                    )
+                }
+            } else {
+                if allProductSearchSnapshots.count != productCatalogStore.products.count {
+                    rebuildProductSearchIndex()
+                }
+                productSnapshots = allProductSearchSnapshots
+            }
+
+            let customSnapshots = customProducts.map {
+                CustomProductSearchSnapshot(
+                    id: $0.id,
+                    name: $0.name,
+                    usageCount: usageCounts[$0.name] ?? 0
+                )
+            }
+
+            let result = await Task.detached {
+                let productIds = Self.rankedProductIds(
+                    snapshots: productSnapshots,
+                    query: trimmedSearch,
+                    limit: resultLimit
+                )
+                let customProductIds = Self.rankedCustomProductIds(
+                    snapshots: customSnapshots,
+                    query: trimmedSearch
+                )
+                return (productIds: productIds, customProductIds: customProductIds)
+            }.value
 
             guard !Task.isCancelled else { return }
 
-            await MainActor.run {
-                guard searchText.trimmingCharacters(in: .whitespacesAndNewlines) == trimmedSearch,
-                      selectedFilter == filter else { return }
+            guard searchText.trimmingCharacters(in: .whitespacesAndNewlines) == trimmedSearch,
+                  selectedFilter == filter else { return }
 
-                let currentProductModels: [Product]
-                if filter == .favorites {
-                    currentProductModels = cachedFilteredProducts + remoteFavoriteProducts
-                } else {
-                    currentProductModels = productCatalogStore.products
-                }
-
-                let productById = Dictionary(uniqueKeysWithValues: currentProductModels.map { ($0.id, $0) })
-                let customProductById = Dictionary(uniqueKeysWithValues: customProducts.map { ($0.id, $0) })
-
-                filteredProductsCache = productIds.compactMap { productById[$0] }
-                filteredCustomProductsCache = customProductIds.compactMap { customProductById[$0] }
+            let currentProductModels: [Product]
+            if filter == .favorites {
+                currentProductModels = cachedFilteredProducts + remoteFavoriteProducts
+            } else {
+                currentProductModels = productCatalogStore.products
             }
+
+            let productById = Dictionary(uniqueKeysWithValues: currentProductModels.map { ($0.id, $0) })
+            let customProductById = Dictionary(uniqueKeysWithValues: customProducts.map { ($0.id, $0) })
+
+            filteredProductsCache = result.productIds.compactMap { productById[$0] }
+            filteredCustomProductsCache = result.customProductIds.compactMap { customProductById[$0] }
         }
     }
 
@@ -774,11 +829,14 @@ struct ProductSelectionView: View {
         } else {
             baseProducts = productCatalogStore.products
         }
-        let localMatches = trimmedSearch.isEmpty
-            ? baseProducts
-            : baseProducts.filter { $0.matches(trimmedSearch) }
-
-        filteredProductsCache = Array(sortedProducts(localMatches).prefix(300))
+        if trimmedSearch.isEmpty, selectedFilter != .favorites {
+            filteredProductsCache = Array(baseProducts.prefix(300))
+        } else {
+            let localMatches = trimmedSearch.isEmpty
+                ? baseProducts
+                : baseProducts.filter { $0.matches(trimmedSearch) }
+            filteredProductsCache = Array(sortedProducts(localMatches).prefix(300))
+        }
 
         let customMatches = trimmedSearch.isEmpty
             ? customProducts
@@ -836,6 +894,20 @@ struct ProductSelectionView: View {
             let cb = usageCounts[b.name] ?? 0
             if ca != cb { return ca > cb }
             return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+        }
+    }
+
+    private func rebuildProductSearchIndex() {
+        let languageCode = searchLanguage.rawValue
+        allProductSearchSnapshots = productCatalogStore.products.map {
+            ProductSearchSnapshot(
+                id: $0.id,
+                displayName: $0.displayName(preferredLanguageCode: languageCode),
+                name: $0.name,
+                nameEN: $0.nameEN ?? "",
+                barcode: $0.barcode ?? "",
+                usageCount: usageCounts[$0.name] ?? 0
+            )
         }
     }
 
@@ -953,21 +1025,83 @@ struct ProductSelectionView: View {
     }
 
     nonisolated private static func searchRank(for snapshot: ProductSearchSnapshot, query: String) -> Int {
-        let names = [snapshot.displayName, snapshot.name, snapshot.nameEN]
-        let bestNameRank = names
-            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-            .map { searchRank(for: $0, query: query) }
+        let normalizedQuery = normalizedSearchString(query)
+        let queryTokens = searchTokens(in: normalizedQuery)
+        guard !normalizedQuery.isEmpty else { return 6 }
+
+        let nameRanks = [
+            searchRank(
+                normalizedText: snapshot.normalizedDisplayName,
+                words: snapshot.displayNameWords,
+                normalizedQuery: normalizedQuery,
+                queryTokens: queryTokens
+            ),
+            searchRank(
+                normalizedText: snapshot.normalizedName,
+                words: snapshot.nameWords,
+                normalizedQuery: normalizedQuery,
+                queryTokens: queryTokens
+            ),
+            searchRank(
+                normalizedText: snapshot.normalizedNameEN,
+                words: snapshot.nameENWords,
+                normalizedQuery: normalizedQuery,
+                queryTokens: queryTokens
+            )
+        ]
+
+        let bestNameRank = nameRanks
             .min() ?? 7
 
         if bestNameRank < 6 {
             return bestNameRank
         }
 
-        if snapshot.barcode.localizedCaseInsensitiveContains(query) {
+        if !snapshot.normalizedBarcode.isEmpty,
+           snapshot.normalizedBarcode.contains(normalizedQuery) {
             return 6
         }
 
         return 7
+    }
+
+    nonisolated private static func searchRank(
+        normalizedText: String,
+        words: [String],
+        normalizedQuery: String,
+        queryTokens: [String]
+    ) -> Int {
+        guard !normalizedText.isEmpty else { return 6 }
+
+        if normalizedText == normalizedQuery {
+            return 0
+        }
+
+        if normalizedText.hasPrefix(normalizedQuery) {
+            return 1
+        }
+
+        if words.contains(where: { $0.hasPrefix(normalizedQuery) }) {
+            return 2
+        }
+
+        if normalizedText.contains(normalizedQuery) {
+            return 3
+        }
+
+        if !queryTokens.isEmpty,
+           queryTokens.allSatisfy({ token in
+               words.contains { $0.hasPrefix(token) }
+           }) {
+            return 4
+        }
+
+        if !queryTokens.isEmpty,
+           queryTokens.allSatisfy({ token in normalizedText.contains(token) }) {
+            return 5
+        }
+
+        return 6
     }
 
     nonisolated private static func searchRank(for text: String, query: String) -> Int {
@@ -1033,11 +1167,12 @@ struct ProductSelectionView: View {
         usageCountsTask = Task {
             if let cachedCounts = await ProductUsageCache.shared.counts(for: ownerId) {
                 guard !Task.isCancelled else { return }
-                await MainActor.run {
-                    usageCounts = cachedCounts
-                    refreshVisibleProducts()
-                }
-                return
+            await MainActor.run {
+                usageCounts = cachedCounts
+                rebuildProductSearchIndex()
+                refreshVisibleProducts()
+            }
+            return
             }
 
             await Task.yield()
@@ -1066,6 +1201,7 @@ struct ProductSelectionView: View {
 
             await MainActor.run {
                 usageCounts = counts
+                rebuildProductSearchIndex()
                 refreshVisibleProducts()
             }
         }
@@ -1191,6 +1327,14 @@ struct ProductSelectionView: View {
             String(format: "%.2f", product.fat),
             String(format: "%.2f", product.carbs)
         ].joined(separator: "|")
+    }
+
+    private func clearRemoteSearchResults() {
+        searchTask?.cancel()
+        remoteProducts = []
+        remoteSearchMessage = nil
+        isSearchingRemotely = false
+        currentSearchRoute = networkMonitor.isConnected ? .russianLocalThenOpenFoodFacts : .offlineLocal
     }
 
     private func scheduleHybridSearch(immediate: Bool = false) {

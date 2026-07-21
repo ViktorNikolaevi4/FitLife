@@ -37,7 +37,7 @@ class FoodEntry {
         self.date = date
         self.mealType = mealType
         self.product = product
-        self.portion = portion
+        self.portion = max(portion.safeFinite, 0)
         self.genderRawValue = gender.rawValue
         self.isFavorite = isFavorite
         self.aiMealGroupID = aiMealGroupID

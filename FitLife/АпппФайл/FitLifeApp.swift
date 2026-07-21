@@ -33,10 +33,8 @@ struct FitLifeApp: App {
         let inMemory = false
         #endif
 
-        let hasICloudAccount = FileManager.default.ubiquityIdentityToken != nil
-
         let cloudKitDatabase: ModelConfiguration.CloudKitDatabase =
-            (!inMemory && hasICloudAccount) ? .automatic : .none
+            .none
 
         let primaryConfiguration = ModelConfiguration(
             schema: schema,
