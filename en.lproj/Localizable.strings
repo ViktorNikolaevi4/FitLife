@@ -608,8 +608,14 @@
 "workout.set.delete" = "Delete Set";
 "workout.set.delete.title" = "Delete set?";
 "workout.set.delete.message" = "This set will be removed from the exercise.";
-"workout.exercise.bench" = "Bench Press";
-"workout.exercise.incline_bench" = "Incline Bench Press";
+"workout.exercise.bench" = "Barbell Bench Press";
+"workout.exercise.dumbbell_bench" = "Dumbbell Bench Press";
+"workout.exercise.incline_bench" = "Incline Barbell Bench Press";
+"workout.exercise.incline_dumbbell_bench" = "Incline Dumbbell Bench Press";
+"workout.exercise.decline_bench" = "Decline Barbell Bench Press";
+"workout.exercise.decline_dumbbell_bench" = "Decline Dumbbell Bench Press";
+"workout.exercise.dumbbell_fly" = "Dumbbell Fly";
+"workout.exercise.pec_deck" = "Pec Deck Fly";
 "workout.exercise.clean_and_jerk" = "Clean and Jerk";
 "workout.exercise.jumping_jack" = "Jumping Jack";
 "workout.exercise.run" = "Running";

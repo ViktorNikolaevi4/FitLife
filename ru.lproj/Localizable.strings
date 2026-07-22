@@ -608,8 +608,14 @@
 "workout.set.delete" = "Удалить подход";
 "workout.set.delete.title" = "Удалить подход?";
 "workout.set.delete.message" = "Этот подход будет удалён из упражнения.";
-"workout.exercise.bench" = "Жим лежа";
-"workout.exercise.incline_bench" = "Жим на наклонной скамье";
+"workout.exercise.bench" = "Жим штанги лёжа";
+"workout.exercise.dumbbell_bench" = "Жим гантелей лёжа";
+"workout.exercise.incline_bench" = "Жим штанги на наклонной скамье";
+"workout.exercise.incline_dumbbell_bench" = "Жим гантелей на наклонной скамье";
+"workout.exercise.decline_bench" = "Жим штанги головой вниз";
+"workout.exercise.decline_dumbbell_bench" = "Жим гантелей головой вниз";
+"workout.exercise.dumbbell_fly" = "Разводка гантелей лёжа";
+"workout.exercise.pec_deck" = "Сведение рук в тренажёре";
 "workout.exercise.clean_and_jerk" = "Подъём на грудь и толчок";
 "workout.exercise.jumping_jack" = "Jumping Jack";
 "workout.exercise.run" = "Бег";

@@ -6,8 +6,14 @@ enum WorkoutExerciseIcon {
     static let cleanAndJerk = "CleanAndJerk"
     static let jumpingJack = "JumpingJack"
     static let run = "Бег"
-    static let bench = "bench_press_bold-2"
-    static let inclineBench = "Жим на наклонной скамье"
+    static let bench = "Жим штанги лёжа"
+    static let dumbbellBench = "Жим гантелей лёжа"
+    static let inclineBench = "Жим штанги на наклонной скамье"
+    static let inclineDumbbellBench = "Жим гантелей на наклонной скамье"
+    static let declineBench = "Жим штанги головой вниз"
+    static let declineDumbbellBench = "Жим гантелей головой вниз"
+    static let dumbbellFly = "Разводка гантелей лёжа"
+    static let pecDeck = "Сведение рук в тренажёре"
     static let shoulderPress = "ЖимНаПлечи"
     static let legPress = "ЖимНогами"
     static let biceps = "Бицепс"
@@ -77,6 +83,16 @@ func workoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.dumbbell_bench"),
+            systemImage: WorkoutExerciseIcon.dumbbellBench,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 5.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 20, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
             name: AppLocalizer.string("workout.exercise.incline_bench"),
             systemImage: WorkoutExerciseIcon.inclineBench,
             accentName: "blue",
@@ -84,6 +100,56 @@ func workoutTemplates() -> [WorkoutExerciseTemplate] {
             metValue: 5.0,
             defaultSets: [
                 WorkoutDraftSet(weight: 45, reps: 10)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.incline_dumbbell_bench"),
+            systemImage: WorkoutExerciseIcon.inclineDumbbellBench,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 5.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 18, reps: 10)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.decline_bench"),
+            systemImage: WorkoutExerciseIcon.declineBench,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 5.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 50, reps: 10)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.decline_dumbbell_bench"),
+            systemImage: WorkoutExerciseIcon.declineDumbbellBench,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 5.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 18, reps: 10)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.dumbbell_fly"),
+            systemImage: WorkoutExerciseIcon.dumbbellFly,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 4.5,
+            defaultSets: [
+                WorkoutDraftSet(weight: 10, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.pec_deck"),
+            systemImage: WorkoutExerciseIcon.pecDeck,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 4.5,
+            defaultSets: [
+                WorkoutDraftSet(weight: 35, reps: 12)
             ]
         ),
         WorkoutExerciseTemplate(
