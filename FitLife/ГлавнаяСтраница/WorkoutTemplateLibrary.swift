@@ -45,7 +45,8 @@ enum WorkoutExerciseIcon {
     static let tBarRow = "Тяга Т-грифа"
     static let chestSupportedMachineRow = "Тяга в тренажёре с упором грудью"
     static let pendlayRow = "Тяга Пендли"
-    static let legPress = "ЖимНогами"
+    static let legPress = "Жим ногами"
+    static let legExtension = "Разгибание ног в тренажёре"
     static let biceps = "Бицепс"
     static let barbellBicepsCurl = "Сгибание штанги на бицепс"
     static let ezBarBicepsCurl = "Сгибание EZ-штанги на бицепс"
@@ -53,14 +54,32 @@ enum WorkoutExerciseIcon {
     static let hammerCurls = "Молотковые сгибания"
     static let preacherCurl = "Сгибание рук на скамье Скотта"
     static let concentrationCurl = "Концентрированное сгибание"
+    static let inclineDumbbellCurl = "Сгибание гантелей на наклонной скамье"
+    static let lowCableBicepsCurl = "Сгибание рук на нижнем блоке"
+    static let lyingFrenchPress = "Французский жим лёжа"
+    static let seatedFrenchPress = "Французский жим сидя"
+    static let cableTricepsPushdown = "Разгибание рук на верхнем блоке"
+    static let ropeTricepsPushdown = "Разгибание рук с канатом"
+    static let singleArmTricepsExtension = "Разгибание одной руки"
+    static let closeGripBenchPress = "Жим лёжа узким хватом"
+    static let tricepsFocusedDips = "Отжимания на брусьях с акцентом на трицепс"
+    static let overheadDumbbellTricepsExtension = "Разгибание гантели из-за головы"
+    static let dumbbellKickback = "Кикбэк с гантелью"
     static let sidePlank = "БоковаяПланка"
     static let lunges = "Выпады "
+    static let reverseLunges = "Выпады назад"
+    static let bulgarianSplitSquat = "Болгарские выпады"
     static let pullUps = "Подтягивания"
     static let chinUps = "Подтягивания обратным хватом"
     static let bandAssistedPullUps = "Подтягивания с резинкой"
     static let assistedPullUpMachine = "Подтягивания в гравитроне"
     static let snatch = "Рывок"
     static let squats = "Приседания"
+    static let barbellSquat = "Приседания со штангой"
+    static let frontSquat = "Фронтальные приседания"
+    static let gobletSquat = "Гоблет-приседания"
+    static let zercherSquat = "Приседания Зерхера"
+    static let hackSquat = "Гак-приседания"
     static let pistolSquat = "Пистолетик"
     static let boxJumps = "Прыжки на тумбу"
     static let deadlift = "СтановаяТяга"
@@ -69,6 +88,7 @@ enum WorkoutExerciseIcon {
     static let backExtension = "Гиперэкстензия"
     static let reverseBackExtension = "Обратная гиперэкстензия"
     static let battleRopes = "канат"
+    static let sledPush = "Толкание саней"
     static let jumpRope = "скакалка"
     static let lowerAbs = "Пресс нижний"
     static let oneArmRow = "тяга одной рукой"
@@ -556,6 +576,16 @@ func workoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.leg_extension"),
+            systemImage: WorkoutExerciseIcon.legExtension,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 4.5,
+            defaultSets: [
+                WorkoutDraftSet(weight: 35, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
             name: AppLocalizer.string("workout.exercise.core"),
             systemImage: "figure.core.training",
             accentName: "blue",
@@ -646,6 +676,116 @@ func workoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.incline_dumbbell_curl"),
+            systemImage: WorkoutExerciseIcon.inclineDumbbellCurl,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 4.5,
+            defaultSets: [
+                WorkoutDraftSet(weight: 8, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.low_cable_biceps_curl"),
+            systemImage: WorkoutExerciseIcon.lowCableBicepsCurl,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 4.5,
+            defaultSets: [
+                WorkoutDraftSet(weight: 20, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.lying_french_press"),
+            systemImage: WorkoutExerciseIcon.lyingFrenchPress,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 4.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 20, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.seated_french_press"),
+            systemImage: WorkoutExerciseIcon.seatedFrenchPress,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 4.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 18, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.cable_triceps_pushdown"),
+            systemImage: WorkoutExerciseIcon.cableTricepsPushdown,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 4.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 25, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.rope_triceps_pushdown"),
+            systemImage: WorkoutExerciseIcon.ropeTricepsPushdown,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 4.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 20, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.single_arm_triceps_extension"),
+            systemImage: WorkoutExerciseIcon.singleArmTricepsExtension,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 4.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 8, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.close_grip_bench_press"),
+            systemImage: WorkoutExerciseIcon.closeGripBenchPress,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 5.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 40, reps: 10)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.triceps_focused_dips"),
+            systemImage: WorkoutExerciseIcon.tricepsFocusedDips,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 5.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, reps: 10)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.overhead_dumbbell_triceps_extension"),
+            systemImage: WorkoutExerciseIcon.overheadDumbbellTricepsExtension,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 4.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 16, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.dumbbell_kickback"),
+            systemImage: WorkoutExerciseIcon.dumbbellKickback,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 4.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 6, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
             name: AppLocalizer.string("workout.exercise.pullups"),
             systemImage: WorkoutExerciseIcon.pullUps,
             accentName: "blue",
@@ -716,6 +856,56 @@ func workoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.barbell_squat"),
+            systemImage: WorkoutExerciseIcon.barbellSquat,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 6.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 50, reps: 10)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.front_squat"),
+            systemImage: WorkoutExerciseIcon.frontSquat,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 6.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 40, reps: 8)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.goblet_squat"),
+            systemImage: WorkoutExerciseIcon.gobletSquat,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 5.5,
+            defaultSets: [
+                WorkoutDraftSet(weight: 20, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.zercher_squat"),
+            systemImage: WorkoutExerciseIcon.zercherSquat,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 6.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 40, reps: 8)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.hack_squat"),
+            systemImage: WorkoutExerciseIcon.hackSquat,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 6.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 60, reps: 10)
+            ]
+        ),
+        WorkoutExerciseTemplate(
             name: AppLocalizer.string("workout.exercise.pistol_squat"),
             systemImage: WorkoutExerciseIcon.pistolSquat,
             accentName: "blue",
@@ -733,6 +923,26 @@ func workoutTemplates() -> [WorkoutExerciseTemplate] {
             metValue: 5.5,
             defaultSets: [
                 WorkoutDraftSet(weight: 14, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.reverse_lunges"),
+            systemImage: WorkoutExerciseIcon.reverseLunges,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 5.5,
+            defaultSets: [
+                WorkoutDraftSet(weight: 12, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.bulgarian_split_squat"),
+            systemImage: WorkoutExerciseIcon.bulgarianSplitSquat,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 6.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 12, reps: 10)
             ]
         ),
         WorkoutExerciseTemplate(
@@ -821,6 +1031,16 @@ func workoutTemplates() -> [WorkoutExerciseTemplate] {
             accentName: "blue",
             activityType: .hiit,
             metValue: 10.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, durationSeconds: 30, metricType: .duration)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.sled_push"),
+            systemImage: WorkoutExerciseIcon.sledPush,
+            accentName: "blue",
+            activityType: .hiit,
+            metValue: 8.0,
             defaultSets: [
                 WorkoutDraftSet(weight: 0, durationSeconds: 30, metricType: .duration)
             ]
