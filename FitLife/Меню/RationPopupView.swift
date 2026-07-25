@@ -52,6 +52,107 @@ private struct RationMacroCard: View {
     }
 }
 
+private struct PortionSelection: Identifiable {
+    let id = UUID()
+    let product: Product
+    let customProduct: CustomProduct?
+    let meal: MealType
+}
+
+private struct PortionInputSheet: View {
+    let product: Product
+    let onAdd: (Double) -> Void
+    let onCancel: () -> Void
+
+    @State private var portionSize: String = "100"
+
+    private var currentPortionValue: Double {
+        clampedPortion(Double(portionSize) ?? 100)
+    }
+
+    private var calculatedCalories: Int {
+        let p = currentPortionValue
+        return max(Int((Double(product.calories).safeFinite * p.safeFinite / 100).rounded()), 0)
+    }
+
+    private var calculatedMacros: (protein: Double, fat: Double, carbs: Double) {
+        let factor = (currentPortionValue / 100).safeFinite
+        return (
+            max(product.protein.safeFinite * factor, 0),
+            max(product.fat.safeFinite * factor, 0),
+            max(product.carbs.safeFinite * factor, 0)
+        )
+    }
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text(product.name)
+                .font(.headline)
+                .multilineTextAlignment(.center)
+
+            Text(AppLocalizer.string("macros.energy"))
+
+            Text(AppLocalizer.format("unit.kcal.value", calculatedCalories))
+                .font(.largeTitle)
+
+            let macros = calculatedMacros
+            HStack(spacing: 20) {
+                Text(AppLocalizer.format("macro.protein.value", String(format: "%.1f", macros.protein)))
+                Text(AppLocalizer.format("macro.fat.value", String(format: "%.1f", macros.fat)))
+                Text(AppLocalizer.format("macro.carbs.value", String(format: "%.1f", macros.carbs)))
+            }
+            .font(.subheadline)
+            .foregroundColor(.secondary)
+
+            TextField(AppLocalizer.string("portion.grams"), text: $portionSize)
+                .keyboardType(.numberPad)
+                .textFieldStyle(.roundedBorder)
+                .padding(.horizontal)
+                .onChange(of: portionSize) { _, newValue in
+                    let sanitized = sanitizedPortionText(newValue)
+                    if sanitized != newValue {
+                        portionSize = sanitized
+                    }
+                }
+
+            Text(AppLocalizer.string("portion.in_grams"))
+                .padding(.bottom, 8)
+
+            HStack(spacing: 16) {
+                Button(AppLocalizer.string("common.add")) {
+                    onAdd(currentPortionValue)
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(10)
+
+                Button(AppLocalizer.string("common.cancel")) {
+                    onCancel()
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.gray)
+                .foregroundColor(.white)
+                .cornerRadius(10)
+            }
+        }
+        .padding(20)
+        .presentationDetents([.medium])
+    }
+
+    private func sanitizedPortionText(_ text: String) -> String {
+        let digits = text.filter(\.isNumber)
+        guard let value = Double(digits), value > 0 else { return digits }
+        return String(Int(clampedPortion(value)))
+    }
+
+    private func clampedPortion(_ value: Double) -> Double {
+        min(max(value.safeFinite, 1), maxFoodPortionGrams)
+    }
+}
+
 struct RationPopupView: View {
     // MARK: — Храним записи FoodEntry
     @State private var breakfastEntries: [FoodEntry] = []
@@ -61,11 +162,7 @@ struct RationPopupView: View {
 
     // MARK: — Состояние
     @State private var selectedMeal: MealType? = nil
-    @State private var selectedProduct: Product? = nil
-    @State private var selectedCustomProduct: CustomProduct? = nil
-    @State private var showProductDetails = false
-    @State private var portionSize: String = "100"
-    @State private var activeMeal: MealType? = nil
+    @State private var portionSelection: PortionSelection? = nil
     @State private var expandedMeals: Set<MealType> = []
 
     // MARK: — Параметры
@@ -105,8 +202,8 @@ struct RationPopupView: View {
                 // Основной контент (не рисуем при быстром запуске)
                 mainContent
                 // Прячем, когда открыт список продуктов ИЛИ открыт оверлей граммов
-                    .opacity((selectedMeal == nil && !showProductDetails) ? 1 : 0)
-                    .allowsHitTesting(selectedMeal == nil && !showProductDetails)
+                    .opacity(selectedMeal == nil ? 1 : 0)
+                    .allowsHitTesting(selectedMeal == nil)
                     .padding() // пернесли padding сюда, чтобы он касался только mainContent
             }
             // Список продуктов как часть ЭТОГО ЖЕ листа
@@ -116,13 +213,11 @@ struct RationPopupView: View {
                     date: selectedDate,
                     selectedGender: selectedGender,
                     onProductSelected: { product in
-                        selectedProduct = product
-                        selectedCustomProduct = nil
-                        activeMeal = meal
-                        withAnimation {
-                            showProductDetails = true
-                            portionSize = "100"
-                        }
+                        portionSelection = PortionSelection(
+                            product: product,
+                            customProduct: nil,
+                            meal: meal
+                        )
                     },
                     onCustomProductSelected: { custom in
                         let generic = Product(
@@ -134,13 +229,11 @@ struct RationPopupView: View {
                             isFavorite: custom.isFavorite,
                             isCustom: true
                         )
-                        selectedProduct = generic
-                        selectedCustomProduct = custom
-                        activeMeal = meal
-                        withAnimation {
-                            showProductDetails = true
-                            portionSize = "100"
-                        }
+                        portionSelection = PortionSelection(
+                            product: generic,
+                            customProduct: custom,
+                            meal: meal
+                        )
                     },
                     onRecognizedMealSaved: {
                         loadData(for: selectedDate, gender: selectedGender)
@@ -151,42 +244,34 @@ struct RationPopupView: View {
                         if preselectedMeal != nil { dismiss() } else { selectedMeal = nil }
                     }
                 )
-                .opacity(showProductDetails ? 0.2 : 1)          // слегка затемняем под оверлеем
-                .allowsHitTesting(!showProductDetails)          // блокируем клики по списку под оверлеем
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(0)
-            }
-            
-            // Полупрозрачный фон под карточкой граммов
-            if showProductDetails {
-                Color.black.opacity(0.25)
-                    .ignoresSafeArea()
-                    .transition(.opacity)
-                    .zIndex(1)
-                    .onTapGesture {
-                        withAnimation {
-                            showProductDetails = false
-                            activeMeal = nil
-                            selectedProduct = nil
-                            selectedCustomProduct = nil
-                        }
-                    }
-            }
-            
-            // Оверлей граммов
-            if showProductDetails, let prod = selectedProduct {
-                gramsContent(prod)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .zIndex(2)
             }
         }
         //      .padding()
         .presentationDetents([.large])
-        .animation(.spring(response: 0.35, dampingFraction: 0.9), value: showProductDetails)
         .onAppear { loadData(for: selectedDate, gender: selectedGender) }
         .onChange(of: selectedDate) { _, newDate in loadData(for: newDate, gender: selectedGender) }
+        .sheet(item: $portionSelection) { selection in
+            PortionInputSheet(
+                product: selection.product,
+                onAdd: { portion in
+                    addGenericProductToMeal(
+                        selection.product,
+                        portion: portion,
+                        meal: selection.meal,
+                        gender: selectedGender,
+                        customProduct: selection.customProduct
+                    )
+                    portionSelection = nil
+                },
+                onCancel: {
+                    portionSelection = nil
+                }
+            )
+        }
         .overlay(alignment: .topTrailing) {
-            if preselectedMeal == nil && selectedMeal == nil && !showProductDetails {
+            if preselectedMeal == nil && selectedMeal == nil {
                 Button(AppLocalizer.string("common.close")) { dismiss() }
                     .font(.callout.weight(.semibold))
                     .padding(.horizontal, 12)
@@ -331,65 +416,6 @@ struct RationPopupView: View {
         }
     }
 
-    // MARK: — Оверлей ввода граммов
-    @ViewBuilder
-    private func gramsContent(_ prod: Product) -> some View {
-        VStack(spacing: 16) {
-            Text(prod.name).font(.headline)
-
-            Text(AppLocalizer.string("macros.energy"))
-            Text(AppLocalizer.format("unit.kcal.value", calculateCalories(for: prod))).font(.largeTitle)
-
-            let macros = calculateMacros(for: prod)
-            HStack(spacing: 20) {
-                Text(AppLocalizer.format("macro.protein.value", String(format: "%.1f", macros.protein)))
-                Text(AppLocalizer.format("macro.fat.value", String(format: "%.1f", macros.fat)))
-                Text(AppLocalizer.format("macro.carbs.value", String(format: "%.1f", macros.carbs)))
-            }
-            .font(.subheadline)
-            .foregroundColor(.secondary)
-
-            TextField(AppLocalizer.string("portion.grams"), text: $portionSize)
-                .keyboardType(.numberPad)
-                .textFieldStyle(.roundedBorder)
-                .padding(.horizontal)
-                .onChange(of: portionSize) { portionSize = sanitizedPortionText($0) }
-
-            Text(AppLocalizer.string("portion.in_grams")).padding(.bottom, 8)
-
-            HStack(spacing: 16) {
-                Button(AppLocalizer.string("common.add")) {
-                    addGenericProductToMeal(prod, portion: currentPortionValue, gender: selectedGender)
-                }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color.blue)
-                .foregroundColor(.white)
-                .cornerRadius(10)
-
-                Button(AppLocalizer.string("common.cancel")) {
-                    withAnimation {
-                        showProductDetails = false
-                        activeMeal = nil
-                        selectedProduct = nil
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color.gray)
-                .foregroundColor(.white)
-                .cornerRadius(10)
-            }
-        }
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.systemBackground))   // непрозрачный фон карточки
-        )
-        .padding(.horizontal, 20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-    }
-
     // MARK: — Подсчёты
     private var totalCalories: Int {
         [breakfastEntries, lunchEntries, dinnerEntries, snacksEntries]
@@ -413,31 +439,6 @@ struct RationPopupView: View {
         [breakfastEntries, lunchEntries, dinnerEntries, snacksEntries]
             .flatMap { $0 }
             .reduce(0) { $0 + Int(max(($1.product?.carbs ?? 0).safeFinite, 0)) }
-    }
-
-    private func calculateMacros(for product: Product) -> (protein: Double, fat: Double, carbs: Double) {
-        let portion = currentPortionValue
-        let factor = (portion / 100).safeFinite
-        return (
-            max(product.protein.safeFinite * factor, 0),
-            max(product.fat.safeFinite * factor, 0),
-            max(product.carbs.safeFinite * factor, 0)
-        )
-    }
-
-    private func calculateCalories(for product: Product) -> Int {
-        let p = currentPortionValue
-        return max(Int((Double(product.calories).safeFinite * p.safeFinite / 100).rounded()), 0)
-    }
-
-    private var currentPortionValue: Double {
-        clampedPortion(Double(portionSize) ?? 100)
-    }
-
-    private func sanitizedPortionText(_ text: String) -> String {
-        let digits = text.filter(\.isNumber)
-        guard let value = Double(digits), value > 0 else { return digits }
-        return String(Int(clampedPortion(value)))
     }
 
     private func clampedPortion(_ value: Double) -> Double {
@@ -467,8 +468,13 @@ struct RationPopupView: View {
     }
 
     // MARK: — Добавление
-    private func addGenericProductToMeal(_ product: Product, portion: Double, gender: Gender) {
-        guard let meal = activeMeal else { return }
+    private func addGenericProductToMeal(
+        _ product: Product,
+        portion: Double,
+        meal: MealType,
+        gender: Gender,
+        customProduct: CustomProduct?
+    ) {
         let safePortion = clampedPortion(portion)
         let factor = (safePortion / 100).safeFinite
         let adjusted = Product(
@@ -489,7 +495,7 @@ struct RationPopupView: View {
             gender:    gender,
             ownerId:   sessionStore.firebaseUser?.uid ?? "",
             isFavorite: product.isFavorite,
-            customProductID: selectedCustomProduct?.id
+            customProductID: customProduct?.id
         )
 
         do {
@@ -516,9 +522,6 @@ struct RationPopupView: View {
                 gender: gender
             )
             onMealAdded()
-            activeMeal = nil
-            selectedCustomProduct = nil
-            withAnimation { showProductDetails = false }
         } catch {}
     }
 
