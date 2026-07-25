@@ -1,12 +1,13 @@
 import SwiftUI
 import SwiftData
+import Foundation
 
 private let workoutPickerCardBackground = Color(.secondarySystemBackground)
 private let workoutPickerInsetBackground = Color(.tertiarySystemBackground)
 private let workoutPickerCardBorder = Color(.separator).opacity(0.40)
 
 struct WorkoutExerciseTemplate: Identifiable {
-    let id = UUID()
+    let id: String
     let name: String
     let systemImage: String
     let accentName: String
@@ -22,6 +23,7 @@ struct WorkoutExerciseTemplate: Identifiable {
         metValue: Double = 5.0,
         defaultSets: [WorkoutDraftSet]
     ) {
+        self.id = "\(systemImage)|\(activityType.rawValue)|\(String(format: "%.2f", metValue))|\(name)"
         self.name = name
         self.systemImage = systemImage
         self.accentName = accentName
@@ -126,10 +128,18 @@ struct AddWorkoutExerciseScreen: View {
         return customTemplates.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
 
+    private var filteredTemplateGroups: [(activityType: WorkoutActivityType, templates: [WorkoutExerciseTemplate])] {
+        let grouped = Dictionary(grouping: filteredTemplates, by: \.activityType)
+        return WorkoutActivityType.pickerDisplayOrder.compactMap { activityType in
+            guard let templates = grouped[activityType], !templates.isEmpty else { return nil }
+            return (activityType, templates)
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 18) {
+                LazyVStack(alignment: .leading, spacing: 18) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(AppLocalizer.string("workout.select.exercise.title"))
                             .font(.largeTitle.bold())
@@ -140,10 +150,12 @@ struct AddWorkoutExerciseScreen: View {
 
                     createExerciseCard
 
-                    workoutTemplateSection(
-                        title: AppLocalizer.string("workout.select.exercise.library"),
-                        templates: filteredTemplates
-                    )
+                    ForEach(filteredTemplateGroups, id: \.activityType) { group in
+                        workoutTemplateSection(
+                            title: group.activityType.title,
+                            templates: group.templates
+                        )
+                    }
 
                     if !filteredCustomTemplates.isEmpty {
                         customTemplateSection
@@ -237,7 +249,7 @@ struct AddWorkoutExerciseScreen: View {
             Text(title)
                 .font(.headline.weight(.semibold))
 
-            VStack(spacing: 12) {
+            LazyVStack(spacing: 12) {
                 ForEach(templates) { template in
                     Button(action: { draftToConfigure = WorkoutExerciseDraft(template: template) }) {
                         HStack(spacing: 14) {
@@ -290,7 +302,7 @@ struct AddWorkoutExerciseScreen: View {
             Text(AppLocalizer.string("workout.select.exercise.saved"))
                 .font(.headline.weight(.semibold))
 
-            VStack(spacing: 12) {
+            LazyVStack(spacing: 12) {
                 ForEach(filteredCustomTemplates) { template in
                     HStack(spacing: 14) {
                         ZStack {
@@ -835,6 +847,14 @@ private extension ExerciseActivityOption {
 }
 
 private extension WorkoutActivityType {
+    static let pickerDisplayOrder: [WorkoutActivityType] = [
+        .cardio,
+        .strength,
+        .hiit,
+        .core,
+        .mobility
+    ]
+
     var title: String {
         switch self {
         case .strength:

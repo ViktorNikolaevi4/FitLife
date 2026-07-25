@@ -1,5 +1,6 @@
 import SwiftUI
 import FirebaseFirestore
+import UserNotifications
 
 enum AppNotificationEventType: String, Codable, CaseIterable {
     case coachingRequestSubmitted = "coaching_request_submitted"
@@ -182,7 +183,11 @@ enum AppNotificationEventWriter {
 @MainActor
 final class AppNotificationsStore: ObservableObject {
     @Published private(set) var notifications: [AppNotificationEvent] = []
-    @Published private(set) var unreadCount = 0
+    @Published private(set) var unreadCount = 0 {
+        didSet {
+            syncApplicationIconBadge()
+        }
+    }
 
     private let firestore: Firestore
     private var listener: ListenerRegistration?
@@ -255,6 +260,13 @@ final class AppNotificationsStore: ObservableObject {
                 .document(notification.id)
                 .setData(["isArchived": true, "isRead": true], merge: true)
         } catch {}
+    }
+
+    private func syncApplicationIconBadge() {
+        let badgeCount = unreadCount
+        Task {
+            try? await UNUserNotificationCenter.current().setBadgeCount(badgeCount)
+        }
     }
 }
 

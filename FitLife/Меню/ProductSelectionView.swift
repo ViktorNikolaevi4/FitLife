@@ -88,6 +88,7 @@ struct ProductSelectionView: View {
     @State private var localSearchTask: Task<Void, Never>?
     @State private var showsExpandedResults = false
     @State private var allProductSearchSnapshots: [ProductSearchSnapshot] = []
+    @State private var productCatalogIndexById: [UUID: Int] = [:]
 
     var onProductSelected: (Product) -> Void
     var onCustomProductSelected: (CustomProduct) -> Void
@@ -474,6 +475,7 @@ struct ProductSelectionView: View {
             }
             .onAppear {
                 hydrateRemoteFavoriteKeysIfNeeded()
+                rebuildProductCatalogIndexIfNeeded()
                 ensureLazyLoadedDataForCurrentContext()
                 refreshVisibleProducts()
                 scheduleExpandedResults()
@@ -489,6 +491,7 @@ struct ProductSelectionView: View {
             }
             .onChange(of: productCatalogStore.products.count) { _, _ in
                 hasLoadedFavorites = false
+                rebuildProductCatalogIndex(force: true)
                 ensureLazyLoadedDataForCurrentContext()
                 refreshVisibleProducts()
                 scheduleHybridSearch(immediate: true)
@@ -616,7 +619,8 @@ struct ProductSelectionView: View {
                 }
                 .buttonStyle(.plain)
 
-                if let index = productCatalogStore.products.firstIndex(where: { $0.id == product.id }) {
+                if let index = productCatalogIndexById[product.id],
+                   productCatalogStore.products.indices.contains(index) {
                     Button(action: {
                         productCatalogStore.products[index].isFavorite.toggle()
                         persistFavorites()
@@ -909,6 +913,20 @@ struct ProductSelectionView: View {
                 usageCount: usageCounts[$0.name] ?? 0
             )
         }
+    }
+
+    private func rebuildProductCatalogIndexIfNeeded() {
+        guard productCatalogIndexById.count != productCatalogStore.products.count else { return }
+        rebuildProductCatalogIndex(force: true)
+    }
+
+    private func rebuildProductCatalogIndex(force: Bool = false) {
+        guard force || productCatalogIndexById.count != productCatalogStore.products.count else { return }
+        productCatalogIndexById = Dictionary(
+            uniqueKeysWithValues: productCatalogStore.products.enumerated().map { index, product in
+                (product.id, index)
+            }
+        )
     }
 
     private func searchRank(for product: Product, query: String) -> Int {

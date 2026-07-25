@@ -95,8 +95,22 @@ enum WorkoutExerciseIcon {
     static let rowing = "Гребля"
 }
 
+private enum WorkoutAssetIconCache {
+    private static var cache: [String: Bool] = [:]
+
+    static func hasIcon(named name: String) -> Bool {
+        if let cached = cache[name] {
+            return cached
+        }
+
+        let hasIcon = UIImage(named: name) != nil
+        cache[name] = hasIcon
+        return hasIcon
+    }
+}
+
 func hasWorkoutAssetIcon(named name: String) -> Bool {
-    UIImage(named: name) != nil
+    WorkoutAssetIconCache.hasIcon(named: name)
 }
 
 @ViewBuilder
@@ -123,7 +137,25 @@ func workoutIconImage(
     }
 }
 
+private enum WorkoutTemplateLibraryCache {
+    private static var cachedTemplatesByLanguage: [String: [WorkoutExerciseTemplate]] = [:]
+
+    static func templates(for language: AppLanguage = AppLocalizer.currentLanguage) -> [WorkoutExerciseTemplate] {
+        if let cached = cachedTemplatesByLanguage[language.rawValue] {
+            return cached
+        }
+
+        let templates = makeWorkoutTemplates()
+        cachedTemplatesByLanguage[language.rawValue] = templates
+        return templates
+    }
+}
+
 func workoutTemplates() -> [WorkoutExerciseTemplate] {
+    WorkoutTemplateLibraryCache.templates()
+}
+
+private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
     [
         WorkoutExerciseTemplate(
             name: AppLocalizer.string("workout.exercise.run"),

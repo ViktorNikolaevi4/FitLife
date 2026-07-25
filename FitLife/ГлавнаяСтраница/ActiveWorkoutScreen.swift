@@ -32,6 +32,7 @@ struct ActiveWorkoutScreen: View {
     @State private var isEditingWorkoutNote = false
     @State private var showFinishConfirmation = false
     @State private var isShowingEffortPicker = false
+    @State private var exerciseTemplates: [WorkoutExerciseTemplate] = []
     private let firestore = Firestore.firestore()
 
     private var sortedExercises: [WorkoutExercise] {
@@ -169,10 +170,11 @@ struct ActiveWorkoutScreen: View {
             stopLegacyTimerIfNeeded()
             ensureWorkoutBlocksIfNeeded()
             collapseExercisesIfNeeded()
+            preloadExerciseTemplatesIfNeeded()
         }
         .sheet(isPresented: $isShowingExercisePicker) {
             AddWorkoutExerciseScreen(
-                templates: workoutTemplates(),
+                templates: exerciseTemplates.isEmpty ? workoutTemplates() : exerciseTemplates,
                 onAddExercise: { draft in
                     addExercise(draft: draft, to: exerciseTargetBlock)
                     exerciseTargetBlock = nil
@@ -409,6 +411,11 @@ struct ActiveWorkoutScreen: View {
         if hasChanges {
             try? modelContext.save()
         }
+    }
+
+    private func preloadExerciseTemplatesIfNeeded() {
+        guard exerciseTemplates.isEmpty else { return }
+        exerciseTemplates = workoutTemplates()
     }
 
     private func stopLegacyTimerIfNeeded() {

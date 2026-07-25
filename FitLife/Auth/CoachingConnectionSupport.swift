@@ -1217,7 +1217,7 @@ struct ClientCoachingHomeScreen: View {
                 }
 
                 trainerCard
-                requestCard
+                notesSection
                 summaryNavigationCard(
                     icon: "clock",
                     title: AppLocalizer.string("coaching.checkin.history"),
@@ -1236,7 +1236,7 @@ struct ClientCoachingHomeScreen: View {
                     subtitle: nutritionReportsSubtitle,
                     action: { showAllNutritionReports = true }
                 )
-                notesSection
+                requestCard
             }
             .padding(.horizontal, 18)
             .padding(.top, 18)
