@@ -316,7 +316,7 @@ struct AppNotificationsScreen: View {
     }
 }
 
-private struct AppNotificationDestinationScreen: View {
+struct AppNotificationDestinationScreen: View {
     let notification: AppNotificationEvent
 
     @EnvironmentObject private var sessionStore: AppSessionStore
@@ -359,7 +359,7 @@ private struct AppNotificationDestinationScreen: View {
         case .client:
             switch notification.type {
             case .coachNoteReceived:
-                ClientNoteNotificationDestination(notification: notification, clientId: profile.id)
+                ClientCoachingEntryScreen(clientId: profile.id, opensChatInitially: true)
             case .profileUpdateRequested, .coachingRequestApproved, .coachingRequestRejected:
                 ClientNotificationBridgeScreen(notification: notification, clientId: profile.id)
             case .coachingRequestSubmitted, .workoutReportSent, .nutritionReportSent, .checkInSubmitted, .clientNoteReceived, .workoutAssigned:
@@ -368,7 +368,11 @@ private struct AppNotificationDestinationScreen: View {
         case .trainer:
             switch notification.type {
             case .clientNoteReceived:
-                TrainerNoteNotificationDestination(notification: notification, trainerId: profile.id, clientId: notification.senderId)
+                TrainerClientNotificationDestination(
+                    trainerId: profile.id,
+                    clientId: notification.senderId,
+                    opensChatInitially: true
+                )
             case .checkInSubmitted:
                 TrainerNotificationBridgeScreen(notification: notification, trainerId: profile.id, clientId: notification.senderId)
             case .coachingRequestSubmitted, .coachingRequestApproved, .coachingRequestRejected, .workoutReportSent, .nutritionReportSent, .coachNoteReceived, .workoutAssigned, .profileUpdateRequested:
@@ -426,6 +430,7 @@ private struct AppNotificationDestinationScreen: View {
 private struct TrainerClientNotificationDestination: View {
     let trainerId: String
     let clientId: String
+    var opensChatInitially = false
 
     @State private var client: AppUserProfile?
     @State private var isLoading = true
@@ -434,7 +439,11 @@ private struct TrainerClientNotificationDestination: View {
     var body: some View {
         Group {
             if let client {
-                TrainerClientSupportScreen(trainerId: trainerId, client: client)
+                TrainerClientSupportScreen(
+                    trainerId: trainerId,
+                    client: client,
+                    opensChatInitially: opensChatInitially
+                )
             } else if isLoading {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

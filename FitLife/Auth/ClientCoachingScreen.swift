@@ -3,6 +3,7 @@ import SwiftData
 
 struct ClientCoachingEntryScreen: View {
     let clientId: String
+    var opensChatInitially = false
 
     @EnvironmentObject private var sessionStore: AppSessionStore
     @Query private var users: [UserData]
@@ -11,8 +12,9 @@ struct ClientCoachingEntryScreen: View {
     @State private var isEditing = false
     @State private var didAcknowledgeApprovedConnection: Bool
 
-    init(clientId: String) {
+    init(clientId: String, opensChatInitially: Bool = false) {
         self.clientId = clientId
+        self.opensChatInitially = opensChatInitially
         _store = StateObject(wrappedValue: ClientCoachingStore(clientId: clientId))
         _didAcknowledgeApprovedConnection = State(
             initialValue: UserDefaults.standard.bool(forKey: Self.approvedIntroSeenKey(for: clientId))
@@ -34,7 +36,8 @@ struct ClientCoachingEntryScreen: View {
                 ClientCoachingLinkedScreen(
                     clientId: clientId,
                     trainerId: store.activeLink?.trainerId,
-                    trainer: store.trainerProfile
+                    trainer: store.trainerProfile,
+                    opensChatInitially: opensChatInitially
                 )
             } else if shouldShowForm {
                 ClientCoachingIntakeScreen(store: store)
@@ -695,6 +698,7 @@ private struct ClientCoachingLinkedScreen: View {
     let clientId: String
     let trainerId: String?
     let trainer: AppUserProfile?
+    var opensChatInitially = false
 
     var body: some View {
         Group {
@@ -702,7 +706,8 @@ private struct ClientCoachingLinkedScreen: View {
                 ClientCoachingHomeScreen(
                     clientId: clientId,
                     trainerId: trainerId,
-                    trainer: trainer
+                    trainer: trainer,
+                    opensChatInitially: opensChatInitially
                 )
             } else {
                 ScrollView(showsIndicators: false) {

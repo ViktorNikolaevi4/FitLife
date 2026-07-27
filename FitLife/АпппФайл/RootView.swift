@@ -13,6 +13,7 @@ struct RootView: View {
     @Query private var users: [UserData]
     @State private var preparedOwnerId: String?
     @State private var isPreparingLocalData = false
+    @State private var openedPushNotification: AppNotificationEvent?
 
     private var currentOwnerId: String? {
         sessionStore.firebaseUser?.uid
@@ -81,6 +82,7 @@ struct RootView: View {
             pushNotificationsManager.setCurrentUser(currentOwnerId)
             refreshMealRemindersIfNeeded()
             refreshWorkoutRemindersIfNeeded()
+            presentOpenedPushNotificationIfPossible()
         }
         .onChange(of: currentOwnerId) { _, _ in
             prepareLocalDataIfNeeded()
@@ -88,6 +90,10 @@ struct RootView: View {
             pushNotificationsManager.setCurrentUser(currentOwnerId)
             refreshMealRemindersIfNeeded()
             refreshWorkoutRemindersIfNeeded()
+            presentOpenedPushNotificationIfPossible()
+        }
+        .onChange(of: pushNotificationsManager.openedNotification) { _, _ in
+            presentOpenedPushNotificationIfPossible()
         }
         .onChange(of: appLanguageRaw) { _, _ in
             Task {
@@ -98,6 +104,21 @@ struct RootView: View {
             refreshMealRemindersIfNeeded()
             refreshWorkoutRemindersIfNeeded()
         }
+        .fullScreenCover(item: $openedPushNotification) { notification in
+            NavigationStack {
+                AppNotificationDestinationScreen(notification: notification)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button(AppLocalizer.string("common.close")) {
+                                openedPushNotification = nil
+                            }
+                        }
+                    }
+                    .task {
+                        await notificationsStore.markRead(notification)
+                    }
+            }
+        }
     }
 
     private func prepareLocalDataIfNeeded() {
@@ -106,6 +127,17 @@ struct RootView: View {
         migrateLegacyLocalDataIfNeeded(to: currentOwnerId)
         preparedOwnerId = currentOwnerId
         isPreparingLocalData = false
+    }
+
+    private func presentOpenedPushNotificationIfPossible() {
+        guard
+            currentOwnerId != nil,
+            openedPushNotification == nil,
+            let notification = pushNotificationsManager.openedNotification
+        else { return }
+
+        openedPushNotification = notification
+        pushNotificationsManager.clearOpenedNotification()
     }
 
     private func refreshMealRemindersIfNeeded() {

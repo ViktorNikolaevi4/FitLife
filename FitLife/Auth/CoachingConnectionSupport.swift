@@ -1178,6 +1178,7 @@ struct ClientCoachingHomeScreen: View {
     let clientId: String
     let trainerId: String
     let trainer: AppUserProfile?
+    let opensChatInitially: Bool
 
     @EnvironmentObject private var sessionStore: AppSessionStore
     @Environment(\.dismiss) private var dismiss
@@ -1193,13 +1194,21 @@ struct ClientCoachingHomeScreen: View {
     @State private var showAllWorkoutReports = false
     @State private var showAllNutritionReports = false
     @State private var showAllNotes = false
+    @State private var shouldOpenChatOnLoad: Bool
     @State private var noteMessage = ""
 
-    init(clientId: String, trainerId: String, trainer: AppUserProfile?) {
+    init(
+        clientId: String,
+        trainerId: String,
+        trainer: AppUserProfile?,
+        opensChatInitially: Bool = false
+    ) {
         self.clientId = clientId
         self.trainerId = trainerId
         self.trainer = trainer
+        self.opensChatInitially = opensChatInitially
         _store = StateObject(wrappedValue: ClientCoachingHomeStore(clientId: clientId, trainerId: trainerId))
+        _shouldOpenChatOnLoad = State(initialValue: opensChatInitially)
     }
 
     var body: some View {
@@ -1247,6 +1256,7 @@ struct ClientCoachingHomeScreen: View {
         .toolbar(.hidden, for: .navigationBar)
         .task {
             await store.load()
+            openChatIfNeeded()
         }
         .refreshable {
             await store.load()
@@ -1332,6 +1342,12 @@ struct ClientCoachingHomeScreen: View {
         workouts
             .filter { $0.ownerId == clientId && $0.endedAt != nil }
             .sorted { ($0.endedAt ?? .distantPast) > ($1.endedAt ?? .distantPast) }
+    }
+
+    private func openChatIfNeeded() {
+        guard shouldOpenChatOnLoad else { return }
+        shouldOpenChatOnLoad = false
+        showAllNotes = true
     }
 
     private var coachingBackground: Color {
@@ -1852,6 +1868,7 @@ private struct ClientWorkoutReportComposerScreen: View {
 struct TrainerClientSupportScreen: View {
     let trainerId: String
     let client: AppUserProfile
+    let opensChatInitially: Bool
 
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var sessionStore: AppSessionStore
@@ -1865,14 +1882,21 @@ struct TrainerClientSupportScreen: View {
     @State private var showAllWorkoutReports = false
     @State private var showAllNutritionReports = false
     @State private var showAllNotes = false
+    @State private var shouldOpenChatOnLoad: Bool
     @State private var showRequestComposer = false
     @State private var isIntakeExpanded = false
     @State private var selectedProgressPeriod: TrainerClientProgressPeriod = .sevenDays
 
-    init(trainerId: String, client: AppUserProfile) {
+    init(
+        trainerId: String,
+        client: AppUserProfile,
+        opensChatInitially: Bool = false
+    ) {
         self.trainerId = trainerId
         self.client = client
+        self.opensChatInitially = opensChatInitially
         _store = StateObject(wrappedValue: TrainerClientSupportStore(trainerId: trainerId, client: client))
+        _shouldOpenChatOnLoad = State(initialValue: opensChatInitially)
     }
 
     var body: some View {
@@ -1929,6 +1953,7 @@ struct TrainerClientSupportScreen: View {
         .navigationTitle(client.displayName)
         .task {
             await store.load()
+            openChatIfNeeded()
         }
         .refreshable {
             await store.load()
@@ -1993,6 +2018,12 @@ struct TrainerClientSupportScreen: View {
 
     private var openRequests: [ProfileUpdateRequest] {
         store.updateRequests.filter { $0.status == "open" }
+    }
+
+    private func openChatIfNeeded() {
+        guard shouldOpenChatOnLoad else { return }
+        shouldOpenChatOnLoad = false
+        showAllNotes = true
     }
 
     private var trainerBackground: Color {

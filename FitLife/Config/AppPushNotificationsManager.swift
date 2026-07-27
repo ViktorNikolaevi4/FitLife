@@ -10,6 +10,7 @@ final class AppPushNotificationsManager: NSObject, ObservableObject {
     static let shared = AppPushNotificationsManager()
 
     @Published private(set) var fcmToken: String?
+    @Published private(set) var openedNotification: AppNotificationEvent?
 
     private var currentUserId: String?
     private let didRequestPermissionKey = "push.didRequestAuthorization"
@@ -50,6 +51,35 @@ final class AppPushNotificationsManager: NSObject, ObservableObject {
         #if DEBUG
         print("Push registration failed:", error.localizedDescription)
         #endif
+    }
+
+    func clearOpenedNotification() {
+        openedNotification = nil
+    }
+
+    func handleNotificationResponse(userInfo: [AnyHashable: Any]) {
+        guard
+            let eventId = userInfo["eventId"] as? String,
+            let typeRaw = userInfo["type"] as? String,
+            let type = AppNotificationEventType(rawValue: typeRaw),
+            let recipientId = userInfo["recipientId"] as? String,
+            let senderId = userInfo["senderId"] as? String,
+            let targetTypeRaw = userInfo["targetType"] as? String,
+            let targetType = AppNotificationTargetType(rawValue: targetTypeRaw),
+            let targetId = userInfo["targetId"] as? String
+        else {
+            return
+        }
+
+        openedNotification = AppNotificationEvent(
+            id: eventId,
+            type: type,
+            recipientId: recipientId,
+            senderId: senderId,
+            senderName: (userInfo["senderName"] as? String) ?? "",
+            targetType: targetType,
+            targetId: targetId
+        )
     }
 
     private func ensurePushRegistrationFlow() async {
@@ -143,6 +173,9 @@ final class FitLifeAppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         AppPushNotificationsManager.shared.configure()
+        if let userInfo = launchOptions?[.remoteNotification] as? [AnyHashable: Any] {
+            AppPushNotificationsManager.shared.handleNotificationResponse(userInfo: userInfo)
+        }
         return true
     }
 
@@ -179,6 +212,9 @@ extension AppPushNotificationsManager: UNUserNotificationCenterDelegate {
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
+        Task { @MainActor in
+            self.handleNotificationResponse(userInfo: response.notification.request.content.userInfo)
+        }
         completionHandler()
     }
 }
