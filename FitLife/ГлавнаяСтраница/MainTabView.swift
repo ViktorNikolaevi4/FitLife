@@ -22,7 +22,7 @@ struct MainTabView: View {
     @State private var selectedTab: MainTab = .home
     @State private var showsHomeFloatingAddButton = true
     @State private var childHidesHomeFloatingAddButton = false
-    @State private var isShowingAIQuickAdd = false
+    @State private var isShowingAIMealRecognition = false
 
     private var appLanguage: AppLanguage {
         AppLanguage.from(rawValue: appLanguageRaw)
@@ -77,7 +77,7 @@ struct MainTabView: View {
             }
 
             if showsFloatingAddButton {
-                Button(action: { isShowingAIQuickAdd = true }) {
+                Button(action: { isShowingAIMealRecognition = true }) {
                     Image(systemName: "plus")
                         .font(.system(size: 28, weight: .semibold))
                         .foregroundStyle(.white)
@@ -119,8 +119,8 @@ struct MainTabView: View {
                 preselectedMeal: preset
             )
         }
-        .sheet(isPresented: $isShowingAIQuickAdd) {
-            AIQuickMealEntryChooserView(
+        .sheet(isPresented: $isShowingAIMealRecognition) {
+            AIMealRecognitionFlowView(
                 selectedDate: selectedDate,
                 selectedGender: selectedGender,
                 onSaved: { refreshID = UUID() }
