@@ -82,7 +82,10 @@ service cloud.firestore {
             "preferredLanguage",
             "fcmTokens",
             "lastFCMToken",
-            "pushTokenUpdatedAt"
+            "pushTokenUpdatedAt",
+            "unreadNotificationCount",
+            "unreadCounterInitialized",
+            "unreadCounterUpdatedAt"
           ]);
       }
 

@@ -13,6 +13,7 @@ final class AppPushNotificationsManager: NSObject, ObservableObject {
     @Published private(set) var openedNotification: AppNotificationEvent?
 
     private var currentUserId: String?
+    private var hasAPNSToken = false
     private let didRequestPermissionKey = "push.didRequestAuthorization"
 
     private var firestore: Firestore {
@@ -35,7 +36,10 @@ final class AppPushNotificationsManager: NSObject, ObservableObject {
         Task {
             await ensurePushRegistrationFlow()
             await syncPreferredLanguageIfPossible()
-            await syncFCMTokenIfPossible()
+            if hasAPNSToken {
+                await refreshFCMTokenIfPossible()
+                await syncFCMTokenIfPossible()
+            }
         }
     }
 
@@ -45,6 +49,11 @@ final class AppPushNotificationsManager: NSObject, ObservableObject {
 
     func didRegisterForRemoteNotifications(deviceToken: Data) {
         Messaging.messaging().apnsToken = deviceToken
+        hasAPNSToken = true
+        Task {
+            await refreshFCMTokenIfPossible()
+            await syncFCMTokenIfPossible()
+        }
     }
 
     func didFailToRegisterForRemoteNotifications(_ error: Error) {
@@ -145,6 +154,17 @@ final class AppPushNotificationsManager: NSObject, ObservableObject {
             print("Failed to sync FCM token:", error.localizedDescription)
             #endif
         }
+    }
+
+    private func refreshFCMTokenIfPossible() async {
+        let token = await withCheckedContinuation { continuation in
+            Messaging.messaging().token { token, _ in
+                continuation.resume(returning: token)
+            }
+        }
+
+        guard let token, token.isEmpty == false else { return }
+        fcmToken = token
     }
 
     private func syncPreferredLanguageIfPossible() async {

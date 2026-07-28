@@ -6,6 +6,9 @@ enum WorkoutExerciseIcon {
     static let cleanAndJerk = "CleanAndJerk"
     static let jumpingJack = "JumpingJack"
     static let run = "Бег"
+    static let walking = "Ходьба"
+    static let runInPlank = "Бег в упоре лежа"
+    static let burpee = "Бёрпи"
     static let bench = "Жим штанги лёжа"
     static let dumbbellBench = "Жим гантелей лёжа"
     static let inclineBench = "Жим штанги на наклонной скамье"
@@ -47,6 +50,9 @@ enum WorkoutExerciseIcon {
     static let pendlayRow = "Тяга Пендли"
     static let legPress = "Жим ногами"
     static let legExtension = "Разгибание ног в тренажёре"
+    static let machineHipAbduction = "Отведение ног в тренажёре "
+    static let bandedSeatedHipAbduction = "Отведение ног с резинкой сидя"
+    static let stepUpKneeDrive = "Подъём на платформу с подъёмом колена"
     static let biceps = "Бицепс"
     static let barbellBicepsCurl = "Сгибание штанги на бицепс"
     static let ezBarBicepsCurl = "Сгибание EZ-штанги на бицепс"
@@ -81,10 +87,20 @@ enum WorkoutExerciseIcon {
     static let zercherSquat = "Приседания Зерхера"
     static let hackSquat = "Гак-приседания"
     static let pistolSquat = "Пистолетик"
+    static let sumoSquat = "Приседания сумо"
+    static let splitSquat = "Сплит-приседания"
+    static let wallSit = "Статический присед у стены"
+    static let jumpSquats = "Прыжковые приседания"
+    static let jumpingLunges = "Прыжковые выпады"
     static let boxJumps = "Прыжки на тумбу"
     static let deadlift = "СтановаяТяга"
     static let classicDeadlift = "Классическая становая тяга"
     static let sumoDeadlift = "Становая тяга сумо"
+    static let romanianDeadlift = "Румынская тяга"
+    static let stiffLegDeadlift = "Тяга на прямых ногах"
+    static let goodMorning = "Наклоны Good Morning"
+    static let singleLegGluteBridge = "Ягодичный мост 1 ногой"
+    static let barbellHipThrust = "ягодичный мост"
     static let backExtension = "Гиперэкстензия"
     static let reverseBackExtension = "Обратная гиперэкстензия"
     static let battleRopes = "канат"
@@ -93,6 +109,7 @@ enum WorkoutExerciseIcon {
     static let lowerAbs = "Пресс нижний"
     static let oneArmRow = "тяга одной рукой"
     static let rowing = "Гребля"
+    static let rowingMachine = "Гребной тренажёр"
 }
 
 private enum WorkoutAssetIconCache {
@@ -165,6 +182,16 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             metValue: 9.0,
             defaultSets: [
                 WorkoutDraftSet(weight: 0, durationSeconds: 900, metricType: .duration)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.walking"),
+            systemImage: WorkoutExerciseIcon.walking,
+            accentName: "blue",
+            activityType: .cardio,
+            metValue: 3.5,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, durationSeconds: 1800, metricType: .duration)
             ]
         ),
         WorkoutExerciseTemplate(
@@ -618,6 +645,36 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.machine_hip_abduction"),
+            systemImage: WorkoutExerciseIcon.machineHipAbduction,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 4.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 35, reps: 15)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.banded_seated_hip_abduction"),
+            systemImage: WorkoutExerciseIcon.bandedSeatedHipAbduction,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 3.5,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, reps: 20)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.step_up_knee_drive"),
+            systemImage: WorkoutExerciseIcon.stepUpKneeDrive,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 5.5,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
             name: AppLocalizer.string("workout.exercise.core"),
             systemImage: "figure.core.training",
             accentName: "blue",
@@ -868,6 +925,16 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.rowing_machine"),
+            systemImage: WorkoutExerciseIcon.rowingMachine,
+            accentName: "blue",
+            activityType: .cardio,
+            metValue: 7.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, durationSeconds: 600, metricType: .duration)
+            ]
+        ),
+        WorkoutExerciseTemplate(
             name: AppLocalizer.string("workout.exercise.jumping_jack"),
             systemImage: WorkoutExerciseIcon.jumpingJack,
             accentName: "blue",
@@ -875,6 +942,26 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             metValue: 8.0,
             defaultSets: [
                 WorkoutDraftSet(weight: 0, durationSeconds: 60, metricType: .duration)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.run_in_plank"),
+            systemImage: WorkoutExerciseIcon.runInPlank,
+            accentName: "blue",
+            activityType: .hiit,
+            metValue: 8.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, durationSeconds: 45, metricType: .duration)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.burpee"),
+            systemImage: WorkoutExerciseIcon.burpee,
+            accentName: "blue",
+            activityType: .hiit,
+            metValue: 9.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, reps: 10)
             ]
         ),
         WorkoutExerciseTemplate(
@@ -910,6 +997,16 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
         WorkoutExerciseTemplate(
             name: AppLocalizer.string("workout.exercise.goblet_squat"),
             systemImage: WorkoutExerciseIcon.gobletSquat,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 5.5,
+            defaultSets: [
+                WorkoutDraftSet(weight: 20, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.sumo_squat"),
+            systemImage: WorkoutExerciseIcon.sumoSquat,
             accentName: "blue",
             activityType: .strength,
             metValue: 5.5,
@@ -978,6 +1075,46 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.split_squat"),
+            systemImage: WorkoutExerciseIcon.splitSquat,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 5.5,
+            defaultSets: [
+                WorkoutDraftSet(weight: 12, reps: 10)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.wall_sit"),
+            systemImage: WorkoutExerciseIcon.wallSit,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 4.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, durationSeconds: 45, metricType: .duration)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.jump_squats"),
+            systemImage: WorkoutExerciseIcon.jumpSquats,
+            accentName: "blue",
+            activityType: .hiit,
+            metValue: 8.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, reps: 15)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.jumping_lunges"),
+            systemImage: WorkoutExerciseIcon.jumpingLunges,
+            accentName: "blue",
+            activityType: .hiit,
+            metValue: 8.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
             name: AppLocalizer.string("workout.exercise.box_jumps"),
             systemImage: WorkoutExerciseIcon.boxJumps,
             accentName: "blue",
@@ -1025,6 +1162,56 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             metValue: 6.0,
             defaultSets: [
                 WorkoutDraftSet(weight: 70, reps: 8)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.romanian_deadlift"),
+            systemImage: WorkoutExerciseIcon.romanianDeadlift,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 5.5,
+            defaultSets: [
+                WorkoutDraftSet(weight: 50, reps: 10)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.stiff_leg_deadlift"),
+            systemImage: WorkoutExerciseIcon.stiffLegDeadlift,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 5.5,
+            defaultSets: [
+                WorkoutDraftSet(weight: 40, reps: 10)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.good_morning"),
+            systemImage: WorkoutExerciseIcon.goodMorning,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 4.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 20, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.barbell_hip_thrust"),
+            systemImage: WorkoutExerciseIcon.barbellHipThrust,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 5.5,
+            defaultSets: [
+                WorkoutDraftSet(weight: 50, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.single_leg_glute_bridge"),
+            systemImage: WorkoutExerciseIcon.singleLegGluteBridge,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 4.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, reps: 12)
             ]
         ),
         WorkoutExerciseTemplate(

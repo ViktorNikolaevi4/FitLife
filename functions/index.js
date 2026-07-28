@@ -206,6 +206,7 @@ exports.sendPushForNotificationEvent = onDocumentCreated(
 
     const userSnapshot = await db.collection("users").doc(recipientId).get();
     const userData = userSnapshot.data() || {};
+    const unreadCount = await incrementUnreadNotificationCount(recipientId, userData);
     const fcmTokens = sanitizeTokens(userData.fcmTokens);
 
     if (fcmTokens.length === 0) {
@@ -216,6 +217,7 @@ exports.sendPushForNotificationEvent = onDocumentCreated(
 
     const preferredLanguage = normalizeLanguage(userData.preferredLanguage);
     const pushContent = buildPushContent(data, preferredLanguage);
+    const chatNotificationId = chatNotificationIdentifier(data);
     const message = {
       tokens: fcmTokens,
       notification: {
@@ -232,10 +234,14 @@ exports.sendPushForNotificationEvent = onDocumentCreated(
         targetId: stringifyData(data.targetId)
       },
       apns: {
+        headers: chatNotificationId
+          ? { "apns-collapse-id": chatNotificationId }
+          : {},
         payload: {
           aps: {
             sound: "default",
-            badge: 1
+            badge: Math.max(1, unreadCount),
+            ...(chatNotificationId ? { "thread-id": chatNotificationId } : {})
           }
         }
       }
@@ -276,6 +282,13 @@ exports.sendPushForNotificationEvent = onDocumentCreated(
     }
 
     if (response.successCount > 0) {
+      logger.info("Push sent", {
+        eventId,
+        recipientId,
+        unreadCount,
+        successCount: response.successCount,
+        failureCount: response.failureCount
+      });
       await db.collection("notification_events").doc(eventId).set(
         {
           pushStatus: response.failureCount === 0 ? "sent" : "partial",
@@ -291,6 +304,66 @@ exports.sendPushForNotificationEvent = onDocumentCreated(
     await markPushFailed(eventId, "send_failed");
   }
 );
+
+async function incrementUnreadNotificationCount(recipientId, userData) {
+  const userRef = db.collection("users").doc(recipientId);
+
+  // Existing users receive one historical calculation during migration. Each
+  // subsequent notification uses an atomic increment instead of reading the
+  // whole notification history.
+  if (userData.unreadCounterInitialized !== true) {
+    const unreadCount = await unreadNotificationCount(recipientId);
+    await userRef.set(
+      {
+        unreadNotificationCount: unreadCount,
+        unreadCounterInitialized: true,
+        unreadCounterUpdatedAt: admin.firestore.FieldValue.serverTimestamp()
+      },
+      { merge: true }
+    );
+    return unreadCount;
+  }
+
+  const currentCount = Number(userData.unreadNotificationCount) || 0;
+  await userRef.set(
+    {
+      unreadNotificationCount: admin.firestore.FieldValue.increment(1),
+      unreadCounterUpdatedAt: admin.firestore.FieldValue.serverTimestamp()
+    },
+    { merge: true }
+  );
+  return Math.max(0, currentCount) + 1;
+}
+
+async function unreadNotificationCount(recipientId) {
+  const snapshot = await db
+    .collection("notification_events")
+    .where("recipientId", "==", recipientId)
+    .get();
+
+  return snapshot.docs.filter((document) => {
+    const data = document.data();
+    return data.isRead !== true && data.isArchived !== true;
+  }).length;
+}
+
+function chatNotificationIdentifier(data) {
+  const senderId = stringifyData(data.senderId);
+  const recipientId = stringifyData(data.recipientId);
+
+  if (!senderId || !recipientId) {
+    return null;
+  }
+
+  switch (data.type) {
+    case "coach_note_received":
+      return `chat-${senderId}-${recipientId}`;
+    case "client_note_received":
+      return `chat-${recipientId}-${senderId}`;
+    default:
+      return null;
+  }
+}
 
 function buildPushContent(data, preferredLanguage) {
   const config = TYPE_CONFIG[data.type] || {};

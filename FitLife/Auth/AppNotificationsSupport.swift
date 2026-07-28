@@ -182,6 +182,8 @@ enum AppNotificationEventWriter {
 
 @MainActor
 final class AppNotificationsStore: ObservableObject {
+    private static let pageSize = 50
+
     @Published private(set) var notifications: [AppNotificationEvent] = []
     @Published private(set) var unreadCount = 0 {
         didSet {
@@ -190,76 +192,261 @@ final class AppNotificationsStore: ObservableObject {
     }
 
     private let firestore: Firestore
-    private var listener: ListenerRegistration?
+    private var notificationsListener: ListenerRegistration?
+    private var unreadCountListener: ListenerRegistration?
     private var currentUserId: String?
+    private var loadedDocuments: [String: DocumentSnapshot] = [:]
+    private var lastPageDocument: DocumentSnapshot?
+    private var isBootstrappingUnreadCounter = false
+    @Published private(set) var canLoadMore = false
+    @Published private(set) var isLoadingMore = false
 
     init(firestore: Firestore = .firestore()) {
         self.firestore = firestore
     }
 
     deinit {
-        listener?.remove()
+        notificationsListener?.remove()
+        unreadCountListener?.remove()
     }
 
     func setCurrentUser(_ userId: String?) {
         guard currentUserId != userId else { return }
         currentUserId = userId
-        listener?.remove()
+        notificationsListener?.remove()
+        unreadCountListener?.remove()
         notifications = []
         unreadCount = 0
+        loadedDocuments = [:]
+        lastPageDocument = nil
+        canLoadMore = false
+        isLoadingMore = false
+        isBootstrappingUnreadCounter = false
 
         guard let userId, userId.isEmpty == false else { return }
 
-        listener = firestore
+        unreadCountListener = firestore
+            .collection("users")
+            .document(userId)
+            .addSnapshotListener { [weak self] snapshot, _ in
+                guard let self else { return }
+                let unreadCount = snapshot?.data()?["unreadNotificationCount"] as? NSNumber
+
+                Task { @MainActor in
+                    guard self.currentUserId == userId else { return }
+                    if let unreadCount {
+                        self.unreadCount = max(0, unreadCount.intValue)
+                    } else {
+                        await self.bootstrapUnreadCounterIfNeeded(for: userId)
+                    }
+                }
+            }
+
+        notificationsListener = firestore
             .collection("notification_events")
             .whereField("recipientId", isEqualTo: userId)
             .order(by: "createdAt", descending: true)
+            .limit(to: Self.pageSize)
             .addSnapshotListener { [weak self] snapshot, _ in
                 guard let self, let snapshot else { return }
                 Task { @MainActor in
-                    self.notifications = snapshot.documents
-                        .compactMap { document in
-                            AppNotificationEvent(id: document.documentID, data: document.data())
-                        }
-                        .filter { $0.isArchived == false }
-                    self.unreadCount = self.notifications.filter { $0.isRead == false }.count
+                    guard self.currentUserId == userId else { return }
+                    self.merge(snapshot.documents)
+                    if self.lastPageDocument == nil {
+                        self.lastPageDocument = snapshot.documents.last
+                    }
+                    self.canLoadMore = snapshot.documents.count == Self.pageSize
                 }
             }
     }
 
     func markRead(_ notification: AppNotificationEvent) async {
-        guard notification.isRead == false else { return }
+        guard notification.isRead == false, currentUserId == notification.recipientId else { return }
 
         do {
-            try await firestore
-                .collection("notification_events")
-                .document(notification.id)
-                .setData(["isRead": true], merge: true)
+            let batch = firestore.batch()
+            batch.setData(
+                ["isRead": true],
+                forDocument: firestore.collection("notification_events").document(notification.id),
+                merge: true
+            )
+            batch.setData(
+                unreadCounterUpdate(by: -1),
+                forDocument: firestore.collection("users").document(notification.recipientId),
+                merge: true
+            )
+            try await batch.commit()
+            updateLocalNotification(notification.id) { event in
+                AppNotificationEvent(
+                    id: event.id,
+                    type: event.type,
+                    recipientId: event.recipientId,
+                    senderId: event.senderId,
+                    senderName: event.senderName,
+                    targetType: event.targetType,
+                    targetId: event.targetId,
+                    createdAt: event.createdAt,
+                    isRead: true,
+                    isArchived: event.isArchived
+                )
+            }
         } catch {}
     }
 
     func markAllRead() async {
-        let unreadNotifications = notifications.filter { $0.isRead == false }
-        guard unreadNotifications.isEmpty == false else { return }
-
-        let batch = firestore.batch()
-        for notification in unreadNotifications {
-            let ref = firestore.collection("notification_events").document(notification.id)
-            batch.setData(["isRead": true], forDocument: ref, merge: true)
-        }
-
         do {
-            try await batch.commit()
+            guard let userId = currentUserId else { return }
+            let snapshot = try await firestore
+                .collection("notification_events")
+                .whereField("recipientId", isEqualTo: userId)
+                .getDocuments()
+            let unreadDocuments = snapshot.documents.filter { document in
+                let data = document.data()
+                return (data["isRead"] as? Bool) != true && (data["isArchived"] as? Bool) != true
+            }
+
+            for startIndex in stride(from: 0, to: unreadDocuments.count, by: 450) {
+                let endIndex = min(startIndex + 450, unreadDocuments.count)
+                let documents = unreadDocuments[startIndex..<endIndex]
+                let batch = firestore.batch()
+                for document in documents {
+                    batch.setData(["isRead": true], forDocument: document.reference, merge: true)
+                }
+                batch.setData(
+                    unreadCounterUpdate(by: -documents.count),
+                    forDocument: firestore.collection("users").document(userId),
+                    merge: true
+                )
+                try await batch.commit()
+            }
+
+            notifications = notifications.map { event in
+                guard event.isRead == false else { return event }
+                return AppNotificationEvent(
+                    id: event.id,
+                    type: event.type,
+                    recipientId: event.recipientId,
+                    senderId: event.senderId,
+                    senderName: event.senderName,
+                    targetType: event.targetType,
+                    targetId: event.targetId,
+                    createdAt: event.createdAt,
+                    isRead: true,
+                    isArchived: event.isArchived
+                )
+            }
         } catch {}
     }
 
     func delete(_ notification: AppNotificationEvent) async {
         do {
-            try await firestore
-                .collection("notification_events")
-                .document(notification.id)
-                .setData(["isArchived": true, "isRead": true], merge: true)
+            let batch = firestore.batch()
+            batch.setData(
+                ["isArchived": true, "isRead": true],
+                forDocument: firestore.collection("notification_events").document(notification.id),
+                merge: true
+            )
+            if notification.isRead == false {
+                batch.setData(
+                    unreadCounterUpdate(by: -1),
+                    forDocument: firestore.collection("users").document(notification.recipientId),
+                    merge: true
+                )
+            }
+            try await batch.commit()
+            loadedDocuments.removeValue(forKey: notification.id)
+            rebuildNotifications()
         } catch {}
+    }
+
+    func loadMoreNotifications() async {
+        guard
+            isLoadingMore == false,
+            canLoadMore,
+            let userId = currentUserId,
+            let lastPageDocument
+        else {
+            return
+        }
+
+        isLoadingMore = true
+        defer { isLoadingMore = false }
+
+        do {
+            let snapshot = try await firestore
+                .collection("notification_events")
+                .whereField("recipientId", isEqualTo: userId)
+                .order(by: "createdAt", descending: true)
+                .start(afterDocument: lastPageDocument)
+                .limit(to: Self.pageSize)
+                .getDocuments()
+
+            guard currentUserId == userId else { return }
+            merge(snapshot.documents)
+            if let lastDocument = snapshot.documents.last {
+                self.lastPageDocument = lastDocument
+            }
+            canLoadMore = snapshot.documents.count == Self.pageSize
+        } catch {}
+    }
+
+    private func bootstrapUnreadCounterIfNeeded(for userId: String) async {
+        guard isBootstrappingUnreadCounter == false, currentUserId == userId else { return }
+        isBootstrappingUnreadCounter = true
+        defer { isBootstrappingUnreadCounter = false }
+
+        do {
+            let snapshot = try await firestore
+                .collection("notification_events")
+                .whereField("recipientId", isEqualTo: userId)
+                .getDocuments()
+            let count = snapshot.documents.reduce(into: 0) { result, document in
+                let data = document.data()
+                if (data["isRead"] as? Bool) != true && (data["isArchived"] as? Bool) != true {
+                    result += 1
+                }
+            }
+            guard currentUserId == userId else { return }
+            try await firestore.collection("users").document(userId).setData([
+                "unreadNotificationCount": count,
+                "unreadCounterInitialized": true,
+                "unreadCounterUpdatedAt": FieldValue.serverTimestamp()
+            ], merge: true)
+        } catch {}
+    }
+
+    private func unreadCounterUpdate(by delta: Int) -> [String: Any] {
+        [
+            "unreadNotificationCount": FieldValue.increment(Int64(delta)),
+            "unreadCounterInitialized": true,
+            "unreadCounterUpdatedAt": FieldValue.serverTimestamp()
+        ]
+    }
+
+    private func merge(_ documents: [DocumentSnapshot]) {
+        for document in documents {
+            loadedDocuments[document.documentID] = document
+        }
+        rebuildNotifications()
+    }
+
+    private func rebuildNotifications() {
+        notifications = loadedDocuments.values
+            .compactMap { document in
+                guard let data = document.data() else { return nil }
+                return AppNotificationEvent(id: document.documentID, data: data)
+            }
+            .filter { $0.isArchived == false }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    private func updateLocalNotification(
+        _ id: String,
+        transform: (AppNotificationEvent) -> AppNotificationEvent
+    ) {
+        notifications = notifications.map { event in
+            event.id == id ? transform(event) : event
+        }
     }
 
     private func syncApplicationIconBadge() {
@@ -286,6 +473,21 @@ struct AppNotificationsScreen: View {
                     AppNotificationRow(notification: notification)
                 }
                 .buttonStyle(.plain)
+                .listRowBackground(Color.clear)
+                .onAppear {
+                    guard notification.id == notificationsStore.notifications.last?.id else { return }
+                    Task {
+                        await notificationsStore.loadMoreNotifications()
+                    }
+                }
+            }
+
+            if notificationsStore.isLoadingMore {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                    Spacer()
+                }
                 .listRowBackground(Color.clear)
             }
         }
