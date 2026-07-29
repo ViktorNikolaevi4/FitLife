@@ -1098,3 +1098,5 @@
 "coaching.approved.message.trainer" = "%@ is connected to your coaching flow. You can now send check-ins, workout reports, and nutrition reports.";
 "coaching.approved.action" = "Continue to coaching";
 "coaching.approved.hint" = "This message is shown once. Next time this section will open directly.";
+"chat.link.open" = "Open Link";
+"chat.link.copy" = "Copy Link";

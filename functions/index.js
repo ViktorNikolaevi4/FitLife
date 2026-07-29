@@ -234,11 +234,23 @@ exports.sendPushForNotificationEvent = onDocumentCreated(
         targetId: stringifyData(data.targetId)
       },
       apns: {
-        headers: chatNotificationId
-          ? { "apns-collapse-id": chatNotificationId }
-          : {},
+        // Be explicit for APNs: this is a user-visible notification, not a
+        // background data update. It makes delivery semantics consistent on
+        // iOS when the app is suspended or in the foreground.
+        headers: {
+          "apns-push-type": "alert",
+          "apns-priority": "10",
+          ...(chatNotificationId ? { "apns-collapse-id": chatNotificationId } : {})
+        },
         payload: {
           aps: {
+            // Include the alert in the APNs payload itself. The badge proves
+            // APNs receives the message; this makes the banner content
+            // unambiguous instead of relying on FCM's notification mapping.
+            alert: {
+              title: pushContent.title,
+              body: pushContent.body
+            },
             sound: "default",
             badge: Math.max(1, unreadCount),
             ...(chatNotificationId ? { "thread-id": chatNotificationId } : {})

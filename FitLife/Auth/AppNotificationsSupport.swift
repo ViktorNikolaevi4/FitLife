@@ -436,7 +436,9 @@ final class AppNotificationsStore: ObservableObject {
                 guard let data = document.data() else { return nil }
                 return AppNotificationEvent(id: document.documentID, data: data)
             }
-            .filter { $0.isArchived == false }
+            // The inbox is an action queue, not a history: once a notification
+            // has been read, it should no longer occupy the user's attention.
+            .filter { $0.isArchived == false && $0.isRead == false }
             .sorted { $0.createdAt > $1.createdAt }
     }
 
@@ -467,7 +469,7 @@ struct AppNotificationsScreen: View {
                 Button {
                     selectedNotification = notification
                     Task {
-                        await notificationsStore.markRead(notification)
+                        await notificationsStore.delete(notification)
                     }
                 } label: {
                     AppNotificationRow(notification: notification)

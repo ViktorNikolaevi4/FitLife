@@ -64,6 +64,7 @@ struct TrainerAssignedClientsScreen: View {
             }
         }
         .navigationTitle(appLanguage.localized("trainer.clients.title"))
+        .hidesHomeFloatingAddButton()
         .task {
             await store.load()
         }

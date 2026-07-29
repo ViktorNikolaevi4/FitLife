@@ -115,7 +115,7 @@ struct RootView: View {
                         }
                     }
                     .task {
-                        await notificationsStore.markRead(notification)
+                        await notificationsStore.delete(notification)
                     }
             }
         }

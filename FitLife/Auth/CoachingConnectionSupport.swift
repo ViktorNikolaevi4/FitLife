@@ -1,6 +1,8 @@
 import SwiftUI
 import FirebaseFirestore
 import SwiftData
+import SafariServices
+import UIKit
 
 enum CoachingReportDateRange: String, CaseIterable, Identifiable {
     case all
@@ -3196,8 +3198,66 @@ private struct CoachingChatBubble: View {
     let isOutgoing: Bool
     let onRequestDelete: () -> Void
 
+    @State private var browserURL: URL?
+
     private var authorTitle: String {
         AppLocalizer.string(note.authorRole == .trainer ? "coaching.notes.author.trainer" : "coaching.notes.author.client")
+    }
+
+    private var detectedURLs: [URL] {
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
+            return []
+        }
+        let range = NSRange(note.message.startIndex..., in: note.message)
+        return detector.matches(in: note.message, options: [], range: range).compactMap(\.url)
+    }
+
+    private var linkifiedMessage: AttributedString {
+        guard detectedURLs.isEmpty == false else { return AttributedString(note.message) }
+
+        var result = AttributedString()
+        var currentIndex = note.message.startIndex
+        let linkColor: Color = isOutgoing ? .white : HomeColors.accent
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
+            return AttributedString(note.message)
+        }
+        let range = NSRange(note.message.startIndex..., in: note.message)
+
+        for match in detector.matches(in: note.message, options: [], range: range) {
+            guard
+                let url = match.url,
+                let urlRange = Range(match.range, in: note.message)
+            else {
+                continue
+            }
+
+            result += AttributedString(String(note.message[currentIndex..<urlRange.lowerBound]))
+            var link = AttributedString(String(note.message[urlRange]))
+            link.link = url
+            link.foregroundColor = linkColor
+            link.underlineStyle = .single
+            result += link
+            currentIndex = urlRange.upperBound
+        }
+
+        result += AttributedString(String(note.message[currentIndex...]))
+        return result
+    }
+
+    private func openLink(_ url: URL) {
+        if Self.isYouTubeURL(url) {
+            // Universal Link: opens YouTube when installed, otherwise falls back to Safari.
+            UIApplication.shared.open(url)
+        } else {
+            browserURL = url
+        }
+    }
+
+    private static func isYouTubeURL(_ url: URL) -> Bool {
+        guard let host = url.host?.lowercased() else { return false }
+        return host == "youtu.be"
+            || host == "youtube.com"
+            || host.hasSuffix(".youtube.com")
     }
 
     var body: some View {
@@ -3213,10 +3273,14 @@ private struct CoachingChatBubble: View {
                         .foregroundStyle(HomeColors.accent)
                 }
 
-                Text(note.message)
+                Text(linkifiedMessage)
                     .font(.body)
                     .foregroundStyle(isOutgoing ? .white : .primary)
                     .fixedSize(horizontal: false, vertical: true)
+                    .environment(\.openURL, OpenURLAction { url in
+                        openLink(url)
+                        return .handled
+                    })
 
                 Text(note.createdAt.formatted(date: .abbreviated, time: .shortened))
                     .font(.caption2)
@@ -3242,6 +3306,20 @@ private struct CoachingChatBubble: View {
             }
             .frame(maxWidth: 310, alignment: isOutgoing ? .trailing : .leading)
             .contextMenu {
+                ForEach(detectedURLs, id: \.absoluteString) { url in
+                    Button {
+                        openLink(url)
+                    } label: {
+                        Label(AppLocalizer.string("chat.link.open"), systemImage: "safari")
+                    }
+
+                    Button {
+                        UIPasteboard.general.url = url
+                    } label: {
+                        Label(AppLocalizer.string("chat.link.copy"), systemImage: "doc.on.doc")
+                    }
+                }
+
                 Button(role: .destructive) {
                     onRequestDelete()
                 } label: {
@@ -3254,7 +3332,26 @@ private struct CoachingChatBubble: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: isOutgoing ? .trailing : .leading)
+        .sheet(isPresented: Binding(
+            get: { browserURL != nil },
+            set: { if $0 == false { browserURL = nil } }
+        )) {
+            if let browserURL {
+                InAppSafariView(url: browserURL)
+                    .ignoresSafeArea()
+            }
+        }
     }
+}
+
+private struct InAppSafariView: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        SFSafariViewController(url: url)
+    }
+
+    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
 
 struct CoachingWorkoutReportDetailScreen: View {
