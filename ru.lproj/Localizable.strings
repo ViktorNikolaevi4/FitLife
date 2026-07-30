@@ -712,6 +712,15 @@
 "workout.exercise.back_extension" = "Гиперэкстензия";
 "workout.exercise.reverse_back_extension" = "Обратная гиперэкстензия";
 "workout.exercise.snatch" = "Рывок";
+"workout.exercise.barbell_clean" = "Взятие на грудь";
+"workout.exercise.horizontal_pullups" = "Горизонтальные подтягивания";
+"workout.exercise.hanging_leg_raise" = "Подъём ног в висе";
+"workout.exercise.lying_leg_raise" = "Подъём ног лёжа";
+"workout.exercise.snatch_pull" = "Рывковая тяга";
+"workout.exercise.barbell_snatch" = "Рывок штанги";
+"workout.exercise.turkish_getup" = "Турецкий подъём";
+"workout.exercise.med_ball_throw" = "Броски медбола";
+"workout.exercise.med_ball_slam" = "Броски медбола в пол";
 "workout.exercise.battle_ropes" = "Канат";
 "workout.exercise.sled_push" = "Толкание саней";
 "workout.exercise.jump_rope" = "Скакалка";

@@ -4,6 +4,15 @@ import UIKit
 
 enum WorkoutExerciseIcon {
     static let cleanAndJerk = "CleanAndJerk"
+    static let barbellClean = "Взятие на грудь"
+    static let horizontalPullUps = "Горизонтальные подтягивания"
+    static let hangingLegRaise = "Подъём ног в висе"
+    static let lyingLegRaise = "Подъём ног лежа"
+    static let snatchPull = "Рывковая тяга"
+    static let barbellSnatch = "Рывок штанги"
+    static let turkishGetUp = "Турецкий подъём"
+    static let medBallThrow = "Броски медбола"
+    static let medBallSlam = "Броски медбола в пол"
     static let jumpingJack = "JumpingJack"
     static let run = "Бег"
     static let walking = "Ходьба"
@@ -1272,6 +1281,96 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             metValue: 11.0,
             defaultSets: [
                 WorkoutDraftSet(weight: 0, durationSeconds: 60, metricType: .duration)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.barbell_clean"),
+            systemImage: WorkoutExerciseIcon.barbellClean,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 7.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 40, reps: 6)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.horizontal_pullups"),
+            systemImage: WorkoutExerciseIcon.horizontalPullUps,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 4.5,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.hanging_leg_raise"),
+            systemImage: WorkoutExerciseIcon.hangingLegRaise,
+            accentName: "blue",
+            activityType: .core,
+            metValue: 4.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.lying_leg_raise"),
+            systemImage: WorkoutExerciseIcon.lyingLegRaise,
+            accentName: "blue",
+            activityType: .core,
+            metValue: 3.5,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, reps: 15)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.snatch_pull"),
+            systemImage: WorkoutExerciseIcon.snatchPull,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 6.5,
+            defaultSets: [
+                WorkoutDraftSet(weight: 40, reps: 6)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.barbell_snatch"),
+            systemImage: WorkoutExerciseIcon.barbellSnatch,
+            accentName: "blue",
+            activityType: .hiit,
+            metValue: 7.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 35, reps: 6)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.turkish_getup"),
+            systemImage: WorkoutExerciseIcon.turkishGetUp,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 5.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 12, reps: 6)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.med_ball_throw"),
+            systemImage: WorkoutExerciseIcon.medBallThrow,
+            accentName: "blue",
+            activityType: .hiit,
+            metValue: 7.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.med_ball_slam"),
+            systemImage: WorkoutExerciseIcon.medBallSlam,
+            accentName: "blue",
+            activityType: .hiit,
+            metValue: 8.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, reps: 12)
             ]
         )
     ]
