@@ -848,6 +848,7 @@
 "meal.dinner" = "Ужин";
 "meal.snacks" = "Перекусы";
 "meal.snack" = "Перекус";
+"meal.daily_goal.percent" = "%d%%";
 "meal.macros.summary" = "Б %d • Ж %d • У %d г";
 "macro.protein.short" = "Б";
 "macro.fat.short" = "Ж";

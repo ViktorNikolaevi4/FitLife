@@ -848,6 +848,7 @@
 "meal.dinner" = "Dinner";
 "meal.snacks" = "Snacks";
 "meal.snack" = "Snack";
+"meal.daily_goal.percent" = "%d%%";
 "meal.macros.summary" = "P %d • F %d • C %d g";
 "macro.protein.short" = "P";
 "macro.fat.short" = "F";

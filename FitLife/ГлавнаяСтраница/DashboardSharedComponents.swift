@@ -864,6 +864,7 @@ struct FoodDaySnapshot {
 
 struct MealsSection: View {
     let theme: AppTheme
+    let dailyCalorieGoal: Int
     let calories: (breakfast: Int, lunch: Int, dinner: Int, snacks: Int)
     let macros: (
         breakfast: (protein: Int, fat: Int, carb: Int),
@@ -904,6 +905,7 @@ struct MealsSection: View {
             MealRow(
                 title: AppLocalizer.string("meal.breakfast"),
                 systemImage: "sunrise.fill",
+                dailyCalorieGoal: dailyCalorieGoal,
                 kcal: calories.breakfast > 0 ? calories.breakfast : nil,
                 macros: calories.breakfast > 0 ? macros.breakfast : nil,
                 theme: theme,
@@ -935,6 +937,7 @@ struct MealsSection: View {
             MealRow(
                 title: AppLocalizer.string("meal.lunch"),
                 systemImage: "fork.knife",
+                dailyCalorieGoal: dailyCalorieGoal,
                 kcal: calories.lunch > 0 ? calories.lunch : nil,
                 macros: calories.lunch > 0 ? macros.lunch : nil,
                 theme: theme,
@@ -966,6 +969,7 @@ struct MealsSection: View {
             MealRow(
                 title: AppLocalizer.string("meal.dinner"),
                 systemImage: "moon.stars.fill",
+                dailyCalorieGoal: dailyCalorieGoal,
                 kcal: calories.dinner > 0 ? calories.dinner : nil,
                 macros: calories.dinner > 0 ? macros.dinner : nil,
                 theme: theme,
@@ -997,6 +1001,7 @@ struct MealsSection: View {
             MealRow(
                 title: AppLocalizer.string("meal.snack"),
                 systemImage: "takeoutbag.and.cup.and.straw.fill",
+                dailyCalorieGoal: dailyCalorieGoal,
                 kcal: calories.snacks > 0 ? calories.snacks : nil,
                 macros: calories.snacks > 0 ? macros.snacks : nil,
                 theme: theme,
@@ -1363,6 +1368,7 @@ private struct RepeatYesterdayDraftRow: View {
 struct MealRow: View {
     let title: String
     let systemImage: String
+    let dailyCalorieGoal: Int
     let kcal: Int?
     let macros: (protein: Int, fat: Int, carb: Int)?
     let theme: AppTheme
@@ -1373,6 +1379,11 @@ struct MealRow: View {
     var onChevronTap: (() -> Void)? = nil
 
     var macrosTopInset: CGFloat = 4
+
+    private var dailyGoalPercent: Int {
+        guard dailyCalorieGoal > 0 else { return 0 }
+        return max(0, Int((Double(kcal ?? 0) / Double(dailyCalorieGoal) * 100).rounded()))
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -1385,7 +1396,20 @@ struct MealRow: View {
             .frame(width: 40, height: 40)
 
             VStack(alignment: .leading, spacing: 0) {
-                Text(title).font(.headline)
+                HStack(spacing: 7) {
+                    Text(title)
+                        .font(.headline)
+
+                    if dailyCalorieGoal > 0 {
+                        Text(AppLocalizer.format("meal.daily_goal.percent", dailyGoalPercent))
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(badgeFill)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(badgeFill.opacity(0.14), in: Capsule())
+                    }
+                }
+
                 if let m = macros {
                     Text(AppLocalizer.format("meal.macros.summary", m.protein, m.fat, m.carb))
                         .font(.caption)
