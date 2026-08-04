@@ -5,6 +5,7 @@ struct WorkoutTemplateExerciseItem: Identifiable, Hashable {
     let id: String
     let templateId: String
     let blockId: String?
+    let groupId: String?
     let name: String
     let systemImage: String
     let accentName: String
@@ -12,22 +13,26 @@ struct WorkoutTemplateExerciseItem: Identifiable, Hashable {
     let metValue: Double
     let orderIndex: Int
     let sets: [WorkoutDraftSet]
+    let note: String
 
     init(
         id: String,
         templateId: String,
         blockId: String? = nil,
+        groupId: String? = nil,
         name: String,
         systemImage: String,
         accentName: String,
         activityType: WorkoutActivityType = .strength,
         metValue: Double = 5.0,
         orderIndex: Int,
-        sets: [WorkoutDraftSet]
+        sets: [WorkoutDraftSet],
+        note: String = ""
     ) {
         self.id = id
         self.templateId = templateId
         self.blockId = blockId
+        self.groupId = groupId
         self.name = name
         self.systemImage = systemImage
         self.accentName = accentName
@@ -35,6 +40,7 @@ struct WorkoutTemplateExerciseItem: Identifiable, Hashable {
         self.metValue = metValue
         self.orderIndex = orderIndex
         self.sets = sets
+        self.note = note
     }
 
     init?(id: String, templateId: String, data: [String: Any]) {
@@ -51,12 +57,14 @@ struct WorkoutTemplateExerciseItem: Identifiable, Hashable {
         self.id = id
         self.templateId = templateId
         self.blockId = data["blockId"] as? String
+        self.groupId = data["groupId"] as? String
         self.name = name
         self.systemImage = systemImage
         self.accentName = accentName
         self.activityTypeRaw = (data["activityTypeRaw"] as? String) ?? WorkoutActivityType.strength.rawValue
         self.metValue = (data["metValue"] as? Double) ?? 5.0
         self.orderIndex = orderIndex
+        self.note = data["note"] as? String ?? ""
         self.sets = rawSets.map { raw in
             WorkoutDraftSet(
                 weight: raw["weight"] as? Double ?? 0,
@@ -75,6 +83,7 @@ struct WorkoutTemplateExerciseItem: Identifiable, Hashable {
             "activityTypeRaw": activityTypeRaw,
             "metValue": metValue,
             "orderIndex": orderIndex,
+            "note": note,
             "sets": sets.map {
                 [
                     "weight": $0.weight,
@@ -87,12 +96,50 @@ struct WorkoutTemplateExerciseItem: Identifiable, Hashable {
         if let blockId {
             data["blockId"] = blockId
         }
+        if let groupId {
+            data["groupId"] = groupId
+        }
         return data
     }
 
     var activityType: WorkoutActivityType {
         WorkoutActivityType(rawValue: activityTypeRaw) ?? .strength
     }
+}
+
+enum WorkoutBlockGroupKind: String, CaseIterable, Codable {
+    case standard, pyramid, superset, circuit
+
+    var title: String {
+        switch self {
+        case .standard: return "Группа"
+        case .pyramid: return "Пирамида"
+        case .superset: return "Суперсет"
+        case .circuit: return "Круг"
+        }
+    }
+}
+
+struct WorkoutTemplateBlockGroupItem: Identifiable, Hashable {
+    let id: String
+    let title: String
+    let kind: WorkoutBlockGroupKind
+    let note: String
+    let rounds: Int
+    let restSeconds: Int
+    let orderIndex: Int
+
+    init(id: String = UUID().uuidString, title: String, kind: WorkoutBlockGroupKind = .standard, note: String = "", rounds: Int = 1, restSeconds: Int = 0, orderIndex: Int) {
+        self.id = id; self.title = title; self.kind = kind; self.note = note
+        self.rounds = rounds; self.restSeconds = restSeconds; self.orderIndex = orderIndex
+    }
+
+    init?(data: [String: Any]) {
+        guard let id = data["id"] as? String else { return nil }
+        self.init(id: id, title: data["title"] as? String ?? "", kind: WorkoutBlockGroupKind(rawValue: data["kind"] as? String ?? "") ?? .standard, note: data["note"] as? String ?? "", rounds: data["rounds"] as? Int ?? 1, restSeconds: data["restSeconds"] as? Int ?? 0, orderIndex: data["orderIndex"] as? Int ?? 0)
+    }
+
+    var firestoreData: [String: Any] { ["id": id, "title": title, "kind": kind.rawValue, "note": note, "rounds": rounds, "restSeconds": restSeconds, "orderIndex": orderIndex] }
 }
 
 struct WorkoutTemplateBlockItem: Identifiable, Hashable {
@@ -107,6 +154,7 @@ struct WorkoutTemplateBlockItem: Identifiable, Hashable {
     let workSeconds: Int
     let restSeconds: Int
     let restBetweenRoundsSeconds: Int
+    let groups: [WorkoutTemplateBlockGroupItem]
 
     init(
         id: String,
@@ -119,7 +167,8 @@ struct WorkoutTemplateBlockItem: Identifiable, Hashable {
         durationMinutes: Int = 12,
         workSeconds: Int = 0,
         restSeconds: Int = 0,
-        restBetweenRoundsSeconds: Int = 0
+        restBetweenRoundsSeconds: Int = 0,
+        groups: [WorkoutTemplateBlockGroupItem] = []
     ) {
         self.id = id
         self.templateId = templateId
@@ -132,6 +181,7 @@ struct WorkoutTemplateBlockItem: Identifiable, Hashable {
         self.workSeconds = workSeconds
         self.restSeconds = restSeconds
         self.restBetweenRoundsSeconds = restBetweenRoundsSeconds
+        self.groups = groups
     }
 
     init?(id: String, templateId: String, data: [String: Any]) {
@@ -154,6 +204,7 @@ struct WorkoutTemplateBlockItem: Identifiable, Hashable {
         self.workSeconds = (data["workSeconds"] as? Int) ?? 0
         self.restSeconds = (data["restSeconds"] as? Int) ?? 0
         self.restBetweenRoundsSeconds = (data["restBetweenRoundsSeconds"] as? Int) ?? 0
+        self.groups = ((data["groups"] as? [[String: Any]]) ?? []).compactMap(WorkoutTemplateBlockGroupItem.init(data:))
     }
 
     var firestoreData: [String: Any] {
@@ -166,7 +217,8 @@ struct WorkoutTemplateBlockItem: Identifiable, Hashable {
             "durationMinutes": durationMinutes,
             "workSeconds": workSeconds,
             "restSeconds": restSeconds,
-            "restBetweenRoundsSeconds": restBetweenRoundsSeconds
+            "restBetweenRoundsSeconds": restBetweenRoundsSeconds,
+            "groups": groups.map(\.firestoreData)
         ]
     }
 
@@ -266,7 +318,11 @@ final class WorkoutTemplateContentStore: ObservableObject {
         await addExercise(draft, blockId: nil)
     }
 
-    func addExercise(_ draft: WorkoutExerciseDraft, blockId: String?) async {
+    func addExercise(
+        _ draft: WorkoutExerciseDraft,
+        blockId: String?,
+        groupId: String? = nil
+    ) async {
         errorMessage = nil
         do {
             let documentRef = firestore
@@ -279,13 +335,15 @@ final class WorkoutTemplateContentStore: ObservableObject {
                 id: documentRef.documentID,
                 templateId: template.id,
                 blockId: blockId,
+                groupId: groupId,
                 name: draft.name,
                 systemImage: draft.systemImage,
                 accentName: draft.accentName,
                 activityType: draft.activityType,
                 metValue: draft.metValue,
                 orderIndex: exercises.count,
-                sets: draft.sets
+                sets: draft.sets,
+                note: draft.note
             )
 
             try await documentRef.setData(item.firestoreData)
@@ -334,6 +392,54 @@ final class WorkoutTemplateContentStore: ObservableObject {
         }
     }
 
+    func addGroup(
+        to block: WorkoutTemplateBlockItem,
+        title: String,
+        kind: WorkoutBlockGroupKind,
+        rounds: Int,
+        restSeconds: Int,
+        note: String
+    ) async {
+        errorMessage = nil
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let group = WorkoutTemplateBlockGroupItem(
+            title: trimmedTitle.isEmpty ? kind.title : trimmedTitle,
+            kind: kind,
+            note: note.trimmingCharacters(in: .whitespacesAndNewlines),
+            rounds: rounds,
+            restSeconds: restSeconds,
+            orderIndex: block.groups.count
+        )
+        let updatedBlock = WorkoutTemplateBlockItem(
+            id: block.id,
+            templateId: block.templateId,
+            title: block.title,
+            type: block.type,
+            mode: block.mode,
+            orderIndex: block.orderIndex,
+            rounds: block.rounds,
+            durationMinutes: block.durationMinutes,
+            workSeconds: block.workSeconds,
+            restSeconds: block.restSeconds,
+            restBetweenRoundsSeconds: block.restBetweenRoundsSeconds,
+            groups: block.groups + [group]
+        )
+
+        do {
+            try await firestore
+                .collection("workout_templates")
+                .document(template.id)
+                .collection("blocks")
+                .document(block.id)
+                .setData(updatedBlock.firestoreData)
+            if let index = blocks.firstIndex(where: { $0.id == block.id }) {
+                blocks[index] = updatedBlock
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func deleteExercise(_ exercise: WorkoutTemplateExerciseItem) async {
         errorMessage = nil
         do {
@@ -351,19 +457,56 @@ final class WorkoutTemplateContentStore: ObservableObject {
         }
     }
 
+    func updateExercise(
+        _ exercise: WorkoutTemplateExerciseItem,
+        with draft: WorkoutExerciseDraft
+    ) async {
+        errorMessage = nil
+        let updated = WorkoutTemplateExerciseItem(
+            id: exercise.id,
+            templateId: exercise.templateId,
+            blockId: exercise.blockId,
+            groupId: exercise.groupId,
+            name: exercise.name,
+            systemImage: exercise.systemImage,
+            accentName: exercise.accentName,
+            activityType: draft.activityType,
+            metValue: draft.metValue,
+            orderIndex: exercise.orderIndex,
+            sets: draft.sets,
+            note: draft.note
+        )
+
+        do {
+            try await firestore
+                .collection("workout_templates")
+                .document(template.id)
+                .collection("exercises")
+                .document(exercise.id)
+                .setData(updated.firestoreData)
+            if let index = exercises.firstIndex(where: { $0.id == exercise.id }) {
+                exercises[index] = updated
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     private func normalizeOrderIndexes() async throws {
         let ordered = exercises.enumerated().map { index, item in
             WorkoutTemplateExerciseItem(
                 id: item.id,
                 templateId: item.templateId,
                 blockId: item.blockId,
+                groupId: item.groupId,
                 name: item.name,
                 systemImage: item.systemImage,
                 accentName: item.accentName,
                 activityType: item.activityType,
                 metValue: item.metValue,
                 orderIndex: index,
-                sets: item.sets
+                sets: item.sets,
+                note: item.note
             )
         }
 

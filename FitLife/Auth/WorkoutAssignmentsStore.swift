@@ -290,6 +290,7 @@ final class ClientAssignedWorkoutsStore: ObservableObject {
                     activityType: remoteExercise.activityType,
                     metValue: remoteExercise.metValue
                 )
+                exercise.note = remoteExercise.note
                 exercise.session = workout
                 if let blockId = remoteExercise.blockId,
                    let block = localBlocksByRemoteId[blockId] {

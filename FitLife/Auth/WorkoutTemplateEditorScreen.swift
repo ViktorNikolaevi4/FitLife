@@ -11,9 +11,15 @@ struct WorkoutTemplateEditorScreen: View {
     @State private var showAddExercise = false
     @State private var showAddBlock = false
     @State private var targetBlockId: String?
+    @State private var targetGroupId: String?
+    @State private var blockForNewGroup: WorkoutTemplateBlockItem?
+    @State private var showAddGroup = false
     @State private var showAssignSheet = false
     @State private var expandedExerciseIds: Set<String> = []
+    @State private var collapsedBlockIds: Set<String> = []
+    @State private var collapsedNestedGroupIds: Set<String> = []
     @State private var pendingDeleteExercise: WorkoutTemplateExerciseItem?
+    @State private var editingExercise: WorkoutTemplateExerciseItem?
     @Query(sort: \CustomWorkoutExerciseTemplate.createdAt) private var customTemplates: [CustomWorkoutExerciseTemplate]
     @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
 
@@ -37,12 +43,21 @@ struct WorkoutTemplateEditorScreen: View {
                 let exercises = store.exercises
                     .filter { $0.blockId == block.id }
                     .sorted { $0.orderIndex < $1.orderIndex }
+                let nestedGroups = block.groups
+                    .sorted { $0.orderIndex < $1.orderIndex }
+                    .map { nested in
+                        WorkoutTemplateNestedGroup(
+                            item: nested,
+                            exercises: exercises.filter { $0.groupId == nested.id }
+                        )
+                    }
                 return WorkoutTemplateBlockGroup(
                     id: block.id,
                     block: block,
                     title: block.displayTitle,
                     subtitle: block.subtitle(exerciseCount: exercises.count),
-                    exercises: exercises
+                    exercises: exercises.filter { $0.groupId == nil },
+                    nestedGroups: nestedGroups
                 )
             }
 
@@ -57,7 +72,8 @@ struct WorkoutTemplateEditorScreen: View {
                     block: nil,
                     title: AppLocalizer.string("workout.block.strength.title"),
                     subtitle: AppLocalizer.format("workout.block.exercise_count", legacyExercises.count),
-                    exercises: legacyExercises
+                    exercises: legacyExercises,
+                    nestedGroups: []
                 ),
                 at: 0
             )
@@ -121,31 +137,49 @@ struct WorkoutTemplateEditorScreen: View {
                         onAddExercise: group.block.map { block in
                             {
                                 targetBlockId = block.id
+                                targetGroupId = nil
                                 showAddExercise = true
                             }
-                        }
+                        },
+                        onAddGroup: group.block.map { block in
+                            {
+                                blockForNewGroup = block
+                                showAddGroup = true
+                            }
+                        },
+                        isExpanded: collapsedBlockIds.contains(group.id) == false,
+                        onToggleExpanded: { toggleBlock(group.id) }
                     )
                     .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 2, trailing: 0))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
 
-                    ForEach(group.exercises) { exercise in
-                        WorkoutTemplateExerciseCard(
-                            exercise: exercise,
-                            isExpanded: expandedExerciseIds.contains(exercise.id),
-                            onToggleExpanded: {
-                                toggleExpanded(exercise.id)
-                            }
-                        )
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button(role: .destructive) {
-                                pendingDeleteExercise = exercise
-                            } label: {
-                                Label(AppLocalizer.string("common.delete"), systemImage: "trash")
+                    if collapsedBlockIds.contains(group.id) == false {
+                        ForEach(group.exercises) { exercise in
+                            exerciseRow(exercise)
+                        }
+
+                        ForEach(group.nestedGroups) { nestedGroup in
+                            WorkoutTemplateNestedGroupHeader(
+                                group: nestedGroup.item,
+                                isExpanded: collapsedNestedGroupIds.contains(nestedGroup.id) == false,
+                                onToggleExpanded: { toggleNestedGroup(nestedGroup.id) },
+                                onAddExercise: {
+                                    targetBlockId = group.block?.id
+                                    targetGroupId = nestedGroup.id
+                                    showAddExercise = true
+                                }
+                            )
+                            .listRowInsets(EdgeInsets(top: 12, leading: 8, bottom: 2, trailing: 8))
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+
+                            if collapsedNestedGroupIds.contains(nestedGroup.id) == false {
+                                ForEach(nestedGroup.exercises) { exercise in
+                                    exerciseRow(exercise)
+                                }
                             }
                         }
-                        .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
-                        .listRowBackground(Color.clear)
                     }
                 }
             }
@@ -197,8 +231,9 @@ struct WorkoutTemplateEditorScreen: View {
         .sheet(isPresented: $showAddExercise) {
             AddWorkoutExerciseScreen(templates: templates) { draft in
                 Task {
-                    await store.addExercise(draft, blockId: targetBlockId)
+                    await store.addExercise(draft, blockId: targetBlockId, groupId: targetGroupId)
                     targetBlockId = nil
+                    targetGroupId = nil
                     showAddExercise = false
                 }
             }
@@ -224,11 +259,49 @@ struct WorkoutTemplateEditorScreen: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showAddGroup) {
+            if let blockForNewGroup {
+                AddWorkoutTemplateGroupScreen { draft in
+                    Task {
+                        await store.addGroup(
+                            to: blockForNewGroup,
+                            title: draft.title,
+                            kind: draft.kind,
+                            rounds: draft.rounds,
+                            restSeconds: draft.restSeconds,
+                            note: draft.note
+                        )
+                        self.blockForNewGroup = nil
+                        showAddGroup = false
+                    }
+                }
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+            }
+        }
         .sheet(isPresented: $showAssignSheet) {
             NavigationStack {
                 AssignWorkoutTemplateScreen(
                     template: template,
                     exerciseCount: store.exercises.count
+                )
+            }
+        }
+        .sheet(item: $editingExercise) { exercise in
+            NavigationStack {
+                WorkoutExerciseSetupScreen(
+                    draft: WorkoutExerciseDraft(
+                        name: exercise.name,
+                        systemImage: exercise.systemImage,
+                        accentName: exercise.accentName,
+                        activityType: exercise.activityType,
+                        metValue: exercise.metValue,
+                        sets: exercise.sets,
+                        note: exercise.note
+                    ),
+                    onSave: { draft in
+                        Task { await store.updateExercise(exercise, with: draft) }
+                    }
                 )
             }
         }
@@ -263,6 +336,43 @@ struct WorkoutTemplateEditorScreen: View {
             }
         }
     }
+
+    private func toggleBlock(_ id: String) {
+        withAnimation(.snappy(duration: 0.22)) {
+            if collapsedBlockIds.contains(id) {
+                collapsedBlockIds.remove(id)
+            } else {
+                collapsedBlockIds.insert(id)
+            }
+        }
+    }
+
+    private func toggleNestedGroup(_ id: String) {
+        withAnimation(.snappy(duration: 0.22)) {
+            if collapsedNestedGroupIds.contains(id) {
+                collapsedNestedGroupIds.remove(id)
+            } else {
+                collapsedNestedGroupIds.insert(id)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func exerciseRow(_ exercise: WorkoutTemplateExerciseItem) -> some View {
+        WorkoutTemplateExerciseCard(
+            exercise: exercise,
+            isExpanded: expandedExerciseIds.contains(exercise.id),
+            onToggleExpanded: { toggleExpanded(exercise.id) },
+            onEdit: { editingExercise = exercise }
+        )
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) { pendingDeleteExercise = exercise } label: {
+                Label(AppLocalizer.string("common.delete"), systemImage: "trash")
+            }
+        }
+        .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+        .listRowBackground(Color.clear)
+    }
 }
 
 private struct WorkoutTemplateBlockGroup: Identifiable {
@@ -271,12 +381,22 @@ private struct WorkoutTemplateBlockGroup: Identifiable {
     let title: String
     let subtitle: String
     let exercises: [WorkoutTemplateExerciseItem]
+    let nestedGroups: [WorkoutTemplateNestedGroup]
+}
+
+private struct WorkoutTemplateNestedGroup: Identifiable {
+    let item: WorkoutTemplateBlockGroupItem
+    let exercises: [WorkoutTemplateExerciseItem]
+    var id: String { item.id }
 }
 
 private struct WorkoutTemplateBlockHeader: View {
     let title: String
     let subtitle: String
     var onAddExercise: (() -> Void)?
+    var onAddGroup: (() -> Void)?
+    let isExpanded: Bool
+    let onToggleExpanded: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -302,6 +422,16 @@ private struct WorkoutTemplateBlockHeader: View {
 
             Spacer()
 
+            Button(action: onToggleExpanded) {
+                Image(systemName: "chevron.down")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                    .frame(width: 34, height: 34)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(isExpanded ? "Свернуть блок" : "Развернуть блок")
+
             if let onAddExercise {
                 Button(action: onAddExercise) {
                     Image(systemName: "plus")
@@ -313,9 +443,60 @@ private struct WorkoutTemplateBlockHeader: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(AppLocalizer.string("workout.add.exercise"))
             }
+            if let onAddGroup {
+                Button(action: onAddGroup) {
+                    Image(systemName: "rectangle.3.group.fill")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(Color.blue)
+                        .frame(width: 34, height: 34)
+                        .background(Circle().fill(Color.blue.opacity(0.12)))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Добавить подгруппу")
+            }
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 4)
+    }
+}
+
+private struct WorkoutTemplateNestedGroupHeader: View {
+    let group: WorkoutTemplateBlockGroupItem
+    let isExpanded: Bool
+    let onToggleExpanded: () -> Void
+    let onAddExercise: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: group.kind == .superset ? "link" : "arrow.triangle.branch")
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(group.title).font(.subheadline.weight(.semibold))
+                Text(groupDescription).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button(action: onToggleExpanded) {
+                Image(systemName: "chevron.down")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                    .frame(width: 30, height: 30)
+            }
+            .buttonStyle(.plain)
+            Button(action: onAddExercise) {
+                Image(systemName: "plus.circle.fill").font(.title3).foregroundStyle(.blue)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.orange.opacity(0.10)))
+    }
+
+    private var groupDescription: String {
+        var parts = [group.kind.title]
+        if group.rounds > 1 { parts.append("\(group.rounds) круг(а)") }
+        if group.restSeconds > 0 { parts.append("отдых \(group.restSeconds) сек") }
+        return parts.joined(separator: " · ")
     }
 }
 
@@ -335,6 +516,65 @@ private struct WorkoutTemplateBlockDraft {
             return type.title
         }
         return trimmedTitle
+    }
+}
+
+private struct WorkoutTemplateGroupDraft {
+    let title: String
+    let kind: WorkoutBlockGroupKind
+    let rounds: Int
+    let restSeconds: Int
+    let note: String
+}
+
+private struct AddWorkoutTemplateGroupScreen: View {
+    @Environment(\.dismiss) private var dismiss
+    let onSave: (WorkoutTemplateGroupDraft) -> Void
+
+    @State private var title = ""
+    @State private var kind: WorkoutBlockGroupKind = .superset
+    @State private var rounds = 1
+    @State private var restSeconds = 0
+    @State private var note = ""
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Подгруппа") {
+                    TextField("Название, например: Пирамида приседаний", text: $title)
+                    Picker("Тип", selection: $kind) {
+                        ForEach(WorkoutBlockGroupKind.allCases, id: \.self) { kind in
+                            Text(kind.title).tag(kind)
+                        }
+                    }
+                }
+                Section("Настройки") {
+                    Stepper("Повторов группы: \(rounds)", value: $rounds, in: 1...20)
+                    Stepper("Отдых: \(restSeconds) сек", value: $restSeconds, in: 0...600, step: 5)
+                    TextField("Заметка для клиента (необязательно)", text: $note, axis: .vertical)
+                        .lineLimit(2...4)
+                }
+            }
+            .navigationTitle("Добавить подгруппу")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(AppLocalizer.string("common.cancel")) { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(AppLocalizer.string("common.save")) {
+                        onSave(WorkoutTemplateGroupDraft(
+                            title: title,
+                            kind: kind,
+                            rounds: rounds,
+                            restSeconds: restSeconds,
+                            note: note
+                        ))
+                        dismiss()
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -453,6 +693,7 @@ private struct WorkoutTemplateExerciseCard: View {
     let exercise: WorkoutTemplateExerciseItem
     let isExpanded: Bool
     let onToggleExpanded: () -> Void
+    let onEdit: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -493,6 +734,26 @@ private struct WorkoutTemplateExerciseCard: View {
 
             if isExpanded {
                 VStack(spacing: 0) {
+                    Button(action: onEdit) {
+                        Label("Редактировать подходы", systemImage: "pencil")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 10)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.blue)
+
+                    Divider()
+
+                    if exercise.note.isEmpty == false {
+                        Label(exercise.note, systemImage: "text.bubble")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .padding(.vertical, 10)
+
+                        Divider()
+                    }
+
                     ForEach(Array(exercise.sets.enumerated()), id: \.offset) { index, set in
                         HStack {
                             Text("\(index + 1)")

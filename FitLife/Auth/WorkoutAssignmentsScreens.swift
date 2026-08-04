@@ -228,11 +228,20 @@ struct ClientAssignmentDetailScreen: View {
                 let exercises = store.exercises
                     .filter { $0.blockId == block.id }
                     .sorted { $0.orderIndex < $1.orderIndex }
+                let nestedGroups = block.groups
+                    .sorted { $0.orderIndex < $1.orderIndex }
+                    .map { nested in
+                        WorkoutAssignmentNestedGroup(
+                            item: nested,
+                            exercises: exercises.filter { $0.groupId == nested.id }
+                        )
+                    }
                 return WorkoutAssignmentBlockGroup(
                     id: block.id,
                     title: block.displayTitle,
                     subtitle: block.subtitle(exerciseCount: exercises.count),
-                    exercises: exercises
+                    exercises: exercises.filter { $0.groupId == nil },
+                    nestedGroups: nestedGroups
                 )
             }
 
@@ -246,7 +255,8 @@ struct ClientAssignmentDetailScreen: View {
                     id: "legacy-strength",
                     title: AppLocalizer.string("workout.block.strength.title"),
                     subtitle: AppLocalizer.format("workout.block.exercise_count", legacyExercises.count),
-                    exercises: legacyExercises
+                    exercises: legacyExercises,
+                    nestedGroups: []
                 ),
                 at: 0
             )
@@ -280,6 +290,23 @@ struct ClientAssignmentDetailScreen: View {
                         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
+                    }
+
+                    ForEach(group.nestedGroups) { nestedGroup in
+                        WorkoutAssignmentNestedGroupHeader(group: nestedGroup.item)
+                            .listRowInsets(EdgeInsets(top: 12, leading: 24, bottom: 2, trailing: 24))
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+
+                        ForEach(Array(nestedGroup.exercises.enumerated()), id: \.element.id) { index, exercise in
+                            ClientAssignmentExerciseCard(
+                                exercise: exercise,
+                                displayIndex: index + 1
+                            )
+                            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                        }
                     }
                 }
             } header: {
@@ -351,6 +378,38 @@ private struct WorkoutAssignmentBlockGroup: Identifiable {
     let title: String
     let subtitle: String
     let exercises: [WorkoutTemplateExerciseItem]
+    let nestedGroups: [WorkoutAssignmentNestedGroup]
+}
+
+private struct WorkoutAssignmentNestedGroup: Identifiable {
+    let item: WorkoutTemplateBlockGroupItem
+    let exercises: [WorkoutTemplateExerciseItem]
+    var id: String { item.id }
+}
+
+private struct WorkoutAssignmentNestedGroupHeader: View {
+    let group: WorkoutTemplateBlockGroupItem
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: group.kind == .superset ? "link" : "arrow.triangle.branch")
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(group.title).font(.subheadline.weight(.semibold))
+                Text(description).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.orange.opacity(0.10)))
+    }
+
+    private var description: String {
+        var parts = [group.kind.title]
+        if group.rounds > 1 { parts.append("\(group.rounds) круг(а)") }
+        if group.restSeconds > 0 { parts.append("отдых \(group.restSeconds) сек") }
+        return parts.joined(separator: " · ")
+    }
 }
 
 private struct WorkoutAssignmentBlockHeader: View {
@@ -428,6 +487,15 @@ private struct ClientAssignmentExerciseCard: View {
                 ForEach(Array(exercise.sets.enumerated()), id: \.offset) { index, set in
                     ClientAssignmentSetRow(index: index + 1, set: set)
                 }
+            }
+
+            if exercise.note.isEmpty == false {
+                Label(exercise.note, systemImage: "text.bubble")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                    .background(assignmentDetailInsetBackground, in: RoundedRectangle(cornerRadius: 14))
             }
         }
         .padding(14)

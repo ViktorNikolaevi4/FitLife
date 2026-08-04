@@ -41,6 +41,7 @@ struct WorkoutExerciseDraft: Identifiable, Hashable {
     var activityType: WorkoutActivityType
     var metValue: Double
     var sets: [WorkoutDraftSet]
+    var note: String
 
     init(
         name: String,
@@ -48,7 +49,8 @@ struct WorkoutExerciseDraft: Identifiable, Hashable {
         accentName: String,
         activityType: WorkoutActivityType = .strength,
         metValue: Double = 5.0,
-        sets: [WorkoutDraftSet]
+        sets: [WorkoutDraftSet],
+        note: String = ""
     ) {
         self.name = name
         self.systemImage = systemImage
@@ -56,6 +58,7 @@ struct WorkoutExerciseDraft: Identifiable, Hashable {
         self.activityType = activityType
         self.metValue = metValue
         self.sets = sets
+        self.note = note
     }
 
     init(template: WorkoutExerciseTemplate) {
@@ -65,6 +68,7 @@ struct WorkoutExerciseDraft: Identifiable, Hashable {
         self.activityType = template.activityType
         self.metValue = template.metValue
         self.sets = template.defaultSets
+        self.note = ""
     }
 
     init(customTemplate: CustomWorkoutExerciseTemplate) {
@@ -76,6 +80,7 @@ struct WorkoutExerciseDraft: Identifiable, Hashable {
         self.sets = [
             WorkoutDraftSet(weight: 20, reps: 10)
         ]
+        self.note = ""
     }
 }
 
@@ -901,7 +906,7 @@ private extension WorkoutActivityType {
     }
 }
 
-private struct WorkoutExerciseSetupScreen: View {
+struct WorkoutExerciseSetupScreen: View {
     @Environment(\.dismiss) private var dismiss
 
     let draft: WorkoutExerciseDraft
@@ -910,6 +915,7 @@ private struct WorkoutExerciseSetupScreen: View {
     @State private var sets: [WorkoutDraftSet]
     @State private var selectedActivityType: WorkoutActivityType
     @State private var selectedMetValue: Double
+    @State private var note: String
 
     init(draft: WorkoutExerciseDraft, onSave: @escaping (WorkoutExerciseDraft) -> Void) {
         self.draft = draft
@@ -917,6 +923,7 @@ private struct WorkoutExerciseSetupScreen: View {
         _sets = State(initialValue: draft.sets)
         _selectedActivityType = State(initialValue: draft.activityType)
         _selectedMetValue = State(initialValue: draft.metValue)
+        _note = State(initialValue: draft.note)
     }
 
     private let activityOptions: [ExerciseActivityOption] = [
@@ -1040,6 +1047,18 @@ private struct WorkoutExerciseSetupScreen: View {
                     }
                 }
 
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Комментарий тренера")
+                        .font(.headline.weight(.semibold))
+                    TextField("Например: контролируй колени и темп", text: $note, axis: .vertical)
+                        .lineLimit(2...4)
+                        .padding(12)
+                        .background(RoundedRectangle(cornerRadius: 14).fill(workoutPickerInsetBackground))
+                }
+                .padding(16)
+                .background(RoundedRectangle(cornerRadius: 22).fill(workoutPickerCardBackground))
+                .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(workoutPickerCardBorder))
+
                 Button(action: addSet) {
                     HStack(spacing: 8) {
                         Image(systemName: "plus")
@@ -1114,6 +1133,7 @@ private struct WorkoutExerciseSetupScreen: View {
             configuredDraft.sets = sets
             configuredDraft.activityType = selectedActivityType
             configuredDraft.metValue = selectedMetValue
+            configuredDraft.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
             onSave(configuredDraft)
             dismiss()
         }
