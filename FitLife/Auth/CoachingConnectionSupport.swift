@@ -694,11 +694,40 @@ final class ClientCoachingHomeStore: ObservableObject {
     private let clientId: String
     private let trainerId: String
     private let firestore: Firestore
+    private var notesListener: ListenerRegistration?
 
     init(clientId: String, trainerId: String, firestore: Firestore = .firestore()) {
         self.clientId = clientId
         self.trainerId = trainerId
         self.firestore = firestore
+    }
+
+    deinit {
+        notesListener?.remove()
+    }
+
+    func startNotesListening() {
+        guard notesListener == nil else { return }
+
+        notesListener = firestore
+            .collection("coaching_notes")
+            .whereField("clientId", isEqualTo: clientId)
+            .whereField("trainerId", isEqualTo: trainerId)
+            .addSnapshotListener { [weak self] snapshot, _ in
+                guard let snapshot else { return }
+                let updatedNotes = snapshot.documents
+                    .compactMap { CoachingNote(id: $0.documentID, data: $0.data()) }
+                    .sorted { $0.createdAt > $1.createdAt }
+
+                Task { @MainActor [weak self] in
+                    self?.notes = updatedNotes
+                }
+            }
+    }
+
+    func stopNotesListening() {
+        notesListener?.remove()
+        notesListener = nil
     }
 
     func load() async {
@@ -832,15 +861,6 @@ final class ClientCoachingHomeStore: ObservableObject {
                 .collection("coaching_notes")
                 .document(note.id)
                 .setData(note.firestoreData)
-            try? await AppNotificationEventWriter.create(
-                type: .clientNoteReceived,
-                recipientId: trainerId,
-                senderId: clientId,
-                senderName: senderName,
-                targetType: .coachingConnection,
-                targetId: note.id,
-                firestore: firestore
-            )
             isSubmitting = false
             await load()
         } catch {
@@ -999,11 +1019,40 @@ final class TrainerClientSupportStore: ObservableObject {
     private let trainerId: String
     private let client: AppUserProfile
     private let firestore: Firestore
+    private var notesListener: ListenerRegistration?
 
     init(trainerId: String, client: AppUserProfile, firestore: Firestore = .firestore()) {
         self.trainerId = trainerId
         self.client = client
         self.firestore = firestore
+    }
+
+    deinit {
+        notesListener?.remove()
+    }
+
+    func startNotesListening() {
+        guard notesListener == nil else { return }
+
+        notesListener = firestore
+            .collection("coaching_notes")
+            .whereField("clientId", isEqualTo: client.id)
+            .whereField("trainerId", isEqualTo: trainerId)
+            .addSnapshotListener { [weak self] snapshot, _ in
+                guard let snapshot else { return }
+                let updatedNotes = snapshot.documents
+                    .compactMap { CoachingNote(id: $0.documentID, data: $0.data()) }
+                    .sorted { $0.createdAt > $1.createdAt }
+
+                Task { @MainActor [weak self] in
+                    self?.notes = updatedNotes
+                }
+            }
+    }
+
+    func stopNotesListening() {
+        notesListener?.remove()
+        notesListener = nil
     }
 
     func load() async {
@@ -1107,15 +1156,6 @@ final class TrainerClientSupportStore: ObservableObject {
                 .collection("coaching_notes")
                 .document(note.id)
                 .setData(note.firestoreData)
-            try? await AppNotificationEventWriter.create(
-                type: .coachNoteReceived,
-                recipientId: client.id,
-                senderId: trainerId,
-                senderName: senderName,
-                targetType: .coachingConnection,
-                targetId: note.id,
-                firestore: firestore
-            )
             isSubmitting = false
             await load()
         } catch {
@@ -1633,6 +1673,12 @@ private struct ClientCoachingChatScreen: View {
         )
         .navigationTitle(AppLocalizer.string("coaching.notes.section"))
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            store.startNotesListening()
+        }
+        .onDisappear {
+            store.stopNotesListening()
+        }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button(AppLocalizer.string("common.close")) {
@@ -2718,6 +2764,12 @@ private struct TrainerClientChatScreen: View {
         )
         .navigationTitle(AppLocalizer.string("coaching.workspace.client_chat"))
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            store.startNotesListening()
+        }
+        .onDisappear {
+            store.stopNotesListening()
+        }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button(AppLocalizer.string("common.close")) {

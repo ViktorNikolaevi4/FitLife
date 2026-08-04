@@ -7,6 +7,7 @@ admin.initializeApp();
 
 const db = admin.firestore();
 const messaging = admin.messaging();
+const PUSH_LEASE_MS = 5 * 60 * 1000;
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const OPENAI_MODEL = "gpt-4.1-mini";
 
@@ -177,30 +178,141 @@ const TYPE_CONFIG = {
   }
 };
 
-exports.sendPushForNotificationEvent = onDocumentCreated(
+// Chat delivery and notification delivery are separate concerns. Creating the
+// notification on the server makes the latter reliable even if an older app
+// build or a transient client-side write failure skips its notification event.
+exports.createNotificationForCoachingNote = onDocumentCreated(
   {
-    document: "notification_events/{eventId}",
-    region: "europe-west1"
+    document: "coaching_notes/{noteId}",
+    region: "europe-west1",
+    retry: true
   },
   async (event) => {
     const snapshot = event.data;
     if (!snapshot) {
-      logger.warn("Notification event snapshot is missing");
       return;
     }
 
-    const eventId = snapshot.id;
-    const data = snapshot.data();
+    const note = snapshot.data() || {};
+    const noteId = snapshot.id;
+    const authorRole = stringifyData(note.authorRole);
+    const clientId = stringifyData(note.clientId);
+    const trainerId = stringifyData(note.trainerId);
+    const authorId = stringifyData(note.authorId);
 
+    const isClientMessage = authorRole === "client" && authorId === clientId;
+    const isTrainerMessage = authorRole === "trainer" && authorId === trainerId;
+    if ((!isClientMessage && !isTrainerMessage) || !clientId || !trainerId) {
+      logger.warn("Coaching note has invalid participants", { noteId });
+      return;
+    }
+
+    const recipientId = isClientMessage ? trainerId : clientId;
+    const type = isClientMessage ? "client_note_received" : "coach_note_received";
+
+    // Older app versions may have already created this event themselves. Do
+    // not generate a duplicate while those versions are still in the field.
+    const existingEvent = await db
+      .collection("notification_events")
+      .where("targetId", "==", noteId)
+      .limit(1)
+      .get();
+    if (!existingEvent.empty) {
+      // Do not rely solely on the second Firestore trigger.  A direct call
+      // keeps chat push delivery reliable even when Eventarc delays a chained
+      // notification_events trigger. `claimPushDelivery` below prevents a
+      // duplicate if that trigger is already running.
+      await processPushForNotificationEvent(existingEvent.docs[0].id);
+      return;
+    }
+
+    const senderSnapshot = await db.collection("users").doc(authorId).get();
+    const senderData = senderSnapshot.data() || {};
+    const senderName = typeof senderData.displayName === "string"
+      ? senderData.displayName.trim()
+      : "";
+
+    const notificationRef = db.collection("notification_events").doc(`coaching-note-${noteId}`);
+    await notificationRef.create({
+      type,
+      recipientId,
+      senderId: authorId,
+      senderName,
+      targetType: "coaching_connection",
+      targetId: noteId,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      isRead: false,
+      isArchived: false
+    });
+
+    await processPushForNotificationEvent(notificationRef.id);
+  }
+);
+
+exports.sendPushForNotificationEvent = onDocumentCreated(
+  {
+    document: "notification_events/{eventId}",
+    region: "europe-west1",
+    retry: true
+  },
+  async (event) => {
+    const eventId = event.params.eventId;
+    await processPushForNotificationEvent(eventId);
+  }
+);
+
+// Atomically claim an event before contacting FCM. A lease makes a failed
+// invocation recoverable: Cloud Functions may retry it, while a later
+// invocation can reclaim a stale `sending` state after the lease expires.
+async function claimPushDelivery(eventId) {
+  const eventRef = db.collection("notification_events").doc(eventId);
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(eventRef);
+    if (!snapshot.exists) {
+      logger.warn("Notification event does not exist", { eventId });
+      return null;
+    }
+
+    const data = snapshot.data() || {};
+    const status = stringifyData(data.pushStatus);
+    if (status === "sent" || status === "permanent_failed") {
+      logger.info("Push delivery already claimed", { eventId, pushStatus: data.pushStatus });
+      return null;
+    }
+
+    if (status === "sending") {
+      const leaseExpiresAt = data.pushLeaseExpiresAt;
+      const leaseIsActive = leaseExpiresAt
+        && typeof leaseExpiresAt.toMillis === "function"
+        && leaseExpiresAt.toMillis() > Date.now();
+      if (leaseIsActive) {
+        logger.info("Push delivery is being processed", { eventId });
+        return null;
+      }
+    }
+
+    transaction.set(eventRef, {
+      pushStatus: "sending",
+      pushStartedAt: admin.firestore.FieldValue.serverTimestamp(),
+      pushLeaseExpiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + PUSH_LEASE_MS),
+      pushAttemptCount: admin.firestore.FieldValue.increment(1),
+      pushFailureReason: admin.firestore.FieldValue.delete()
+    }, { merge: true });
+    return data;
+  });
+}
+
+async function processPushForNotificationEvent(eventId) {
+  try {
+    const data = await claimPushDelivery(eventId);
     if (!data) {
-      logger.warn("Notification event data is empty", { eventId });
       return;
     }
 
     const recipientId = data.recipientId;
     if (!recipientId) {
       logger.warn("recipientId is missing", { eventId });
-      await markPushFailed(eventId, "missing_recipient");
+      await markPushPermanentlyFailed(eventId, "missing_recipient");
       return;
     }
 
@@ -211,13 +323,13 @@ exports.sendPushForNotificationEvent = onDocumentCreated(
 
     if (fcmTokens.length === 0) {
       logger.info("No FCM tokens for recipient", { eventId, recipientId });
-      await markPushFailed(eventId, "no_tokens");
+      await markPushPermanentlyFailed(eventId, "no_tokens");
       return;
     }
 
     const preferredLanguage = normalizeLanguage(userData.preferredLanguage);
     const pushContent = buildPushContent(data, preferredLanguage);
-    const chatNotificationId = chatNotificationIdentifier(data);
+    const chatThreadId = chatNotificationThreadIdentifier(data);
     const message = {
       tokens: fcmTokens,
       notification: {
@@ -239,8 +351,7 @@ exports.sendPushForNotificationEvent = onDocumentCreated(
         // iOS when the app is suspended or in the foreground.
         headers: {
           "apns-push-type": "alert",
-          "apns-priority": "10",
-          ...(chatNotificationId ? { "apns-collapse-id": chatNotificationId } : {})
+          "apns-priority": "10"
         },
         payload: {
           aps: {
@@ -253,7 +364,7 @@ exports.sendPushForNotificationEvent = onDocumentCreated(
             },
             sound: "default",
             badge: Math.max(1, unreadCount),
-            ...(chatNotificationId ? { "thread-id": chatNotificationId } : {})
+            ...(chatThreadId ? { "thread-id": chatThreadId } : {})
           }
         }
       }
@@ -313,9 +424,26 @@ exports.sendPushForNotificationEvent = onDocumentCreated(
       return;
     }
 
-    await markPushFailed(eventId, "send_failed");
+    if (invalidTokens.length === fcmTokens.length) {
+      await markPushPermanentlyFailed(eventId, "all_tokens_invalid");
+      return;
+    }
+
+    const error = new Error("FCM did not accept any recipient token");
+    error.code = "push_send_failed";
+    throw error;
+  } catch (error) {
+    logger.error("Push delivery will be retried", {
+      eventId,
+      errorCode: error.code || "unknown",
+      errorMessage: error.message || "unknown_error"
+    });
+    await markPushRetryable(eventId, error.code || "unknown_error");
+    // Firestore-trigger retries are enabled above. Rethrowing is essential:
+    // otherwise an invocation crash silently leaves the event undelivered.
+    throw error;
   }
-);
+}
 
 async function incrementUnreadNotificationCount(recipientId, userData) {
   const userRef = db.collection("users").doc(recipientId);
@@ -359,7 +487,10 @@ async function unreadNotificationCount(recipientId) {
   }).length;
 }
 
-function chatNotificationIdentifier(data) {
+// `thread-id` groups chat notifications in Notification Center without
+// suppressing the banner for subsequent messages. Do not set
+// `apns-collapse-id` here: APNs merges notifications with a shared value.
+function chatNotificationThreadIdentifier(data) {
   const senderId = stringifyData(data.senderId);
   const recipientId = stringifyData(data.recipientId);
 
@@ -424,11 +555,22 @@ function stringifyData(value) {
   return String(value);
 }
 
-async function markPushFailed(eventId, reason) {
+async function markPushRetryable(eventId, reason) {
   await db.collection("notification_events").doc(eventId).set(
     {
-      pushStatus: "failed",
+      pushStatus: "retryable_failed",
       pushFailureReason: reason
+    },
+    { merge: true }
+  );
+}
+
+async function markPushPermanentlyFailed(eventId, reason) {
+  await db.collection("notification_events").doc(eventId).set(
+    {
+      pushStatus: "permanent_failed",
+      pushFailureReason: reason,
+      pushLeaseExpiresAt: admin.firestore.FieldValue.delete()
     },
     { merge: true }
   );

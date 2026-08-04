@@ -197,6 +197,7 @@ final class AppNotificationsStore: ObservableObject {
     private var currentUserId: String?
     private var loadedDocuments: [String: DocumentSnapshot] = [:]
     private var lastPageDocument: DocumentSnapshot?
+    private var serverUnreadCount = 0
     private var isBootstrappingUnreadCounter = false
     @Published private(set) var canLoadMore = false
     @Published private(set) var isLoadingMore = false
@@ -217,6 +218,7 @@ final class AppNotificationsStore: ObservableObject {
         unreadCountListener?.remove()
         notifications = []
         unreadCount = 0
+        serverUnreadCount = 0
         loadedDocuments = [:]
         lastPageDocument = nil
         canLoadMore = false
@@ -235,7 +237,8 @@ final class AppNotificationsStore: ObservableObject {
                 Task { @MainActor in
                     guard self.currentUserId == userId else { return }
                     if let unreadCount {
-                        self.unreadCount = max(0, unreadCount.intValue)
+                        self.serverUnreadCount = max(0, unreadCount.intValue)
+                        self.refreshUnreadCount()
                     } else {
                         await self.bootstrapUnreadCounterIfNeeded(for: userId)
                     }
@@ -440,6 +443,14 @@ final class AppNotificationsStore: ObservableObject {
             // has been read, it should no longer occupy the user's attention.
             .filter { $0.isArchived == false && $0.isRead == false }
             .sorted { $0.createdAt > $1.createdAt }
+        refreshUnreadCount()
+    }
+
+    // The server counter is efficient for a large notification history. The
+    // live event list is a safety net: an arriving unread event must be
+    // reflected in the UI even while that counter is being updated remotely.
+    private func refreshUnreadCount() {
+        unreadCount = max(serverUnreadCount, notifications.count)
     }
 
     private func updateLocalNotification(
