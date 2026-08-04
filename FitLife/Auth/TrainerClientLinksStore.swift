@@ -126,7 +126,9 @@ final class TrainerClientsStore: ObservableObject {
                     id: documentId,
                     trainerId: trainer.id,
                     clientId: client.id,
-                    createdByOwnerId: ownerId
+                    createdByOwnerId: ownerId,
+                    clientDisplayName: client.displayName,
+                    clientEmail: client.email
                 )
 
                 try await documentRef.setData(link.firestoreData)

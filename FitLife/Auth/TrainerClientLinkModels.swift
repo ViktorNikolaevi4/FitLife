@@ -8,6 +8,8 @@ struct TrainerClientLink: Identifiable, Hashable {
     let createdAt: Date
     let createdByOwnerId: String
     let status: String
+    let clientDisplayName: String?
+    let clientEmail: String?
 
     init(
         id: String,
@@ -15,7 +17,9 @@ struct TrainerClientLink: Identifiable, Hashable {
         clientId: String,
         createdAt: Date = .now,
         createdByOwnerId: String,
-        status: String = "active"
+        status: String = "active",
+        clientDisplayName: String? = nil,
+        clientEmail: String? = nil
     ) {
         self.id = id
         self.trainerId = trainerId
@@ -23,6 +27,8 @@ struct TrainerClientLink: Identifiable, Hashable {
         self.createdAt = createdAt
         self.createdByOwnerId = createdByOwnerId
         self.status = status
+        self.clientDisplayName = clientDisplayName
+        self.clientEmail = clientEmail
     }
 
     init?(id: String, data: [String: Any]) {
@@ -39,6 +45,10 @@ struct TrainerClientLink: Identifiable, Hashable {
         self.clientId = clientId
         self.createdByOwnerId = createdByOwnerId
         self.status = (data["status"] as? String) ?? "active"
+        self.clientDisplayName = (data["clientDisplayName"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        self.clientEmail = (data["clientEmail"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
 
         if let timestamp = data["createdAt"] as? Timestamp {
             self.createdAt = timestamp.dateValue()
@@ -48,12 +58,32 @@ struct TrainerClientLink: Identifiable, Hashable {
     }
 
     var firestoreData: [String: Any] {
-        [
+        var data: [String: Any] = [
             "trainerId": trainerId,
             "clientId": clientId,
             "createdAt": createdAt,
             "createdByOwnerId": createdByOwnerId,
             "status": status
         ]
+        if let clientDisplayName, clientDisplayName.isEmpty == false {
+            data["clientDisplayName"] = clientDisplayName
+        }
+        if let clientEmail, clientEmail.isEmpty == false {
+            data["clientEmail"] = clientEmail
+        }
+        return data
+    }
+
+    var clientProfileSnapshot: AppUserProfile? {
+        guard let clientDisplayName, clientDisplayName.isEmpty == false else { return nil }
+
+        return AppUserProfile(
+            id: clientId,
+            email: clientEmail ?? "",
+            displayName: clientDisplayName,
+            role: .client,
+            createdAt: createdAt,
+            isActive: true
+        )
     }
 }

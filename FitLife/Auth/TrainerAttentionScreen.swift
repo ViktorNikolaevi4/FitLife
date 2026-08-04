@@ -160,26 +160,34 @@ final class TrainerAttentionStore: ObservableObject {
             .whereField("status", isEqualTo: "active")
             .getDocuments()
 
-        let clientIds = linksSnapshot.documents.compactMap { document in
-            TrainerClientLink(id: document.documentID, data: document.data())?.clientId
+        let links = linksSnapshot.documents.compactMap { document in
+            TrainerClientLink(id: document.documentID, data: document.data())
         }
 
-        var clients: [AppUserProfile] = []
-        for chunk in clientIds.chunked(into: 30) {
+        // New links include a small client snapshot, so a trainer with hundreds
+        // of clients needs just this one links query. Older links stay readable
+        // through the per-document fallback below.
+        var clientsByID = Dictionary(
+            uniqueKeysWithValues: links.compactMap { link in
+                link.clientProfileSnapshot.map { (link.clientId, $0) }
+            }
+        )
+        let legacyClientIDs = Set(links.map(\.clientId)).subtracting(Set(clientsByID.keys))
+
+        for clientId in legacyClientIDs {
             let snapshot = try await firestore
                 .collection("users")
-                .whereField(FieldPath.documentID(), in: chunk)
-                .getDocuments()
+                .document(clientId)
+                .getDocument()
 
-            for document in snapshot.documents {
-                guard let profile = AppUserProfile(id: document.documentID, data: document.data()) else {
-                    continue
-                }
-                clients.append(profile)
+            guard let data = snapshot.data(),
+                  let profile = AppUserProfile(id: snapshot.documentID, data: data) else {
+                continue
             }
+            clientsByID[clientId] = profile
         }
 
-        return clients.sorted {
+        return clientsByID.values.sorted {
             $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
         }
     }

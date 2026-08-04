@@ -103,7 +103,9 @@ final class CoachingRequestsReviewStore: ObservableObject {
             clientId: request.clientId,
             createdAt: now,
             createdByOwnerId: currentUser.id,
-            status: "active"
+            status: "active",
+            clientDisplayName: request.intakeSnapshot?.clientDisplayName,
+            clientEmail: request.intakeSnapshot?.clientEmail
         )
 
         let batch = firestore.batch()
