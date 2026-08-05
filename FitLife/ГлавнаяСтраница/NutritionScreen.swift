@@ -95,7 +95,7 @@ struct NutritionScreen: View {
                 VStack(spacing: 12) {
                     MealsSection(
                         theme: theme,
-                        dailyCalorieGoal: userData?.calories ?? 0,
+                        totalConsumedCalories: consumedCalories,
                         calories: (breakfastKcal, lunchKcal, dinnerKcal, snacksKcal),
                         macros: (breakfastMacros, lunchMacros, dinnerMacros, snacksMacros),
                         entries: (breakfastItems, lunchItems, dinnerItems, snacksItems),

@@ -363,7 +363,7 @@ struct RationPopupView: View {
         MealRow(
             title: meal == .snacks ? AppLocalizer.string("meal.snack") : meal.displayName,
             systemImage: systemImage,
-            dailyCalorieGoal: 0,
+            totalConsumedCalories: 0,
             kcal: kcal > 0 ? kcal : nil,
             macros: kcal > 0 ? (protein: protein, fat: fat, carb: carb) : nil,
             theme: theme,
