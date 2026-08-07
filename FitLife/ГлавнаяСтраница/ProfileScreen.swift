@@ -34,9 +34,11 @@ struct ProfileScreen: View {
             ScrollView {
                 LazyVStack(spacing: 16) {
                     if let user {
-                        ProfileHeroCard {
-                            ProfileProgressScreen(userData: user, ownerId: currentOwnerId, gender: editingGender)
-                        }
+                        ProfileHeroCard(
+                            progressUserData: user,
+                            ownerId: currentOwnerId,
+                            gender: editingGender
+                        )
                     } else {
                         ProfileHeroCard()
                     }
@@ -771,18 +773,24 @@ private struct ManualMacroGoalRow: View {
 }
 
 private struct ProfileHeroCard: View {
-    let progressDestination: AnyView?
+    let progressUserData: UserData?
+    let ownerId: String?
+    let gender: Gender
 
     @Environment(\.colorScheme) private var colorScheme
 
     private var theme: AppTheme { AppTheme(colorScheme) }
 
     init() {
-        progressDestination = nil
+        progressUserData = nil
+        ownerId = nil
+        gender = .male
     }
 
-    init<Destination: View>(@ViewBuilder progressDestination: () -> Destination) {
-        self.progressDestination = AnyView(progressDestination())
+    init(progressUserData: UserData, ownerId: String?, gender: Gender) {
+        self.progressUserData = progressUserData
+        self.ownerId = ownerId
+        self.gender = gender
     }
 
     var body: some View {
@@ -802,14 +810,18 @@ private struct ProfileHeroCard: View {
                 }
             }
 
-            if let progressDestination {
+            if let progressUserData {
                 Rectangle()
                     .fill(theme.border.opacity(theme.isDark ? 0.70 : 0.55))
                     .frame(height: 1)
                     .padding(.top, 2)
 
                 NavigationLink {
-                    progressDestination
+                    ProfileProgressScreen(
+                        userData: progressUserData,
+                        ownerId: ownerId,
+                        gender: gender
+                    )
                 } label: {
                     HStack(spacing: 12) {
                         ProfileIconTile(systemImage: "chart.line.uptrend.xyaxis", tint: theme.accent, size: 40, cornerRadius: 12)
@@ -839,7 +851,11 @@ private struct ProfileHeroCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(20)
-        .lightweightAdaptiveHomeCard(theme: theme, cornerRadius: HomeDarkMetrics.cardCornerRadius)
+        .lightweightAdaptiveHomeCard(
+            theme: theme,
+            cornerRadius: HomeDarkMetrics.cardCornerRadius,
+            showsShadow: false
+        )
         .padding(.horizontal)
     }
 }
@@ -920,7 +936,7 @@ private struct EditableSummaryMetricCardInt: View {
             }
             .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
             .padding(12)
-            .lightweightAdaptiveHomeCard(theme: theme, cornerRadius: 16)
+            .lightweightAdaptiveHomeCard(theme: theme, cornerRadius: 16, showsShadow: false)
         }
         .buttonStyle(.plain)
         .sheet(isPresented: $showSheet) {
@@ -989,7 +1005,7 @@ private struct EditableSummaryMetricCardDoubleAsInt: View {
             }
             .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
             .padding(12)
-            .lightweightAdaptiveHomeCard(theme: theme, cornerRadius: 16)
+            .lightweightAdaptiveHomeCard(theme: theme, cornerRadius: 16, showsShadow: false)
         }
         .buttonStyle(.plain)
         .sheet(isPresented: $showSheet) {

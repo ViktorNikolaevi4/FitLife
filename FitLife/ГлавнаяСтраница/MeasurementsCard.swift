@@ -241,7 +241,11 @@ struct SectionCard<Content: View>: View {
             content
         }
         .padding(18)
-        .lightweightAdaptiveHomeCard(theme: theme, cornerRadius: HomeDarkMetrics.cardCornerRadius)
+        .lightweightAdaptiveHomeCard(
+            theme: theme,
+            cornerRadius: HomeDarkMetrics.cardCornerRadius,
+            showsShadow: false
+        )
         .padding(.horizontal)
     }
 }

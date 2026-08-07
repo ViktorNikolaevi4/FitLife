@@ -80,7 +80,11 @@ private struct BMICardView: View {
             }
         }
         .padding(16)
-        .lightweightAdaptiveHomeCard(theme: theme, cornerRadius: HomeDarkMetrics.cardCornerRadius)
+        .lightweightAdaptiveHomeCard(
+            theme: theme,
+            cornerRadius: HomeDarkMetrics.cardCornerRadius,
+            showsShadow: false
+        )
     }
 }
 

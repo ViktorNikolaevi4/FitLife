@@ -114,6 +114,7 @@ struct AdaptiveHomeCardModifier: ViewModifier {
 struct LightweightAdaptiveHomeCardModifier: ViewModifier {
     let theme: AppTheme
     var cornerRadius: CGFloat = HomeDarkMetrics.cardCornerRadius
+    var showsShadow = true
 
     func body(content: Content) -> some View {
         content
@@ -126,10 +127,10 @@ struct LightweightAdaptiveHomeCardModifier: ViewModifier {
                     .stroke(theme.border, lineWidth: HomeDarkMetrics.strokeWidth)
             }
             .shadow(
-                color: theme.isDark ? .clear : .black.opacity(0.05),
-                radius: theme.isDark ? 0 : 12,
+                color: showsShadow && theme.isDark == false ? .black.opacity(0.05) : .clear,
+                radius: showsShadow && theme.isDark == false ? 12 : 0,
                 x: 0,
-                y: theme.isDark ? 0 : 7
+                y: showsShadow && theme.isDark == false ? 7 : 0
             )
     }
 }
@@ -139,8 +140,18 @@ extension View {
         modifier(AdaptiveHomeCardModifier(theme: theme, cornerRadius: cornerRadius))
     }
 
-    func lightweightAdaptiveHomeCard(theme: AppTheme, cornerRadius: CGFloat = HomeDarkMetrics.cardCornerRadius) -> some View {
-        modifier(LightweightAdaptiveHomeCardModifier(theme: theme, cornerRadius: cornerRadius))
+    func lightweightAdaptiveHomeCard(
+        theme: AppTheme,
+        cornerRadius: CGFloat = HomeDarkMetrics.cardCornerRadius,
+        showsShadow: Bool = true
+    ) -> some View {
+        modifier(
+            LightweightAdaptiveHomeCardModifier(
+                theme: theme,
+                cornerRadius: cornerRadius,
+                showsShadow: showsShadow
+            )
+        )
     }
 }
 
