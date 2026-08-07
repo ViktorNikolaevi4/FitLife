@@ -13,7 +13,6 @@ struct WorkoutTemplateEditorScreen: View {
     @State private var targetBlockId: String?
     @State private var targetGroupId: String?
     @State private var blockForNewGroup: WorkoutTemplateBlockItem?
-    @State private var showAddGroup = false
     @State private var showAssignSheet = false
     @State private var expandedExerciseIds: Set<String> = []
     @State private var collapsedBlockIds: Set<String> = []
@@ -144,7 +143,6 @@ struct WorkoutTemplateEditorScreen: View {
                         onAddGroup: group.block.map { block in
                             {
                                 blockForNewGroup = block
-                                showAddGroup = true
                             }
                         },
                         isExpanded: collapsedBlockIds.contains(group.id) == false,
@@ -259,25 +257,22 @@ struct WorkoutTemplateEditorScreen: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showAddGroup) {
-            if let blockForNewGroup {
-                AddWorkoutTemplateGroupScreen { draft in
-                    Task {
-                        await store.addGroup(
-                            to: blockForNewGroup,
-                            title: draft.title,
-                            kind: draft.kind,
-                            rounds: draft.rounds,
-                            restSeconds: draft.restSeconds,
-                            note: draft.note
-                        )
-                        self.blockForNewGroup = nil
-                        showAddGroup = false
-                    }
+        .sheet(item: $blockForNewGroup) { block in
+            AddWorkoutTemplateGroupScreen { draft in
+                Task {
+                    await store.addGroup(
+                        to: block,
+                        title: draft.title,
+                        kind: draft.kind,
+                        rounds: draft.rounds,
+                        restSeconds: draft.restSeconds,
+                        note: draft.note
+                    )
+                    blockForNewGroup = nil
                 }
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
             }
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showAssignSheet) {
             NavigationStack {
