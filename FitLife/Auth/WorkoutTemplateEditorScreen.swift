@@ -10,6 +10,7 @@ struct WorkoutTemplateEditorScreen: View {
     @StateObject private var store: WorkoutTemplateContentStore
     @State private var showAddExercise = false
     @State private var showAddBlock = false
+    @State private var showAIGenerator = false
     @State private var targetBlockId: String?
     @State private var targetGroupId: String?
     @State private var blockForNewGroup: WorkoutTemplateBlockItem?
@@ -18,6 +19,7 @@ struct WorkoutTemplateEditorScreen: View {
     @State private var collapsedBlockIds: Set<String> = []
     @State private var collapsedNestedGroupIds: Set<String> = []
     @State private var pendingDeleteExercise: WorkoutTemplateExerciseItem?
+    @State private var pendingEmptyBlockDeletion: WorkoutTemplateBlockItem?
     @State private var editingExercise: WorkoutTemplateExerciseItem?
     @Query(sort: \CustomWorkoutExerciseTemplate.createdAt) private var customTemplates: [CustomWorkoutExerciseTemplate]
     @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
@@ -205,6 +207,15 @@ struct WorkoutTemplateEditorScreen: View {
 
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
+                    showAIGenerator = true
+                } label: {
+                    Image(systemName: "sparkles")
+                }
+                .accessibilityLabel("Создать тренировку с ИИ")
+            }
+
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
                     targetBlockId = nil
                     showAddExercise = true
                 } label: {
@@ -255,6 +266,16 @@ struct WorkoutTemplateEditorScreen: View {
                 }
             }
             .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showAIGenerator) {
+            AIWorkoutGeneratorScreen(language: appLanguage) { draft in
+                Task {
+                    await store.addGeneratedDraft(draft)
+                    showAIGenerator = false
+                }
+            }
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
         .sheet(item: $blockForNewGroup) { block in
@@ -320,6 +341,25 @@ struct WorkoutTemplateEditorScreen: View {
         } message: {
             Text(AppLocalizer.string("workout.exercise.delete.message"))
         }
+        .confirmationDialog(
+            "Удалить пустой блок?",
+            isPresented: Binding(
+                get: { pendingEmptyBlockDeletion != nil },
+                set: { if $0 == false { pendingEmptyBlockDeletion = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Удалить блок", role: .destructive) {
+                guard let block = pendingEmptyBlockDeletion else { return }
+                Task { await store.deleteEmptyBlock(block) }
+                pendingEmptyBlockDeletion = nil
+            }
+            Button(AppLocalizer.string("common.cancel"), role: .cancel) {
+                pendingEmptyBlockDeletion = nil
+            }
+        } message: {
+            Text("В блоке «\(pendingEmptyBlockDeletion?.displayTitle ?? "")» больше нет упражнений.")
+        }
     }
 
     private func toggleExpanded(_ id: String) {
@@ -363,6 +403,20 @@ struct WorkoutTemplateEditorScreen: View {
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive) { pendingDeleteExercise = exercise } label: {
                 Label(AppLocalizer.string("common.delete"), systemImage: "trash")
+            }
+        }
+        .contextMenu {
+            if store.blocks.isEmpty == false {
+                Menu("Переместить в блок") {
+                    ForEach(store.blocks.sorted { $0.orderIndex < $1.orderIndex }) { block in
+                        Button(block.displayTitle) {
+                            Task {
+                                pendingEmptyBlockDeletion = await store.moveExercise(exercise, to: block)
+                            }
+                        }
+                        .disabled(exercise.blockId == block.id)
+                    }
+                }
             }
         }
         .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
@@ -511,6 +565,181 @@ private struct WorkoutTemplateBlockDraft {
             return type.title
         }
         return trimmedTitle
+    }
+}
+
+private struct AIWorkoutGeneratorScreen: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let language: AppLanguage
+    let onAdd: (AIWorkoutDraft) -> Void
+
+    @State private var command = ""
+    @State private var draft: AIWorkoutDraft?
+    @State private var errorMessage: String?
+    @State private var isGenerating = false
+
+    private let generator = AIWorkoutDraftGenerator()
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let draft {
+                    draftPreview(draft)
+                } else {
+                    commandForm
+                }
+            }
+            .navigationTitle(draft == nil ? "Тренировка с ИИ" : "Черновик тренировки")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(AppLocalizer.string("common.cancel")) { dismiss() }
+                }
+                if let draft {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Добавить") { onAdd(draft) }
+                            .fontWeight(.semibold)
+                    }
+                }
+            }
+        }
+    }
+
+    private var commandForm: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Опишите тренировку своими словами", systemImage: "sparkles")
+                        .font(.headline)
+                        .foregroundStyle(.blue)
+
+                    Text("ИИ создаст черновик. Ничего не будет сохранено без вашего подтверждения.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                TextField(
+                    "Например: Добавь основную часть — приседания со штангой 10×10, жим лёжа 4×8, отдых 90 секунд.",
+                    text: $command,
+                    axis: .vertical
+                )
+                .lineLimit(5...8)
+                .padding(14)
+                .background(RoundedRectangle(cornerRadius: 16).fill(Color(.secondarySystemBackground)))
+
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                }
+
+                Button(action: generate) {
+                    HStack(spacing: 8) {
+                        if isGenerating {
+                            ProgressView().tint(.white)
+                        } else {
+                            Image(systemName: "sparkles")
+                        }
+                        Text(isGenerating ? "Создаём черновик…" : "Создать черновик")
+                    }
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(RoundedRectangle(cornerRadius: 18).fill(Color.blue))
+                }
+                .buttonStyle(.plain)
+                .disabled(command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isGenerating)
+            }
+            .padding(20)
+        }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+    }
+
+    private func draftPreview(_ draft: AIWorkoutDraft) -> some View {
+        List {
+            if draft.summary.isEmpty == false {
+                Section("Что создаст ИИ") {
+                    Text(draft.summary)
+                        .font(.subheadline)
+                }
+            }
+
+            ForEach(draft.blocks) { block in
+                Section(block.title) {
+                    Text(blockSubtitle(block))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    ForEach(block.exercises) { exercise in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(exercise.name)
+                                .font(.body.weight(.semibold))
+                            Text(exerciseSummary(exercise))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            if exercise.note.isEmpty == false {
+                                Text(exercise.note)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Section {
+                Button("Сформировать заново") {
+                    self.draft = nil
+                    errorMessage = nil
+                }
+                .foregroundStyle(.blue)
+            }
+        }
+        .listStyle(.insetGrouped)
+    }
+
+    private func generate() {
+        let trimmedCommand = command.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedCommand.isEmpty == false else { return }
+        errorMessage = nil
+        isGenerating = true
+        Task {
+            do {
+                draft = try await generator.generate(command: trimmedCommand, language: language)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            isGenerating = false
+        }
+    }
+
+    private func blockSubtitle(_ block: AIWorkoutDraftBlock) -> String {
+        if block.workoutBlockType == .circuit {
+            return circuitSubtitle(
+                mode: block.workoutBlockMode,
+                rounds: block.rounds,
+                exerciseCount: block.exercises.count,
+                durationMinutes: block.durationMinutes,
+                workSeconds: block.workSeconds,
+                restSeconds: block.restSeconds,
+                restBetweenRoundsSeconds: block.restBetweenRoundsSeconds
+            )
+        }
+        return AppLocalizer.format("workout.block.exercise_count", block.exercises.count)
+    }
+
+    private func exerciseSummary(_ exercise: AIWorkoutDraftExercise) -> String {
+        let values = exercise.sets.map { set in
+            formattedWorkoutSetValue(
+                weight: set.weight,
+                reps: set.reps,
+                durationSeconds: set.durationSeconds,
+                metricType: WorkoutSetMetricType(rawValue: set.metricType) ?? .reps
+            )
+        }
+        return values.joined(separator: " · ")
     }
 }
 

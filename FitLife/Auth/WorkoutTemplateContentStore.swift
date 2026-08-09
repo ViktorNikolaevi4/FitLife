@@ -392,6 +392,66 @@ final class WorkoutTemplateContentStore: ObservableObject {
         }
     }
 
+    func addGeneratedDraft(_ draft: AIWorkoutDraft) async {
+        errorMessage = nil
+
+        do {
+            let templateRef = firestore.collection("workout_templates").document(template.id)
+            let batch = firestore.batch()
+            var newBlocks: [WorkoutTemplateBlockItem] = []
+            var newExercises: [WorkoutTemplateExerciseItem] = []
+            var nextBlockIndex = blocks.count
+            var nextExerciseIndex = exercises.count
+
+            for generatedBlock in draft.blocks {
+                let blockRef = templateRef.collection("blocks").document()
+                let block = WorkoutTemplateBlockItem(
+                    id: blockRef.documentID,
+                    templateId: template.id,
+                    title: generatedBlock.title,
+                    type: generatedBlock.workoutBlockType,
+                    mode: generatedBlock.workoutBlockMode,
+                    orderIndex: nextBlockIndex,
+                    rounds: generatedBlock.rounds,
+                    durationMinutes: generatedBlock.durationMinutes,
+                    workSeconds: generatedBlock.workSeconds,
+                    restSeconds: generatedBlock.restSeconds,
+                    restBetweenRoundsSeconds: generatedBlock.restBetweenRoundsSeconds
+                )
+                batch.setData(block.firestoreData, forDocument: blockRef)
+                newBlocks.append(block)
+                nextBlockIndex += 1
+
+                for generatedExercise in generatedBlock.exercises {
+                    let exerciseRef = templateRef.collection("exercises").document()
+                    let exercise = WorkoutTemplateExerciseItem(
+                        id: exerciseRef.documentID,
+                        templateId: template.id,
+                        blockId: block.id,
+                        name: generatedExercise.name,
+                        systemImage: generatedExercise.systemImage,
+                        accentName: generatedExercise.accentName,
+                        activityType: generatedExercise.workoutActivityType,
+                        metValue: generatedExercise.metValue,
+                        orderIndex: nextExerciseIndex,
+                        sets: generatedExercise.sets.map(\.workoutSet),
+                        note: generatedExercise.note
+                    )
+                    batch.setData(exercise.firestoreData, forDocument: exerciseRef)
+                    newExercises.append(exercise)
+                    nextExerciseIndex += 1
+                }
+            }
+
+            guard newBlocks.isEmpty == false, newExercises.isEmpty == false else { return }
+            try await batch.commit()
+            blocks.append(contentsOf: newBlocks)
+            exercises.append(contentsOf: newExercises)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func addGroup(
         to block: WorkoutTemplateBlockItem,
         title: String,
@@ -487,6 +547,70 @@ final class WorkoutTemplateContentStore: ObservableObject {
             if let index = exercises.firstIndex(where: { $0.id == exercise.id }) {
                 exercises[index] = updated
             }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func moveExercise(
+        _ exercise: WorkoutTemplateExerciseItem,
+        to block: WorkoutTemplateBlockItem
+    ) async -> WorkoutTemplateBlockItem? {
+        guard exercise.blockId != block.id else { return nil }
+        errorMessage = nil
+
+        let sourceBlock = blocks.first { $0.id == exercise.blockId }
+        let sourceWillBeEmpty = sourceBlock.map { source in
+            exercises.contains { $0.blockId == source.id && $0.id != exercise.id } == false
+        } ?? false
+
+        let targetOrderIndex = (exercises
+            .filter { $0.blockId == block.id }
+            .map(\.orderIndex)
+            .max() ?? -1) + 1
+        let updated = WorkoutTemplateExerciseItem(
+            id: exercise.id,
+            templateId: exercise.templateId,
+            blockId: block.id,
+            groupId: nil,
+            name: exercise.name,
+            systemImage: exercise.systemImage,
+            accentName: exercise.accentName,
+            activityType: exercise.activityType,
+            metValue: exercise.metValue,
+            orderIndex: targetOrderIndex,
+            sets: exercise.sets,
+            note: exercise.note
+        )
+
+        do {
+            try await firestore
+                .collection("workout_templates")
+                .document(template.id)
+                .collection("exercises")
+                .document(exercise.id)
+                .setData(updated.firestoreData)
+            if let index = exercises.firstIndex(where: { $0.id == exercise.id }) {
+                exercises[index] = updated
+            }
+            return sourceWillBeEmpty ? sourceBlock : nil
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func deleteEmptyBlock(_ block: WorkoutTemplateBlockItem) async {
+        guard exercises.contains(where: { $0.blockId == block.id }) == false else { return }
+        errorMessage = nil
+        do {
+            try await firestore
+                .collection("workout_templates")
+                .document(template.id)
+                .collection("blocks")
+                .document(block.id)
+                .delete()
+            blocks.removeAll { $0.id == block.id }
         } catch {
             errorMessage = error.localizedDescription
         }

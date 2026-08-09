@@ -75,6 +75,53 @@ exports.recognizeMeal = onRequest(
   }
 );
 
+// Creates a training draft only. The iOS app presents the result to the
+// trainer and persists it after an explicit confirmation.
+exports.generateWorkoutDraft = onRequest(
+  {
+    region: "europe-west1",
+    timeoutSeconds: 60,
+    memory: "512MiB",
+    secrets: ["OPENAI_API_KEY"]
+  },
+  async (request, response) => {
+    setJsonResponseHeaders(response);
+
+    if (request.method === "OPTIONS") {
+      response.status(204).send("");
+      return;
+    }
+    if (request.method !== "POST") {
+      response.status(405).json({ error: { code: "method_not_allowed" } });
+      return;
+    }
+
+    try {
+      const decodedToken = await verifyAuthorization(request);
+      await verifyActiveTrainer(decodedToken.uid);
+
+      const body = request.body || {};
+      const command = typeof body.command === "string" ? body.command.trim() : "";
+      const language = body.language === "en" ? "English" : "Russian";
+      if (!command || command.length > 2_000) {
+        response.status(400).json({ error: { code: "invalid_command" } });
+        return;
+      }
+
+      const draft = await generateWorkoutDraft(command, language);
+      response.status(200).json(draft);
+    } catch (error) {
+      logger.error("Workout draft generation failed", {
+        code: error.code || "unknown",
+        message: error.message || "unknown_error"
+      });
+      response.status(error.status || 500).json({
+        error: { code: error.code || "workout_generation_failed" }
+      });
+    }
+  }
+);
+
 const TYPE_CONFIG = {
   coaching_request_submitted: {
     ru: {
@@ -600,6 +647,246 @@ async function verifyAuthorization(request) {
     error.code = "unauthorized";
     throw error;
   }
+}
+
+async function verifyActiveTrainer(uid) {
+  const snapshot = await db.collection("users").doc(uid).get();
+  const user = snapshot.data() || {};
+  if (user.role === "trainer" && user.isActive === true) {
+    return;
+  }
+
+  const error = new Error("Trainer role is required");
+  error.status = 403;
+  error.code = "trainer_role_required";
+  throw error;
+}
+
+async function generateWorkoutDraft(command, language) {
+  const systemPrompt = `
+You are a fitness-programming assistant for certified trainers. Convert the trainer's instruction into a conservative workout TEMPLATE DRAFT.
+Return JSON only and respond in ${language}.
+
+Return this exact object:
+{
+  "summary": "short description",
+  "blocks": [
+    {
+      "title": "short block title",
+      "type": "warmup|strength|main|circuit|stretching|cooldown",
+      "mode": "rounds|amrap|tabata",
+      "rounds": 1,
+      "durationMinutes": 0,
+      "workSeconds": 0,
+      "restSeconds": 0,
+      "restBetweenRoundsSeconds": 0,
+      "exercises": [
+        {
+          "name": "exercise name",
+          "systemImage": "valid SF Symbol name",
+          "accentName": "blue|green|orange|purple|teal|red",
+          "activityType": "strength|cardio|hiit|core|mobility",
+          "metValue": 5,
+          "note": "optional short coach note",
+          "sets": [
+            { "weight": 0, "reps": 10, "durationSeconds": 0, "metricType": "reps" }
+          ]
+        }
+      ]
+    }
+  ]
+}
+
+Rules:
+- Create only what the trainer asked for. Do not invent medical advice, contraindications, diagnoses, or client-specific limits.
+- If a load is not specified, use weight 0. Never guess a client's working weight.
+- "10x10" means 10 sets with 10 reps each, not a weight of 10 kg.
+- Use metricType "duration" only for timed work; then durationSeconds must be 5 to 3600 and reps must be 0.
+- Use metricType "reps" for normal exercises; reps must be 1 to 100 and durationSeconds must be 0.
+- Keep the draft compact: at most 5 blocks, 20 exercises total, and 12 sets per exercise.
+- Valid block type and activityType values must be used exactly as listed.
+- For non-circuit blocks use mode "rounds", rounds 1, and all timing fields 0.
+- Do not include markdown or any text outside JSON.
+`;
+
+  const rawDraft = await callOpenAIForWorkoutDraft([
+    {
+      role: "system",
+      content: [{ type: "input_text", text: systemPrompt }]
+    },
+    {
+      role: "user",
+      content: [{ type: "input_text", text: `Trainer instruction: ${command}` }]
+    }
+  ]);
+
+  return sanitizeWorkoutDraft(rawDraft);
+}
+
+async function callOpenAIForWorkoutDraft(input) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    const error = new Error("OpenAI API key is not configured");
+    error.status = 500;
+    error.code = "missing_openai_key";
+    throw error;
+  }
+
+  const openAIResponse = await fetch(OPENAI_RESPONSES_URL, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      input,
+      text: { format: { type: "json_object" } }
+    })
+  });
+
+  const responseText = await openAIResponse.text();
+  if (!openAIResponse.ok) {
+    const error = new Error("OpenAI request failed");
+    error.status = openAIResponse.status >= 400 && openAIResponse.status < 500 ? 502 : 500;
+    error.code = extractOpenAIErrorCode(responseText) || "openai_request_failed";
+    throw error;
+  }
+
+  const outputText = extractOpenAIOutputText(responseText);
+  if (!outputText) {
+    const error = new Error("OpenAI response did not contain output text");
+    error.status = 502;
+    error.code = "invalid_openai_response";
+    throw error;
+  }
+
+  try {
+    return JSON.parse(outputText);
+  } catch (_) {
+    const error = new Error("OpenAI output was not valid JSON");
+    error.status = 502;
+    error.code = "invalid_workout_json";
+    throw error;
+  }
+}
+
+function sanitizeWorkoutDraft(rawDraft) {
+  const allowedBlockTypes = new Set(["warmup", "strength", "main", "circuit", "stretching", "cooldown"]);
+  const allowedModes = new Set(["rounds", "amrap", "tabata"]);
+  const allowedActivityTypes = new Set(["strength", "cardio", "hiit", "core", "mobility"]);
+  const allowedAccents = new Set(["blue", "green", "orange", "purple", "teal", "red"]);
+  const rawBlocks = Array.isArray(rawDraft && rawDraft.blocks) ? rawDraft.blocks.slice(0, 5) : [];
+  const blocks = [];
+  let exerciseCount = 0;
+
+  for (const rawBlock of rawBlocks) {
+    const type = typeof rawBlock.type === "string" && allowedBlockTypes.has(rawBlock.type)
+      ? rawBlock.type
+      : "main";
+    const isCircuit = type === "circuit";
+    const rawExercises = Array.isArray(rawBlock.exercises) ? rawBlock.exercises : [];
+    const exercises = [];
+
+    for (const rawExercise of rawExercises) {
+      if (exerciseCount >= 20 || !rawExercise || typeof rawExercise.name !== "string") {
+        break;
+      }
+      const name = rawExercise.name.trim().slice(0, 120);
+      if (!name) {
+        continue;
+      }
+      const metricActivity = allowedActivityTypes.has(rawExercise.activityType)
+        ? rawExercise.activityType
+        : "strength";
+      const rawSets = Array.isArray(rawExercise.sets) ? rawExercise.sets.slice(0, 12) : [];
+      const sets = rawSets.map(sanitizeWorkoutSet).filter(Boolean);
+      if (sets.length === 0) {
+        sets.push({ weight: 0, reps: 10, durationSeconds: 0, metricType: "reps" });
+      }
+      exercises.push({
+        name,
+        systemImage: safeSFSymbol(rawExercise.systemImage),
+        accentName: allowedAccents.has(rawExercise.accentName) ? rawExercise.accentName : "blue",
+        activityType: metricActivity,
+        metValue: clampNumber(rawExercise.metValue, 1, 20, 5),
+        note: typeof rawExercise.note === "string" ? rawExercise.note.trim().slice(0, 500) : "",
+        sets
+      });
+      exerciseCount += 1;
+    }
+
+    if (exercises.length === 0) {
+      continue;
+    }
+    blocks.push({
+      title: typeof rawBlock.title === "string" && rawBlock.title.trim()
+        ? rawBlock.title.trim().slice(0, 120)
+        : defaultBlockTitle(type),
+      type,
+      mode: isCircuit && allowedModes.has(rawBlock.mode) ? rawBlock.mode : "rounds",
+      rounds: isCircuit ? Math.round(clampNumber(rawBlock.rounds, 1, 40, 1)) : 1,
+      durationMinutes: isCircuit ? Math.round(clampNumber(rawBlock.durationMinutes, 0, 90, 0)) : 0,
+      workSeconds: isCircuit ? Math.round(clampNumber(rawBlock.workSeconds, 0, 300, 0)) : 0,
+      restSeconds: isCircuit ? Math.round(clampNumber(rawBlock.restSeconds, 0, 600, 0)) : 0,
+      restBetweenRoundsSeconds: isCircuit ? Math.round(clampNumber(rawBlock.restBetweenRoundsSeconds, 0, 600, 0)) : 0,
+      exercises
+    });
+  }
+
+  if (blocks.length === 0) {
+    const error = new Error("OpenAI output did not contain exercises");
+    error.status = 502;
+    error.code = "empty_workout_draft";
+    throw error;
+  }
+  return {
+    summary: typeof rawDraft.summary === "string" ? rawDraft.summary.trim().slice(0, 500) : "",
+    blocks
+  };
+}
+
+function sanitizeWorkoutSet(rawSet) {
+  if (!rawSet || typeof rawSet !== "object") {
+    return null;
+  }
+  const metricType = rawSet.metricType === "duration" ? "duration" : "reps";
+  if (metricType === "duration") {
+    return {
+      weight: clampNumber(rawSet.weight, 0, 500, 0),
+      reps: 0,
+      durationSeconds: Math.round(clampNumber(rawSet.durationSeconds, 5, 3600, 30)),
+      metricType
+    };
+  }
+  return {
+    weight: clampNumber(rawSet.weight, 0, 500, 0),
+    reps: Math.round(clampNumber(rawSet.reps, 1, 100, 10)),
+    durationSeconds: 0,
+    metricType
+  };
+}
+
+function clampNumber(value, minimum, maximum, fallback) {
+  const number = typeof value === "number" && Number.isFinite(value) ? value : fallback;
+  return Math.min(Math.max(number, minimum), maximum);
+}
+
+function safeSFSymbol(value) {
+  return typeof value === "string" && /^[A-Za-z0-9.]+$/.test(value) && value.length <= 80
+    ? value
+    : "dumbbell.fill";
+}
+
+function defaultBlockTitle(type) {
+  return {
+    warmup: "Разминка",
+    strength: "Силовой блок",
+    main: "Основная часть",
+    circuit: "Круговая часть",
+    stretching: "Растяжка",
+    cooldown: "Заминка"
+  }[type] || "Основная часть";
 }
 
 function normalizeRecognitionLanguage(rawLanguage) {
