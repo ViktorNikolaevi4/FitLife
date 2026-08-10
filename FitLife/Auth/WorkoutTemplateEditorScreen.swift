@@ -269,7 +269,12 @@ struct WorkoutTemplateEditorScreen: View {
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showAIGenerator) {
-            AIWorkoutGeneratorScreen(language: appLanguage) { draft in
+            AIWorkoutGeneratorScreen(
+                language: appLanguage,
+                existingBlocks: store.blocks.map {
+                    AIWorkoutExistingBlock(id: $0.id, title: $0.title, type: $0.typeRawValue)
+                }
+            ) { draft in
                 Task {
                     await store.addGeneratedDraft(draft)
                     showAIGenerator = false
@@ -572,6 +577,7 @@ private struct AIWorkoutGeneratorScreen: View {
     @Environment(\.dismiss) private var dismiss
 
     let language: AppLanguage
+    let existingBlocks: [AIWorkoutExistingBlock]
     let onAdd: (AIWorkoutDraft) -> Void
 
     @State private var command = ""
@@ -707,7 +713,11 @@ private struct AIWorkoutGeneratorScreen: View {
         isGenerating = true
         Task {
             do {
-                draft = try await generator.generate(command: trimmedCommand, language: language)
+                draft = try await generator.generate(
+                    command: trimmedCommand,
+                    language: language,
+                    existingBlocks: existingBlocks
+                )
             } catch {
                 errorMessage = error.localizedDescription
             }

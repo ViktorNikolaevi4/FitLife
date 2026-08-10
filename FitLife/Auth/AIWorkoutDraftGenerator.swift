@@ -9,6 +9,7 @@ struct AIWorkoutDraft: Decodable, Identifiable {
 
 struct AIWorkoutDraftBlock: Decodable, Identifiable {
     let title: String
+    let targetBlockId: String?
     let type: String
     let mode: String
     let rounds: Int
@@ -27,6 +28,12 @@ struct AIWorkoutDraftBlock: Decodable, Identifiable {
     var workoutBlockMode: WorkoutBlockMode {
         WorkoutBlockMode(rawValue: mode) ?? .rounds
     }
+}
+
+struct AIWorkoutExistingBlock: Encodable {
+    let id: String
+    let title: String
+    let type: String
 }
 
 struct AIWorkoutDraftExercise: Decodable, Identifiable {
@@ -59,6 +66,78 @@ struct AIWorkoutDraftSet: Decodable {
             metricType: WorkoutSetMetricType(rawValue: metricType) ?? .reps
         )
     }
+}
+
+extension AIWorkoutDraft {
+    func resolvingExercises(using catalog: [WorkoutExerciseTemplate]) -> AIWorkoutDraft {
+        AIWorkoutDraft(
+            summary: summary,
+            blocks: blocks.map { block in
+                AIWorkoutDraftBlock(
+                    title: block.title,
+                    targetBlockId: block.targetBlockId,
+                    type: block.type,
+                    mode: block.mode,
+                    rounds: block.rounds,
+                    durationMinutes: block.durationMinutes,
+                    workSeconds: block.workSeconds,
+                    restSeconds: block.restSeconds,
+                    restBetweenRoundsSeconds: block.restBetweenRoundsSeconds,
+                    exercises: block.exercises.map { exercise in
+                        guard let template = catalog.bestMatch(for: exercise.name) else {
+                            return exercise
+                        }
+                        return AIWorkoutDraftExercise(
+                            name: template.name,
+                            systemImage: template.systemImage,
+                            accentName: template.accentName,
+                            activityType: template.activityType.rawValue,
+                            metValue: template.metValue,
+                            note: exercise.note,
+                            sets: exercise.sets
+                        )
+                    }
+                )
+            }
+        )
+    }
+}
+
+private extension Array where Element == WorkoutExerciseTemplate {
+    func bestMatch(for exerciseName: String) -> WorkoutExerciseTemplate? {
+        let requested = normalizedExerciseName(exerciseName)
+        guard requested.isEmpty == false else { return nil }
+        let requestedTokens = Set(requested.split(separator: " ").map(String.init))
+
+        let matches = compactMap { template -> (template: WorkoutExerciseTemplate, score: Int)? in
+            let candidate = normalizedExerciseName(template.name)
+            if candidate == requested {
+                return (template, 10_000)
+            }
+
+            let candidateTokens = Set(candidate.split(separator: " ").map(String.init))
+            let commonTokens = requestedTokens.intersection(candidateTokens)
+                .filter { $0.count > 2 }
+            let score = commonTokens.count * 100
+                + (candidate.contains(requested) || requested.contains(candidate) ? 40 : 0)
+            return score >= 100 ? (template, score) : nil
+        }
+
+        return matches.max { $0.score < $1.score }?.template
+    }
+}
+
+private func normalizedExerciseName(_ value: String) -> String {
+    let lowercased = value.lowercased().folding(options: .diacriticInsensitive, locale: .current)
+    let cleaned = lowercased.unicodeScalars.map { scalar -> Character in
+        CharacterSet.alphanumerics.contains(scalar) ? Character(String(scalar)) : " "
+    }
+    return String(cleaned)
+        .split(whereSeparator: { $0.isWhitespace })
+        .filter { token in
+            ["со", "с", "на", "для", "по", "и", "кг", "kg"].contains(String(token)) == false
+        }
+        .joined(separator: " ")
 }
 
 private struct AIWorkoutDraftRequest: Encodable {
@@ -106,11 +185,19 @@ actor AIWorkoutDraftGenerator {
     private let endpoint = URL(string: "https://api.openai.com/v1/responses")!
     private let model = "gpt-4.1-mini"
 
-    func generate(command: String, language: AppLanguage) async throws -> AIWorkoutDraft {
+    func generate(
+        command: String,
+        language: AppLanguage,
+        existingBlocks: [AIWorkoutExistingBlock]
+    ) async throws -> AIWorkoutDraft {
         guard let apiKey = AIWorkoutOpenAIConfiguration.apiKey else {
             throw AIWorkoutDraftGeneratorError.missingAPIKey
         }
         let languageName = language == .english ? "English" : "Russian"
+        let existingBlocksJSON = String(
+            data: try JSONEncoder().encode(existingBlocks),
+            encoding: .utf8
+        ) ?? "[]"
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
@@ -131,7 +218,7 @@ actor AIWorkoutDraftGenerator {
                     "role": "user",
                     "content": [[
                         "type": "input_text",
-                        "text": "Trainer instruction: \(command)"
+                        "text": "Trainer instruction: \(command)\nCurrent template blocks: \(existingBlocksJSON)"
                     ]]
                 ]
             ],
@@ -169,8 +256,8 @@ actor AIWorkoutDraftGenerator {
     private func systemPrompt(language: String) -> String {
         """
         You are a fitness-programming assistant for certified trainers. Convert the trainer's instruction into a conservative workout TEMPLATE DRAFT. Return JSON only and respond in \(language).
-        Return an object with a short string field summary and a blocks array. Each block has title, type (warmup|strength|main|circuit|stretching|cooldown), mode (rounds|amrap|tabata), rounds, durationMinutes, workSeconds, restSeconds, restBetweenRoundsSeconds, and exercises. Each exercise has name, systemImage, accentName (blue|green|orange|purple|teal|red), activityType (strength|cardio|hiit|core|mobility), metValue, note, and sets. Each set has weight, reps, durationSeconds, metricType (reps|duration).
-        Rules: create only what the trainer asked; do not provide medical advice; never guess a working weight — use 0 when it is not supplied; "10x10" means 10 sets of 10 reps; use duration only for timed exercises; use valid values; no more than 5 blocks, 20 exercises, or 12 sets per exercise; no markdown.
+        Return an object with a short string field summary and a blocks array. Each block has title, targetBlockId (a current template block id or null), type (warmup|strength|main|circuit|stretching|cooldown), mode (rounds|amrap|tabata), rounds, durationMinutes, workSeconds, restSeconds, restBetweenRoundsSeconds, and exercises. Each exercise has name, systemImage, accentName (blue|green|orange|purple|teal|red), activityType (strength|cardio|hiit|core|mobility), metValue, note, and sets. Each set has weight, reps, durationSeconds, metricType (reps|duration).
+        Rules: current template blocks are provided in the user message. If the trainer refers to an existing block by name, set targetBlockId to that exact id and add exercises to it. Only use null when a new block is actually requested. Create only what the trainer asked; do not provide medical advice; never guess a working weight — use 0 when it is not supplied; "10x10" means 10 sets of 10 reps; use duration only for timed exercises; use valid values; no more than 5 blocks, 20 exercises, or 12 sets per exercise; no markdown.
         """
     }
 

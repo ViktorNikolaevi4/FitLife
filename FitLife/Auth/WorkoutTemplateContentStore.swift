@@ -396,6 +396,7 @@ final class WorkoutTemplateContentStore: ObservableObject {
         errorMessage = nil
 
         do {
+            let resolvedDraft = draft.resolvingExercises(using: workoutTemplates())
             let templateRef = firestore.collection("workout_templates").document(template.id)
             let batch = firestore.batch()
             var newBlocks: [WorkoutTemplateBlockItem] = []
@@ -403,31 +404,46 @@ final class WorkoutTemplateContentStore: ObservableObject {
             var nextBlockIndex = blocks.count
             var nextExerciseIndex = exercises.count
 
-            for generatedBlock in draft.blocks {
-                let blockRef = templateRef.collection("blocks").document()
-                let block = WorkoutTemplateBlockItem(
-                    id: blockRef.documentID,
-                    templateId: template.id,
-                    title: generatedBlock.title,
-                    type: generatedBlock.workoutBlockType,
-                    mode: generatedBlock.workoutBlockMode,
-                    orderIndex: nextBlockIndex,
-                    rounds: generatedBlock.rounds,
-                    durationMinutes: generatedBlock.durationMinutes,
-                    workSeconds: generatedBlock.workSeconds,
-                    restSeconds: generatedBlock.restSeconds,
-                    restBetweenRoundsSeconds: generatedBlock.restBetweenRoundsSeconds
-                )
-                batch.setData(block.firestoreData, forDocument: blockRef)
-                newBlocks.append(block)
-                nextBlockIndex += 1
+            for generatedBlock in resolvedDraft.blocks {
+                let existingBlock = generatedBlock.targetBlockId.flatMap { targetID in
+                    blocks.first { $0.id == targetID }
+                } ?? blocks.first { block in
+                    block.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                        .caseInsensitiveCompare(
+                            generatedBlock.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                        ) == .orderedSame
+                }
+
+                let destinationBlock: WorkoutTemplateBlockItem
+                if let existingBlock {
+                    destinationBlock = existingBlock
+                } else {
+                    let blockRef = templateRef.collection("blocks").document()
+                    let block = WorkoutTemplateBlockItem(
+                        id: blockRef.documentID,
+                        templateId: template.id,
+                        title: generatedBlock.title,
+                        type: generatedBlock.workoutBlockType,
+                        mode: generatedBlock.workoutBlockMode,
+                        orderIndex: nextBlockIndex,
+                        rounds: generatedBlock.rounds,
+                        durationMinutes: generatedBlock.durationMinutes,
+                        workSeconds: generatedBlock.workSeconds,
+                        restSeconds: generatedBlock.restSeconds,
+                        restBetweenRoundsSeconds: generatedBlock.restBetweenRoundsSeconds
+                    )
+                    batch.setData(block.firestoreData, forDocument: blockRef)
+                    newBlocks.append(block)
+                    nextBlockIndex += 1
+                    destinationBlock = block
+                }
 
                 for generatedExercise in generatedBlock.exercises {
                     let exerciseRef = templateRef.collection("exercises").document()
                     let exercise = WorkoutTemplateExerciseItem(
                         id: exerciseRef.documentID,
                         templateId: template.id,
-                        blockId: block.id,
+                        blockId: destinationBlock.id,
                         name: generatedExercise.name,
                         systemImage: generatedExercise.systemImage,
                         accentName: generatedExercise.accentName,
@@ -443,7 +459,7 @@ final class WorkoutTemplateContentStore: ObservableObject {
                 }
             }
 
-            guard newBlocks.isEmpty == false, newExercises.isEmpty == false else { return }
+            guard newExercises.isEmpty == false else { return }
             try await batch.commit()
             blocks.append(contentsOf: newBlocks)
             exercises.append(contentsOf: newExercises)
