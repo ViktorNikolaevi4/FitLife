@@ -25,6 +25,7 @@ struct ActiveWorkoutScreen: View {
     let workout: WorkoutSession
     @State private var isShowingExercisePicker = false
     @State private var isShowingBlockEditor = false
+    @State private var isShowingAIGenerator = false
     @State private var exerciseTargetBlock: WorkoutBlock?
     @State private var editingSet: WorkoutSet?
     @State private var editingExerciseNote: WorkoutExercise?
@@ -33,6 +34,7 @@ struct ActiveWorkoutScreen: View {
     @State private var showFinishConfirmation = false
     @State private var isShowingEffortPicker = false
     @State private var exerciseTemplates: [WorkoutExerciseTemplate] = []
+    @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
     private let firestore = Firestore.firestore()
 
     private var sortedExercises: [WorkoutExercise] {
@@ -70,6 +72,9 @@ struct ActiveWorkoutScreen: View {
     private var activeWorkoutCardShadow: Color { colorScheme == .dark ? .clear : .black.opacity(0.08) }
     private var workoutTitle: String {
         localizedWorkoutSessionTitle(workout.title)
+    }
+    private var appLanguage: AppLanguage {
+        AppLanguage.from(rawValue: appLanguageRaw)
     }
     private var currentUserWeight: Double {
         users.first { $0.ownerId == workout.ownerId && $0.gender == workout.gender }?.weight
@@ -123,6 +128,20 @@ struct ActiveWorkoutScreen: View {
                                 )
                             }
                         }
+
+                        Button(action: { showFinishConfirmation = true }) {
+                            Label(
+                                AppLocalizer.string("workout.finish"),
+                                systemImage: "checkmark.circle.fill"
+                            )
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 18)
+                            .background(RoundedRectangle(cornerRadius: 20).fill(HomeColors.primaryActionGradient))
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.top, 10)
                     }
                 }
             }
@@ -161,6 +180,17 @@ struct ActiveWorkoutScreen: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(AppLocalizer.string("workout.add.block"))
+
+                Button(action: { isShowingAIGenerator = true }) {
+                    Image(systemName: "sparkles")
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.blue)
+                        .frame(width: 58, height: 58)
+                        .background(RoundedRectangle(cornerRadius: 20).fill(activeWorkoutCardBackground))
+                        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(activeWorkoutCardBorder))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Создать тренировку с ИИ")
             }
             .padding(.horizontal)
             .padding(.bottom, 8)
@@ -191,6 +221,17 @@ struct ActiveWorkoutScreen: View {
                 isShowingBlockEditor = false
             }
             .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $isShowingAIGenerator) {
+            AIWorkoutGeneratorScreen(
+                language: appLanguage,
+                existingBlocks: []
+            ) { draft in
+                addGeneratedDraft(draft)
+                isShowingAIGenerator = false
+            }
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $isEditingWorkoutTitle) {
@@ -545,6 +586,70 @@ struct ActiveWorkoutScreen: View {
         try? modelContext.save()
     }
 
+    private func addGeneratedDraft(_ draft: AIWorkoutDraft) {
+        let resolvedDraft = draft.resolvingExercises(
+            using: exerciseTemplates.isEmpty ? workoutTemplates() : exerciseTemplates
+        )
+        guard resolvedDraft.blocks.isEmpty == false else { return }
+
+        for block in workout.blockItems where block.exerciseItems.isEmpty {
+            workout.blockItems.removeAll { $0.id == block.id }
+            modelContext.delete(block)
+        }
+
+        var nextBlockIndex = workout.blockItems.count
+        var nextExerciseIndex = workout.exerciseItems.count
+        for generatedBlock in resolvedDraft.blocks {
+            let block = WorkoutBlock(
+                title: generatedBlock.title,
+                type: generatedBlock.workoutBlockType,
+                mode: generatedBlock.workoutBlockMode,
+                orderIndex: nextBlockIndex,
+                rounds: generatedBlock.rounds,
+                durationMinutes: generatedBlock.durationMinutes,
+                workSeconds: generatedBlock.workSeconds,
+                restSeconds: generatedBlock.restSeconds,
+                restBetweenRoundsSeconds: generatedBlock.restBetweenRoundsSeconds
+            )
+            block.session = workout
+            workout.blockItems.append(block)
+            modelContext.insert(block)
+            nextBlockIndex += 1
+
+            for generatedExercise in generatedBlock.exercises {
+                let exercise = WorkoutExercise(
+                    name: generatedExercise.name,
+                    systemImage: generatedExercise.systemImage,
+                    accentName: generatedExercise.accentName,
+                    orderIndex: nextExerciseIndex,
+                    note: generatedExercise.note,
+                    activityType: generatedExercise.workoutActivityType,
+                    metValue: generatedExercise.metValue
+                )
+                exercise.session = workout
+                exercise.block = block
+
+                for (setIndex, generatedSet) in generatedExercise.sets.enumerated() {
+                    let set = generatedSet.workoutSet
+                    let workoutSet = WorkoutSet(
+                        orderIndex: setIndex,
+                        weight: set.weight,
+                        reps: set.reps,
+                        durationSeconds: set.durationSeconds,
+                        metricType: set.metricType
+                    )
+                    workoutSet.exercise = exercise
+                    exercise.setItems.append(workoutSet)
+                }
+
+                workout.exerciseItems.append(exercise)
+                block.exerciseItems.append(exercise)
+                nextExerciseIndex += 1
+            }
+        }
+        try? modelContext.save()
+    }
+
     private func defaultStrengthBlock() -> WorkoutBlock {
         if let existing = workout.blockItems
             .sorted(by: { $0.orderIndex < $1.orderIndex })
@@ -802,7 +907,7 @@ private struct WorkoutEffortPickerSheet: View {
             .padding(.bottom, 24)
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .topBarTrailing) {
                     Button(AppLocalizer.string("common.cancel")) {
                         dismiss()
                     }

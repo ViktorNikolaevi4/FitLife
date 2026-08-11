@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import FirebaseFirestore
 
 private let nutritionCardBackground = Color(.secondarySystemBackground)
 private let nutritionCardBorder = Color(.separator).opacity(0.40)
@@ -38,6 +39,8 @@ struct NutritionScreen: View {
     @State private var selectedMacroDetail: MacroDetailKind?
     @State private var repeatYesterdayMeal: RepeatYesterdayMealSelection?
     @State private var isShowingAIMealRecognition = false
+    @State private var activeTrainerId: String?
+    @State private var isShowingNutritionReport = false
 
     private var selectedGender: Gender { Gender(rawValue: activeGenderRaw) ?? .male }
     private var theme: AppTheme { AppTheme(colorScheme) }
@@ -109,6 +112,31 @@ struct NutritionScreen: View {
                     )
                 }
                 .padding(.horizontal)
+
+                if let activeTrainerId, let currentOwnerId {
+                    Button {
+                        isShowingNutritionReport = true
+                    } label: {
+                        Label("Отправить отчёт тренеру", systemImage: "paperplane.fill")
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 18)
+                            .background(
+                                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                    .fill(HomeColors.primaryActionGradient)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal)
+                    .padding(.top, 6)
+                    .sheet(isPresented: $isShowingNutritionReport) {
+                        ClientNutritionReportSheet(
+                            clientId: currentOwnerId,
+                            trainerId: activeTrainerId
+                        )
+                    }
+                }
             }
             .padding(.vertical, 16)
         }
@@ -116,6 +144,7 @@ struct NutritionScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { recalcFor(selectedDate) }
+        .task(id: currentOwnerId) { await loadActiveTrainer() }
         .onChange(of: selectedDate) { _, newDate in recalcFor(newDate) }
         .onChange(of: activeGenderRaw) { recalcFor(selectedDate) }
         .sheet(item: $sheet) { key in
@@ -237,6 +266,28 @@ struct NutritionScreen: View {
     private func recalcFor(_ date: Date) {
         loadEntries(for: date)
         loadYesterdayEntries(for: date)
+    }
+
+    private func loadActiveTrainer() async {
+        guard let currentOwnerId else {
+            activeTrainerId = nil
+            return
+        }
+
+        do {
+            let snapshot = try await Firestore.firestore()
+                .collection("trainer_client_links")
+                .whereField("clientId", isEqualTo: currentOwnerId)
+                .whereField("status", isEqualTo: "active")
+                .limit(to: 1)
+                .getDocuments()
+            activeTrainerId = snapshot.documents
+                .compactMap { TrainerClientLink(id: $0.documentID, data: $0.data()) }
+                .first?
+                .trainerId
+        } catch {
+            activeTrainerId = nil
+        }
     }
 
     private func loadEntries(for date: Date) {

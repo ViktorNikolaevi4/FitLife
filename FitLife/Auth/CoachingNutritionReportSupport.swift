@@ -472,6 +472,29 @@ struct ClientNutritionReportComposerScreen: View {
     }
 }
 
+struct ClientNutritionReportSheet: View {
+    let clientId: String
+    let trainerId: String
+
+    @StateObject private var store: ClientCoachingHomeStore
+
+    init(clientId: String, trainerId: String) {
+        self.clientId = clientId
+        self.trainerId = trainerId
+        _store = StateObject(wrappedValue: ClientCoachingHomeStore(clientId: clientId, trainerId: trainerId))
+    }
+
+    var body: some View {
+        NavigationStack {
+            ClientNutritionReportComposerScreen(
+                clientId: clientId,
+                trainerId: trainerId,
+                store: store
+            )
+        }
+    }
+}
+
 private extension CoachingNutritionReport {
     func with(comment: String) -> CoachingNutritionReport {
         CoachingNutritionReport(

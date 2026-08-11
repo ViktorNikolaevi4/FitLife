@@ -20,6 +20,7 @@ struct WorkoutTemplateEditorScreen: View {
     @State private var collapsedNestedGroupIds: Set<String> = []
     @State private var pendingDeleteExercise: WorkoutTemplateExerciseItem?
     @State private var pendingEmptyBlockDeletion: WorkoutTemplateBlockItem?
+    @State private var pendingDeleteBlock: WorkoutTemplateBlockItem?
     @State private var editingExercise: WorkoutTemplateExerciseItem?
     @Query(sort: \CustomWorkoutExerciseTemplate.createdAt) private var customTemplates: [CustomWorkoutExerciseTemplate]
     @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
@@ -62,7 +63,10 @@ struct WorkoutTemplateEditorScreen: View {
                 )
             }
 
-        let groupedIds = Set(groups.flatMap { $0.exercises.map(\.id) })
+        let groupedIds = Set(groups.flatMap { group in
+            group.exercises.map(\.id)
+                + group.nestedGroups.flatMap { $0.exercises.map(\.id) }
+        })
         let legacyExercises = store.exercises
             .filter { groupedIds.contains($0.id) == false }
             .sorted { $0.orderIndex < $1.orderIndex }
@@ -150,6 +154,13 @@ struct WorkoutTemplateEditorScreen: View {
                         isExpanded: collapsedBlockIds.contains(group.id) == false,
                         onToggleExpanded: { toggleBlock(group.id) }
                     )
+                    .contextMenu {
+                        if let block = group.block {
+                            Button("Удалить блок", systemImage: "trash", role: .destructive) {
+                                pendingDeleteBlock = block
+                            }
+                        }
+                    }
                     .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 2, trailing: 0))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
@@ -365,6 +376,30 @@ struct WorkoutTemplateEditorScreen: View {
         } message: {
             Text("В блоке «\(pendingEmptyBlockDeletion?.displayTitle ?? "")» больше нет упражнений.")
         }
+        .confirmationDialog(
+            "Удалить блок?",
+            isPresented: Binding(
+                get: { pendingDeleteBlock != nil },
+                set: { if $0 == false { pendingDeleteBlock = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Удалить блок и упражнения", role: .destructive) {
+                guard let block = pendingDeleteBlock else { return }
+                collapsedBlockIds.remove(block.id)
+                collapsedNestedGroupIds.subtract(block.groups.map(\.id))
+                Task { await store.deleteBlock(block) }
+                pendingDeleteBlock = nil
+            }
+            Button(AppLocalizer.string("common.cancel"), role: .cancel) {
+                pendingDeleteBlock = nil
+            }
+        } message: {
+            let count = pendingDeleteBlock.map { block in
+                store.exercises.filter { $0.blockId == block.id }.count
+            } ?? 0
+            Text("Будет удалён блок «\(pendingDeleteBlock?.displayTitle ?? "")» и упражнений: \(count).")
+        }
     }
 
     private func toggleExpanded(_ id: String) {
@@ -573,7 +608,7 @@ private struct WorkoutTemplateBlockDraft {
     }
 }
 
-private struct AIWorkoutGeneratorScreen: View {
+struct AIWorkoutGeneratorScreen: View {
     @Environment(\.dismiss) private var dismiss
 
     let language: AppLanguage

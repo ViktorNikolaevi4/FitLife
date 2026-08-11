@@ -618,15 +618,24 @@ final class WorkoutTemplateContentStore: ObservableObject {
 
     func deleteEmptyBlock(_ block: WorkoutTemplateBlockItem) async {
         guard exercises.contains(where: { $0.blockId == block.id }) == false else { return }
+        await deleteBlock(block)
+    }
+
+    func deleteBlock(_ block: WorkoutTemplateBlockItem) async {
         errorMessage = nil
         do {
-            try await firestore
-                .collection("workout_templates")
-                .document(template.id)
-                .collection("blocks")
-                .document(block.id)
-                .delete()
+            let templateRef = firestore.collection("workout_templates").document(template.id)
+            let blockExercises = exercises.filter { $0.blockId == block.id }
+            let batch = firestore.batch()
+
+            for exercise in blockExercises {
+                batch.deleteDocument(templateRef.collection("exercises").document(exercise.id))
+            }
+            batch.deleteDocument(templateRef.collection("blocks").document(block.id))
+            try await batch.commit()
+
             blocks.removeAll { $0.id == block.id }
+            exercises.removeAll { $0.blockId == block.id }
         } catch {
             errorMessage = error.localizedDescription
         }
