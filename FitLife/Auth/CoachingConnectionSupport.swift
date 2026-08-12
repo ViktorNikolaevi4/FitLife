@@ -1933,6 +1933,8 @@ struct TrainerClientSupportScreen: View {
     @State private var shouldOpenChatOnLoad: Bool
     @State private var showRequestComposer = false
     @State private var isIntakeExpanded = false
+    @State private var isClientSummaryExpanded = false
+    @State private var isProgressExpanded = false
     @State private var selectedProgressPeriod: TrainerClientProgressPeriod = .sevenDays
 
     init(
@@ -2121,42 +2123,43 @@ struct TrainerClientSupportScreen: View {
 
     private var trainerClientSummaryCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(client.displayName)
-                    .font(.title2.weight(.bold))
-                Text(client.email)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+            Button {
+                withAnimation(.snappy) { isClientSummaryExpanded.toggle() }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "person.crop.circle")
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(HomeColors.accent)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(client.displayName)
+                            .font(.title3.weight(.bold))
+                        Text(client.email)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    Image(systemName: isClientSummaryExpanded ? "chevron.up" : "chevron.down")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
 
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 12) {
-                trainerMetricTile(
-                    title: AppLocalizer.string("coaching.workspace.metric.goal"),
-                    value: store.intake.map { AppLocalizer.string($0.goal.localizationKey) } ?? "—"
-                )
-                trainerMetricTile(
-                    title: AppLocalizer.string("coaching.workspace.metric.weight"),
-                    value: store.intake.map { "\(String(format: "%.1f", $0.weight)) \(AppLocalizer.string("coaching.unit.kg"))" } ?? "—"
-                )
-                trainerMetricTile(
-                    title: AppLocalizer.string("coaching.workspace.metric.last_checkin"),
-                    value: store.checkIns.first.map { $0.createdAt.formatted(date: .abbreviated, time: .omitted) } ?? "—"
-                )
-                trainerMetricTile(
-                    title: AppLocalizer.string("coaching.workspace.metric.open_requests"),
-                    value: "\(openRequests.count)"
-                )
-            }
+            if isClientSummaryExpanded {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 12) {
+                    trainerMetricTile(title: AppLocalizer.string("coaching.workspace.metric.goal"), value: store.intake.map { AppLocalizer.string($0.goal.localizationKey) } ?? "—")
+                    trainerMetricTile(title: AppLocalizer.string("coaching.workspace.metric.weight"), value: store.intake.map { "\(String(format: "%.1f", $0.weight)) \(AppLocalizer.string("coaching.unit.kg"))" } ?? "—")
+                    trainerMetricTile(title: AppLocalizer.string("coaching.workspace.metric.last_checkin"), value: store.checkIns.first.map { $0.createdAt.formatted(date: .abbreviated, time: .omitted) } ?? "—")
+                    trainerMetricTile(title: AppLocalizer.string("coaching.workspace.metric.open_requests"), value: "\(openRequests.count)")
+                }
 
-            if let activeLink = store.activeLink {
-                Label(
-                    "\(AppLocalizer.string("coaching.workspace.connected_since")) \(activeLink.createdAt.formatted(date: .abbreviated, time: .omitted))",
-                    systemImage: "link"
-                )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+                if let activeLink = store.activeLink {
+                    Label("\(AppLocalizer.string("coaching.workspace.connected_since")) \(activeLink.createdAt.formatted(date: .abbreviated, time: .omitted))", systemImage: "link")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .padding(16)
@@ -2172,9 +2175,25 @@ struct TrainerClientSupportScreen: View {
         let progress = progressSnapshot
 
         return VStack(alignment: .leading, spacing: 14) {
-            trainerCardTitle(icon: "chart.line.uptrend.xyaxis", title: AppLocalizer.string("coaching.progress.title"))
+            Button {
+                withAnimation(.snappy) { isProgressExpanded.toggle() }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(HomeColors.accent)
+                    Text(AppLocalizer.string("coaching.progress.title"))
+                        .font(.headline.weight(.semibold))
+                    Spacer()
+                    Image(systemName: isProgressExpanded ? "chevron.up" : "chevron.down")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
 
-            if progress.hasAnyData {
+            if isProgressExpanded && progress.hasAnyData {
                 Picker("", selection: $selectedProgressPeriod) {
                     ForEach(TrainerClientProgressPeriod.allCases) { period in
                         Text(AppLocalizer.string(period.localizationKey))
@@ -2209,7 +2228,7 @@ struct TrainerClientSupportScreen: View {
                 Text(progress.summaryText)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
-            } else {
+            } else if isProgressExpanded {
                 Label(
                     AppLocalizer.string("coaching.progress.empty"),
                     systemImage: "chart.line.uptrend.xyaxis"

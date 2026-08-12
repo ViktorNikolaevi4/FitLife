@@ -571,8 +571,19 @@ private struct CoachingNutritionReportSummaryContent: View {
             ForEach(report.meals) { meal in
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text(meal.title)
-                            .font(.subheadline.weight(.semibold))
+                        HStack(spacing: 7) {
+                            Text(meal.title)
+                                .font(.subheadline.weight(.semibold))
+
+                            if report.totalCalories > 0 {
+                                Text(AppLocalizer.format("meal.daily_goal.percent", mealCaloriesPercent(meal)))
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(.blue)
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
+                                    .background(Color.blue.opacity(0.14), in: Capsule())
+                            }
+                        }
                         Spacer()
                         Text(AppLocalizer.format("unit.kcal.value", meal.totalCalories))
                             .font(.caption)
@@ -599,6 +610,10 @@ private struct CoachingNutritionReportSummaryContent: View {
             }
         }
         .padding(.vertical, 4)
+    }
+
+    private func mealCaloriesPercent(_ meal: CoachingNutritionMealSnapshot) -> Int {
+        Int((Double(meal.totalCalories) / Double(report.totalCalories) * 100).rounded())
     }
 }
 

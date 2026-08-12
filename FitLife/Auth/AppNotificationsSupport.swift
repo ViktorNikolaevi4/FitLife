@@ -822,25 +822,56 @@ private struct ClientWorkoutAssignmentNotificationDestination: View {
     let clientId: String
 
     @EnvironmentObject private var notificationsStore: AppNotificationsStore
-    @State private var openAssignments = false
+    @State private var assignment: WorkoutAssignment?
+    @State private var trainerName: String?
+    @State private var isLoading = true
 
     var body: some View {
-        Color.clear
-            .navigationTitle(notification.localizedTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(AppLocalizer.string("notifications.inbox.open_related")) {
-                        Task {
-                            await notificationsStore.delete(notification)
-                            openAssignments = true
-                        }
-                    }
-                }
-            }
-            .navigationDestination(isPresented: $openAssignments) {
+        Group {
+            if let assignment {
+                ClientAssignmentDetailScreen(
+                    assignment: assignment,
+                    trainerName: trainerName
+                )
+            } else if isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemGroupedBackground))
+            } else {
                 ClientAssignedWorkoutsScreen(clientId: clientId)
             }
+        }
+        .task { await loadAssignment() }
+    }
+
+    private func loadAssignment() async {
+        defer { isLoading = false }
+
+        do {
+            let assignmentDocument = try await Firestore.firestore()
+                .collection("workout_assignments")
+                .document(notification.targetId)
+                .getDocument()
+            guard
+                let data = assignmentDocument.data(),
+                let assignment = WorkoutAssignment(id: assignmentDocument.documentID, data: data),
+                assignment.clientId == clientId
+            else {
+                return
+            }
+
+            self.assignment = assignment
+            if let trainerData = try await Firestore.firestore()
+                .collection("users")
+                .document(assignment.trainerId)
+                .getDocument()
+                .data() {
+                trainerName = AppUserProfile(id: assignment.trainerId, data: trainerData)?.displayName
+            }
+            await notificationsStore.markRead(notification)
+        } catch {
+            assignment = nil
+        }
     }
 }
 

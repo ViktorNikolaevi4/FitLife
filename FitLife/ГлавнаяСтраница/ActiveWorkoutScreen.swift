@@ -26,6 +26,7 @@ struct ActiveWorkoutScreen: View {
     @State private var isShowingExercisePicker = false
     @State private var isShowingBlockEditor = false
     @State private var isShowingAIGenerator = false
+    @State private var collapsedBlockIds: Set<String> = []
     @State private var exerciseTargetBlock: WorkoutBlock?
     @State private var editingSet: WorkoutSet?
     @State private var editingExerciseNote: WorkoutExercise?
@@ -112,20 +113,24 @@ struct ActiveWorkoutScreen: View {
                                         exerciseTargetBlock = block
                                         isShowingExercisePicker = true
                                     }
-                                }
+                                },
+                                isExpanded: collapsedBlockIds.contains(group.id) == false,
+                                onToggleExpanded: { toggleBlock(group.id) }
                             )
 
-                            ForEach(group.exercises, id: \.id) { exercise in
-                                WorkoutExerciseCard(
-                                    exercise: exercise,
-                                    onToggleExpanded: { toggleExpanded(exercise) },
-                                    onEditNote: { editingExerciseNote = exercise },
-                                    onToggleSet: { set in toggleSet(set) },
-                                    onEditSet: { set in editingSet = set },
-                                    onAddSet: { addSet(to: exercise) },
-                                    onDeleteSet: { set in deleteSet(set, from: exercise) },
-                                    onDeleteExercise: { deleteExercise(exercise) }
-                                )
+                            if collapsedBlockIds.contains(group.id) == false {
+                                ForEach(group.exercises, id: \.id) { exercise in
+                                    WorkoutExerciseCard(
+                                        exercise: exercise,
+                                        onToggleExpanded: { toggleExpanded(exercise) },
+                                        onEditNote: { editingExerciseNote = exercise },
+                                        onToggleSet: { set in toggleSet(set) },
+                                        onEditSet: { set in editingSet = set },
+                                        onAddSet: { addSet(to: exercise) },
+                                        onDeleteSet: { set in deleteSet(set, from: exercise) },
+                                        onDeleteExercise: { deleteExercise(exercise) }
+                                    )
+                                }
                             }
                         }
 
@@ -451,6 +456,16 @@ struct ActiveWorkoutScreen: View {
         }
         if hasChanges {
             try? modelContext.save()
+        }
+    }
+
+    private func toggleBlock(_ id: String) {
+        withAnimation(.snappy(duration: 0.22)) {
+            if collapsedBlockIds.contains(id) {
+                collapsedBlockIds.remove(id)
+            } else {
+                collapsedBlockIds.insert(id)
+            }
         }
     }
 
@@ -921,6 +936,8 @@ private struct WorkoutBlockSectionHeader: View {
     let title: String
     let subtitle: String
     var onAddExercise: (() -> Void)?
+    let isExpanded: Bool
+    let onToggleExpanded: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -945,6 +962,16 @@ private struct WorkoutBlockSectionHeader: View {
             }
 
             Spacer()
+
+            Button(action: onToggleExpanded) {
+                Image(systemName: "chevron.down")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                    .frame(width: 34, height: 34)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(isExpanded ? "Свернуть блок" : "Развернуть блок")
 
             if let onAddExercise {
                 Button(action: onAddExercise) {
