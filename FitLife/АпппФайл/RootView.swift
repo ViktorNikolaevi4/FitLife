@@ -27,9 +27,13 @@ struct RootView: View {
     var body: some View {
         Group {
             if sessionStore.isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(.systemGroupedBackground))
+                VStack(spacing: 12) {
+                    ProgressView()
+                    Text(AppLocalizer.string("app.loading_account"))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(.systemGroupedBackground))
             } else if sessionStore.firebaseUser == nil {
                 AuthScreen()
             } else if isPreparingLocalData {

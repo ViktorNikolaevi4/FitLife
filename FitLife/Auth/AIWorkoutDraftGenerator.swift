@@ -199,6 +199,33 @@ actor AIWorkoutDraftGenerator {
             encoding: .utf8
         ) ?? "[]"
 
+        let userPrompt = "Trainer instruction: \(command)\nCurrent template blocks: \(existingBlocksJSON)"
+        let outputText = try await requestOutput(
+            apiKey: apiKey,
+            systemPrompt: systemPrompt(language: languageName),
+            userPrompt: userPrompt
+        )
+
+        if let draft = Self.decodeDraft(from: outputText) {
+            return draft
+        }
+
+        let repairedOutputText = try await requestOutput(
+            apiKey: apiKey,
+            systemPrompt: repairSystemPrompt(language: languageName),
+            userPrompt: "Original trainer instruction:\n\(command)\n\nCurrent template blocks:\n\(existingBlocksJSON)\n\nInvalid draft to repair:\n\(outputText)"
+        )
+        guard let repairedDraft = Self.decodeDraft(from: repairedOutputText) else {
+            throw AIWorkoutDraftGeneratorError.invalidResponse
+        }
+        return repairedDraft
+    }
+
+    private func requestOutput(
+        apiKey: String,
+        systemPrompt: String,
+        userPrompt: String
+    ) async throws -> String {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.timeoutInterval = 60
@@ -211,18 +238,24 @@ actor AIWorkoutDraftGenerator {
                     "role": "system",
                     "content": [[
                         "type": "input_text",
-                        "text": systemPrompt(language: languageName)
+                        "text": systemPrompt
                     ]]
                 ],
                 [
                     "role": "user",
                     "content": [[
                         "type": "input_text",
-                        "text": "Trainer instruction: \(command)\nCurrent template blocks: \(existingBlocksJSON)"
+                        "text": userPrompt
                     ]]
                 ]
             ],
-            "text": ["format": ["type": "json_object"]]
+            // A single exercise can contain many individually represented sets,
+            // so leave enough room for a complete JSON document on the first try.
+            "max_output_tokens": 4_000,
+            // Structured Outputs keeps the first response compatible with the
+            // app's Codable models instead of relying on the model to remember
+            // every technical field in a prompt.
+            "text": ["format": Self.workoutDraftResponseFormat()]
         ])
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -234,32 +267,100 @@ actor AIWorkoutDraftGenerator {
             throw AIWorkoutDraftGeneratorError.requestFailed(code ?? "unknown")
         }
 
-        do {
-            guard let outputText = Self.outputText(from: data),
-                  let outputData = outputText.data(using: .utf8) else {
-                throw AIWorkoutDraftGeneratorError.invalidResponse
-            }
-            let draft = try JSONDecoder().decode(AIWorkoutDraft.self, from: outputData)
-            guard draft.blocks.isEmpty == false,
-                  draft.blocks.allSatisfy({ $0.exercises.isEmpty == false }) else {
-                throw AIWorkoutDraftGeneratorError.invalidResponse
-            }
-            return draft
-        } catch {
-            if let generatorError = error as? AIWorkoutDraftGeneratorError {
-                throw generatorError
-            }
+        guard let outputText = Self.outputText(from: data) else {
             throw AIWorkoutDraftGeneratorError.invalidResponse
         }
+        return outputText
+    }
+
+    private static func workoutDraftResponseFormat() -> [String: Any] {
+        let setSchema: [String: Any] = [
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["weight", "reps", "durationSeconds", "metricType"],
+            "properties": [
+                "weight": ["type": "number"],
+                "reps": ["type": "integer", "minimum": 0, "maximum": 500],
+                "durationSeconds": ["type": "integer", "minimum": 0, "maximum": 7_200],
+                "metricType": ["type": "string", "enum": ["reps", "duration"]]
+            ]
+        ]
+
+        let exerciseSchema: [String: Any] = [
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "systemImage", "accentName", "activityType", "metValue", "note", "sets"],
+            "properties": [
+                "name": ["type": "string"],
+                "systemImage": ["type": "string"],
+                "accentName": ["type": "string", "enum": ["blue", "green", "orange", "purple", "teal", "red"]],
+                "activityType": ["type": "string", "enum": ["strength", "cardio", "hiit", "core", "mobility"]],
+                "metValue": ["type": "number", "minimum": 0],
+                "note": ["type": "string"],
+                "sets": ["type": "array", "minItems": 1, "maxItems": 12, "items": setSchema]
+            ]
+        ]
+
+        let blockSchema: [String: Any] = [
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "title", "targetBlockId", "type", "mode", "rounds", "durationMinutes",
+                "workSeconds", "restSeconds", "restBetweenRoundsSeconds", "exercises"
+            ],
+            "properties": [
+                "title": ["type": "string"],
+                "targetBlockId": ["type": ["string", "null"]],
+                "type": ["type": "string", "enum": ["warmup", "strength", "main", "circuit", "stretching", "cooldown"]],
+                "mode": ["type": "string", "enum": ["rounds", "amrap", "tabata"]],
+                "rounds": ["type": "integer", "minimum": 0, "maximum": 100],
+                "durationMinutes": ["type": "integer", "minimum": 0, "maximum": 300],
+                "workSeconds": ["type": "integer", "minimum": 0, "maximum": 7_200],
+                "restSeconds": ["type": "integer", "minimum": 0, "maximum": 7_200],
+                "restBetweenRoundsSeconds": ["type": "integer", "minimum": 0, "maximum": 7_200],
+                "exercises": ["type": "array", "minItems": 1, "maxItems": 20, "items": exerciseSchema]
+            ]
+        ]
+
+        return [
+            "type": "json_schema",
+            "name": "workout_draft",
+            "strict": true,
+            "schema": [
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["summary", "blocks"],
+                "properties": [
+                    "summary": ["type": "string"],
+                    "blocks": ["type": "array", "minItems": 1, "maxItems": 5, "items": blockSchema]
+                ]
+            ]
+        ]
     }
 
     private func systemPrompt(language: String) -> String {
         """
         You are a fitness-programming assistant for certified trainers. Convert the trainer's instruction into a conservative workout TEMPLATE DRAFT. Return JSON only and respond in \(language).
         Return an object with a short string field summary and a blocks array. Each block has title, targetBlockId (a current template block id or null), type (warmup|strength|main|circuit|stretching|cooldown), mode (rounds|amrap|tabata), rounds, durationMinutes, workSeconds, restSeconds, restBetweenRoundsSeconds, and exercises. Each exercise has name, systemImage, accentName (blue|green|orange|purple|teal|red), activityType (strength|cardio|hiit|core|mobility), metValue, note, and sets. Each set has weight, reps, durationSeconds, metricType (reps|duration).
-        Rules: current template blocks are provided in the user message. If the trainer refers to an existing block by name, set targetBlockId to that exact id and add exercises to it. Only use null when a new block is actually requested. Create only what the trainer asked; do not provide medical advice; never guess a working weight — use 0 when it is not supplied.
+        Rules: current template blocks are provided in the user message. If the trainer refers to an existing block by name, set targetBlockId to that exact id and add exercises to it. Only use null when a new block is actually requested. If no section or workout format is explicitly requested, return EXACTLY ONE block: title "Силовой блок" in Russian or "Strength block" in English, type "strength", and put every requested exercise in it. Never make a block from an exercise name; "bench press" must be an exercise inside the strength block, not a block named "bench press". Create multiple blocks only when the instruction explicitly asks for warmup, cooldown, a circuit/AMRAP/Tabata, or named separate sections. Create only what the trainer asked; do not provide medical advice; never guess a working weight — use 0 when it is not supplied.
         Sets are the source of truth: output one sets array item for EVERY prescribed set. Never put a prescription for sets, reps, weight, duration, or rest only into note. For example, "5 sets of 5 reps at 70 kg" must return five set objects, each {weight: 70, reps: 5, durationSeconds: 0, metricType: "reps"}; "2 sets of 15 at 20 kg, then 4 sets of 15 at 40 kg" must return six set objects in that exact order. "10x10" means 10 set objects of 10 reps. Use note only for coaching cues or explanations. Use duration only for timed exercises; use valid values; no more than 5 blocks, 20 exercises, or 12 sets per exercise; no markdown.
         """
+    }
+
+    private func repairSystemPrompt(language: String) -> String {
+        """
+        You repair workout-template draft JSON for certified trainers. Return JSON only and respond in \(language). Rebuild the draft from the original trainer instruction, correcting the invalid draft if useful. Use exactly this schema: {summary:String, blocks:[{title:String,targetBlockId:String|null,type:String,mode:String,rounds:Int,durationMinutes:Int,workSeconds:Int,restSeconds:Int,restBetweenRoundsSeconds:Int,exercises:[{name:String,systemImage:String,accentName:String,activityType:String,metValue:Double,note:String,sets:[{weight:Double,reps:Int,durationSeconds:Int,metricType:String}]}]}]}. Every block must contain at least one exercise. Use only type warmup|strength|main|circuit|stretching|cooldown, mode rounds|amrap|tabata, accentName blue|green|orange|purple|teal|red, activityType strength|cardio|hiit|core|mobility, metricType reps|duration. Preserve every prescribed set as individual objects. Never add markdown or explanation.
+        """
+    }
+
+    private static func decodeDraft(from outputText: String) -> AIWorkoutDraft? {
+        guard let outputData = outputText.data(using: .utf8),
+              let draft = try? JSONDecoder().decode(AIWorkoutDraft.self, from: outputData),
+              draft.blocks.isEmpty == false,
+              draft.blocks.allSatisfy({ $0.exercises.isEmpty == false }) else {
+            return nil
+        }
+        return draft
     }
 
     private static func outputText(from data: Data) -> String? {

@@ -192,6 +192,13 @@ final class FitLifeAppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        // Configure Firebase before any Messaging/Auth/Firestore object can be
+        // created. In a SwiftUI app the App delegate runs earlier than the
+        // @main App initializer, so doing this only in FitLifeApp.init() leaves
+        // a short race during launch.
+        if FirebaseApp.app() == nil {
+            FirebaseApp.configure()
+        }
         AppPushNotificationsManager.shared.configure()
         if let userInfo = launchOptions?[.remoteNotification] as? [AnyHashable: Any] {
             AppPushNotificationsManager.shared.handleNotificationResponse(userInfo: userInfo)

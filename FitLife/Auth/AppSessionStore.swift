@@ -12,6 +12,7 @@ final class AppSessionStore: ObservableObject {
     private let auth: Auth
     private let firestore: Firestore
     private var authListenerHandle: AuthStateDidChangeListenerHandle?
+    private var initialLoadingTimeoutTask: Task<Void, Never>?
 
     init(auth: Auth = .auth(), firestore: Firestore = .firestore()) {
         self.auth = auth
@@ -20,6 +21,7 @@ final class AppSessionStore: ObservableObject {
     }
 
     deinit {
+        initialLoadingTimeoutTask?.cancel()
         if let authListenerHandle {
             auth.removeStateDidChangeListener(authListenerHandle)
         }
@@ -156,6 +158,7 @@ final class AppSessionStore: ObservableObject {
     }
 
     private func handleAuthStateChange(_ user: User?) async {
+        initialLoadingTimeoutTask?.cancel()
         firebaseUser = user
         profile = nil
 
@@ -164,7 +167,23 @@ final class AppSessionStore: ObservableObject {
             return
         }
 
+        // Firestore can wait indefinitely while iOS has no usable route to the
+        // network. The local SwiftData content is still safe to show, so never
+        // leave the whole application on its launch screen in that situation.
+        initialLoadingTimeoutTask = Task { [weak self, userId = user.uid] in
+            try? await Task.sleep(for: .seconds(5))
+            guard Task.isCancelled == false else { return }
+            self?.finishInitialLoadingIfNeeded(for: userId)
+        }
+
         await loadOrCreateProfile(for: user)
+        initialLoadingTimeoutTask?.cancel()
+        initialLoadingTimeoutTask = nil
+    }
+
+    private func finishInitialLoadingIfNeeded(for userId: String) {
+        guard firebaseUser?.uid == userId, isLoading else { return }
+        isLoading = false
     }
 
     private func loadOrCreateProfile(for user: User) async {

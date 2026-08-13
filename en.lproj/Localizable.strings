@@ -1110,3 +1110,4 @@
 "coaching.approved.hint" = "This message is shown once. Next time this section will open directly.";
 "chat.link.open" = "Open Link";
 "chat.link.copy" = "Copy Link";
+"app.loading_account" = "Connecting your account…";
