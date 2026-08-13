@@ -262,19 +262,21 @@ struct WorkoutTemplateEditorScreen: View {
         }
         .sheet(isPresented: $showAddBlock) {
             AddWorkoutTemplateBlockScreen { draft in
-                Task {
-                    await store.addBlock(
-                        title: draft.resolvedTitle,
-                        type: draft.type,
-                        mode: draft.mode,
-                        rounds: draft.rounds,
-                        durationMinutes: draft.durationMinutes,
-                        workSeconds: draft.workSeconds,
-                        restSeconds: draft.restSeconds,
-                        restBetweenRoundsSeconds: draft.restBetweenRoundsSeconds
-                    )
+                let didSave = await store.addBlock(
+                    title: draft.resolvedTitle,
+                    type: draft.type,
+                    mode: draft.mode,
+                    rounds: draft.rounds,
+                    durationMinutes: draft.durationMinutes,
+                    workSeconds: draft.workSeconds,
+                    restSeconds: draft.restSeconds,
+                    restBetweenRoundsSeconds: draft.restBetweenRoundsSeconds
+                )
+                if didSave {
                     showAddBlock = false
+                    return nil
                 }
+                return store.errorMessage ?? "Не удалось сохранить блок. Проверьте подключение к интернету."
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
@@ -849,7 +851,7 @@ private struct AddWorkoutTemplateGroupScreen: View {
 
 private struct AddWorkoutTemplateBlockScreen: View {
     @Environment(\.dismiss) private var dismiss
-    let onSave: (WorkoutTemplateBlockDraft) -> Void
+    let onSave: (WorkoutTemplateBlockDraft) async -> String?
 
     @State private var type: WorkoutBlockType = .circuit
     @State private var mode: WorkoutBlockMode = .rounds
@@ -859,6 +861,8 @@ private struct AddWorkoutTemplateBlockScreen: View {
     @State private var workSeconds = 20
     @State private var restSeconds = 10
     @State private var restBetweenRoundsSeconds = 60
+    @State private var isSaving = false
+    @State private var saveErrorMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -923,6 +927,14 @@ private struct AddWorkoutTemplateBlockScreen: View {
                         }
                     }
                 }
+
+                if let saveErrorMessage {
+                    Section {
+                        Text(saveErrorMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
+                }
             }
             .navigationTitle(AppLocalizer.string("workout.block.add.title"))
             .navigationBarTitleDisplayMode(.inline)
@@ -936,25 +948,35 @@ private struct AddWorkoutTemplateBlockScreen: View {
                     Button(AppLocalizer.string("common.save")) {
                         save()
                     }
+                    .disabled(isSaving)
                 }
             }
         }
     }
 
     private func save() {
-        onSave(
-            WorkoutTemplateBlockDraft(
-                title: title,
-                type: type,
-                mode: type == .circuit ? mode : .rounds,
-                rounds: type == .circuit ? rounds : 1,
-                durationMinutes: type == .circuit ? durationMinutes : 0,
-                workSeconds: type == .circuit && mode == .tabata ? workSeconds : 0,
-                restSeconds: type == .circuit && mode == .tabata ? restSeconds : 0,
-                restBetweenRoundsSeconds: type == .circuit && mode == .rounds ? restBetweenRoundsSeconds : 0
-            )
+        guard isSaving == false else { return }
+        isSaving = true
+        saveErrorMessage = nil
+        let draft = WorkoutTemplateBlockDraft(
+            title: title,
+            type: type,
+            mode: type == .circuit ? mode : .rounds,
+            rounds: type == .circuit ? rounds : 1,
+            durationMinutes: type == .circuit ? durationMinutes : 0,
+            workSeconds: type == .circuit && mode == .tabata ? workSeconds : 0,
+            restSeconds: type == .circuit && mode == .tabata ? restSeconds : 0,
+            restBetweenRoundsSeconds: type == .circuit && mode == .rounds ? restBetweenRoundsSeconds : 0
         )
-        dismiss()
+
+        Task {
+            if let message = await onSave(draft) {
+                saveErrorMessage = message
+            } else {
+                dismiss()
+            }
+            isSaving = false
+        }
     }
 }
 

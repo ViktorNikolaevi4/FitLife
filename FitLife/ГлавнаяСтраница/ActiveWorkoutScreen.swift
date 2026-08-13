@@ -30,6 +30,7 @@ struct ActiveWorkoutScreen: View {
     @State private var exerciseTargetBlock: WorkoutBlock?
     @State private var editingSet: WorkoutSet?
     @State private var editingExerciseNote: WorkoutExercise?
+    @State private var pendingDeleteBlock: WorkoutBlock?
     @State private var isEditingWorkoutTitle = false
     @State private var isEditingWorkoutNote = false
     @State private var showFinishConfirmation = false
@@ -68,7 +69,9 @@ struct ActiveWorkoutScreen: View {
             )
         }
 
-        return groups.filter { $0.exercises.isEmpty == false }
+        // Empty blocks are useful while composing an active workout: the user
+        // must be able to see a newly created block and add exercises to it.
+        return groups
     }
     private var activeWorkoutCardShadow: Color { colorScheme == .dark ? .clear : .black.opacity(0.08) }
     private var workoutTitle: String {
@@ -115,7 +118,10 @@ struct ActiveWorkoutScreen: View {
                                     }
                                 },
                                 isExpanded: collapsedBlockIds.contains(group.id) == false,
-                                onToggleExpanded: { toggleBlock(group.id) }
+                                onToggleExpanded: { toggleBlock(group.id) },
+                                onDelete: group.block.map { block in
+                                    { pendingDeleteBlock = block }
+                                }
                             )
 
                             if collapsedBlockIds.contains(group.id) == false {
@@ -238,6 +244,28 @@ struct ActiveWorkoutScreen: View {
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
+        }
+        .confirmationDialog(
+            "Удалить блок?",
+            isPresented: Binding(
+                get: { pendingDeleteBlock != nil },
+                set: { if $0 == false { pendingDeleteBlock = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Удалить блок и упражнения", role: .destructive) {
+                if let block = pendingDeleteBlock {
+                    deleteBlock(block)
+                }
+                pendingDeleteBlock = nil
+            }
+            Button(AppLocalizer.string("common.cancel"), role: .cancel) {
+                pendingDeleteBlock = nil
+            }
+        } message: {
+            if let block = pendingDeleteBlock {
+                Text("Будет удалён блок «\(displayTitle(for: block))» и все упражнения внутри него.")
+            }
         }
         .sheet(isPresented: $isEditingWorkoutTitle) {
             EditWorkoutSessionTitleScreen(
@@ -528,6 +556,19 @@ struct ActiveWorkoutScreen: View {
         workout.exerciseItems.removeAll { $0.id == exercise.id }
         exercise.block?.exerciseItems.removeAll { $0.id == exercise.id }
         modelContext.delete(exercise)
+        reindexExercises()
+        try? modelContext.save()
+    }
+
+    private func deleteBlock(_ block: WorkoutBlock) {
+        let blockExercises = block.exerciseItems
+        for exercise in blockExercises {
+            workout.exerciseItems.removeAll { $0.id == exercise.id }
+            modelContext.delete(exercise)
+        }
+        workout.blockItems.removeAll { $0.id == block.id }
+        collapsedBlockIds.remove(block.id.uuidString)
+        modelContext.delete(block)
         reindexExercises()
         try? modelContext.save()
     }
@@ -938,6 +979,7 @@ private struct WorkoutBlockSectionHeader: View {
     var onAddExercise: (() -> Void)?
     let isExpanded: Bool
     let onToggleExpanded: () -> Void
+    var onDelete: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -987,6 +1029,11 @@ private struct WorkoutBlockSectionHeader: View {
         }
         .padding(.horizontal, 2)
         .padding(.top, 2)
+        .contextMenu {
+            if let onDelete {
+                Button("Удалить блок", systemImage: "trash", role: .destructive, action: onDelete)
+            }
+        }
     }
 }
 

@@ -362,7 +362,7 @@ final class WorkoutTemplateContentStore: ObservableObject {
         workSeconds: Int,
         restSeconds: Int,
         restBetweenRoundsSeconds: Int
-    ) async {
+    ) async -> Bool {
         errorMessage = nil
         do {
             let documentRef = firestore
@@ -387,8 +387,10 @@ final class WorkoutTemplateContentStore: ObservableObject {
 
             try await documentRef.setData(item.firestoreData)
             blocks.append(item)
+            return true
         } catch {
             errorMessage = error.localizedDescription
+            return false
         }
     }
 
