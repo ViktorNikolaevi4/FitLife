@@ -111,6 +111,7 @@ struct ActiveWorkoutScreen: View {
                             WorkoutBlockSectionHeader(
                                 title: group.title,
                                 subtitle: group.subtitle,
+                                iconName: blockIconName(for: group.block),
                                 onAddExercise: group.block.map { block in
                                     {
                                         exerciseTargetBlock = block
@@ -167,7 +168,10 @@ struct ActiveWorkoutScreen: View {
         .safeAreaInset(edge: .bottom) {
             HStack(spacing: 10) {
                 Button(action: {
-                    exerciseTargetBlock = defaultStrengthBlock()
+                    // Do not create a placeholder strength block merely by opening
+                    // the picker. A default block is created only after an exercise
+                    // is actually selected and saved.
+                    exerciseTargetBlock = nil
                     isShowingExercisePicker = true
                 }) {
                     Text(AppLocalizer.string("workout.add.exercise"))
@@ -227,11 +231,12 @@ struct ActiveWorkoutScreen: View {
             .interactiveDismissDisabled()
         }
         .sheet(isPresented: $isShowingBlockEditor) {
-            AddWorkoutBlockScreen { draft in
+            WorkoutBlockComposerScreen { draft in
                 addBlock(draft)
                 isShowingBlockEditor = false
+                return nil
             }
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $isShowingAIGenerator) {
@@ -509,10 +514,13 @@ struct ActiveWorkoutScreen: View {
     }
 
     private func ensureWorkoutBlocksIfNeeded() {
+        let unassignedExercises = workout.exerciseItems.filter { $0.block == nil }
+        guard unassignedExercises.isEmpty == false else { return }
+
         let strengthBlock = defaultStrengthBlock()
         var didMutate = false
 
-        for exercise in workout.exerciseItems where exercise.block == nil {
+        for exercise in unassignedExercises {
             exercise.block = strengthBlock
             if strengthBlock.exerciseItems.contains(where: { $0.id == exercise.id }) == false {
                 strengthBlock.exerciseItems.append(exercise)
@@ -624,7 +632,8 @@ struct ActiveWorkoutScreen: View {
         try? modelContext.save()
     }
 
-    private func addBlock(_ draft: WorkoutBlockDraft) {
+    private func addBlock(_ draft: WorkoutBlockComposerDraft) {
+        removeUnusedLegacyDefaultStrengthBlock()
         let block = WorkoutBlock(
             title: draft.resolvedTitle,
             type: draft.type,
@@ -640,6 +649,21 @@ struct ActiveWorkoutScreen: View {
         modelContext.insert(block)
         workout.blockItems.append(block)
         try? modelContext.save()
+    }
+
+    private func removeUnusedLegacyDefaultStrengthBlock() {
+        guard workout.blockItems.count > 0 else { return }
+        let legacyTitle = AppLocalizer.string("workout.block.strength.title")
+        let removableBlocks = workout.blockItems.filter {
+            $0.type == .strength
+                && $0.exerciseItems.isEmpty
+                && $0.title == legacyTitle
+        }
+        for block in removableBlocks {
+            workout.blockItems.removeAll { $0.id == block.id }
+            collapsedBlockIds.remove(block.id.uuidString)
+            modelContext.delete(block)
+        }
     }
 
     private func addGeneratedDraft(_ draft: AIWorkoutDraft) {
@@ -733,21 +757,30 @@ struct ActiveWorkoutScreen: View {
         return trimmedTitle
     }
 
-    private func subtitle(for block: WorkoutBlock) -> String {
-        switch block.type {
-        case .circuit:
-            return circuitSubtitle(
-                mode: block.mode,
-                rounds: block.rounds,
-                exerciseCount: block.exerciseItems.count,
-                durationMinutes: block.durationMinutes,
-                workSeconds: block.workSeconds,
-                restSeconds: block.restSeconds,
-                restBetweenRoundsSeconds: block.restBetweenRoundsSeconds
-            )
-        default:
-            return AppLocalizer.format("workout.block.exercise_count", block.exerciseItems.count)
+    private func blockIconName(for block: WorkoutBlock?) -> String {
+        guard let block else {
+            return WorkoutBlockPreset.strength.iconName
         }
+
+        return WorkoutBlockPreset.inferred(
+            title: displayTitle(for: block),
+            type: block.type,
+            mode: block.mode
+        ).iconName
+    }
+
+    private func subtitle(for block: WorkoutBlock) -> String {
+        workoutBlockSubtitle(
+            title: displayTitle(for: block),
+            type: block.type,
+            mode: block.mode,
+            rounds: block.rounds,
+            exerciseCount: block.exerciseItems.count,
+            durationMinutes: block.durationMinutes,
+            workSeconds: block.workSeconds,
+            restSeconds: block.restSeconds,
+            restBetweenRoundsSeconds: block.restBetweenRoundsSeconds
+        )
     }
 
     private func updateSet(
@@ -976,6 +1009,7 @@ private struct WorkoutEffortPickerSheet: View {
 private struct WorkoutBlockSectionHeader: View {
     let title: String
     let subtitle: String
+    let iconName: String
     var onAddExercise: (() -> Void)?
     let isExpanded: Bool
     let onToggleExpanded: () -> Void
@@ -987,7 +1021,7 @@ private struct WorkoutBlockSectionHeader: View {
                 RoundedRectangle(cornerRadius: 14)
                     .fill(Color.blue.opacity(0.14))
 
-                Image(systemName: "square.stack.3d.up.fill")
+                Image(systemName: iconName)
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(Color.blue)
             }
@@ -1037,7 +1071,7 @@ private struct WorkoutBlockSectionHeader: View {
     }
 }
 
-private struct WorkoutBlockDraft {
+struct WorkoutBlockComposerDraft {
     var title: String
     var type: WorkoutBlockType
     var mode: WorkoutBlockMode
@@ -1056,115 +1090,244 @@ private struct WorkoutBlockDraft {
     }
 }
 
-private struct AddWorkoutBlockScreen: View {
+struct WorkoutBlockComposerScreen: View {
     @Environment(\.dismiss) private var dismiss
 
-    let onSave: (WorkoutBlockDraft) -> Void
+    let onSave: (WorkoutBlockComposerDraft) async -> String?
 
-    @State private var type: WorkoutBlockType = .circuit
-    @State private var mode: WorkoutBlockMode = .rounds
+    @State private var preset: WorkoutBlockPreset = .strength
+    @State private var isConfiguring = false
     @State private var title = ""
     @State private var rounds = 3
     @State private var durationMinutes = 12
     @State private var workSeconds = 20
     @State private var restSeconds = 10
     @State private var restBetweenRoundsSeconds = 60
+    @State private var isSaving = false
+    @State private var saveErrorMessage: String?
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    Picker(AppLocalizer.string("workout.block.type"), selection: $type) {
-                        ForEach(WorkoutBlockType.templateCases, id: \.self) { blockType in
-                            Text(blockType.title).tag(blockType)
-                        }
-                    }
-                    .pickerStyle(.menu)
-
-                    TextField(AppLocalizer.string("workout.block.title.placeholder"), text: $title)
-                }
-
-                if type == .circuit {
-                    Section(AppLocalizer.string("workout.block.circuit.settings")) {
-                        Picker(AppLocalizer.string("workout.block.mode"), selection: $mode) {
-                            ForEach(WorkoutBlockMode.circuitCases, id: \.self) { mode in
-                                Text(mode.title).tag(mode)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-
-                        switch mode {
-                        case .rounds:
-                            Stepper(
-                                AppLocalizer.format("workout.block.rounds.value", rounds),
-                                value: $rounds,
-                                in: 1...20
-                            )
-                            Stepper(
-                                AppLocalizer.format("workout.block.round_rest.value", restBetweenRoundsSeconds),
-                                value: $restBetweenRoundsSeconds,
-                                in: 0...600,
-                                step: 5
-                            )
-                        case .amrap:
-                            Stepper(
-                                AppLocalizer.format("workout.block.duration.value", durationMinutes),
-                                value: $durationMinutes,
-                                in: 1...90
-                            )
-                        case .tabata:
-                            Stepper(
-                                AppLocalizer.format("workout.block.rounds.value", rounds),
-                                value: $rounds,
-                                in: 1...40
-                            )
-                            Stepper(
-                                AppLocalizer.format("workout.block.work.value", workSeconds),
-                                value: $workSeconds,
-                                in: 5...120,
-                                step: 5
-                            )
-                            Stepper(
-                                AppLocalizer.format("workout.block.rest.value", restSeconds),
-                                value: $restSeconds,
-                                in: 0...120,
-                                step: 5
-                            )
-                        }
-                    }
+            Group {
+                if isConfiguring {
+                    configurationView
+                } else {
+                    presetPicker
                 }
             }
-            .navigationTitle(AppLocalizer.string("workout.block.add.title"))
+            .navigationTitle(isConfiguring ? preset.title : AppLocalizer.string("workout.block.add.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(AppLocalizer.string("common.cancel")) {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(AppLocalizer.string("common.save")) {
-                        save()
+                    Button {
+                        if isConfiguring { isConfiguring = false } else { dismiss() }
+                    } label: {
+                        if isConfiguring {
+                            Image(systemName: "chevron.left")
+                        } else {
+                            Text(AppLocalizer.string("common.cancel"))
+                        }
                     }
                 }
             }
         }
     }
 
+    private var presetPicker: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 9), count: 3), spacing: 9) {
+                    ForEach(WorkoutBlockPreset.allCases) { option in
+                        Button {
+                            preset = option
+                        } label: {
+                            VStack(spacing: 7) {
+                                ZStack(alignment: .topTrailing) {
+                                    Image(systemName: option.iconName)
+                                        .font(.system(size: 25, weight: .medium))
+                                        .foregroundStyle(.blue)
+                                        .frame(width: 58, height: 58)
+                                        .background(Circle().fill(Color.blue.opacity(0.08)))
+                                    if preset == option {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.body)
+                                            .foregroundStyle(.blue)
+                                            .offset(x: 8, y: -4)
+                                    }
+                                }
+                                Text(option.title).font(.subheadline.weight(.bold)).foregroundStyle(.primary)
+                                Text(option.subtitle)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(2)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 122)
+                            .padding(8)
+                            .background(RoundedRectangle(cornerRadius: 16).fill(Color(.secondarySystemBackground)))
+                            .overlay(RoundedRectangle(cornerRadius: 16).stroke(preset == option ? Color.blue : .clear, lineWidth: 2))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(20)
+                .padding(.bottom, 6)
+            }
+
+            Button(AppLocalizer.string("workout.block.composer.continue")) {
+                applyDefaults(for: preset)
+                isConfiguring = true
+            }
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 17)
+                .background(RoundedRectangle(cornerRadius: 18).fill(Color.blue))
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+                .background(.ultraThinMaterial)
+        }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+    }
+
+    private var configurationView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(AppLocalizer.string("workout.block.title.placeholder"))
+                        .font(.headline)
+                    TextField(preset.defaultTitle, text: $title)
+                        .padding(16)
+                        .background(RoundedRectangle(cornerRadius: 16).fill(Color(.secondarySystemBackground)))
+                }
+
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: preset.iconName)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.blue)
+                        .frame(width: 42, height: 42)
+                        .background(Circle().fill(Color.blue.opacity(0.12)))
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(preset.subtitle)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text(preset.description)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(16)
+                .background(RoundedRectangle(cornerRadius: 22).fill(Color(.secondarySystemBackground)))
+
+                if hasParameters {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(AppLocalizer.string("workout.block.composer.parameters"))
+                            .font(.headline)
+                            .padding(.bottom, 8)
+                        configurationRows
+                    }
+                    .padding(16)
+                    .background(RoundedRectangle(cornerRadius: 22).fill(Color(.secondarySystemBackground)))
+                }
+
+                if let saveErrorMessage {
+                    Text(saveErrorMessage).font(.footnote).foregroundStyle(.red)
+                }
+
+                Button(action: save) {
+                    HStack(spacing: 8) {
+                        if isSaving { ProgressView().tint(.white) }
+                        Text(isSaving ? AppLocalizer.string("workout.block.composer.saving") : AppLocalizer.string("common.save"))
+                    }
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 17)
+                    .background(RoundedRectangle(cornerRadius: 18).fill(Color.blue))
+                }
+                .disabled(isSaving)
+            }
+            .padding(20)
+        }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+    }
+
+    @ViewBuilder private var configurationRows: some View {
+        switch preset {
+        case .warmup, .strength, .mobility, .stretching, .cooldown:
+            EmptyView()
+        case .pyramid, .ladder:
+            numberRow(AppLocalizer.string("workout.block.composer.steps"), value: $rounds, range: 2...20)
+        case .dropSet:
+            numberRow(AppLocalizer.string("workout.block.composer.weight_drops"), value: $rounds, range: 1...6)
+            numberRow(AppLocalizer.string("workout.block.composer.rest_after_series"), value: $restBetweenRoundsSeconds, range: 0...300, step: 5, suffix: AppLocalizer.string("workout.block.composer.seconds_suffix"))
+        case .clusterSet:
+            numberRow(AppLocalizer.string("workout.block.composer.clusters"), value: $rounds, range: 2...10)
+            numberRow(AppLocalizer.string("workout.block.composer.mini_rest"), value: $restBetweenRoundsSeconds, range: 5...60, step: 5, suffix: AppLocalizer.string("workout.block.composer.seconds_suffix"))
+        case .superset, .circuit, .rft:
+            numberRow(AppLocalizer.string("workout.block.composer.rounds"), value: $rounds, range: 1...20)
+            numberRow(AppLocalizer.string("workout.block.composer.rest"), value: $restBetweenRoundsSeconds, range: 0...600, step: 5, suffix: AppLocalizer.string("workout.block.composer.seconds_suffix"))
+        case .hiit, .tabata:
+            numberRow(AppLocalizer.string("workout.block.composer.intervals"), value: $rounds, range: 1...40)
+            numberRow(AppLocalizer.string("workout.block.composer.work"), value: $workSeconds, range: 5...120, step: 5, suffix: AppLocalizer.string("workout.block.composer.seconds_suffix"))
+            numberRow(AppLocalizer.string("workout.block.composer.rest"), value: $restSeconds, range: 0...120, step: 5, suffix: AppLocalizer.string("workout.block.composer.seconds_suffix"))
+        case .amrap, .emom, .e2mom, .e3mom, .forTime:
+            numberRow(AppLocalizer.string("workout.block.composer.duration"), value: $durationMinutes, range: 1...90, suffix: AppLocalizer.string("workout.block.composer.minutes_suffix"))
+        }
+    }
+
+    private func numberRow(_ label: String, value: Binding<Int>, range: ClosedRange<Int>, step: Int = 1, suffix: String = "") -> some View {
+        HStack {
+            Text(label)
+            Spacer()
+            Text("\(value.wrappedValue)\(suffix)").foregroundStyle(.secondary)
+            Stepper("", value: value, in: range, step: step).labelsHidden()
+        }
+        .padding(.vertical, 7)
+    }
+
+    private func applyDefaults(for preset: WorkoutBlockPreset) {
+        title = preset.defaultTitle
+        rounds = preset.defaultRounds
+        durationMinutes = preset.defaultDurationMinutes
+        workSeconds = preset.defaultWorkSeconds
+        restSeconds = preset.defaultRestSeconds
+        restBetweenRoundsSeconds = preset.defaultRestBetweenRoundsSeconds
+    }
+
+    private var hasParameters: Bool {
+        switch preset {
+        case .superset, .circuit, .hiit, .tabata, .amrap, .emom, .e2mom, .e3mom, .forTime, .rft, .pyramid, .dropSet, .clusterSet, .ladder:
+            true
+        case .warmup, .strength, .mobility, .stretching, .cooldown:
+            false
+        }
+    }
+
     private func save() {
-        onSave(
-            WorkoutBlockDraft(
-                title: title,
-                type: type,
-                mode: type == .circuit ? mode : .rounds,
-                rounds: type == .circuit ? rounds : 1,
-                durationMinutes: type == .circuit ? durationMinutes : 0,
-                workSeconds: type == .circuit && mode == .tabata ? workSeconds : 0,
-                restSeconds: type == .circuit && mode == .tabata ? restSeconds : 0,
-                restBetweenRoundsSeconds: type == .circuit && mode == .rounds ? restBetweenRoundsSeconds : 0
-            )
+        guard isSaving == false else { return }
+        isSaving = true
+        saveErrorMessage = nil
+        let draft = WorkoutBlockComposerDraft(
+            title: title,
+            type: preset.blockType,
+            mode: preset.mode,
+            rounds: preset == .strength || preset == .warmup || preset == .mobility || preset == .stretching || preset == .cooldown || preset == .forTime ? 1 : rounds,
+            durationMinutes: preset.mode == .amrap || preset.mode == .emom || preset == .forTime || preset == .hiit ? durationMinutes : 0,
+            workSeconds: preset.mode == .tabata || preset == .hiit ? workSeconds : 0,
+            restSeconds: preset.mode == .tabata || preset == .hiit ? restSeconds : 0,
+            restBetweenRoundsSeconds: preset.mode == .rounds ? restBetweenRoundsSeconds : 0
         )
-        dismiss()
+        Task {
+            if let message = await onSave(draft) {
+                saveErrorMessage = message
+            } else {
+                dismiss()
+            }
+            isSaving = false
+        }
     }
 }
 

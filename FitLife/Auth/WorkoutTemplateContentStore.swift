@@ -239,20 +239,7 @@ struct WorkoutTemplateBlockItem: Identifiable, Hashable {
     }
 
     func subtitle(exerciseCount: Int) -> String {
-        switch type {
-        case .circuit:
-            return circuitSubtitle(
-                mode: mode,
-                rounds: rounds,
-                exerciseCount: exerciseCount,
-                durationMinutes: durationMinutes,
-                workSeconds: workSeconds,
-                restSeconds: restSeconds,
-                restBetweenRoundsSeconds: restBetweenRoundsSeconds
-            )
-        default:
-            return AppLocalizer.format("workout.block.exercise_count", exerciseCount)
-        }
+        workoutBlockSubtitle(title: displayTitle, type: type, mode: mode, rounds: rounds, exerciseCount: exerciseCount, durationMinutes: durationMinutes, workSeconds: workSeconds, restSeconds: restSeconds, restBetweenRoundsSeconds: restBetweenRoundsSeconds)
     }
 }
 

@@ -532,20 +532,7 @@ struct CoachingWorkoutBlockSnapshot: Identifiable, Hashable {
     }
 
     var subtitle: String {
-        switch type {
-        case .circuit:
-            return circuitSubtitle(
-                mode: mode,
-                rounds: rounds,
-                exerciseCount: exercises.count,
-                durationMinutes: durationMinutes,
-                workSeconds: workSeconds,
-                restSeconds: restSeconds,
-                restBetweenRoundsSeconds: restBetweenRoundsSeconds
-            )
-        default:
-            return AppLocalizer.format("workout.block.exercise_count", exercises.count)
-        }
+        workoutBlockSubtitle(title: displayTitle, type: type, mode: mode, rounds: rounds, exerciseCount: exercises.count, durationMinutes: durationMinutes, workSeconds: workSeconds, restSeconds: restSeconds, restBetweenRoundsSeconds: restBetweenRoundsSeconds)
     }
 }
 

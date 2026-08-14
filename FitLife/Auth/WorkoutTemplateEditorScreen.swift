@@ -261,7 +261,7 @@ struct WorkoutTemplateEditorScreen: View {
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showAddBlock) {
-            AddWorkoutTemplateBlockScreen { draft in
+            WorkoutBlockComposerScreen { draft in
                 let didSave = await store.addBlock(
                     title: draft.resolvedTitle,
                     type: draft.type,
@@ -278,7 +278,7 @@ struct WorkoutTemplateEditorScreen: View {
                 }
                 return store.errorMessage ?? "Не удалось сохранить блок. Проверьте подключение к интернету."
             }
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showAIGenerator) {
@@ -591,25 +591,6 @@ private struct WorkoutTemplateNestedGroupHeader: View {
     }
 }
 
-private struct WorkoutTemplateBlockDraft {
-    var title: String
-    var type: WorkoutBlockType
-    var mode: WorkoutBlockMode
-    var rounds: Int
-    var durationMinutes: Int
-    var workSeconds: Int
-    var restSeconds: Int
-    var restBetweenRoundsSeconds: Int
-
-    var resolvedTitle: String {
-        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmedTitle.isEmpty {
-            return type.title
-        }
-        return trimmedTitle
-    }
-}
-
 struct AIWorkoutGeneratorScreen: View {
     @Environment(\.dismiss) private var dismiss
 
@@ -763,18 +744,17 @@ struct AIWorkoutGeneratorScreen: View {
     }
 
     private func blockSubtitle(_ block: AIWorkoutDraftBlock) -> String {
-        if block.workoutBlockType == .circuit {
-            return circuitSubtitle(
-                mode: block.workoutBlockMode,
-                rounds: block.rounds,
-                exerciseCount: block.exercises.count,
-                durationMinutes: block.durationMinutes,
-                workSeconds: block.workSeconds,
-                restSeconds: block.restSeconds,
-                restBetweenRoundsSeconds: block.restBetweenRoundsSeconds
-            )
-        }
-        return AppLocalizer.format("workout.block.exercise_count", block.exercises.count)
+        workoutBlockSubtitle(
+            title: block.title,
+            type: block.workoutBlockType,
+            mode: block.workoutBlockMode,
+            rounds: block.rounds,
+            exerciseCount: block.exercises.count,
+            durationMinutes: block.durationMinutes,
+            workSeconds: block.workSeconds,
+            restSeconds: block.restSeconds,
+            restBetweenRoundsSeconds: block.restBetweenRoundsSeconds
+        )
     }
 
     private func exerciseSummary(_ exercise: AIWorkoutDraftExercise) -> String {
@@ -849,6 +829,7 @@ private struct AddWorkoutTemplateGroupScreen: View {
     }
 }
 
+#if false // Replaced by the shared WorkoutBlockComposerScreen.
 private struct AddWorkoutTemplateBlockScreen: View {
     @Environment(\.dismiss) private var dismiss
     let onSave: (WorkoutTemplateBlockDraft) async -> String?
@@ -979,6 +960,7 @@ private struct AddWorkoutTemplateBlockScreen: View {
         }
     }
 }
+#endif
 
 private struct WorkoutTemplateExerciseCard: View {
     let exercise: WorkoutTemplateExerciseItem

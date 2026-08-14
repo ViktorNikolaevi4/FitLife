@@ -18,6 +18,7 @@ enum WorkoutBlockType: String, Codable {
     case warmup
     case strength
     case main
+    case superset
     case circuit
     case stretching
     case cooldown
@@ -30,6 +31,8 @@ enum WorkoutBlockType: String, Codable {
             return AppLocalizer.string("workout.block.strength.title")
         case .main:
             return AppLocalizer.string("workout.block.main.title")
+        case .superset:
+            return AppLocalizer.string("workout.block.superset.title")
         case .circuit:
             return AppLocalizer.string("workout.block.circuit.title")
         case .stretching:
@@ -43,6 +46,7 @@ enum WorkoutBlockType: String, Codable {
         .warmup,
         .strength,
         .main,
+        .superset,
         .circuit,
         .stretching,
         .cooldown
@@ -53,6 +57,7 @@ enum WorkoutBlockMode: String, Codable {
     case rounds
     case amrap
     case tabata
+    case emom
 
     var title: String {
         switch self {
@@ -62,10 +67,151 @@ enum WorkoutBlockMode: String, Codable {
             return AppLocalizer.string("workout.block.mode.amrap")
         case .tabata:
             return AppLocalizer.string("workout.block.mode.tabata")
+        case .emom:
+            return AppLocalizer.string("workout.block.mode.emom")
         }
     }
 
-    static let circuitCases: [WorkoutBlockMode] = [.rounds, .amrap, .tabata]
+    static let circuitCases: [WorkoutBlockMode] = [.rounds, .amrap, .tabata, .emom]
+}
+
+enum WorkoutBlockPreset: String, CaseIterable, Identifiable {
+    case warmup
+    case strength
+    case superset
+    case circuit
+    case hiit
+    case tabata
+    case amrap
+    case emom
+    case e2mom
+    case e3mom
+    case forTime
+    case rft
+    case pyramid
+    case dropSet
+    case clusterSet
+    case ladder
+    case mobility
+    case stretching
+    case cooldown
+
+    var id: String { rawValue }
+
+    var title: String { AppLocalizer.string("workout.block.preset.\(rawValue).title") }
+    var subtitle: String { AppLocalizer.string("workout.block.preset.\(rawValue).subtitle") }
+    var description: String { AppLocalizer.string("workout.block.preset.\(rawValue).description") }
+
+    var iconName: String {
+        switch self {
+        case .warmup: "figure.walk"
+        case .strength: "square.stack.3d.up.fill"
+        case .superset: "link"
+        case .circuit: "arrow.triangle.2.circlepath"
+        case .hiit: "bolt.fill"
+        case .tabata: "stopwatch.fill"
+        case .amrap: "infinity"
+        case .emom: "clock.fill"
+        case .e2mom: "2.circle.fill"
+        case .e3mom: "3.circle.fill"
+        case .forTime: "flag.checkered"
+        case .rft: "timer"
+        case .pyramid: "triangle.fill"
+        case .dropSet: "arrow.down.right"
+        case .clusterSet: "circle.grid.3x3.fill"
+        case .ladder: "stairs"
+        case .mobility: "figure.flexibility"
+        case .stretching: "figure.cooldown"
+        case .cooldown: "wind"
+        }
+    }
+
+    var blockType: WorkoutBlockType {
+        switch self {
+        case .warmup: .warmup
+        case .strength: .strength
+        case .superset: .superset
+        case .stretching, .mobility: .stretching
+        case .cooldown: .cooldown
+        case .circuit, .hiit, .tabata, .amrap, .emom, .e2mom, .e3mom, .forTime, .rft, .pyramid, .dropSet, .clusterSet, .ladder: .circuit
+        }
+    }
+
+    var mode: WorkoutBlockMode {
+        switch self {
+        case .tabata: .tabata
+        case .amrap: .amrap
+        case .emom, .e2mom, .e3mom: .emom
+        case .warmup, .strength, .superset, .circuit, .hiit, .forTime, .rft, .pyramid, .dropSet, .clusterSet, .ladder, .mobility, .stretching, .cooldown: .rounds
+        }
+    }
+
+    var defaultTitle: String { title }
+    var defaultRounds: Int {
+        switch self {
+        case .tabata: 8
+        case .pyramid: 4
+        case .dropSet: 2
+        case .clusterSet: 3
+        case .ladder: 5
+        case .strength, .warmup, .mobility, .stretching, .cooldown, .forTime: 1
+        default: 3
+        }
+    }
+    var defaultDurationMinutes: Int {
+        switch self {
+        case .amrap, .emom: 12
+        case .e2mom, .e3mom: 15
+        case .forTime: 20
+        case .hiit: 16
+        default: 0
+        }
+    }
+    var defaultWorkSeconds: Int { self == .tabata || self == .hiit ? 20 : 0 }
+    var defaultRestSeconds: Int { self == .tabata || self == .hiit ? 10 : 0 }
+    var defaultRestBetweenRoundsSeconds: Int {
+        switch self {
+        case .circuit, .hiit, .rft: 60
+        case .superset: 90
+        case .clusterSet: 15
+        default: 0
+        }
+    }
+
+    /// Restores the visual identity of a saved block. Older saved blocks only
+    /// contain a general type/mode, so named presets are detected from title
+    /// first and then fall back to their broad category.
+    static func inferred(title: String, type: WorkoutBlockType, mode: WorkoutBlockMode) -> WorkoutBlockPreset {
+        let normalizedTitle = title
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+
+        if let namedPreset = allCases.first(where: {
+            $0.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == normalizedTitle
+        }) {
+            return namedPreset
+        }
+
+        switch type {
+        case .warmup:
+            return .warmup
+        case .strength, .main:
+            return .strength
+        case .superset:
+            return .superset
+        case .stretching:
+            return .stretching
+        case .cooldown:
+            return .cooldown
+        case .circuit:
+            switch mode {
+            case .tabata: return .tabata
+            case .amrap: return .amrap
+            case .emom: return .emom
+            case .rounds: return .circuit
+            }
+        }
+    }
 }
 
 @Model
@@ -413,5 +559,53 @@ func circuitSubtitle(
             restSeconds,
             exerciseCount
         )
+    case .emom:
+        return AppLocalizer.format(
+            "workout.block.emom.summary",
+            durationMinutes,
+            exerciseCount
+        )
+    }
+}
+
+func workoutBlockSubtitle(
+    title: String,
+    type: WorkoutBlockType,
+    mode: WorkoutBlockMode,
+    rounds: Int,
+    exerciseCount: Int,
+    durationMinutes: Int,
+    workSeconds: Int,
+    restSeconds: Int,
+    restBetweenRoundsSeconds: Int
+) -> String {
+    let preset = WorkoutBlockPreset.inferred(title: title, type: type, mode: mode)
+
+    switch preset {
+    case .dropSet:
+        return AppLocalizer.format("workout.block.drop_set.summary", rounds, exerciseCount, restBetweenRoundsSeconds)
+    case .clusterSet:
+        return AppLocalizer.format("workout.block.cluster_set.summary", rounds, exerciseCount, restBetweenRoundsSeconds)
+    case .pyramid:
+        return AppLocalizer.format("workout.block.pyramid.summary", rounds, exerciseCount)
+    case .ladder:
+        return AppLocalizer.format("workout.block.ladder.summary", rounds, exerciseCount)
+    case .forTime:
+        return AppLocalizer.format("workout.block.for_time.summary", durationMinutes, exerciseCount)
+    case .hiit:
+        return AppLocalizer.format("workout.block.hiit.summary", rounds, workSeconds, restSeconds, exerciseCount)
+    default:
+        if type == .circuit {
+            return circuitSubtitle(
+                mode: mode,
+                rounds: rounds,
+                exerciseCount: exerciseCount,
+                durationMinutes: durationMinutes,
+                workSeconds: workSeconds,
+                restSeconds: restSeconds,
+                restBetweenRoundsSeconds: restBetweenRoundsSeconds
+            )
+        }
+        return AppLocalizer.format("workout.block.exercise_count", exerciseCount)
     }
 }
