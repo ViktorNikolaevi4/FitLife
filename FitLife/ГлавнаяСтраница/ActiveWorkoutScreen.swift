@@ -26,6 +26,7 @@ struct ActiveWorkoutScreen: View {
     @State private var isShowingExercisePicker = false
     @State private var isShowingBlockEditor = false
     @State private var isShowingAIGenerator = false
+    @State private var isShowingAddMenu = false
     @State private var collapsedBlockIds: Set<String> = []
     @State private var exerciseTargetBlock: WorkoutBlock?
     @State private var editingSet: WorkoutSet?
@@ -96,8 +97,9 @@ struct ActiveWorkoutScreen: View {
     }
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 16) {
+        ZStack(alignment: .topTrailing) {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 16) {
                 activeWorkoutHeader
                 workoutControlsCard
 
@@ -156,57 +158,35 @@ struct ActiveWorkoutScreen: View {
                         .padding(.top, 10)
                     }
                 }
+                }
+                .padding(.horizontal)
+                .padding(.top, 16)
+                .padding(.bottom, 120)
             }
-            .padding(.horizontal)
-            .padding(.top, 16)
-            .padding(.bottom, 120)
+
+            if isShowingAddMenu {
+                addActionsMenu
+                    .padding(.top, 70)
+                    .padding(.trailing, 18)
+                    .transition(.scale(scale: 0.92, anchor: .topTrailing).combined(with: .opacity))
+                    .zIndex(1)
+            }
         }
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .tabBar)
         .toolbar(.hidden, for: .navigationBar)
         .safeAreaInset(edge: .bottom) {
-            HStack(spacing: 10) {
-                Button(action: {
-                    // Do not create a placeholder strength block merely by opening
-                    // the picker. A default block is created only after an exercise
-                    // is actually selected and saved.
-                    exerciseTargetBlock = nil
-                    isShowingExercisePicker = true
-                }) {
-                    Text(AppLocalizer.string("workout.add.exercise"))
-                        .fontWeight(.semibold)
-                        .font(.headline)
-                        .foregroundStyle(Color(.systemBackground))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 18)
-                        .background(RoundedRectangle(cornerRadius: 20).fill(HomeColors.primaryActionGradient))
-                }
-                .buttonStyle(.plain)
-
-                Button(action: { isShowingBlockEditor = true }) {
-                    Label(AppLocalizer.string("workout.add.block"), systemImage: "square.stack.3d.up.fill")
-                        .labelStyle(.iconOnly)
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(.primary)
-                        .frame(width: 58, height: 58)
-                        .background(RoundedRectangle(cornerRadius: 20).fill(activeWorkoutCardBackground))
-                        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(activeWorkoutCardBorder))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(AppLocalizer.string("workout.add.block"))
-
-                Button(action: { isShowingAIGenerator = true }) {
-                    Image(systemName: "sparkles")
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(.blue)
-                        .frame(width: 58, height: 58)
-                        .background(RoundedRectangle(cornerRadius: 20).fill(activeWorkoutCardBackground))
-                        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(activeWorkoutCardBorder))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Создать тренировку с ИИ")
+            Button(action: beginAddingExercise) {
+                Text(AppLocalizer.string("workout.add.exercise"))
+                    .fontWeight(.semibold)
+                    .font(.headline)
+                    .foregroundStyle(Color(.systemBackground))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 18)
+                    .background(RoundedRectangle(cornerRadius: 20).fill(HomeColors.primaryActionGradient))
             }
+            .buttonStyle(.plain)
             .padding(.horizontal)
             .padding(.bottom, 8)
             .background(Color(.systemGroupedBackground))
@@ -412,17 +392,69 @@ struct ActiveWorkoutScreen: View {
 
             Spacer()
 
-            Button(action: { showFinishConfirmation = true }) {
-                Label(AppLocalizer.string("workout.finish"), systemImage: "checkmark.circle.fill")
-                    .font(.subheadline.weight(.semibold))
+            Button {
+                withAnimation(.snappy(duration: 0.2)) {
+                    isShowingAddMenu.toggle()
+                }
+            } label: {
+                Image(systemName: "plus")
+                    .font(.headline.weight(.semibold))
                     .foregroundStyle(.white)
-                    .labelStyle(.titleAndIcon)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(Capsule().fill(Color.green))
+                    .frame(width: 46, height: 46)
+                    .background(Circle().fill(Color.blue))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Добавить")
         }
+    }
+
+    private func beginAddingExercise() {
+        // Do not create a placeholder strength block merely by opening the
+        // picker. A default block is created only after an exercise is saved.
+        exerciseTargetBlock = nil
+        isShowingExercisePicker = true
+    }
+
+    private var addActionsMenu: some View {
+        VStack(spacing: 0) {
+            addMenuAction(AppLocalizer.string("workout.add.exercise"), icon: "plus") {
+                beginAddingExercise()
+            }
+            Divider().padding(.horizontal, 14)
+            addMenuAction(AppLocalizer.string("workout.add.block"), icon: "square.stack.3d.up.fill") {
+                isShowingBlockEditor = true
+            }
+            Divider().padding(.horizontal, 14)
+            addMenuAction("Создать с ИИ", icon: "sparkles") {
+                isShowingAIGenerator = true
+            }
+        }
+        .frame(width: 248)
+        .background(RoundedRectangle(cornerRadius: 24).fill(activeWorkoutCardBackground))
+        .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(activeWorkoutCardBorder))
+        .shadow(color: activeWorkoutCardShadow.opacity(1.8), radius: 16, x: 0, y: 8)
+    }
+
+    private func addMenuAction(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button {
+            isShowingAddMenu = false
+            action()
+        } label: {
+            HStack(spacing: 12) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Spacer(minLength: 8)
+                Image(systemName: icon)
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.blue)
+                    .frame(width: 30)
+            }
+            .padding(.horizontal, 18)
+            .frame(height: 56)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var workoutControlsCard: some View {
