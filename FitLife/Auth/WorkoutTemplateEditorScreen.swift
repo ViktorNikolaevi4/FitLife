@@ -261,7 +261,7 @@ struct WorkoutTemplateEditorScreen: View {
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showAddBlock) {
-            WorkoutBlockComposerScreen { draft in
+            WorkoutBlockComposerScreen { _, draft in
                 let didSave = await store.addBlock(
                     title: draft.resolvedTitle,
                     type: draft.type,

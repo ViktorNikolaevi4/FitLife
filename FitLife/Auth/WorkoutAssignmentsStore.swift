@@ -276,7 +276,6 @@ final class ClientAssignedWorkoutsStore: ObservableObject {
                     restSeconds: remoteBlock.restSeconds,
                     restBetweenRoundsSeconds: remoteBlock.restBetweenRoundsSeconds
                 )
-                block.session = workout
                 workout.blockItems.append(block)
                 localBlocksByRemoteId[remoteBlock.id] = block
             }

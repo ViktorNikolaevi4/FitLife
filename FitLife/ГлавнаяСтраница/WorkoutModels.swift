@@ -240,8 +240,14 @@ final class WorkoutSession {
     }
 
     var blockItems: [WorkoutBlock] {
-        get { blocks ?? [] }
-        set { blocks = newValue }
+        get {
+            var seenIDs = Set<UUID>()
+            return (blocks ?? []).filter { seenIDs.insert($0.id).inserted }
+        }
+        set {
+            var seenIDs = Set<UUID>()
+            blocks = newValue.filter { seenIDs.insert($0.id).inserted }
+        }
     }
 
     var gender: Gender {

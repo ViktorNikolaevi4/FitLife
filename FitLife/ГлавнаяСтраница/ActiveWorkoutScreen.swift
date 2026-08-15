@@ -25,6 +25,8 @@ struct ActiveWorkoutScreen: View {
     let workout: WorkoutSession
     @State private var isShowingExercisePicker = false
     @State private var isShowingBlockEditor = false
+    @State private var isAddingBlock = false
+    @State private var processedBlockSubmissionIDs: Set<UUID> = []
     @State private var isShowingAIGenerator = false
     @State private var isShowingAddMenu = false
     @State private var collapsedBlockIds: Set<String> = []
@@ -93,7 +95,7 @@ struct ActiveWorkoutScreen: View {
         )
     }
     private var shouldShowEmptyState: Bool {
-        sortedExercises.isEmpty && workout.blockItems.count <= 1
+        sortedExercises.isEmpty && workout.blockItems.isEmpty
     }
 
     var body: some View {
@@ -220,7 +222,12 @@ struct ActiveWorkoutScreen: View {
             .interactiveDismissDisabled()
         }
         .sheet(isPresented: $isShowingBlockEditor) {
-            WorkoutBlockComposerScreen { draft in
+            WorkoutBlockComposerScreen { submissionID, draft in
+                guard isAddingBlock == false else { return nil }
+                guard processedBlockSubmissionIDs.insert(submissionID).inserted else {
+                    return nil
+                }
+                isAddingBlock = true
                 addBlock(draft)
                 isShowingBlockEditor = false
                 return nil
@@ -431,6 +438,7 @@ struct ActiveWorkoutScreen: View {
             }
             Divider().padding(.horizontal, 14)
             addMenuAction(AppLocalizer.string("workout.add.block"), icon: "square.stack.3d.up.fill") {
+                isAddingBlock = false
                 isShowingBlockEditor = true
             }
             Divider().padding(.horizontal, 14)
@@ -686,7 +694,6 @@ struct ActiveWorkoutScreen: View {
             restSeconds: draft.restSeconds,
             restBetweenRoundsSeconds: draft.restBetweenRoundsSeconds
         )
-        block.session = workout
         modelContext.insert(block)
         workout.blockItems.append(block)
         try? modelContext.save()
@@ -732,9 +739,8 @@ struct ActiveWorkoutScreen: View {
                 restSeconds: generatedBlock.restSeconds,
                 restBetweenRoundsSeconds: generatedBlock.restBetweenRoundsSeconds
             )
-            block.session = workout
-            workout.blockItems.append(block)
             modelContext.insert(block)
+            workout.blockItems.append(block)
             nextBlockIndex += 1
 
             for generatedExercise in generatedBlock.exercises {
@@ -783,7 +789,6 @@ struct ActiveWorkoutScreen: View {
             type: .strength,
             orderIndex: workout.blockItems.count
         )
-        block.session = workout
         modelContext.insert(block)
         workout.blockItems.append(block)
         try? modelContext.save()
@@ -1134,7 +1139,7 @@ struct WorkoutBlockComposerDraft {
 struct WorkoutBlockComposerScreen: View {
     @Environment(\.dismiss) private var dismiss
 
-    let onSave: (WorkoutBlockComposerDraft) async -> String?
+    let onSave: (UUID, WorkoutBlockComposerDraft) async -> String?
 
     @State private var preset: WorkoutBlockPreset = .strength
     @State private var isConfiguring = false
@@ -1144,6 +1149,7 @@ struct WorkoutBlockComposerScreen: View {
     @State private var workSeconds = 20
     @State private var restSeconds = 10
     @State private var restBetweenRoundsSeconds = 60
+    @State private var submissionID = UUID()
     @State private var isSaving = false
     @State private var saveErrorMessage: String?
 
@@ -1217,7 +1223,11 @@ struct WorkoutBlockComposerScreen: View {
 
             Button(AppLocalizer.string("workout.block.composer.continue")) {
                 applyDefaults(for: preset)
-                isConfiguring = true
+                if hasParameters {
+                    isConfiguring = true
+                } else {
+                    save()
+                }
             }
                 .font(.headline.weight(.semibold))
                 .foregroundStyle(.white)
@@ -1362,7 +1372,7 @@ struct WorkoutBlockComposerScreen: View {
             restBetweenRoundsSeconds: preset.mode == .rounds ? restBetweenRoundsSeconds : 0
         )
         Task {
-            if let message = await onSave(draft) {
+            if let message = await onSave(submissionID, draft) {
                 saveErrorMessage = message
             } else {
                 dismiss()
