@@ -165,6 +165,15 @@ struct ActiveWorkoutScreen: View {
             }
 
             if isShowingAddMenu {
+                Color.black.opacity(0.001)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(.snappy(duration: 0.2)) {
+                            isShowingAddMenu = false
+                        }
+                    }
+
                 addActionsMenu
                     .padding(.top, 70)
                     .padding(.trailing, 18)
