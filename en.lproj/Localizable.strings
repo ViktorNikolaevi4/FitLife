@@ -997,6 +997,7 @@
 "coaching.workouts.empty.available" = "You do not have any completed workouts to send yet.";
 "coaching.workouts.empty.sent" = "You have not sent any completed workouts to your coach yet.";
 "coaching.workouts.empty.received" = "The client has not sent any completed workouts yet.";
+"coaching.workouts.error.connection" = "Unable to connect to the server. Check your internet connection or VPN — sending will continue when the connection is restored.";
 "coaching.workouts.report.header" = "Workouts sent: %d";
 "coaching.workouts.blocks" = "%d blocks";
 "coaching.workouts.summary" = "%d exercises • %d sets";

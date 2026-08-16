@@ -997,6 +997,7 @@
 "coaching.workouts.empty.available" = "У вас пока нет завершённых тренировок для отправки.";
 "coaching.workouts.empty.sent" = "Вы ещё не отправляли тренеру завершённые тренировки.";
 "coaching.workouts.empty.received" = "Клиент пока не отправлял завершённые тренировки.";
+"coaching.workouts.error.connection" = "Не удаётся подключиться к серверу. Проверьте интернет или VPN — отправка продолжится, когда связь восстановится.";
 "coaching.workouts.report.header" = "Отправлено тренировок: %d";
 "coaching.workouts.blocks" = "%d блока";
 "coaching.workouts.summary" = "%d упражнений • %d подходов";

@@ -682,6 +682,7 @@ final class ClientCoachingHomeStore: ObservableObject {
     private let trainerId: String
     private let firestore: Firestore
     private var notesListener: ListenerRegistration?
+    private var activeWorkoutReportSubmissionID: UUID?
 
     init(clientId: String, trainerId: String, firestore: Firestore = .firestore()) {
         self.clientId = clientId
@@ -890,8 +891,20 @@ final class ClientCoachingHomeStore: ObservableObject {
     func sendWorkoutReport(workouts: [WorkoutSession], senderName: String = "") async {
         guard workouts.isEmpty == false else { return }
 
+        let submissionID = UUID()
+        activeWorkoutReportSubmissionID = submissionID
         isSubmitting = true
         errorMessage = nil
+
+        let delayedConnectionNotice = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 8_000_000_000)
+            guard Task.isCancelled == false,
+                  self?.activeWorkoutReportSubmissionID == submissionID,
+                  self?.isSubmitting == true else {
+                return
+            }
+            self?.errorMessage = AppLocalizer.string("coaching.workouts.error.connection")
+        }
 
         let report = CoachingWorkoutReport(
             clientId: clientId,
@@ -904,6 +917,9 @@ final class ClientCoachingHomeStore: ObservableObject {
                 .collection("coaching_workout_reports")
                 .document(report.id)
                 .setData(report.firestoreData)
+            delayedConnectionNotice.cancel()
+            activeWorkoutReportSubmissionID = nil
+            errorMessage = nil
             try? await AppNotificationEventWriter.create(
                 type: .workoutReportSent,
                 recipientId: trainerId,
@@ -916,6 +932,8 @@ final class ClientCoachingHomeStore: ObservableObject {
             isSubmitting = false
             await load()
         } catch {
+            delayedConnectionNotice.cancel()
+            activeWorkoutReportSubmissionID = nil
             errorMessage = AppErrorPresenter.message(for: error)
             isSubmitting = false
         }
@@ -2021,7 +2039,8 @@ struct TrainerClientSupportScreen: View {
                 CoachingWorkoutReportHistoryScreen(
                     reports: store.workoutReports,
                     canDelete: false,
-                    onDelete: nil
+                    onDelete: nil,
+                    client: client
                 )
             }
         }
@@ -2960,14 +2979,27 @@ private struct CoachingWorkoutReportHistoryScreen: View {
     let reports: [CoachingWorkoutReport]
     let canDelete: Bool
     let onDelete: ((CoachingWorkoutReport) async -> Void)?
+    let client: AppUserProfile?
 
     @Environment(\.dismiss) private var dismiss
     @State private var selectedRange: CoachingReportDateRange = .all
     @State private var customStartDate = Calendar.current.date(byAdding: .month, value: -1, to: Date()) ?? Date()
     @State private var customEndDate = Date()
     @State private var visibleReportCount = 50
-    @State private var selectedWorkoutReport: CoachingWorkoutReport?
+    @State private var selectedWorkout: CoachingWorkoutHistoryItem?
     @State private var pendingDelete: CoachingWorkoutReport?
+
+    init(
+        reports: [CoachingWorkoutReport],
+        canDelete: Bool,
+        onDelete: ((CoachingWorkoutReport) async -> Void)?,
+        client: AppUserProfile? = nil
+    ) {
+        self.reports = reports
+        self.canDelete = canDelete
+        self.onDelete = onDelete
+        self.client = client
+    }
 
     private var filteredReports: [CoachingWorkoutReport] {
         reports.filter {
@@ -2983,67 +3015,84 @@ private struct CoachingWorkoutReportHistoryScreen: View {
         Array(filteredReports.prefix(visibleReportCount))
     }
 
-    var body: some View {
-        List {
-            Section {
-                Picker(AppLocalizer.string("coaching.reports.range.title"), selection: $selectedRange) {
-                    ForEach(CoachingReportDateRange.allCases) { range in
-                        Text(range.title).tag(range)
-                    }
-                }
-                .pickerStyle(.menu)
-
-                if selectedRange == .custom {
-                    DatePicker(
-                        AppLocalizer.string("coaching.reports.range.start"),
-                        selection: $customStartDate,
-                        in: ...customEndDate,
-                        displayedComponents: .date
-                    )
-                    DatePicker(
-                        AppLocalizer.string("coaching.reports.range.end"),
-                        selection: $customEndDate,
-                        in: customStartDate...Date(),
-                        displayedComponents: .date
-                    )
-                }
+    private var workoutItems: [CoachingWorkoutHistoryItem] {
+        visibleReports.flatMap { report in
+            report.workouts.map { workout in
+                CoachingWorkoutHistoryItem(report: report, workout: workout)
             }
+        }
+        .sorted { $0.date > $1.date }
+    }
 
-            if reports.isEmpty {
-                Text(AppLocalizer.string("coaching.workouts.empty.received"))
-                    .foregroundStyle(.secondary)
-            } else if filteredReports.isEmpty {
-                Text(AppLocalizer.string("coaching.reports.range.empty"))
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(visibleReports) { report in
-                    Button {
-                        selectedWorkoutReport = report
-                    } label: {
-                        CoachingWorkoutReportRow(report: report)
-                    }
-                    .buttonStyle(.plain)
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        if canDelete {
-                            Button(role: .destructive) {
-                                pendingDelete = report
-                            } label: {
-                                Label(AppLocalizer.string("common.delete"), systemImage: "trash")
+    private var groupedWorkoutItems: [(date: Date, items: [CoachingWorkoutHistoryItem])] {
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: workoutItems) { item in
+            calendar.startOfDay(for: item.date)
+        }
+        return grouped.keys.sorted(by: >).map { date in
+            (date, grouped[date, default: []])
+        }
+    }
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 22) {
+                rangePicker
+
+                if reports.isEmpty {
+                    emptyState(AppLocalizer.string("coaching.workouts.empty.received"))
+                } else if filteredReports.isEmpty {
+                    emptyState(AppLocalizer.string("coaching.reports.range.empty"))
+                } else {
+                    ForEach(groupedWorkoutItems, id: \.date) { group in
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(sectionTitle(for: group.date))
+                                .font(.title3.weight(.bold))
+
+                            VStack(spacing: 0) {
+                                ForEach(group.items) { item in
+                                    Button {
+                                        selectedWorkout = item
+                                    } label: {
+                                        CoachingWorkoutHistoryRow(item: item, client: client)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .contextMenu {
+                                        if canDelete {
+                                            Button(role: .destructive) {
+                                                pendingDelete = item.report
+                                            } label: {
+                                                Label(AppLocalizer.string("common.delete"), systemImage: "trash")
+                                            }
+                                        }
+                                    }
+
+                                    if item.id != group.items.last?.id {
+                                        Divider().padding(.leading, 76)
+                                    }
+                                }
                             }
+                            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+                        }
+                    }
+
+                    if filteredReports.count > visibleReports.count {
+                        Button {
+                            visibleReportCount += 50
+                        } label: {
+                            Text(AppLocalizer.format("coaching.reports.show_more", filteredReports.count - visibleReports.count))
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
                         }
                     }
                 }
-
-                if filteredReports.count > visibleReports.count {
-                    Button {
-                        visibleReportCount += 50
-                    } label: {
-                        Text(AppLocalizer.format("coaching.reports.show_more", filteredReports.count - visibleReports.count))
-                            .frame(maxWidth: .infinity, alignment: .center)
-                    }
-                }
             }
+            .padding(.horizontal, 18)
+            .padding(.top, 16)
+            .padding(.bottom, 30)
         }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .onChange(of: selectedRange) { _, _ in visibleReportCount = 50 }
         .onChange(of: customStartDate) { _, _ in visibleReportCount = 50 }
         .onChange(of: customEndDate) { _, _ in visibleReportCount = 50 }
@@ -3056,9 +3105,9 @@ private struct CoachingWorkoutReportHistoryScreen: View {
                 }
             }
         }
-        .sheet(item: $selectedWorkoutReport) { report in
+        .sheet(item: $selectedWorkout) { item in
             NavigationStack {
-                CoachingWorkoutReportDetailScreen(report: report)
+                CoachingWorkoutReportDetailScreen(report: item.report, focusedWorkoutId: item.workout.id, client: client)
             }
         }
         .alert(AppLocalizer.string("coaching.history.delete.title"), isPresented: Binding(
@@ -3078,6 +3127,85 @@ private struct CoachingWorkoutReportHistoryScreen: View {
         } message: {
             Text(AppLocalizer.string("coaching.history.delete.message"))
         }
+    }
+
+    private var rangePicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker(AppLocalizer.string("coaching.reports.range.title"), selection: $selectedRange) {
+                ForEach(CoachingReportDateRange.allCases) { range in
+                    Text(range.title).tag(range)
+                }
+            }
+            .pickerStyle(.menu)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Color(.secondarySystemBackground), in: Capsule())
+
+            if selectedRange == .custom {
+                DatePicker(AppLocalizer.string("coaching.reports.range.start"), selection: $customStartDate, in: ...customEndDate, displayedComponents: .date)
+                DatePicker(AppLocalizer.string("coaching.reports.range.end"), selection: $customEndDate, in: customStartDate...Date(), displayedComponents: .date)
+            }
+        }
+    }
+
+    private func sectionTitle(for date: Date) -> String {
+        if Calendar.current.isDateInToday(date) {
+            return "Сегодня, \(date.formatted(.dateTime.day().month(.wide)))"
+        }
+        return date.formatted(date: .complete, time: .omitted)
+    }
+
+    private func emptyState(_ text: String) -> some View {
+        ContentUnavailableView(text, systemImage: "dumbbell")
+            .frame(maxWidth: .infinity)
+            .padding(.top, 80)
+    }
+}
+
+private struct CoachingWorkoutHistoryItem: Identifiable, Hashable {
+    let report: CoachingWorkoutReport
+    let workout: CoachingWorkoutSnapshot
+
+    var id: String { "\(report.id)-\(workout.id)" }
+    var date: Date { workout.endedAt ?? workout.createdAt }
+}
+
+private struct CoachingWorkoutHistoryRow: View {
+    let item: CoachingWorkoutHistoryItem
+    let client: AppUserProfile?
+
+    private var initials: String {
+        let parts = (client?.displayName ?? item.workout.title)
+            .split(separator: " ")
+            .prefix(2)
+        return parts.map { String($0.prefix(1)) }.joined().uppercased()
+    }
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Text(initials)
+                .font(.title3.weight(.medium))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 54, height: 54)
+                .background(Circle().fill(Color.accentColor.opacity(0.10)))
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(item.workout.title)
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                Text("\(formattedWorkoutCalories(item.workout.estimatedCalories)) • \(AppLocalizer.format("coaching.workouts.summary", item.workout.exerciseCount, item.workout.setCount))")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 8)
+            Image(systemName: "chevron.right")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(16)
     }
 }
 
@@ -3414,70 +3542,57 @@ private struct InAppSafariView: UIViewControllerRepresentable {
 
 struct CoachingWorkoutReportDetailScreen: View {
     let report: CoachingWorkoutReport
+    let focusedWorkoutId: String?
+    let client: AppUserProfile?
 
     @Environment(\.dismiss) private var dismiss
 
-    var body: some View {
-        List {
-            Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(AppLocalizer.format("coaching.workouts.report.header", report.workoutCount))
-                        .font(.headline)
-                    Text(report.createdAt.formatted(date: .abbreviated, time: .shortened))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 4)
-            }
+    init(
+        report: CoachingWorkoutReport,
+        focusedWorkoutId: String? = nil,
+        client: AppUserProfile? = nil
+    ) {
+        self.report = report
+        self.focusedWorkoutId = focusedWorkoutId
+        self.client = client
+    }
 
-            ForEach(report.workouts, id: \.id) { workout in
-                Section(workout.title) {
-                    LabeledContent(
-                        AppLocalizer.string("coaching.workouts.detail.date"),
-                        value: (workout.endedAt ?? workout.createdAt).formatted(date: .abbreviated, time: .omitted)
-                    )
-                    LabeledContent(
-                        AppLocalizer.string("coaching.workouts.detail.calories"),
-                        value: formattedWorkoutCalories(workout.estimatedCalories)
-                    )
-                    LabeledContent(
-                        AppLocalizer.string("coaching.workouts.detail.summary"),
-                        value: AppLocalizer.format("coaching.workouts.summary", workout.exerciseCount, workout.setCount)
-                    )
+    private var displayedWorkouts: [CoachingWorkoutSnapshot] {
+        guard let focusedWorkoutId else { return report.workouts }
+        return report.workouts.filter { $0.id == focusedWorkoutId }
+    }
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 22) {
+                ForEach(displayedWorkouts, id: \.id) { workout in
+                    workoutHeader(workout)
+                    workoutMetrics(workout)
 
                     if workout.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(AppLocalizer.string("coaching.workouts.detail.workout_note"))
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                            Text(workout.note)
-                                .font(.subheadline)
-                        }
-                        .padding(.vertical, 4)
+                        Text(workout.note)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .padding(16)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                     }
 
-                    ForEach(workout.displayBlocks.sorted { $0.orderIndex < $1.orderIndex }, id: \.id) { block in
-                        VStack(alignment: .leading, spacing: 10) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(block.displayTitle)
-                                    .font(.headline.weight(.semibold))
-                                Text(block.subtitle)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Выполнение")
+                            .font(.title3.weight(.bold))
 
-                            ForEach(block.exercises.sorted { $0.orderIndex < $1.orderIndex }, id: \.id) { exercise in
-                                CoachingWorkoutReportExerciseDetail(
-                                    exercise: exercise,
-                                    formattedSetValue: formattedSnapshotSetValue
-                                )
-                            }
+                        ForEach(workout.displayBlocks.sorted { $0.orderIndex < $1.orderIndex }, id: \.id) { block in
+                            blockCard(block)
                         }
-                        .padding(.vertical, 6)
                     }
                 }
             }
+            .padding(.horizontal, 18)
+            .padding(.top, 18)
+            .padding(.bottom, 30)
         }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .navigationTitle(AppLocalizer.string("coaching.workouts.detail.title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -3487,6 +3602,79 @@ struct CoachingWorkoutReportDetailScreen: View {
                 }
             }
         }
+    }
+
+    private func workoutHeader(_ workout: CoachingWorkoutSnapshot) -> some View {
+        HStack(spacing: 14) {
+            Text(clientInitials)
+                .font(.title2.weight(.medium))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 68, height: 68)
+                .background(Circle().fill(Color.accentColor.opacity(0.10)))
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(client?.displayName ?? workout.title)
+                    .font(.title3.weight(.bold))
+                Text((workout.endedAt ?? workout.createdAt).formatted(date: .complete, time: .shortened))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+    }
+
+    private func workoutMetrics(_ workout: CoachingWorkoutSnapshot) -> some View {
+        HStack(spacing: 0) {
+            detailMetric("\(workout.estimatedCalories)", "ккал")
+            Divider().frame(height: 58)
+            detailMetric("\(workout.exerciseCount)", "упражнений")
+            Divider().frame(height: 58)
+            detailMetric("\(workout.setCount)", "подхода")
+        }
+        .padding(.vertical, 18)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+
+    private func detailMetric(_ value: String, _ title: String) -> some View {
+        VStack(spacing: 5) {
+            Text(value).font(.title2.weight(.bold))
+            Text(title).font(.caption).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func blockCard(_ block: CoachingWorkoutBlockSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: "dumbbell.fill")
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 42, height: 42)
+                    .background(Circle().fill(Color.accentColor.opacity(0.10)))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(block.displayTitle).font(.headline.weight(.semibold))
+                    Text(block.subtitle).font(.subheadline).foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            .padding(16)
+
+            Divider().padding(.horizontal, 16)
+
+            ForEach(Array(block.exercises.sorted { $0.orderIndex < $1.orderIndex }.enumerated()), id: \.element.id) { index, exercise in
+                CoachingWorkoutReportExerciseDetail(exercise: exercise, formattedSetValue: formattedSnapshotSetValue)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                if index < block.exercises.count - 1 {
+                    Divider().padding(.leading, 16)
+                }
+            }
+        }
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+
+    private var clientInitials: String {
+        let name = client?.displayName ?? ""
+        return name.split(separator: " ").prefix(2).map { String($0.prefix(1)) }.joined().uppercased()
     }
 
     private func formattedElapsed(_ seconds: Int) -> String {
