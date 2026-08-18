@@ -690,6 +690,8 @@ final class ClientCoachingHomeStore: ObservableObject {
         self.firestore = firestore
     }
 
+    var connectedTrainerId: String { trainerId }
+
     deinit {
         notesListener?.remove()
     }
@@ -913,22 +915,28 @@ final class ClientCoachingHomeStore: ObservableObject {
         )
 
         do {
-            try await firestore
+            let reportRef = firestore
                 .collection("coaching_workout_reports")
                 .document(report.id)
-                .setData(report.firestoreData)
-            delayedConnectionNotice.cancel()
-            activeWorkoutReportSubmissionID = nil
-            errorMessage = nil
-            try? await AppNotificationEventWriter.create(
+            let notification = AppNotificationEvent(
+                id: "workout-report-\(report.id)",
                 type: .workoutReportSent,
                 recipientId: trainerId,
                 senderId: clientId,
                 senderName: senderName,
                 targetType: .workoutReport,
-                targetId: report.id,
-                firestore: firestore
+                targetId: report.id
             )
+            let notificationRef = firestore
+                .collection("notification_events")
+                .document(notification.id)
+            let batch = firestore.batch()
+            batch.setData(report.firestoreData, forDocument: reportRef)
+            batch.setData(notification.firestoreData, forDocument: notificationRef)
+            try await batch.commit()
+            delayedConnectionNotice.cancel()
+            activeWorkoutReportSubmissionID = nil
+            errorMessage = nil
             isSubmitting = false
             await load()
         } catch {
@@ -944,19 +952,25 @@ final class ClientCoachingHomeStore: ObservableObject {
         errorMessage = nil
 
         do {
-            try await firestore
+            let reportRef = firestore
                 .collection("coaching_nutrition_reports")
                 .document(report.id)
-                .setData(report.firestoreData)
-            try? await AppNotificationEventWriter.create(
+            let notification = AppNotificationEvent(
+                id: "nutrition-report-\(report.id)",
                 type: .nutritionReportSent,
                 recipientId: trainerId,
                 senderId: clientId,
                 senderName: senderName,
                 targetType: .nutritionReport,
-                targetId: report.id,
-                firestore: firestore
+                targetId: report.id
             )
+            let notificationRef = firestore
+                .collection("notification_events")
+                .document(notification.id)
+            let batch = firestore.batch()
+            batch.setData(report.firestoreData, forDocument: reportRef)
+            batch.setData(notification.firestoreData, forDocument: notificationRef)
+            try await batch.commit()
             isSubmitting = false
             await load()
         } catch {
@@ -1025,6 +1039,8 @@ final class TrainerClientSupportStore: ObservableObject {
     private let client: AppUserProfile
     private let firestore: Firestore
     private var notesListener: ListenerRegistration?
+
+    var connectedClientId: String { client.id }
 
     init(trainerId: String, client: AppUserProfile, firestore: Firestore = .firestore()) {
         self.trainerId = trainerId
@@ -1652,6 +1668,7 @@ private struct ClientCoachingChatScreen: View {
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var sessionStore: AppSessionStore
+    @EnvironmentObject private var pushNotificationsManager: AppPushNotificationsManager
     @State private var pendingDelete: CoachingNote?
 
     private var trimmedMessage: String {
@@ -1679,9 +1696,17 @@ private struct ClientCoachingChatScreen: View {
         .navigationTitle(AppLocalizer.string("coaching.notes.section"))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
+            pushNotificationsManager.setChatVisible(
+                counterpartId: store.connectedTrainerId,
+                isVisible: true
+            )
             store.startNotesListening()
         }
         .onDisappear {
+            pushNotificationsManager.setChatVisible(
+                counterpartId: store.connectedTrainerId,
+                isVisible: false
+            )
             store.stopNotesListening()
         }
         .toolbar {
@@ -2763,6 +2788,7 @@ private struct TrainerClientChatScreen: View {
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var sessionStore: AppSessionStore
+    @EnvironmentObject private var pushNotificationsManager: AppPushNotificationsManager
     @State private var pendingDelete: CoachingNote?
 
     private var trimmedMessage: String {
@@ -2790,9 +2816,17 @@ private struct TrainerClientChatScreen: View {
         .navigationTitle(AppLocalizer.string("coaching.workspace.client_chat"))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
+            pushNotificationsManager.setChatVisible(
+                counterpartId: store.connectedClientId,
+                isVisible: true
+            )
             store.startNotesListening()
         }
         .onDisappear {
+            pushNotificationsManager.setChatVisible(
+                counterpartId: store.connectedClientId,
+                isVisible: false
+            )
             store.stopNotesListening()
         }
         .toolbar {

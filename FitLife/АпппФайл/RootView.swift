@@ -108,6 +108,20 @@ struct RootView: View {
             refreshMealRemindersIfNeeded()
             refreshWorkoutRemindersIfNeeded()
         }
+        .overlay(alignment: .top) {
+            if let banner = pushNotificationsManager.inAppNotificationBanner {
+                InAppNotificationMessageBanner(
+                    banner: banner,
+                    onOpen: pushNotificationsManager.openInAppNotificationBanner,
+                    onDismiss: pushNotificationsManager.dismissInAppNotificationBanner
+                )
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(10)
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.84), value: pushNotificationsManager.inAppNotificationBanner?.id)
         .fullScreenCover(item: $openedPushNotification) { notification in
             NavigationStack {
                 AppNotificationDestinationScreen(notification: notification)
@@ -119,7 +133,9 @@ struct RootView: View {
                         }
                     }
                     .task {
-                        await notificationsStore.delete(notification)
+                        if notification.isEphemeral == false {
+                            await notificationsStore.delete(notification)
+                        }
                     }
             }
         }
@@ -197,5 +213,55 @@ struct RootView: View {
                 try? modelContext.save()
             }
         } catch {}
+    }
+}
+
+private struct InAppNotificationMessageBanner: View {
+    let banner: InAppNotificationBanner
+    let onOpen: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Button(action: onOpen) {
+                HStack(spacing: 12) {
+                    Image(systemName: banner.systemImage)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 42, height: 42)
+                        .background(Color.blue.gradient, in: Circle())
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(banner.title)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text(banner.message)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 30, height: 30)
+                    .background(Color.secondary.opacity(0.12), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(AppLocalizer.string("common.close"))
+        }
+        .padding(12)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.16), radius: 18, y: 8)
     }
 }

@@ -122,6 +122,46 @@ exports.generateWorkoutDraft = onRequest(
   }
 );
 
+exports.reconcileUnreadNotifications = onRequest(
+  {
+    region: "europe-west1",
+    timeoutSeconds: 60,
+    memory: "256MiB",
+    invoker: "public"
+  },
+  async (request, response) => {
+    setJsonResponseHeaders(response);
+
+    if (request.method === "OPTIONS") {
+      response.status(204).send("");
+      return;
+    }
+    if (request.method !== "POST") {
+      response.status(405).json({ error: { code: "method_not_allowed" } });
+      return;
+    }
+
+    try {
+      const decodedToken = await verifyAuthorization(request);
+      const reconciledThrough = admin.firestore.Timestamp.now();
+      const unreadCount = await reconcileUnreadNotificationCount(
+        decodedToken.uid,
+        reconciledThrough
+      );
+
+      response.status(200).json({ unreadCount });
+    } catch (error) {
+      logger.error("Unread notification reconciliation failed", {
+        code: error.code || "unknown",
+        message: error.message || "unknown_error"
+      });
+      response.status(error.status || 500).json({
+        error: { code: error.code || "unread_reconciliation_failed" }
+      });
+    }
+  }
+);
+
 const TYPE_CONFIG = {
   coaching_request_submitted: {
     ru: {
@@ -296,6 +336,172 @@ exports.createNotificationForCoachingNote = onDocumentCreated(
   }
 );
 
+// Workout assignments and push delivery must not depend on two successful
+// client requests. New app versions create the event in the assignment batch;
+// this trigger is also a server-side backstop for older versions.
+exports.createNotificationForWorkoutAssignment = onDocumentCreated(
+  {
+    document: "workout_assignments/{assignmentId}",
+    region: "europe-west1",
+    retry: true
+  },
+  async (event) => {
+    const snapshot = event.data;
+    if (!snapshot) {
+      return;
+    }
+
+    const assignment = snapshot.data() || {};
+    const assignmentId = snapshot.id;
+    const trainerId = stringifyData(assignment.trainerId);
+    const clientId = stringifyData(assignment.clientId);
+
+    if (!trainerId || !clientId || trainerId === clientId) {
+      logger.warn("Workout assignment has invalid participants", {
+        assignmentId,
+        trainerId,
+        clientId
+      });
+      return;
+    }
+
+    // New clients commit this event atomically with the assignment. Older
+    // clients used a random event ID, so look it up before creating a stable
+    // server-owned document and process either form directly.
+    const existingEvents = await db
+      .collection("notification_events")
+      .where("targetId", "==", assignmentId)
+      .get();
+    const existingEvent = existingEvents.docs.find((document) => {
+      const data = document.data() || {};
+      return data.type === "workout_assigned"
+        && data.targetType === "workout_assignment"
+        && data.recipientId === clientId;
+    });
+
+    if (existingEvent) {
+      await processPushForNotificationEvent(existingEvent.id);
+      return;
+    }
+
+    const trainerSnapshot = await db.collection("users").doc(trainerId).get();
+    const trainerData = trainerSnapshot.data() || {};
+    const senderName = typeof trainerData.displayName === "string"
+      ? trainerData.displayName.trim()
+      : "";
+
+    const notificationRef = db
+      .collection("notification_events")
+      .doc(`workout-assignment-${assignmentId}`);
+    await notificationRef.create({
+      type: "workout_assigned",
+      recipientId: clientId,
+      senderId: trainerId,
+      senderName,
+      targetType: "workout_assignment",
+      targetId: assignmentId,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      isRead: false,
+      isArchived: false
+    });
+
+    await processPushForNotificationEvent(notificationRef.id);
+  }
+);
+
+// Client reports use the same delivery contract as assignments: the report is
+// the source of truth, while this server trigger guarantees that a matching
+// notification event exists even for older app versions.
+exports.createNotificationForWorkoutReport = onDocumentCreated(
+  {
+    document: "coaching_workout_reports/{reportId}",
+    region: "europe-west1",
+    retry: true
+  },
+  async (event) => {
+    await createAndProcessClientReportNotification(event.data, {
+      type: "workout_report_sent",
+      targetType: "workout_report",
+      eventIdPrefix: "workout-report"
+    });
+  }
+);
+
+exports.createNotificationForNutritionReport = onDocumentCreated(
+  {
+    document: "coaching_nutrition_reports/{reportId}",
+    region: "europe-west1",
+    retry: true
+  },
+  async (event) => {
+    await createAndProcessClientReportNotification(event.data, {
+      type: "nutrition_report_sent",
+      targetType: "nutrition_report",
+      eventIdPrefix: "nutrition-report"
+    });
+  }
+);
+
+async function createAndProcessClientReportNotification(snapshot, config) {
+  if (!snapshot) {
+    return;
+  }
+
+  const report = snapshot.data() || {};
+  const reportId = snapshot.id;
+  const clientId = stringifyData(report.clientId);
+  const trainerId = stringifyData(report.trainerId);
+
+  if (!clientId || !trainerId || clientId === trainerId) {
+    logger.warn("Coaching report has invalid participants", {
+      reportId,
+      type: config.type,
+      clientId,
+      trainerId
+    });
+    return;
+  }
+
+  const existingEvents = await db
+    .collection("notification_events")
+    .where("targetId", "==", reportId)
+    .get();
+  const existingEvent = existingEvents.docs.find((document) => {
+    const data = document.data() || {};
+    return data.type === config.type
+      && data.targetType === config.targetType
+      && data.recipientId === trainerId;
+  });
+
+  if (existingEvent) {
+    await processPushForNotificationEvent(existingEvent.id);
+    return;
+  }
+
+  const clientSnapshot = await db.collection("users").doc(clientId).get();
+  const clientData = clientSnapshot.data() || {};
+  const senderName = typeof clientData.displayName === "string"
+    ? clientData.displayName.trim()
+    : "";
+
+  const notificationRef = db
+    .collection("notification_events")
+    .doc(`${config.eventIdPrefix}-${reportId}`);
+  await notificationRef.create({
+    type: config.type,
+    recipientId: trainerId,
+    senderId: clientId,
+    senderName,
+    targetType: config.targetType,
+    targetId: reportId,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    isRead: false,
+    isArchived: false
+  });
+
+  await processPushForNotificationEvent(notificationRef.id);
+}
+
 exports.sendPushForNotificationEvent = onDocumentCreated(
   {
     document: "notification_events/{eventId}",
@@ -363,10 +569,29 @@ async function processPushForNotificationEvent(eventId) {
       return;
     }
 
-    const userSnapshot = await db.collection("users").doc(recipientId).get();
+    const userRef = db.collection("users").doc(recipientId);
+    const [userSnapshot, pushDevicesSnapshot] = await Promise.all([
+      userRef.get(),
+      userRef.collection("push_devices").get()
+    ]);
     const userData = userSnapshot.data() || {};
-    const unreadCount = await incrementUnreadNotificationCount(recipientId, userData);
-    const fcmTokens = sanitizeTokens(userData.fcmTokens);
+    const unreadCount = await incrementUnreadNotificationCount(eventId, recipientId);
+    // A multicast response may be only partially successful. Keep the exact
+    // tokens that had a transient failure on the event and retry only those;
+    // retrying the whole recipient list would create duplicate alerts on
+    // devices that already received this notification.
+    const pendingTokens = sanitizeTokens(data.pushPendingTokens);
+    const currentDeviceTokens = sanitizeTokens(
+      pushDevicesSnapshot.docs.map((document) => (document.data() || {}).fcmToken)
+    );
+    // Existing installs populate only `fcmTokens`. Once the updated app has
+    // launched and written a device record, that record is authoritative and
+    // stale tokens in the legacy array are ignored.
+    const fcmTokens = pendingTokens.length > 0
+      ? pendingTokens
+      : (currentDeviceTokens.length > 0
+        ? currentDeviceTokens
+        : sanitizeTokens(userData.fcmTokens));
 
     if (fcmTokens.length === 0) {
       logger.info("No FCM tokens for recipient", { eventId, recipientId });
@@ -420,17 +645,31 @@ async function processPushForNotificationEvent(eventId) {
     const response = await messaging.sendEachForMulticast(message);
 
     const invalidTokens = [];
+    const retryableTokens = [];
     response.responses.forEach((result, index) => {
       if (result.success) {
         return;
       }
 
       const errorCode = result.error && result.error.code ? result.error.code : "";
+      const errorMessage = result.error && result.error.message
+        ? result.error.message
+        : "unknown_error";
+      // FCM keeps a registration token even when its APNs token is no longer
+      // usable (for example after push was disabled on that device). Keeping
+      // it causes every later multicast send to fail for the same device.
+      const hasDisabledAPNSToken = errorCode === "messaging/invalid-argument"
+        && errorMessage.toLowerCase().includes("apns device token is disabled");
       if (
         errorCode === "messaging/registration-token-not-registered" ||
-        errorCode === "messaging/invalid-registration-token"
+        errorCode === "messaging/invalid-registration-token" ||
+        hasDisabledAPNSToken
       ) {
         invalidTokens.push(fcmTokens[index]);
+      } else {
+        // Firebase internal/network errors are transient. Preserve only the
+        // affected token so a retry cannot notify successful devices twice.
+        retryableTokens.push(fcmTokens[index]);
       }
 
       logger.error("Failed to send push", {
@@ -438,17 +677,37 @@ async function processPushForNotificationEvent(eventId) {
         recipientId,
         token: fcmTokens[index],
         errorCode,
-        errorMessage: result.error ? result.error.message : "unknown_error"
+        errorMessage
       });
     });
 
     if (invalidTokens.length > 0) {
-      await db.collection("users").doc(recipientId).set(
+      const cleanup = db.batch();
+      cleanup.set(userRef, {
+        fcmTokens: admin.firestore.FieldValue.arrayRemove(...invalidTokens)
+      }, { merge: true });
+      pushDevicesSnapshot.docs.forEach((document) => {
+        const token = stringifyData((document.data() || {}).fcmToken);
+        if (invalidTokens.includes(token)) {
+          cleanup.delete(document.ref);
+        }
+      });
+      await cleanup.commit();
+    }
+
+    if (retryableTokens.length > 0) {
+      await db.collection("notification_events").doc(eventId).set(
         {
-          fcmTokens: admin.firestore.FieldValue.arrayRemove(...invalidTokens)
+          pushPendingTokens: retryableTokens,
+          pushSuccessCount: response.successCount,
+          pushFailureCount: response.failureCount
         },
         { merge: true }
       );
+
+      const error = new Error("FCM temporarily did not accept all recipient tokens");
+      error.code = "push_partial_retryable";
+      throw error;
     }
 
     if (response.successCount > 0) {
@@ -461,10 +720,11 @@ async function processPushForNotificationEvent(eventId) {
       });
       await db.collection("notification_events").doc(eventId).set(
         {
-          pushStatus: response.failureCount === 0 ? "sent" : "partial",
+          pushStatus: "sent",
           deliveredAt: admin.firestore.FieldValue.serverTimestamp(),
           pushSuccessCount: response.successCount,
-          pushFailureCount: response.failureCount
+          pushFailureCount: response.failureCount,
+          pushPendingTokens: admin.firestore.FieldValue.delete()
         },
         { merge: true }
       );
@@ -492,46 +752,82 @@ async function processPushForNotificationEvent(eventId) {
   }
 }
 
-async function incrementUnreadNotificationCount(recipientId, userData) {
+async function incrementUnreadNotificationCount(eventId, recipientId) {
+  const eventRef = db.collection("notification_events").doc(eventId);
   const userRef = db.collection("users").doc(recipientId);
 
-  // Existing users receive one historical calculation during migration. Each
-  // subsequent notification uses an atomic increment instead of reading the
-  // whole notification history.
-  if (userData.unreadCounterInitialized !== true) {
-    const unreadCount = await unreadNotificationCount(recipientId);
-    await userRef.set(
-      {
-        unreadNotificationCount: unreadCount,
-        unreadCounterInitialized: true,
-        unreadCounterUpdatedAt: admin.firestore.FieldValue.serverTimestamp()
-      },
-      { merge: true }
-    );
-    return unreadCount;
-  }
+  // Push delivery can be retried after the counter was already updated. Keep
+  // the increment and its per-event marker in one transaction so every event
+  // contributes to the badge at most once.
+  return db.runTransaction(async (transaction) => {
+    const [eventSnapshot, userSnapshot] = await Promise.all([
+      transaction.get(eventRef),
+      transaction.get(userRef)
+    ]);
+    const eventData = eventSnapshot.data() || {};
+    const userData = userSnapshot.data() || {};
+    const currentCount = Math.max(0, Number(userData.unreadNotificationCount) || 0);
 
-  const currentCount = Number(userData.unreadNotificationCount) || 0;
-  await userRef.set(
-    {
-      unreadNotificationCount: admin.firestore.FieldValue.increment(1),
+    if (eventData.unreadCountApplied === true) {
+      return currentCount;
+    }
+
+    const eventCreatedAt = eventData.createdAt;
+    const reconciledThrough = userData.unreadCounterReconciledThrough;
+    const eventWasIncludedInReconciliation = eventCreatedAt
+      && reconciledThrough
+      && typeof eventCreatedAt.toMillis === "function"
+      && typeof reconciledThrough.toMillis === "function"
+      && eventCreatedAt.toMillis() <= reconciledThrough.toMillis();
+    const shouldIncrement = eventData.isRead !== true
+      && eventData.isArchived !== true
+      && !eventWasIncludedInReconciliation;
+    const unreadCount = currentCount + (shouldIncrement ? 1 : 0);
+    transaction.set(eventRef, {
+      unreadCountApplied: true,
+      unreadCountAppliedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    transaction.set(userRef, {
+      unreadNotificationCount: unreadCount,
+      unreadCounterInitialized: true,
       unreadCounterUpdatedAt: admin.firestore.FieldValue.serverTimestamp()
-    },
-    { merge: true }
-  );
-  return Math.max(0, currentCount) + 1;
+    }, { merge: true });
+    return unreadCount;
+  });
 }
 
-async function unreadNotificationCount(recipientId) {
-  const snapshot = await db
+async function reconcileUnreadNotificationCount(recipientId, reconciledThrough) {
+  const userRef = db.collection("users").doc(recipientId);
+  const eventsQuery = db
     .collection("notification_events")
-    .where("recipientId", "==", recipientId)
-    .get();
+    .where("recipientId", "==", recipientId);
 
-  return snapshot.docs.filter((document) => {
-    const data = document.data();
-    return data.isRead !== true && data.isArchived !== true;
-  }).length;
+  return db.runTransaction(async (transaction) => {
+    const eventsSnapshot = await transaction.get(eventsQuery);
+    await transaction.get(userRef);
+
+    const unreadCount = eventsSnapshot.docs.filter((document) => {
+      const data = document.data();
+      if (data.isRead === true || data.isArchived === true) {
+        return false;
+      }
+
+      const createdAt = data.createdAt;
+      const wasAlreadyApplied = data.unreadCountApplied === true;
+      return !createdAt
+        || typeof createdAt.toMillis !== "function"
+        || createdAt.toMillis() <= reconciledThrough.toMillis()
+        || wasAlreadyApplied;
+    }).length;
+
+    transaction.set(userRef, {
+      unreadNotificationCount: unreadCount,
+      unreadCounterInitialized: true,
+      unreadCounterUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      unreadCounterReconciledThrough: reconciledThrough
+    }, { merge: true });
+    return unreadCount;
+  });
 }
 
 // `thread-id` groups chat notifications in Notification Center without

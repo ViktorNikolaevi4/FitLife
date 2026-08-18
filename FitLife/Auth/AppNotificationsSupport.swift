@@ -1,4 +1,6 @@
 import SwiftUI
+import FirebaseAuth
+import FirebaseCore
 import FirebaseFirestore
 import UserNotifications
 
@@ -36,6 +38,7 @@ struct AppNotificationEvent: Identifiable, Hashable {
     let createdAt: Date
     let isRead: Bool
     let isArchived: Bool
+    let isEphemeral: Bool
 
     init(
         id: String = UUID().uuidString,
@@ -47,7 +50,8 @@ struct AppNotificationEvent: Identifiable, Hashable {
         targetId: String,
         createdAt: Date = .now,
         isRead: Bool = false,
-        isArchived: Bool = false
+        isArchived: Bool = false,
+        isEphemeral: Bool = false
     ) {
         self.id = id
         self.type = type
@@ -59,6 +63,7 @@ struct AppNotificationEvent: Identifiable, Hashable {
         self.createdAt = createdAt
         self.isRead = isRead
         self.isArchived = isArchived
+        self.isEphemeral = isEphemeral
     }
 
     init?(id: String, data: [String: Any]) {
@@ -88,6 +93,7 @@ struct AppNotificationEvent: Identifiable, Hashable {
         }
         self.isRead = (data["isRead"] as? Bool) ?? false
         self.isArchived = (data["isArchived"] as? Bool) ?? false
+        self.isEphemeral = false
     }
 
     var firestoreData: [String: Any] {
@@ -199,6 +205,8 @@ final class AppNotificationsStore: ObservableObject {
     private var lastPageDocument: DocumentSnapshot?
     private var serverUnreadCount = 0
     private var isBootstrappingUnreadCounter = false
+    private var hasReconciledUnreadCounter = false
+    private var hasLoadedUnreadSnapshot = false
     @Published private(set) var canLoadMore = false
     @Published private(set) var isLoadingMore = false
 
@@ -224,6 +232,8 @@ final class AppNotificationsStore: ObservableObject {
         canLoadMore = false
         isLoadingMore = false
         isBootstrappingUnreadCounter = false
+        hasReconciledUnreadCounter = false
+        hasLoadedUnreadSnapshot = false
 
         guard let userId, userId.isEmpty == false else { return }
 
@@ -248,17 +258,25 @@ final class AppNotificationsStore: ObservableObject {
         notificationsListener = firestore
             .collection("notification_events")
             .whereField("recipientId", isEqualTo: userId)
+            .whereField("isRead", isEqualTo: false)
             .order(by: "createdAt", descending: true)
             .limit(to: Self.pageSize)
             .addSnapshotListener { [weak self] snapshot, _ in
                 guard let self, let snapshot else { return }
                 Task { @MainActor in
                     guard self.currentUserId == userId else { return }
-                    self.merge(snapshot.documents)
+                    self.canLoadMore = snapshot.documents.count == Self.pageSize
+                    if snapshot.metadata.isFromCache == false {
+                        self.hasLoadedUnreadSnapshot = true
+                    }
+                    self.mergeLiveSnapshot(snapshot)
                     if self.lastPageDocument == nil {
                         self.lastPageDocument = snapshot.documents.last
                     }
-                    self.canLoadMore = snapshot.documents.count == Self.pageSize
+                    if snapshot.metadata.isFromCache == false,
+                       self.hasReconciledUnreadCounter == false {
+                        await self.reconcileUnreadCounter(for: userId)
+                    }
                 }
             }
     }
@@ -279,21 +297,15 @@ final class AppNotificationsStore: ObservableObject {
                 merge: true
             )
             try await batch.commit()
-            updateLocalNotification(notification.id) { event in
-                AppNotificationEvent(
-                    id: event.id,
-                    type: event.type,
-                    recipientId: event.recipientId,
-                    senderId: event.senderId,
-                    senderName: event.senderName,
-                    targetType: event.targetType,
-                    targetId: event.targetId,
-                    createdAt: event.createdAt,
-                    isRead: true,
-                    isArchived: event.isArchived
-                )
-            }
-        } catch {}
+            serverUnreadCount = max(0, serverUnreadCount - 1)
+            loadedDocuments.removeValue(forKey: notification.id)
+            rebuildNotifications()
+            await reconcileUnreadCounter(for: notification.recipientId)
+        } catch {
+            #if DEBUG
+            print("Failed to mark notification as read:", error.localizedDescription)
+            #endif
+        }
     }
 
     func markAllRead() async {
@@ -323,22 +335,24 @@ final class AppNotificationsStore: ObservableObject {
                 try await batch.commit()
             }
 
-            notifications = notifications.map { event in
-                guard event.isRead == false else { return event }
-                return AppNotificationEvent(
-                    id: event.id,
-                    type: event.type,
-                    recipientId: event.recipientId,
-                    senderId: event.senderId,
-                    senderName: event.senderName,
-                    targetType: event.targetType,
-                    targetId: event.targetId,
-                    createdAt: event.createdAt,
-                    isRead: true,
-                    isArchived: event.isArchived
-                )
-            }
-        } catch {}
+            // Always repair a stale denormalized counter, even when every
+            // event was already marked as read and the loop above was empty.
+            try await firestore.collection("users").document(userId).setData([
+                "unreadNotificationCount": 0,
+                "unreadCounterInitialized": true,
+                "unreadCounterUpdatedAt": FieldValue.serverTimestamp()
+            ], merge: true)
+
+            guard currentUserId == userId else { return }
+            serverUnreadCount = 0
+            loadedDocuments = [:]
+            rebuildNotifications()
+            await reconcileUnreadCounter(for: userId)
+        } catch {
+            #if DEBUG
+            print("Failed to mark all notifications as read:", error.localizedDescription)
+            #endif
+        }
     }
 
     func delete(_ notification: AppNotificationEvent) async {
@@ -357,9 +371,17 @@ final class AppNotificationsStore: ObservableObject {
                 )
             }
             try await batch.commit()
+            if notification.isRead == false {
+                serverUnreadCount = max(0, serverUnreadCount - 1)
+            }
             loadedDocuments.removeValue(forKey: notification.id)
             rebuildNotifications()
-        } catch {}
+            await reconcileUnreadCounter(for: notification.recipientId)
+        } catch {
+            #if DEBUG
+            print("Failed to archive notification:", error.localizedDescription)
+            #endif
+        }
     }
 
     func loadMoreNotifications() async {
@@ -379,17 +401,19 @@ final class AppNotificationsStore: ObservableObject {
             let snapshot = try await firestore
                 .collection("notification_events")
                 .whereField("recipientId", isEqualTo: userId)
+                .whereField("isRead", isEqualTo: false)
                 .order(by: "createdAt", descending: true)
                 .start(afterDocument: lastPageDocument)
                 .limit(to: Self.pageSize)
                 .getDocuments()
 
             guard currentUserId == userId else { return }
+            canLoadMore = snapshot.documents.count == Self.pageSize
             merge(snapshot.documents)
             if let lastDocument = snapshot.documents.last {
                 self.lastPageDocument = lastDocument
             }
-            canLoadMore = snapshot.documents.count == Self.pageSize
+            refreshUnreadCount()
         } catch {}
     }
 
@@ -418,6 +442,47 @@ final class AppNotificationsStore: ObservableObject {
         } catch {}
     }
 
+    private func reconcileUnreadCounter(for userId: String) async {
+        guard
+            currentUserId == userId,
+            let firebaseUser = Auth.auth().currentUser,
+            firebaseUser.uid == userId,
+            let projectId = FirebaseApp.app()?.options.projectID,
+            let url = URL(
+                string: "https://europe-west1-\(projectId).cloudfunctions.net/reconcileUnreadNotifications"
+            )
+        else { return }
+
+        do {
+            let idToken = try await firebaseUser.getIDToken()
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = Data("{}".utf8)
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard
+                let httpResponse = response as? HTTPURLResponse,
+                (200..<300).contains(httpResponse.statusCode),
+                let payload = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                let countValue = payload["unreadCount"] as? NSNumber
+            else {
+                throw URLError(.badServerResponse)
+            }
+            let count = max(0, countValue.intValue)
+
+            guard currentUserId == userId else { return }
+            serverUnreadCount = count
+            hasReconciledUnreadCounter = true
+            refreshUnreadCount()
+        } catch {
+            #if DEBUG
+            print("Failed to reconcile unread notification counter:", error.localizedDescription)
+            #endif
+        }
+    }
+
     private func unreadCounterUpdate(by delta: Int) -> [String: Any] {
         [
             "unreadNotificationCount": FieldValue.increment(Int64(delta)),
@@ -429,6 +494,22 @@ final class AppNotificationsStore: ObservableObject {
     private func merge(_ documents: [DocumentSnapshot]) {
         for document in documents {
             loadedDocuments[document.documentID] = document
+        }
+        rebuildNotifications()
+    }
+
+    private func mergeLiveSnapshot(_ snapshot: QuerySnapshot) {
+        for change in snapshot.documentChanges {
+            switch change.type {
+            case .added, .modified:
+                loadedDocuments[change.document.documentID] = change.document
+            case .removed:
+                let data = change.document.data()
+                if (data["isRead"] as? Bool) == true
+                    || (data["isArchived"] as? Bool) == true {
+                    loadedDocuments.removeValue(forKey: change.document.documentID)
+                }
+            }
         }
         rebuildNotifications()
     }
@@ -450,15 +531,12 @@ final class AppNotificationsStore: ObservableObject {
     // live event list is a safety net: an arriving unread event must be
     // reflected in the UI even while that counter is being updated remotely.
     private func refreshUnreadCount() {
-        unreadCount = max(serverUnreadCount, notifications.count)
-    }
-
-    private func updateLocalNotification(
-        _ id: String,
-        transform: (AppNotificationEvent) -> AppNotificationEvent
-    ) {
-        notifications = notifications.map { event in
-            event.id == id ? transform(event) : event
+        if hasLoadedUnreadSnapshot, canLoadMore == false {
+            // A complete unread-only query is the most accurate source and
+            // also repairs a stale denormalized server counter in the UI.
+            unreadCount = notifications.count
+        } else {
+            unreadCount = max(serverUnreadCount, notifications.count)
         }
     }
 

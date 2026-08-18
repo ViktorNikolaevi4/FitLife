@@ -102,6 +102,10 @@ service cloud.firestore {
 
       allow delete: if isOwner()
         || isSelf();
+
+      match /push_devices/{deviceId} {
+        allow read, create, update, delete: if isSelf();
+      }
     }
 
     match /trainer_client_links/{linkId} {

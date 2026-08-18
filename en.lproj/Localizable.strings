@@ -908,6 +908,7 @@
 
 "notifications.title" = "Notifications";
 "notifications.denied" = "Notifications are disabled in system settings.";
+"notifications.banners_disabled" = "Notifications are allowed, but banners are off. Enable Banners in FitLife settings to see trainer messages immediately.";
 "notifications.open_settings" = "Open System Settings";
 "notifications.schedule" = "Schedule";
 "notifications.start" = "Start";

@@ -115,6 +115,22 @@ final class WorkoutTemplateAssignmentStore: ObservableObject {
             let batch = firestore.batch()
             batch.setData(assignment.firestoreData, forDocument: documentRef)
 
+            // Persist the assignment and its notification event atomically.
+            // This prevents a successful assignment from silently losing its
+            // push event when a second, independent Firestore write fails.
+            let notification = AppNotificationEvent(
+                id: "workout-assignment-\(assignment.id)",
+                type: .workoutAssigned,
+                recipientId: client.id,
+                senderId: template.trainerId,
+                targetType: .workoutAssignment,
+                targetId: assignment.id
+            )
+            let notificationRef = firestore
+                .collection("notification_events")
+                .document(notification.id)
+            batch.setData(notification.firestoreData, forDocument: notificationRef)
+
             for exercise in exerciseItems {
                 let exerciseRef = documentRef.collection("exercises").document(exercise.id)
                 batch.setData(exercise.firestoreData, forDocument: exerciseRef)
@@ -126,14 +142,6 @@ final class WorkoutTemplateAssignmentStore: ObservableObject {
             }
 
             try await batch.commit()
-            try? await AppNotificationEventWriter.create(
-                type: .workoutAssigned,
-                recipientId: client.id,
-                senderId: template.trainerId,
-                targetType: .workoutAssignment,
-                targetId: assignment.id,
-                firestore: firestore
-            )
             assignedClientIds.insert(client.id)
             return true
         } catch {

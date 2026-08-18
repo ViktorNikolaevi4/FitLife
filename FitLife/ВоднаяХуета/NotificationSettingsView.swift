@@ -18,6 +18,7 @@ struct NotificationSettingsView: View {
     @State private var selectedEndTime   = Calendar.current.date(bySettingHour: 18, minute: 0, second: 0, of: .now)!
     @State private var selectedIntervalSec: Int = 1800 // 30 минут
     @State private var authorizationStatus: UNAuthorizationStatus = .notDetermined
+    @State private var alertSetting: UNNotificationSetting = .notSupported
     @State private var showInvalidRangeAlert = false
 
     private var selectedInterval: TimeInterval { TimeInterval(selectedIntervalSec) }
@@ -51,6 +52,13 @@ struct NotificationSettingsView: View {
                     if authorizationStatus == .denied {
                         Text(AppLocalizer.string("notifications.denied"))
                             .foregroundStyle(.red)
+                        Button(AppLocalizer.string("notifications.open_settings")) { openSystemSettings() }
+                    } else if systemBannersAreDisabled {
+                        Label(
+                            AppLocalizer.string("notifications.banners_disabled"),
+                            systemImage: "exclamationmark.triangle.fill"
+                        )
+                        .foregroundStyle(.orange)
                         Button(AppLocalizer.string("notifications.open_settings")) { openSystemSettings() }
                     }
                 }
@@ -161,6 +169,7 @@ struct NotificationSettingsView: View {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
             DispatchQueue.main.async {
                 self.authorizationStatus = granted ? .authorized : .denied
+                self.refreshAuthorization()
                 if granted { self.reschedule() } else { self.isNotificationEnabled = false }
             }
         }
@@ -168,7 +177,21 @@ struct NotificationSettingsView: View {
 
     private func refreshAuthorization() {
         UNUserNotificationCenter.current().getNotificationSettings { st in
-            DispatchQueue.main.async { self.authorizationStatus = st.authorizationStatus }
+            DispatchQueue.main.async {
+                self.authorizationStatus = st.authorizationStatus
+                self.alertSetting = st.alertSetting
+            }
+        }
+    }
+
+    private var systemBannersAreDisabled: Bool {
+        switch authorizationStatus {
+        case .authorized, .provisional, .ephemeral:
+            return alertSetting == .disabled
+        case .notDetermined, .denied:
+            return false
+        @unknown default:
+            return false
         }
     }
 

@@ -197,35 +197,41 @@ struct NutritionScreen: View {
     }
 
     private var caloriesCard: some View {
-        VStack(spacing: 14) {
-            VStack(spacing: 8) {
-                Donut(progress: progress, lineWidth: 10, track: theme.accent.opacity(0.16), gradient: theme.ringGradient)
-                    .frame(width: 136, height: 136)
-                    .overlay {
-                        VStack(spacing: 3) {
-                            Text(consumedCalories.formatted(.number.grouping(.automatic)))
-                                .font(.system(size: 24, weight: .bold))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.72)
-                            Text(AppLocalizer.format("nutrition.goal.value", userData?.calories ?? 0))
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.78)
-                        }
-                        .padding(.horizontal, 24)
+        VStack(spacing: 18) {
+            Donut(
+                progress: progress,
+                lineWidth: 14,
+                track: theme.accent.opacity(0.15),
+                gradient: theme.ringGradient
+            )
+            .frame(width: 142, height: 142)
+            .overlay {
+                VStack(spacing: 4) {
+                    HStack(alignment: .lastTextBaseline, spacing: 4) {
+                        Text(consumedCalories.formatted(.number.grouping(.automatic)))
+                            .font(.system(size: 29, weight: .bold, design: .rounded))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                        Text(AppLocalizer.string("unit.kcal"))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
                     }
-
-                Text(AppLocalizer.format("nutrition.remaining.value", max((userData?.calories ?? 0) - consumedCalories, 0)))
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
+                    Text("из \((userData?.calories ?? 0).formatted(.number.grouping(.automatic)))")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
                 }
+                .padding(.horizontal, 20)
+            }
 
-            HStack(spacing: 8) {
+            Text(AppLocalizer.format("nutrition.remaining.value", max((userData?.calories ?? 0) - consumedCalories, 0)))
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+
+            HStack(spacing: 0) {
                 Button(action: { selectedMacroDetail = .protein }) {
-                    NutritionMacroCard(
+                    NutritionMacroMetric(
                         title: AppLocalizer.string("macro.protein"),
                         current: consumedProteins,
                         target: userData?.proteins ?? 0,
@@ -234,8 +240,12 @@ struct NutritionScreen: View {
                 }
                 .buttonStyle(.plain)
 
+                Divider()
+                    .frame(height: 60)
+                    .padding(.horizontal, 10)
+
                 Button(action: { selectedMacroDetail = .fat }) {
-                    NutritionMacroCard(
+                    NutritionMacroMetric(
                         title: AppLocalizer.string("macro.fat"),
                         current: consumedFats,
                         target: userData?.fats ?? 0,
@@ -244,8 +254,12 @@ struct NutritionScreen: View {
                 }
                 .buttonStyle(.plain)
 
+                Divider()
+                    .frame(height: 60)
+                    .padding(.horizontal, 10)
+
                 Button(action: { selectedMacroDetail = .carbs }) {
-                    NutritionMacroCard(
+                    NutritionMacroMetric(
                         title: AppLocalizer.string("macro.carbs"),
                         current: consumedCarbs,
                         target: userData?.carbs ?? 0,
@@ -256,7 +270,8 @@ struct NutritionScreen: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(14)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 18)
         .background(RoundedRectangle(cornerRadius: 24).fill(theme.card))
         .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(theme.border))
         .shadow(color: nutritionCardShadow, radius: 16, x: 0, y: 6)
@@ -269,7 +284,11 @@ struct NutritionScreen: View {
     }
 
     private func loadActiveTrainer() async {
-        guard let currentOwnerId else {
+        // This query is meaningful only for a client. Running it for a
+        // trainer asks for a link where the trainer is the `clientId`, which
+        // Firestore correctly rejects under the role-based rules.
+        guard sessionStore.profile?.role == .client,
+              let currentOwnerId else {
             activeTrainerId = nil
             return
         }
@@ -551,7 +570,7 @@ struct RepeatYesterdayMealSelection: Identifiable {
     let entries: [FoodEntry]
 }
 
-private struct NutritionMacroCard: View {
+private struct NutritionMacroMetric: View {
     let title: String
     let current: Int
     let target: Int
@@ -566,8 +585,11 @@ private struct NutritionMacroCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 4) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(isOverTarget ? .red : tint)
+                    .frame(width: 8, height: 8)
                 Text(title)
                     .font(.caption2.weight(.semibold))
 
@@ -587,12 +609,10 @@ private struct NutritionMacroCard: View {
                 track: (isOverTarget ? Color.red : tint).opacity(0.16),
                 height: 4
             )
-            .frame(height: 4)
+            .frame(height: 5)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 9)
-        .background(RoundedRectangle(cornerRadius: 16).fill(Color(.systemBackground)))
+        .contentShape(Rectangle())
     }
 }
 

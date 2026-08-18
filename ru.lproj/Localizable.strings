@@ -908,6 +908,7 @@
 
 "notifications.title" = "Уведомления";
 "notifications.denied" = "Уведомления запрещены в настройках системы.";
+"notifications.banners_disabled" = "Уведомления разрешены, но баннеры отключены. Включите «Баннеры» в настройках FitLife, чтобы видеть сообщения тренера сразу.";
 "notifications.open_settings" = "Открыть настройки системы";
 "notifications.schedule" = "Расписание";
 "notifications.start" = "Начало";
