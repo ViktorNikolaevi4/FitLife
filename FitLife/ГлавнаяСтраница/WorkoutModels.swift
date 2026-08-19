@@ -349,6 +349,7 @@ final class WorkoutExercise {
     var accentName: String = ""
     var orderIndex: Int = 0
     var isExpanded: Bool = false
+    var isFinished: Bool = false
     /// Guidance supplied by the trainer or when composing the workout.
     var note: String = ""
     /// Private note recorded by the person performing the workout.
@@ -377,6 +378,7 @@ final class WorkoutExercise {
         accentName: String,
         orderIndex: Int,
         isExpanded: Bool = false,
+        isFinished: Bool = false,
         note: String = "",
         userNote: String = "",
         activityType: WorkoutActivityType = .strength,
@@ -387,6 +389,7 @@ final class WorkoutExercise {
         self.accentName = accentName
         self.orderIndex = orderIndex
         self.isExpanded = isExpanded
+        self.isFinished = isFinished
         self.note = note
         self.userNote = userNote
         self.activityTypeRaw = activityType.rawValue

@@ -37,6 +37,7 @@ struct ActiveWorkoutScreen: View {
     @State private var showFinishConfirmation = false
     @State private var isShowingEffortPicker = false
     @State private var exerciseTemplates: [WorkoutExerciseTemplate] = []
+    @State private var selectedExercise: WorkoutExercise?
     @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
     private let firestore = Firestore.firestore()
 
@@ -129,11 +130,8 @@ struct ActiveWorkoutScreen: View {
 
                             if collapsedBlockIds.contains(group.id) == false {
                                 ForEach(group.exercises, id: \.id) { exercise in
-                                    NavigationLink {
-                                        WorkoutExerciseDetailScreen(
-                                            exercise: exercise,
-                                            followingExercises: followingExercises(after: exercise)
-                                        )
+                                    Button {
+                                        selectedExercise = exercise
                                     } label: {
                                         WorkoutExerciseCard(exercise: exercise)
                                     }
@@ -184,6 +182,15 @@ struct ActiveWorkoutScreen: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .tabBar)
         .toolbar(.hidden, for: .navigationBar)
+        .navigationDestination(item: $selectedExercise) { exercise in
+            WorkoutExerciseDetailScreen(
+                exercise: exercise,
+                followingExercises: followingExercises(after: exercise),
+                onOpenExercise: { nextExercise in
+                    selectedExercise = nextExercise
+                }
+            )
+        }
         .safeAreaInset(edge: .bottom) {
             Button(action: beginAddingExercise) {
                 Text(AppLocalizer.string("workout.add.exercise"))

@@ -105,13 +105,21 @@ struct WorkoutExerciseDetailScreen: View {
 
     let exercise: WorkoutExercise
     let followingExercises: [WorkoutExercise]
+    let onOpenExercise: (WorkoutExercise) -> Void
 
     @State private var personalNote: String
     @State private var editingSet: WorkoutSet?
+    @FocusState private var isPersonalNoteFocused: Bool
+    @State private var showIncompleteSetsConfirmation = false
 
-    init(exercise: WorkoutExercise, followingExercises: [WorkoutExercise]) {
+    init(
+        exercise: WorkoutExercise,
+        followingExercises: [WorkoutExercise],
+        onOpenExercise: @escaping (WorkoutExercise) -> Void
+    ) {
         self.exercise = exercise
         self.followingExercises = followingExercises
+        self.onOpenExercise = onOpenExercise
         _personalNote = State(initialValue: exercise.userNote)
     }
 
@@ -123,7 +131,7 @@ struct WorkoutExerciseDetailScreen: View {
         sortedSets.filter(\.isCompleted).count
     }
 
-    private var isComplete: Bool {
+    private var areAllSetsComplete: Bool {
         sortedSets.isEmpty == false && completedCount == sortedSets.count
     }
 
@@ -133,6 +141,19 @@ struct WorkoutExerciseDetailScreen: View {
 
     private var currentSet: WorkoutSet? {
         sortedSets.first(where: { $0.isCompleted == false }) ?? sortedSets.last
+    }
+
+    private var currentMetricTitle: String {
+        currentSet?.metricType == .duration ? "Время" : "Повторений"
+    }
+
+    private var currentMetricValue: String {
+        guard let currentSet else { return "—" }
+        return formattedWorkoutMetricValue(
+            reps: currentSet.reps,
+            durationSeconds: currentSet.durationSeconds,
+            metricType: currentSet.metricType
+        )
     }
 
     var body: some View {
@@ -152,12 +173,41 @@ struct WorkoutExerciseDetailScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
         .safeAreaInset(edge: .bottom) {
-            completionAction
-                .padding(.horizontal)
-                .padding(.vertical, 10)
-                .background(Color(.systemGroupedBackground))
+            if isPersonalNoteFocused == false {
+                completionAction
+                    .padding(.horizontal)
+                    .padding(.vertical, 10)
+                    .background(Color(.systemGroupedBackground))
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
+        .animation(.easeInOut(duration: 0.18), value: isPersonalNoteFocused)
         .onDisappear(perform: persistPersonalNote)
+        .confirmationDialog(
+            "Остались невыполненные подходы",
+            isPresented: $showIncompleteSetsConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Завершить с пропущенными подходами") {
+                finishExercise()
+            }
+            Button("Продолжить тренировку", role: .cancel) {}
+        } message: {
+            Text("Невыполненные подходы останутся без отметки.")
+        }
+        .onChange(of: isPersonalNoteFocused) { _, isFocused in
+            if isFocused == false {
+                persistPersonalNote()
+            }
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Готово") {
+                    isPersonalNoteFocused = false
+                }
+            }
+        }
         .sheet(item: $editingSet) { set in
             WorkoutExerciseSetEditorSheet(
                 set: set,
@@ -210,14 +260,8 @@ struct WorkoutExerciseDetailScreen: View {
                     icon: "square.stack.3d.up.fill"
                 )
                 WorkoutExerciseMetricCard(
-                    title: "Повторений",
-                    value: currentSet.map {
-                        formattedWorkoutMetricValue(
-                            reps: $0.reps,
-                            durationSeconds: $0.durationSeconds,
-                            metricType: $0.metricType
-                        )
-                    } ?? "—",
+                    title: currentMetricTitle,
+                    value: currentMetricValue,
                     icon: "target"
                 )
                 WorkoutExerciseMetricCard(
@@ -245,9 +289,11 @@ struct WorkoutExerciseDetailScreen: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 12) {
                     ForEach(sortedSets, id: \.id) { set in
-                        WorkoutSetHorizontalCard(set: set) {
-                            editingSet = set
-                        }
+                        WorkoutSetHorizontalCard(
+                            set: set,
+                            onEdit: { editingSet = set },
+                            onToggleCompletion: { toggleSetCompletion(set) }
+                        )
                     }
 
                     WorkoutAddSetCard(action: addSet)
@@ -285,6 +331,7 @@ struct WorkoutExerciseDetailScreen: View {
                 .padding(8)
                 .background(workoutCardInsetBackground, in: RoundedRectangle(cornerRadius: 14))
                 .accessibilityLabel("Личная заметка к упражнению")
+                .focused($isPersonalNoteFocused)
 
             Text("Заметка сохранится автоматически.")
                 .font(.caption)
@@ -297,12 +344,9 @@ struct WorkoutExerciseDetailScreen: View {
 
     @ViewBuilder
     private var completionAction: some View {
-        if isComplete, let nextExercise = followingExercises.first {
-            NavigationLink {
-                WorkoutExerciseDetailScreen(
-                    exercise: nextExercise,
-                    followingExercises: Array(followingExercises.dropFirst())
-                )
+        if exercise.isFinished, let nextExercise = followingExercises.first {
+            Button {
+                onOpenExercise(nextExercise)
             } label: {
                 Label("Следующее упражнение", systemImage: "arrow.right.circle.fill")
                     .font(.headline.weight(.semibold))
@@ -312,7 +356,7 @@ struct WorkoutExerciseDetailScreen: View {
                     .background(RoundedRectangle(cornerRadius: 20).fill(HomeColors.primaryActionGradient))
             }
             .buttonStyle(.plain)
-        } else if isComplete {
+        } else if exercise.isFinished {
             Button { dismiss() } label: {
                 Label("Упражнение завершено", systemImage: "checkmark.circle.fill")
                     .font(.headline.weight(.semibold))
@@ -323,7 +367,7 @@ struct WorkoutExerciseDetailScreen: View {
             }
             .buttonStyle(.plain)
         } else {
-            Button(action: completeExercise) {
+                    Button(action: completeExercise) {
                 Label("Завершить упражнение", systemImage: "checkmark.circle.fill")
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(.white)
@@ -338,11 +382,24 @@ struct WorkoutExerciseDetailScreen: View {
     }
 
     private func completeExercise() {
-        for set in sortedSets {
-            set.isCompleted = true
+        if areAllSetsComplete {
+            finishExercise()
+        } else {
+            showIncompleteSetsConfirmation = true
         }
+    }
+
+    private func finishExercise() {
+        isPersonalNoteFocused = false
+        exercise.isFinished = true
         persistPersonalNote()
         try? modelContext.save()
+
+        if followingExercises.isEmpty {
+            dismiss()
+        } else {
+            onOpenExercise(followingExercises[0])
+        }
     }
 
     private func addSet() {
@@ -371,6 +428,11 @@ struct WorkoutExerciseDetailScreen: View {
         try? modelContext.save()
     }
 
+    private func toggleSetCompletion(_ set: WorkoutSet) {
+        set.isCompleted.toggle()
+        try? modelContext.save()
+    }
+
     private func persistPersonalNote() {
         let trimmedNote = personalNote.trimmingCharacters(in: .whitespacesAndNewlines)
         guard exercise.userNote != trimmedNote else { return }
@@ -381,21 +443,41 @@ struct WorkoutExerciseDetailScreen: View {
 
 private struct WorkoutSetHorizontalCard: View {
     let set: WorkoutSet
-    let action: () -> Void
+    let onEdit: () -> Void
+    let onToggleCompletion: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        HStack(alignment: .top, spacing: 4) {
+            Button(action: onEdit) {
+                setDetails
+            }
+            .buttonStyle(.plain)
+
+            Button(action: onToggleCompletion) {
+                Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(set.isCompleted ? Color.green : Color.secondary)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(set.isCompleted ? "Отметить подход невыполненным" : "Отметить подход выполненным")
+        }
+        .padding(9)
+        .frame(width: 116, height: 72, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 18).fill(workoutCardBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .strokeBorder(set.isCompleted ? Color.green.opacity(0.55) : workoutCardBorder)
+        )
+    }
+
+    private var setDetails: some View {
             VStack(alignment: .leading, spacing: 5) {
-                HStack {
-                    Text("Подход \(set.orderIndex + 1)")
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.72)
-                    Spacer(minLength: 8)
-                    Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(set.isCompleted ? Color.green : Color.secondary)
-                }
+                Text("Подход \(set.orderIndex + 1)")
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
 
                 Text(formattedWorkoutSetValue(
                     weight: set.weight,
@@ -408,15 +490,6 @@ private struct WorkoutSetHorizontalCard: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
             }
-            .padding(9)
-            .frame(width: 96, height: 72, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 18).fill(workoutCardBackground))
-            .overlay(
-                RoundedRectangle(cornerRadius: 18)
-                    .strokeBorder(set.isCompleted ? Color.green.opacity(0.55) : workoutCardBorder)
-            )
-        }
-        .buttonStyle(.plain)
     }
 }
 
@@ -474,6 +547,12 @@ private struct WorkoutAddSetCard: View {
 }
 
 private struct WorkoutExerciseSetEditorSheet: View {
+    private enum InputField: Hashable {
+        case weight
+        case reps
+        case duration
+    }
+
     @Environment(\.dismiss) private var dismiss
 
     let set: WorkoutSet
@@ -486,6 +565,7 @@ private struct WorkoutExerciseSetEditorSheet: View {
     @State private var metricType: WorkoutSetMetricType
     @State private var isCompleted: Bool
     @State private var showDeleteConfirmation = false
+    @FocusState private var focusedField: InputField?
 
     init(
         set: WorkoutSet,
@@ -503,67 +583,169 @@ private struct WorkoutExerciseSetEditorSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Подход \(set.orderIndex + 1)") {
-                    Picker("Тип", selection: $metricType) {
-                        Text("Повторения").tag(WorkoutSetMetricType.reps)
-                        Text("Время").tag(WorkoutSetMetricType.duration)
+        VStack(spacing: 0) {
+            Capsule()
+                .fill(Color.secondary.opacity(0.35))
+                .frame(width: 38, height: 5)
+                .padding(.top, 9)
+
+            HStack {
+                Button("Отмена") { dismiss() }
+                    .font(.body.weight(.medium))
+
+                Spacer()
+
+                Text("Редактировать подход")
+                    .font(.headline.weight(.bold))
+
+                Spacer()
+
+                Button("Сохранить", action: save)
+                    .font(.body.weight(.semibold))
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 18)
+            .padding(.bottom, 22)
+
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 18) {
+                    Text("Подход \(set.orderIndex + 1)")
+                        .font(.title3.weight(.semibold))
+
+                    VStack(spacing: 0) {
+                        HStack {
+                            Text("Тип")
+                                .font(.body.weight(.semibold))
+                            Spacer()
+                            Picker("Тип", selection: $metricType) {
+                                Text("Повторения").tag(WorkoutSetMetricType.reps)
+                                Text("Время").tag(WorkoutSetMetricType.duration)
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(width: 260)
+                        }
+                        .padding(16)
+
+                        Divider().padding(.horizontal, 16)
+
+                        HStack(spacing: 12) {
+                            Image(systemName: "dumbbell.fill")
+                                .foregroundStyle(.blue)
+                                .frame(width: 24)
+                            Text("Вес")
+                                .font(.body.weight(.medium))
+                            Spacer()
+                            TextField("0", value: $weight, format: .number)
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .font(.headline.weight(.semibold))
+                                .frame(width: 110)
+                                .focused($focusedField, equals: .weight)
+                            Text("кг")
+                                .font(.body.weight(.semibold))
+                        }
+                        .padding(16)
+
+                        Divider().padding(.horizontal, 16)
+
+                        if metricType == .reps {
+                            HStack(spacing: 12) {
+                                Image(systemName: "target")
+                                    .foregroundStyle(.blue)
+                                    .frame(width: 24)
+                                Text("Повторения")
+                                    .font(.body.weight(.medium))
+                                Spacer()
+                                TextField("0", value: $reps, format: .number)
+                                    .keyboardType(.numberPad)
+                                    .multilineTextAlignment(.trailing)
+                                    .font(.headline.weight(.semibold))
+                                    .frame(width: 100)
+                                    .focused($focusedField, equals: .reps)
+                            }
+                            .padding(16)
+                        } else {
+                            HStack(spacing: 12) {
+                                Image(systemName: "timer")
+                                    .foregroundStyle(.blue)
+                                    .frame(width: 24)
+                                Text("Время")
+                                    .font(.body.weight(.medium))
+                                Spacer()
+                                TextField("0", value: $durationSeconds, format: .number)
+                                    .keyboardType(.numberPad)
+                                    .multilineTextAlignment(.trailing)
+                                    .font(.headline.weight(.semibold))
+                                    .frame(width: 100)
+                                    .focused($focusedField, equals: .duration)
+                                Text("сек")
+                                    .font(.body.weight(.semibold))
+                            }
+                            .padding(16)
+                        }
+
+                        Divider().padding(.horizontal, 16)
+
+                        Toggle("Подход выполнен", isOn: $isCompleted)
+                            .font(.body.weight(.medium))
+                            .padding(16)
                     }
+                    .background(RoundedRectangle(cornerRadius: 22).fill(Color(.secondarySystemBackground)))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 22)
+                            .strokeBorder(Color(.separator).opacity(0.32))
+                    )
 
-                    TextField("Вес, кг", value: $weight, format: .number)
-                        .keyboardType(.decimalPad)
-
-                    if metricType == .reps {
-                        TextField("Повторения", value: $reps, format: .number)
-                            .keyboardType(.numberPad)
-                    } else {
-                        TextField("Время, секунд", value: $durationSeconds, format: .number)
-                            .keyboardType(.numberPad)
-                    }
-
-                    Toggle("Подход выполнен", isOn: $isCompleted)
-                }
-
-                Section {
-                    Button("Удалить подход", role: .destructive) {
+                    Button(role: .destructive) {
                         showDeleteConfirmation = true
+                    } label: {
+                        Label("Удалить подход", systemImage: "trash")
+                            .font(.headline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 17)
                     }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.red)
+                    .background(Color.red.opacity(0.10), in: RoundedRectangle(cornerRadius: 20))
                 }
-            }
-            .navigationTitle("Редактировать подход")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Отмена") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Сохранить") {
-                        onSave(
-                            max(0, weight),
-                            max(0, reps),
-                            max(0, durationSeconds),
-                            metricType,
-                            isCompleted
-                        )
-                        dismiss()
-                    }
-                }
-            }
-            .confirmationDialog(
-                "Удалить подход?",
-                isPresented: $showDeleteConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("Удалить", role: .destructive) {
-                    onDelete()
-                    dismiss()
-                }
-                Button("Отмена", role: .cancel) {}
-            } message: {
-                Text("Вес и повторения этого подхода будут удалены.")
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
             }
         }
+        .background(Color(.systemGroupedBackground))
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Готово") {
+                    focusedField = nil
+                }
+            }
+        }
+        .confirmationDialog(
+            "Удалить подход?",
+            isPresented: $showDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Удалить", role: .destructive) {
+                onDelete()
+                dismiss()
+            }
+            Button("Отмена", role: .cancel) {}
+        } message: {
+            Text("Вес и повторения этого подхода будут удалены.")
+        }
+    }
+
+    private func save() {
+        focusedField = nil
+        onSave(
+            max(0, weight),
+            max(0, reps),
+            max(0, durationSeconds),
+            metricType,
+            isCompleted
+        )
+        dismiss()
     }
 }
 
