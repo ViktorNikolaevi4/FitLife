@@ -31,8 +31,6 @@ struct ActiveWorkoutScreen: View {
     @State private var isShowingAddMenu = false
     @State private var collapsedBlockIds: Set<String> = []
     @State private var exerciseTargetBlock: WorkoutBlock?
-    @State private var editingSet: WorkoutSet?
-    @State private var editingExerciseNote: WorkoutExercise?
     @State private var pendingDeleteBlock: WorkoutBlock?
     @State private var isEditingWorkoutTitle = false
     @State private var isEditingWorkoutNote = false
@@ -131,16 +129,15 @@ struct ActiveWorkoutScreen: View {
 
                             if collapsedBlockIds.contains(group.id) == false {
                                 ForEach(group.exercises, id: \.id) { exercise in
-                                    WorkoutExerciseCard(
-                                        exercise: exercise,
-                                        onToggleExpanded: { toggleExpanded(exercise) },
-                                        onEditNote: { editingExerciseNote = exercise },
-                                        onToggleSet: { set in toggleSet(set) },
-                                        onEditSet: { set in editingSet = set },
-                                        onAddSet: { addSet(to: exercise) },
-                                        onDeleteSet: { set in deleteSet(set, from: exercise) },
-                                        onDeleteExercise: { deleteExercise(exercise) }
-                                    )
+                                    NavigationLink {
+                                        WorkoutExerciseDetailScreen(
+                                            exercise: exercise,
+                                            followingExercises: followingExercises(after: exercise)
+                                        )
+                                    } label: {
+                                        WorkoutExerciseCard(exercise: exercise)
+                                    }
+                                    .buttonStyle(.plain)
                                 }
                             }
                         }
@@ -274,37 +271,6 @@ struct ActiveWorkoutScreen: View {
                 fallbackTitle: AppLocalizer.string("workout.active.title"),
                 onSave: { title in
                     updateWorkoutTitle(title)
-                }
-            )
-            .presentationDetents([.medium])
-            .presentationDragIndicator(.visible)
-        }
-        .sheet(item: $editingSet) { set in
-            EditWorkoutSetScreen(
-                set: set,
-                onSave: { weight, reps, durationSeconds, metricType in
-                    updateSet(
-                        set,
-                        weight: weight,
-                        reps: reps,
-                        durationSeconds: durationSeconds,
-                        metricType: metricType
-                    )
-                },
-                onDelete: {
-                    if let exercise = set.exercise {
-                        deleteSet(set, from: exercise)
-                    }
-                }
-            )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-        }
-        .sheet(item: $editingExerciseNote) { exercise in
-            EditWorkoutExerciseNoteScreen(
-                exercise: exercise,
-                onSave: { note in
-                    updateExerciseNote(exercise, note: note)
                 }
             )
             .presentationDetents([.medium])
@@ -523,13 +489,6 @@ struct ActiveWorkoutScreen: View {
         .shadow(color: activeWorkoutCardShadow.opacity(0.9), radius: 12, x: 0, y: 4)
     }
 
-    private func toggleExpanded(_ exercise: WorkoutExercise) {
-        withAnimation(.easeInOut(duration: 0.22)) {
-            exercise.isExpanded.toggle()
-        }
-        try? modelContext.save()
-    }
-
     private func collapseExercisesIfNeeded() {
         var hasChanges = false
         for exercise in workout.exerciseItems where exercise.isExpanded {
@@ -582,33 +541,6 @@ struct ActiveWorkoutScreen: View {
         }
     }
 
-    private func toggleSet(_ set: WorkoutSet) {
-        set.isCompleted.toggle()
-        try? modelContext.save()
-    }
-
-    private func addSet(to exercise: WorkoutExercise) {
-        let nextIndex = exercise.setItems.count
-        let lastSet = exercise.setItems.sorted { $0.orderIndex < $1.orderIndex }.last
-        let set = WorkoutSet(
-            orderIndex: nextIndex,
-            weight: lastSet?.weight ?? 20,
-            reps: lastSet?.reps ?? 10,
-            durationSeconds: lastSet?.durationSeconds ?? 30,
-            metricType: lastSet?.metricType ?? .reps
-        )
-        set.exercise = exercise
-        exercise.setItems.append(set)
-        try? modelContext.save()
-    }
-
-    private func deleteSet(_ set: WorkoutSet, from exercise: WorkoutExercise) {
-        exercise.setItems.removeAll { $0.id == set.id }
-        modelContext.delete(set)
-        reindexSets(in: exercise)
-        try? modelContext.save()
-    }
-
     private func deleteExercise(_ exercise: WorkoutExercise) {
         workout.exerciseItems.removeAll { $0.id == exercise.id }
         exercise.block?.exerciseItems.removeAll { $0.id == exercise.id }
@@ -627,11 +559,6 @@ struct ActiveWorkoutScreen: View {
         collapsedBlockIds.remove(block.id.uuidString)
         modelContext.delete(block)
         reindexExercises()
-        try? modelContext.save()
-    }
-
-    private func updateExerciseNote(_ exercise: WorkoutExercise, note: String) {
-        exercise.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
         try? modelContext.save()
     }
 
@@ -658,6 +585,7 @@ struct ActiveWorkoutScreen: View {
             systemImage: draft.systemImage,
             accentName: draft.accentName,
             orderIndex: index,
+            note: draft.note,
             activityType: draft.activityType,
             metValue: draft.metValue
         )
@@ -843,19 +771,21 @@ struct ActiveWorkoutScreen: View {
         try? modelContext.save()
     }
 
+    private func followingExercises(after exercise: WorkoutExercise) -> [WorkoutExercise] {
+        let orderedExercises = sortedExercises
+        guard let currentIndex = orderedExercises.firstIndex(where: { $0.id == exercise.id }) else {
+            return []
+        }
+        let followingIndex = orderedExercises.index(after: currentIndex)
+        guard followingIndex < orderedExercises.endIndex else { return [] }
+        return Array(orderedExercises[followingIndex...])
+    }
+
     private func reindexExercises() {
         for (index, exercise) in workout.exerciseItems
             .sorted(by: { $0.orderIndex < $1.orderIndex })
             .enumerated() {
             exercise.orderIndex = index
-        }
-    }
-
-    private func reindexSets(in exercise: WorkoutExercise) {
-        for (index, item) in exercise.setItems
-            .sorted(by: { $0.orderIndex < $1.orderIndex })
-            .enumerated() {
-            item.orderIndex = index
         }
     }
 
