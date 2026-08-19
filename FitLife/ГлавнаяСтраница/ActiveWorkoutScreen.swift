@@ -37,6 +37,8 @@ struct ActiveWorkoutScreen: View {
     @State private var isEditingWorkoutNote = false
     @State private var showFinishConfirmation = false
     @State private var isShowingEffortPicker = false
+    @State private var shouldShowCompletionAfterEffortPicker = false
+    @State private var isShowingCompletionSummary = false
     @State private var exerciseTemplates: [WorkoutExerciseTemplate] = []
     @State private var selectedExercise: WorkoutExercise?
     @State private var selectedBlock: WorkoutBlock?
@@ -200,6 +202,12 @@ struct ActiveWorkoutScreen: View {
                 },
                 onDeleteExercise: {
                     deleteExercise(exercise)
+                },
+                onContinueWorkout: {
+                    selectedExercise = nil
+                    DispatchQueue.main.async {
+                        continueWorkout()
+                    }
                 }
             )
         }
@@ -208,6 +216,9 @@ struct ActiveWorkoutScreen: View {
                 block: block,
                 onFinish: {
                     selectedBlock = nil
+                    DispatchQueue.main.async {
+                        continueWorkout()
+                    }
                 }
             )
         }
@@ -364,7 +375,14 @@ struct ActiveWorkoutScreen: View {
         } message: {
             Text(AppLocalizer.string("workout.finish.confirm.message"))
         }
-        .sheet(isPresented: $isShowingEffortPicker) {
+        .sheet(
+            isPresented: $isShowingEffortPicker,
+            onDismiss: {
+                guard shouldShowCompletionAfterEffortPicker else { return }
+                shouldShowCompletionAfterEffortPicker = false
+                isShowingCompletionSummary = true
+            }
+        ) {
             WorkoutEffortPickerSheet(
                 baseCalories: currentEstimatedCalories,
                 onSelect: { effort in
@@ -374,6 +392,14 @@ struct ActiveWorkoutScreen: View {
             )
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
+        }
+        .fullScreenCover(isPresented: $isShowingCompletionSummary) {
+            WorkoutCompletionSummaryScreen(workout: workout) {
+                isShowingCompletionSummary = false
+                DispatchQueue.main.async {
+                    dismiss()
+                }
+            }
         }
     }
 
@@ -913,7 +939,7 @@ struct ActiveWorkoutScreen: View {
             gender: workout.gender
         )
         syncCompletedAssignmentIfNeeded()
-        dismiss()
+        shouldShowCompletionAfterEffortPicker = true
     }
 
     private func syncCompletedAssignmentIfNeeded() {

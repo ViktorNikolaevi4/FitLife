@@ -57,35 +57,46 @@ struct WorkoutCompositeSetCard: View {
     let number: Int
     let group: WorkoutSetGroupDescriptor
     let onOpen: () -> Void
+    let onStatusAction: () -> Void
     let onEdit: () -> Void
 
     var body: some View {
-        Button(action: onOpen) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 5) {
-                    Image(systemName: group.method.iconName)
-                        .font(.caption.weight(.bold))
-                    Text(group.method.title)
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(1)
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 4) {
+                Button(action: onOpen) {
+                    HStack(spacing: 5) {
+                        Image(systemName: group.method.iconName)
+                            .font(.caption.weight(.bold))
+                        Text(group.method.title)
+                            .font(.caption.weight(.semibold))
+                            .lineLimit(1)
+                    }
+                    .foregroundStyle(.blue)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
 
-                    Spacer(minLength: 4)
-
+                Button(action: onStatusAction) {
                     Image(systemName: group.isCompleted ? "checkmark.circle.fill" : "circle")
                         .font(.body.weight(.semibold))
                         .foregroundStyle(group.isCompleted ? Color.green : Color.secondary)
+                        .frame(width: 32, height: 28)
+                        .contentShape(Circle())
                 }
-                .foregroundStyle(.blue)
+                .buttonStyle(.plain)
+                .accessibilityLabel(group.isCompleted ? "Начать метод заново" : "Продолжить выполнение")
+            }
 
+            Button(action: onOpen) {
                 Text(summary)
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.68)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
         .padding(9)
         .frame(width: 152, height: 72, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 18).fill(Color(.secondarySystemBackground)))

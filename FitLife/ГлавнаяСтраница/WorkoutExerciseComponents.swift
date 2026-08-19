@@ -107,25 +107,30 @@ struct WorkoutExerciseDetailScreen: View {
     let followingExercises: [WorkoutExercise]
     let onOpenExercise: (WorkoutExercise) -> Void
     let onDeleteExercise: (() -> Void)?
+    let onContinueWorkout: (() -> Void)?
 
     @State private var editingSet: WorkoutSet?
     @State private var editingSetGroup: WorkoutSetGroupDescriptor?
     @State private var activeSetGroup: WorkoutSetGroupDescriptor?
+    @State private var pendingRestartSetGroup: WorkoutSetGroupDescriptor?
     @State private var showSetMethodPicker = false
     @FocusState private var isPersonalNoteFocused: Bool
     @State private var showIncompleteSetsConfirmation = false
+    @State private var showNextExerciseIncompleteConfirmation = false
     @State private var showDeleteExerciseConfirmation = false
 
     init(
         exercise: WorkoutExercise,
         followingExercises: [WorkoutExercise],
         onOpenExercise: @escaping (WorkoutExercise) -> Void,
-        onDeleteExercise: (() -> Void)? = nil
+        onDeleteExercise: (() -> Void)? = nil,
+        onContinueWorkout: (() -> Void)? = nil
     ) {
         self.exercise = exercise
         self.followingExercises = followingExercises
         self.onOpenExercise = onOpenExercise
         self.onDeleteExercise = onDeleteExercise
+        self.onContinueWorkout = onContinueWorkout
     }
 
     private var sortedSets: [WorkoutSet] {
@@ -138,6 +143,10 @@ struct WorkoutExerciseDetailScreen: View {
 
     private var areAllSetsComplete: Bool {
         setGroups.isEmpty == false && completedCount == setGroups.count
+    }
+
+    private var incompleteSetCount: Int {
+        max(setGroups.count - completedCount, 0)
     }
 
     private var setGroups: [WorkoutSetGroupDescriptor] {
@@ -207,6 +216,18 @@ struct WorkoutExerciseDetailScreen: View {
         } message: {
             Text("Невыполненные подходы останутся без отметки.")
         }
+        .confirmationDialog(
+            "Не все подходы выполнены",
+            isPresented: $showNextExerciseIncompleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Перейти с пропущенными подходами") {
+                openNextExercise()
+            }
+            Button("Остаться", role: .cancel) {}
+        } message: {
+            Text("Не выполнено \(incompleteSetCount) из \(setGroups.count) подходов.")
+        }
         .onChange(of: isPersonalNoteFocused) { _, isFocused in
             if isFocused == false {
                 persistPersonalNote()
@@ -248,6 +269,28 @@ struct WorkoutExerciseDetailScreen: View {
             Button("Отмена", role: .cancel) {}
         } message: {
             Text("«\(exercise.name)» и все его подходы будут удалены из этой тренировки.")
+        }
+        .confirmationDialog(
+            "Начать метод заново?",
+            isPresented: Binding(
+                get: { pendingRestartSetGroup != nil },
+                set: { if $0 == false { pendingRestartSetGroup = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Начать заново", role: .destructive) {
+                if let group = pendingRestartSetGroup {
+                    restartSetGroup(group)
+                }
+                pendingRestartSetGroup = nil
+            }
+            Button("Отмена", role: .cancel) {
+                pendingRestartSetGroup = nil
+            }
+        } message: {
+            if let group = pendingRestartSetGroup {
+                Text("Сохранённые результаты «\(group.method.title)» будут сброшены.")
+            }
         }
         .sheet(item: $editingSet) { set in
             WorkoutExerciseSetEditorSheet(
@@ -368,6 +411,13 @@ struct WorkoutExerciseDetailScreen: View {
                                 number: index + 1,
                                 group: group,
                                 onOpen: { activeSetGroup = group },
+                                onStatusAction: {
+                                    if group.isCompleted {
+                                        pendingRestartSetGroup = group
+                                    } else {
+                                        activeSetGroup = group
+                                    }
+                                },
                                 onEdit: { editingSetGroup = group }
                             )
                         }
@@ -423,7 +473,11 @@ struct WorkoutExerciseDetailScreen: View {
     private var completionAction: some View {
         if exercise.isFinished, let nextExercise = followingExercises.first {
             Button {
-                onOpenExercise(nextExercise)
+                if incompleteSetCount > 0 {
+                    showNextExerciseIncompleteConfirmation = true
+                } else {
+                    onOpenExercise(nextExercise)
+                }
             } label: {
                 Label("Следующее упражнение", systemImage: "arrow.right.circle.fill")
                     .font(.headline.weight(.semibold))
@@ -434,8 +488,11 @@ struct WorkoutExerciseDetailScreen: View {
             }
             .buttonStyle(.plain)
         } else if exercise.isFinished {
-            Button { dismiss() } label: {
-                Label("Упражнение завершено", systemImage: "checkmark.circle.fill")
+            Button(action: continueAfterCurrentExercise) {
+                Label(
+                    onContinueWorkout == nil ? "Упражнение завершено" : "Продолжить тренировку",
+                    systemImage: onContinueWorkout == nil ? "checkmark.circle.fill" : "play.circle.fill"
+                )
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
@@ -473,10 +530,25 @@ struct WorkoutExerciseDetailScreen: View {
         try? modelContext.save()
 
         if followingExercises.isEmpty {
-            dismiss()
+            continueAfterCurrentExercise()
         } else {
             onOpenExercise(followingExercises[0])
         }
+    }
+
+    private func continueAfterCurrentExercise() {
+        dismiss()
+        guard let onContinueWorkout else { return }
+        DispatchQueue.main.async {
+            onContinueWorkout()
+        }
+    }
+
+    private func openNextExercise() {
+        guard let nextExercise = followingExercises.first else { return }
+        isPersonalNoteFocused = false
+        persistPersonalNote()
+        onOpenExercise(nextExercise)
     }
 
     private func addNormalSet() {
@@ -640,6 +712,9 @@ struct WorkoutExerciseDetailScreen: View {
 
     private func toggleSetCompletion(_ set: WorkoutSet) {
         set.isCompleted.toggle()
+        if set.isCompleted == false {
+            exercise.isFinished = false
+        }
         set.completedAt = set.isCompleted ? Date() : nil
         if set.isCompleted {
             set.actualWeight = set.actualWeight ?? set.weight
@@ -647,6 +722,21 @@ struct WorkoutExerciseDetailScreen: View {
             set.actualDurationSeconds = set.actualDurationSeconds ?? set.durationSeconds
         }
         try? modelContext.save()
+    }
+
+    private func restartSetGroup(_ group: WorkoutSetGroupDescriptor) {
+        exercise.isFinished = false
+        for set in group.steps {
+            set.isCompleted = false
+            set.actualWeight = nil
+            set.actualReps = nil
+            set.actualDurationSeconds = nil
+            set.completedAt = nil
+        }
+        try? modelContext.save()
+
+        let refreshedGroup = workoutSetGroups(for: exercise).first { $0.id == group.id } ?? group
+        activeSetGroup = refreshedGroup
     }
 
     private func persistPersonalNote() {
