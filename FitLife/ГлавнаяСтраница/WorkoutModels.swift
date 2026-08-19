@@ -6,6 +6,60 @@ enum WorkoutSetMetricType: String, Codable {
     case duration
 }
 
+enum WorkoutSetMethod: String, Codable, CaseIterable, Identifiable {
+    case normal
+    case dropSet
+    case pyramid
+    case cluster
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .normal: return "Обычный подход"
+        case .dropSet: return "Дроп-сет"
+        case .pyramid: return "Пирамида"
+        case .cluster: return "Кластер"
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .normal: return "circle"
+        case .dropSet: return "arrow.down.right"
+        case .pyramid: return "triangle.fill"
+        case .cluster: return "circle.grid.3x3.fill"
+        }
+    }
+}
+
+enum WorkoutPyramidPattern: String, Codable, CaseIterable, Identifiable {
+    case ascending
+    case descending
+    case full
+    case custom
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .ascending: return "Вверх"
+        case .descending: return "Вниз"
+        case .full: return "Полная"
+        case .custom: return "Своя"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .ascending: return "↑"
+        case .descending: return "↓"
+        case .full: return "↑↓"
+        case .custom: return "↕"
+        }
+    }
+}
+
 enum WorkoutActivityType: String, Codable {
     case strength
     case cardio
@@ -469,6 +523,15 @@ final class WorkoutSet {
     var reps: Int = 0
     var durationSeconds: Int = 30
     var isCompleted: Bool = false
+    var methodRawValue: String = WorkoutSetMethod.normal.rawValue
+    var methodVariantRawValue: String = ""
+    var groupID: UUID?
+    var stepIndex: Int = 0
+    var restAfterSeconds: Int = 0
+    var actualWeight: Double?
+    var actualReps: Int?
+    var actualDurationSeconds: Int?
+    var completedAt: Date?
 
     var exercise: WorkoutExercise?
 
@@ -477,13 +540,28 @@ final class WorkoutSet {
         set { metricTypeRaw = newValue.rawValue }
     }
 
+    var method: WorkoutSetMethod {
+        get { WorkoutSetMethod(rawValue: methodRawValue) ?? .normal }
+        set { methodRawValue = newValue.rawValue }
+    }
+
+    var pyramidPattern: WorkoutPyramidPattern {
+        get { WorkoutPyramidPattern(rawValue: methodVariantRawValue) ?? .ascending }
+        set { methodVariantRawValue = newValue.rawValue }
+    }
+
     init(
         orderIndex: Int,
         weight: Double,
         reps: Int,
         durationSeconds: Int = 30,
         metricType: WorkoutSetMetricType = .reps,
-        isCompleted: Bool = false
+        isCompleted: Bool = false,
+        method: WorkoutSetMethod = .normal,
+        pyramidPattern: WorkoutPyramidPattern = .ascending,
+        groupID: UUID? = nil,
+        stepIndex: Int = 0,
+        restAfterSeconds: Int = 0
     ) {
         self.orderIndex = orderIndex
         self.weight = weight
@@ -491,6 +569,11 @@ final class WorkoutSet {
         self.reps = reps
         self.durationSeconds = durationSeconds
         self.isCompleted = isCompleted
+        self.methodRawValue = method.rawValue
+        self.methodVariantRawValue = method == .pyramid ? pyramidPattern.rawValue : ""
+        self.groupID = groupID
+        self.stepIndex = stepIndex
+        self.restAfterSeconds = restAfterSeconds
     }
 }
 

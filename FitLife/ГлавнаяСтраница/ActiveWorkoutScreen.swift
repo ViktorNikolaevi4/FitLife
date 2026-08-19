@@ -32,6 +32,7 @@ struct ActiveWorkoutScreen: View {
     @State private var collapsedBlockIds: Set<String> = []
     @State private var exerciseTargetBlock: WorkoutBlock?
     @State private var pendingDeleteBlock: WorkoutBlock?
+    @State private var pendingDeleteExercise: WorkoutExercise?
     @State private var isEditingWorkoutTitle = false
     @State private var isEditingWorkoutNote = false
     @State private var showFinishConfirmation = false
@@ -139,6 +140,11 @@ struct ActiveWorkoutScreen: View {
                                         WorkoutExerciseCard(exercise: exercise)
                                     }
                                     .buttonStyle(.plain)
+                                    .contextMenu {
+                                        Button("Удалить упражнение", systemImage: "trash", role: .destructive) {
+                                            pendingDeleteExercise = exercise
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -191,6 +197,9 @@ struct ActiveWorkoutScreen: View {
                 followingExercises: followingExercises(after: exercise),
                 onOpenExercise: { nextExercise in
                     selectedExercise = nextExercise
+                },
+                onDeleteExercise: {
+                    deleteExercise(exercise)
                 }
             )
         }
@@ -298,6 +307,28 @@ struct ActiveWorkoutScreen: View {
         } message: {
             if let block = pendingDeleteBlock {
                 Text("Будет удалён блок «\(displayTitle(for: block))» и все упражнения внутри него.")
+            }
+        }
+        .confirmationDialog(
+            "Удалить упражнение?",
+            isPresented: Binding(
+                get: { pendingDeleteExercise != nil },
+                set: { if $0 == false { pendingDeleteExercise = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Удалить упражнение", role: .destructive) {
+                if let exercise = pendingDeleteExercise {
+                    deleteExercise(exercise)
+                }
+                pendingDeleteExercise = nil
+            }
+            Button(AppLocalizer.string("common.cancel"), role: .cancel) {
+                pendingDeleteExercise = nil
+            }
+        } message: {
+            if let exercise = pendingDeleteExercise {
+                Text("«\(exercise.name)» и все его подходы будут удалены из этой тренировки.")
             }
         }
         .sheet(isPresented: $isEditingWorkoutTitle) {

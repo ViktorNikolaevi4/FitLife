@@ -7,12 +7,12 @@ private let workoutCardBorder = Color(.separator).opacity(0.40)
 struct WorkoutExerciseCard: View {
     let exercise: WorkoutExercise
 
-    private var sortedSets: [WorkoutSet] {
-        exercise.setItems.sorted { $0.orderIndex < $1.orderIndex }
+    private var groups: [WorkoutSetGroupDescriptor] {
+        workoutSetGroups(for: exercise)
     }
 
     private var completedCount: Int {
-        sortedSets.filter(\.isCompleted).count
+        groups.filter(\.isCompleted).count
     }
 
     var body: some View {
@@ -36,7 +36,7 @@ struct WorkoutExerciseCard: View {
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.leading)
 
-                Text(AppLocalizer.format("workout.exercise.summary", sortedSets.count, completedCount))
+                Text(AppLocalizer.format("workout.exercise.summary", groups.count, completedCount))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -103,24 +103,29 @@ struct WorkoutExerciseDetailScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
-    let exercise: WorkoutExercise
+    @Bindable var exercise: WorkoutExercise
     let followingExercises: [WorkoutExercise]
     let onOpenExercise: (WorkoutExercise) -> Void
+    let onDeleteExercise: (() -> Void)?
 
-    @State private var personalNote: String
     @State private var editingSet: WorkoutSet?
+    @State private var editingSetGroup: WorkoutSetGroupDescriptor?
+    @State private var activeSetGroup: WorkoutSetGroupDescriptor?
+    @State private var showSetMethodPicker = false
     @FocusState private var isPersonalNoteFocused: Bool
     @State private var showIncompleteSetsConfirmation = false
+    @State private var showDeleteExerciseConfirmation = false
 
     init(
         exercise: WorkoutExercise,
         followingExercises: [WorkoutExercise],
-        onOpenExercise: @escaping (WorkoutExercise) -> Void
+        onOpenExercise: @escaping (WorkoutExercise) -> Void,
+        onDeleteExercise: (() -> Void)? = nil
     ) {
         self.exercise = exercise
         self.followingExercises = followingExercises
         self.onOpenExercise = onOpenExercise
-        _personalNote = State(initialValue: exercise.userNote)
+        self.onDeleteExercise = onDeleteExercise
     }
 
     private var sortedSets: [WorkoutSet] {
@@ -128,11 +133,15 @@ struct WorkoutExerciseDetailScreen: View {
     }
 
     private var completedCount: Int {
-        sortedSets.filter(\.isCompleted).count
+        setGroups.filter(\.isCompleted).count
     }
 
     private var areAllSetsComplete: Bool {
-        sortedSets.isEmpty == false && completedCount == sortedSets.count
+        setGroups.isEmpty == false && completedCount == setGroups.count
+    }
+
+    private var setGroups: [WorkoutSetGroupDescriptor] {
+        workoutSetGroups(for: exercise)
     }
 
     private var coachComment: String {
@@ -172,6 +181,9 @@ struct WorkoutExerciseDetailScreen: View {
         .navigationTitle(exercise.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
+        .navigationDestination(item: $activeSetGroup) { group in
+            WorkoutSetMethodRunnerScreen(exercise: exercise, groupID: group.id)
+        }
         .safeAreaInset(edge: .bottom) {
             if isPersonalNoteFocused == false {
                 completionAction
@@ -201,12 +213,41 @@ struct WorkoutExerciseDetailScreen: View {
             }
         }
         .toolbar {
+            if onDeleteExercise != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button("Удалить упражнение", systemImage: "trash", role: .destructive) {
+                            showDeleteExerciseConfirmation = true
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .accessibilityLabel("Действия с упражнением")
+                }
+            }
+
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 Button("Готово") {
                     isPersonalNoteFocused = false
                 }
             }
+        }
+        .confirmationDialog(
+            "Удалить упражнение?",
+            isPresented: $showDeleteExerciseConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Удалить упражнение", role: .destructive) {
+                persistPersonalNote()
+                dismiss()
+                DispatchQueue.main.async {
+                    onDeleteExercise?()
+                }
+            }
+            Button("Отмена", role: .cancel) {}
+        } message: {
+            Text("«\(exercise.name)» и все его подходы будут удалены из этой тренировки.")
         }
         .sheet(item: $editingSet) { set in
             WorkoutExerciseSetEditorSheet(
@@ -225,6 +266,32 @@ struct WorkoutExerciseDetailScreen: View {
             )
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $editingSetGroup) { group in
+            WorkoutSetGroupEditorSheet(
+                group: group,
+                onSave: { drafts, pyramidPattern in
+                    saveSetGroup(group, drafts: drafts, pyramidPattern: pyramidPattern)
+                },
+                onDelete: {
+                    deleteSetGroup(group)
+                }
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .confirmationDialog(
+            "Добавить подход",
+            isPresented: $showSetMethodPicker,
+            titleVisibility: .visible
+        ) {
+            Button("Обычный подход") { addNormalSet() }
+            Button("Дроп-сет") { addCompositeSet(method: .dropSet) }
+            Button("Пирамида") { addCompositeSet(method: .pyramid) }
+            Button("Кластер") { addCompositeSet(method: .cluster) }
+            Button("Отмена", role: .cancel) {}
+        } message: {
+            Text("Выберите способ выполнения нового подхода.")
         }
     }
 
@@ -256,7 +323,7 @@ struct WorkoutExerciseDetailScreen: View {
             VStack(spacing: 10) {
                 WorkoutExerciseMetricCard(
                     title: "Подходы",
-                    value: "\(completedCount) из \(sortedSets.count)",
+                    value: "\(completedCount) из \(setGroups.count)",
                     icon: "square.stack.3d.up.fill"
                 )
                 WorkoutExerciseMetricCard(
@@ -288,15 +355,25 @@ struct WorkoutExerciseDetailScreen: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 12) {
-                    ForEach(sortedSets, id: \.id) { set in
-                        WorkoutSetHorizontalCard(
-                            set: set,
-                            onEdit: { editingSet = set },
-                            onToggleCompletion: { toggleSetCompletion(set) }
-                        )
+                    ForEach(Array(setGroups.enumerated()), id: \.element.id) { index, group in
+                        if group.method == .normal, let set = group.steps.first {
+                            WorkoutSetHorizontalCard(
+                                number: index + 1,
+                                set: set,
+                                onEdit: { editingSet = set },
+                                onToggleCompletion: { toggleSetCompletion(set) }
+                            )
+                        } else {
+                            WorkoutCompositeSetCard(
+                                number: index + 1,
+                                group: group,
+                                onOpen: { activeSetGroup = group },
+                                onEdit: { editingSetGroup = group }
+                            )
+                        }
                     }
 
-                    WorkoutAddSetCard(action: addSet)
+                    WorkoutAddSetCard(action: { showSetMethodPicker = true })
                 }
             }
         }
@@ -324,7 +401,7 @@ struct WorkoutExerciseDetailScreen: View {
             Label("Моя заметка", systemImage: "square.and.pencil")
                 .font(.headline.weight(.semibold))
 
-            TextEditor(text: $personalNote)
+            TextEditor(text: $exercise.userNote)
                 .font(.body)
                 .frame(minHeight: 96)
                 .scrollContentBackground(.hidden)
@@ -402,7 +479,7 @@ struct WorkoutExerciseDetailScreen: View {
         }
     }
 
-    private func addSet() {
+    private func addNormalSet() {
         let lastSet = sortedSets.last
         let set = WorkoutSet(
             orderIndex: sortedSets.count,
@@ -417,6 +494,63 @@ struct WorkoutExerciseDetailScreen: View {
         editingSet = set
     }
 
+    private func addCompositeSet(method: WorkoutSetMethod) {
+        let lastSet = sortedSets.last
+        let baseWeight = max(lastSet?.weight ?? 20, 0)
+        let baseReps = max(lastSet?.reps ?? 10, 1)
+        let groupID = UUID()
+        let presets: [(Double, Int, Int)]
+
+        switch method {
+        case .dropSet:
+            presets = [
+                (baseWeight, baseReps, 0),
+                (baseWeight * 0.80, baseReps, 0),
+                (baseWeight * 0.65, baseReps + 2, 0)
+            ]
+        case .pyramid:
+            presets = [
+                (baseWeight * 0.75, 12, 90),
+                (baseWeight * 0.85, 10, 90),
+                (baseWeight * 0.95, 8, 90),
+                (baseWeight, 6, 0)
+            ]
+        case .cluster:
+            let clusterReps = max(baseReps / 3, 2)
+            presets = [
+                (baseWeight, clusterReps, 20),
+                (baseWeight, clusterReps, 20),
+                (baseWeight, clusterReps, 20),
+                (baseWeight, clusterReps, 0)
+            ]
+        case .normal:
+            addNormalSet()
+            return
+        }
+
+        let startingIndex = sortedSets.count
+        for (stepIndex, preset) in presets.enumerated() {
+            let set = WorkoutSet(
+                orderIndex: startingIndex + stepIndex,
+                weight: preset.0,
+                reps: preset.1,
+                metricType: .reps,
+                method: method,
+                pyramidPattern: .ascending,
+                groupID: groupID,
+                stepIndex: stepIndex,
+                restAfterSeconds: preset.2
+            )
+            set.exercise = exercise
+            exercise.setItems.append(set)
+        }
+        try? modelContext.save()
+
+        if let group = workoutSetGroups(for: exercise).first(where: { $0.id == groupID }) {
+            editingSetGroup = group
+        }
+    }
+
     private func deleteSet(_ set: WorkoutSet) {
         exercise.setItems.removeAll { $0.id == set.id }
         modelContext.delete(set)
@@ -428,13 +562,95 @@ struct WorkoutExerciseDetailScreen: View {
         try? modelContext.save()
     }
 
+    private func saveSetGroup(
+        _ group: WorkoutSetGroupDescriptor,
+        drafts: [WorkoutSetStepDraft],
+        pyramidPattern: WorkoutPyramidPattern
+    ) {
+        let groupOrder = setGroups.map(\.id)
+        let existingByID = Dictionary(uniqueKeysWithValues: group.steps.map { ($0.id, $0) })
+        let draftIDs = Set(drafts.map(\.id))
+
+        for set in group.steps where draftIDs.contains(set.id) == false {
+            exercise.setItems.removeAll { $0.id == set.id }
+            modelContext.delete(set)
+        }
+
+        for (stepIndex, draft) in drafts.enumerated() {
+            let set: WorkoutSet
+            if let existing = existingByID[draft.id] {
+                set = existing
+            } else {
+                set = WorkoutSet(
+                    orderIndex: group.orderIndex + stepIndex,
+                    weight: draft.weight,
+                    reps: draft.reps,
+                    durationSeconds: draft.durationSeconds,
+                    metricType: draft.metricType,
+                    method: group.method,
+                    pyramidPattern: pyramidPattern,
+                    groupID: group.id,
+                    stepIndex: stepIndex,
+                    restAfterSeconds: draft.restAfterSeconds
+                )
+                set.id = draft.id
+                set.exercise = exercise
+                exercise.setItems.append(set)
+            }
+
+            set.weight = max(draft.weight, 0)
+            set.reps = max(draft.reps, 0)
+            set.durationSeconds = max(draft.durationSeconds, 0)
+            set.metricType = draft.metricType
+            set.method = group.method
+            if group.method == .pyramid {
+                set.pyramidPattern = pyramidPattern
+            }
+            set.groupID = group.id
+            set.stepIndex = stepIndex
+            set.restAfterSeconds = max(draft.restAfterSeconds, 0)
+            set.isCompleted = draft.isCompleted
+        }
+
+        reindexSetGroups(in: groupOrder)
+        try? modelContext.save()
+    }
+
+    private func deleteSetGroup(_ group: WorkoutSetGroupDescriptor) {
+        for set in group.steps {
+            exercise.setItems.removeAll { $0.id == set.id }
+            modelContext.delete(set)
+        }
+        reindexSetGroups(in: setGroups.filter { $0.id != group.id }.map(\.id))
+        try? modelContext.save()
+    }
+
+    private func reindexSetGroups(in groupOrder: [UUID]) {
+        let currentGroups = Dictionary(uniqueKeysWithValues: workoutSetGroups(for: exercise).map { ($0.id, $0) })
+        var flatIndex = 0
+        for groupID in groupOrder {
+            guard let group = currentGroups[groupID] else { continue }
+            for (stepIndex, set) in group.steps.enumerated() {
+                set.orderIndex = flatIndex
+                set.stepIndex = stepIndex
+                flatIndex += 1
+            }
+        }
+    }
+
     private func toggleSetCompletion(_ set: WorkoutSet) {
         set.isCompleted.toggle()
+        set.completedAt = set.isCompleted ? Date() : nil
+        if set.isCompleted {
+            set.actualWeight = set.actualWeight ?? set.weight
+            set.actualReps = set.actualReps ?? set.reps
+            set.actualDurationSeconds = set.actualDurationSeconds ?? set.durationSeconds
+        }
         try? modelContext.save()
     }
 
     private func persistPersonalNote() {
-        let trimmedNote = personalNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedNote = exercise.userNote.trimmingCharacters(in: .whitespacesAndNewlines)
         guard exercise.userNote != trimmedNote else { return }
         exercise.userNote = trimmedNote
         try? modelContext.save()
@@ -442,6 +658,7 @@ struct WorkoutExerciseDetailScreen: View {
 }
 
 private struct WorkoutSetHorizontalCard: View {
+    let number: Int
     let set: WorkoutSet
     let onEdit: () -> Void
     let onToggleCompletion: () -> Void
@@ -474,7 +691,7 @@ private struct WorkoutSetHorizontalCard: View {
 
     private var setDetails: some View {
             VStack(alignment: .leading, spacing: 5) {
-                Text("Подход \(set.orderIndex + 1)")
+                Text("Подход \(number)")
                     .font(.caption.weight(.semibold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
