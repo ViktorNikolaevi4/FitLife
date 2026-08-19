@@ -75,6 +75,14 @@ enum WorkoutBlockMode: String, Codable {
     static let circuitCases: [WorkoutBlockMode] = [.rounds, .amrap, .tabata, .emom]
 }
 
+enum WorkoutBlockRunnerPhase: String, Codable {
+    case ready
+    case work
+    case rest
+    case paused
+    case completed
+}
+
 enum WorkoutBlockPreset: String, CaseIterable, Identifiable {
     case warmup
     case strength
@@ -292,12 +300,23 @@ final class WorkoutBlock {
     var title: String = ""
     var typeRawValue: String = WorkoutBlockType.strength.rawValue
     var modeRawValue: String = WorkoutBlockMode.rounds.rawValue
+    var presetRawValue: String = ""
     var orderIndex: Int = 0
     var rounds: Int = 1
     var durationMinutes: Int = 12
     var workSeconds: Int = 0
     var restSeconds: Int = 0
     var restBetweenRoundsSeconds: Int = 0
+    var isFinished: Bool = false
+    var currentRoundIndex: Int = 0
+    var currentExerciseIndex: Int = 0
+    var runnerPhaseRawValue: String = WorkoutBlockRunnerPhase.ready.rawValue
+    var phaseBeforePauseRawValue: String = WorkoutBlockRunnerPhase.work.rawValue
+    var phaseEndsAt: Date?
+    var pausedRemainingSeconds: Int = 0
+    var runnerStartedAt: Date?
+    var runnerCompletedAt: Date?
+    var completedIntervalsRawValue: String = ""
 
     var session: WorkoutSession?
 
@@ -318,26 +337,70 @@ final class WorkoutBlock {
         set { modeRawValue = newValue.rawValue }
     }
 
+    var runnerPhase: WorkoutBlockRunnerPhase {
+        get { WorkoutBlockRunnerPhase(rawValue: runnerPhaseRawValue) ?? .ready }
+        set { runnerPhaseRawValue = newValue.rawValue }
+    }
+
+    var phaseBeforePause: WorkoutBlockRunnerPhase {
+        get { WorkoutBlockRunnerPhase(rawValue: phaseBeforePauseRawValue) ?? .work }
+        set { phaseBeforePauseRawValue = newValue.rawValue }
+    }
+
+    var preset: WorkoutBlockPreset {
+        get {
+            WorkoutBlockPreset(rawValue: presetRawValue)
+                ?? WorkoutBlockPreset.inferred(title: title, type: type, mode: mode)
+        }
+        set { presetRawValue = newValue.rawValue }
+    }
+
+    var completedIntervalIndexes: Set<Int> {
+        get {
+            Set(
+                completedIntervalsRawValue
+                    .split(separator: ",")
+                    .compactMap { Int($0) }
+            )
+        }
+        set {
+            completedIntervalsRawValue = newValue
+                .sorted()
+                .map(String.init)
+                .joined(separator: ",")
+        }
+    }
+
     init(
         title: String,
         type: WorkoutBlockType = .strength,
         mode: WorkoutBlockMode = .rounds,
+        preset: WorkoutBlockPreset? = nil,
         orderIndex: Int,
         rounds: Int = 1,
         durationMinutes: Int = 12,
         workSeconds: Int = 0,
         restSeconds: Int = 0,
-        restBetweenRoundsSeconds: Int = 0
+        restBetweenRoundsSeconds: Int = 0,
+        isFinished: Bool = false,
+        currentRoundIndex: Int = 0,
+        currentExerciseIndex: Int = 0,
+        runnerPhase: WorkoutBlockRunnerPhase = .ready
     ) {
         self.title = title
         self.typeRawValue = type.rawValue
         self.modeRawValue = mode.rawValue
+        self.presetRawValue = preset?.rawValue ?? ""
         self.orderIndex = orderIndex
         self.rounds = rounds
         self.durationMinutes = durationMinutes
         self.workSeconds = workSeconds
         self.restSeconds = restSeconds
         self.restBetweenRoundsSeconds = restBetweenRoundsSeconds
+        self.isFinished = isFinished
+        self.currentRoundIndex = currentRoundIndex
+        self.currentExerciseIndex = currentExerciseIndex
+        self.runnerPhaseRawValue = runnerPhase.rawValue
     }
 }
 

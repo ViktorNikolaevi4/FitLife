@@ -38,6 +38,7 @@ struct ActiveWorkoutScreen: View {
     @State private var isShowingEffortPicker = false
     @State private var exerciseTemplates: [WorkoutExerciseTemplate] = []
     @State private var selectedExercise: WorkoutExercise?
+    @State private var selectedBlock: WorkoutBlock?
     @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
     private let firestore = Firestore.firestore()
 
@@ -115,6 +116,8 @@ struct ActiveWorkoutScreen: View {
                                 title: group.title,
                                 subtitle: group.subtitle,
                                 iconName: blockIconName(for: group.block),
+                                onStart: runnerAction(for: group.block),
+                                isCompleted: group.block?.isFinished == true,
                                 onAddExercise: group.block.map { block in
                                     {
                                         exerciseTargetBlock = block
@@ -191,20 +194,45 @@ struct ActiveWorkoutScreen: View {
                 }
             )
         }
+        .navigationDestination(item: $selectedBlock) { block in
+            WorkoutBlockRunnerScreen(
+                block: block,
+                onFinish: {
+                    selectedBlock = nil
+                }
+            )
+        }
         .safeAreaInset(edge: .bottom) {
-            Button(action: beginAddingExercise) {
-                Text(AppLocalizer.string("workout.add.exercise"))
-                    .fontWeight(.semibold)
-                    .font(.headline)
-                    .foregroundStyle(Color(.systemBackground))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 18)
-                    .background(RoundedRectangle(cornerRadius: 20).fill(HomeColors.primaryActionGradient))
+            VStack(spacing: 10) {
+                if hasPendingWorkoutItem {
+                    Button(action: continueWorkout) {
+                        Label("Продолжить тренировку", systemImage: "play.circle.fill")
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 17)
+                            .background(RoundedRectangle(cornerRadius: 20).fill(HomeColors.primaryActionGradient))
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Button(action: beginAddingExercise) {
+                    Text(AppLocalizer.string("workout.add.exercise"))
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.blue)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 15)
+                        .background(
+                            RoundedRectangle(cornerRadius: 20)
+                                .strokeBorder(Color.blue, lineWidth: 1.5)
+                        )
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
             .padding(.horizontal)
+            .padding(.top, 8)
             .padding(.bottom, 8)
-            .background(Color(.systemGroupedBackground))
+            .background(.bar)
         }
         .onAppear {
             stopLegacyTimerIfNeeded()
@@ -622,6 +650,7 @@ struct ActiveWorkoutScreen: View {
             title: draft.resolvedTitle,
             type: draft.type,
             mode: draft.mode,
+            preset: draft.preset,
             orderIndex: workout.blockItems.count,
             rounds: draft.rounds,
             durationMinutes: draft.durationMinutes,
@@ -743,11 +772,7 @@ struct ActiveWorkoutScreen: View {
             return WorkoutBlockPreset.strength.iconName
         }
 
-        return WorkoutBlockPreset.inferred(
-            title: displayTitle(for: block),
-            type: block.type,
-            mode: block.mode
-        ).iconName
+        return block.preset.iconName
     }
 
     private func subtitle(for block: WorkoutBlock) -> String {
@@ -779,13 +804,59 @@ struct ActiveWorkoutScreen: View {
     }
 
     private func followingExercises(after exercise: WorkoutExercise) -> [WorkoutExercise] {
-        let orderedExercises = sortedExercises
+        if let block = exercise.block, isRunnerBlock(block) {
+            return []
+        }
+
+        let orderedExercises: [WorkoutExercise]
+        if let block = exercise.block {
+            orderedExercises = block.exerciseItems.sorted { $0.orderIndex < $1.orderIndex }
+        } else {
+            orderedExercises = sortedExercises.filter { $0.block == nil }
+        }
         guard let currentIndex = orderedExercises.firstIndex(where: { $0.id == exercise.id }) else {
             return []
         }
         let followingIndex = orderedExercises.index(after: currentIndex)
         guard followingIndex < orderedExercises.endIndex else { return [] }
         return Array(orderedExercises[followingIndex...])
+    }
+
+    private var hasPendingWorkoutItem: Bool {
+        sortedBlockGroups.contains { group in
+            if let block = group.block, isRunnerBlock(block) {
+                return block.isFinished == false && group.exercises.isEmpty == false
+            }
+            return group.exercises.contains { $0.isFinished == false }
+        }
+    }
+
+    private func continueWorkout() {
+        for group in sortedBlockGroups {
+            if let block = group.block,
+               isRunnerBlock(block),
+               block.isFinished == false,
+               group.exercises.isEmpty == false {
+                selectedBlock = block
+                return
+            }
+
+            if let exercise = group.exercises.first(where: { $0.isFinished == false }) {
+                selectedExercise = exercise
+                return
+            }
+        }
+    }
+
+    private func isRunnerBlock(_ block: WorkoutBlock) -> Bool {
+        block.type == .superset || block.type == .circuit
+    }
+
+    private func runnerAction(for block: WorkoutBlock?) -> (() -> Void)? {
+        guard let block, isRunnerBlock(block), block.exerciseItems.isEmpty == false else { return nil }
+        return {
+            selectedBlock = block
+        }
     }
 
     private func reindexExercises() {
@@ -993,6 +1064,8 @@ private struct WorkoutBlockSectionHeader: View {
     let title: String
     let subtitle: String
     let iconName: String
+    var onStart: (() -> Void)?
+    let isCompleted: Bool
     var onAddExercise: (() -> Void)?
     let isExpanded: Bool
     let onToggleExpanded: () -> Void
@@ -1000,27 +1073,38 @@ private struct WorkoutBlockSectionHeader: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(Color.blue.opacity(0.14))
-
-                Image(systemName: iconName)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color.blue)
-            }
-            .frame(width: 44, height: 44)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(.primary)
-
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            if let onStart {
+                Button(action: onStart) {
+                    blockIdentity
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isCompleted ? "Посмотреть результаты блока \(title)" : "Начать блок \(title)")
+            } else {
+                blockIdentity
             }
 
             Spacer()
+
+            if isCompleted, let onStart {
+                Button(action: onStart) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.green)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Посмотреть результаты блока \(title)")
+            } else if let onStart {
+                Button(action: onStart) {
+                    Image(systemName: "play.fill")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .background(Circle().fill(Color.blue))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Начать блок \(title)")
+            }
 
             Button(action: onToggleExpanded) {
                 Image(systemName: "chevron.down")
@@ -1052,12 +1136,38 @@ private struct WorkoutBlockSectionHeader: View {
             }
         }
     }
+
+    private var blockIdentity: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color.blue.opacity(0.14))
+
+                Image(systemName: iconName)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Color.blue)
+            }
+            .frame(width: 44, height: 44)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.primary)
+
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.leading)
+            }
+        }
+    }
 }
 
 struct WorkoutBlockComposerDraft {
     var title: String
     var type: WorkoutBlockType
     var mode: WorkoutBlockMode
+    var preset: WorkoutBlockPreset
     var rounds: Int
     var durationMinutes: Int
     var workSeconds: Int
@@ -1302,6 +1412,7 @@ struct WorkoutBlockComposerScreen: View {
             title: title,
             type: preset.blockType,
             mode: preset.mode,
+            preset: preset,
             rounds: preset == .strength || preset == .warmup || preset == .mobility || preset == .stretching || preset == .cooldown || preset == .forTime ? 1 : rounds,
             durationMinutes: preset.mode == .amrap || preset.mode == .emom || preset == .forTime || preset == .hiit ? durationMinutes : 0,
             workSeconds: preset.mode == .tabata || preset == .hiit ? workSeconds : 0,
