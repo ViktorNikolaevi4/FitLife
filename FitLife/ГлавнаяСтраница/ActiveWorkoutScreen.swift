@@ -151,19 +151,6 @@ struct ActiveWorkoutScreen: View {
                             }
                         }
 
-                        Button(action: { showFinishConfirmation = true }) {
-                            Label(
-                                AppLocalizer.string("workout.finish"),
-                                systemImage: "checkmark.circle.fill"
-                            )
-                            .font(.headline.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 18)
-                            .background(RoundedRectangle(cornerRadius: 20).fill(HomeColors.primaryActionGradient))
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.top, 10)
                     }
                 }
                 }
@@ -223,36 +210,54 @@ struct ActiveWorkoutScreen: View {
             )
         }
         .safeAreaInset(edge: .bottom) {
-            VStack(spacing: 10) {
-                if hasPendingWorkoutItem {
-                    Button(action: continueWorkout) {
-                        Label("Продолжить тренировку", systemImage: "play.circle.fill")
+            if selectedExercise == nil && selectedBlock == nil {
+                VStack(spacing: 10) {
+                    if hasPendingWorkoutItem {
+                        Button(action: continueWorkout) {
+                            Label("Продолжить тренировку", systemImage: "play.circle.fill")
+                                .font(.headline.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 17)
+                                .background(RoundedRectangle(cornerRadius: 20).fill(HomeColors.primaryActionGradient))
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    Button(action: beginAddingExercise) {
+                        Text(AppLocalizer.string("workout.add.exercise"))
                             .font(.headline.weight(.semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.blue)
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 17)
-                            .background(RoundedRectangle(cornerRadius: 20).fill(HomeColors.primaryActionGradient))
+                            .padding(.vertical, 15)
+                            .background(
+                                RoundedRectangle(cornerRadius: 20)
+                                    .strokeBorder(Color.blue, lineWidth: 1.5)
+                            )
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: { showFinishConfirmation = true }) {
+                        Label(
+                            AppLocalizer.string("workout.finish"),
+                            systemImage: "checkmark.circle.fill"
+                        )
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 17)
+                        .background(
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(HomeColors.primaryActionGradient)
+                        )
                     }
                     .buttonStyle(.plain)
                 }
-
-                Button(action: beginAddingExercise) {
-                    Text(AppLocalizer.string("workout.add.exercise"))
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(.blue)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 15)
-                        .background(
-                            RoundedRectangle(cornerRadius: 20)
-                                .strokeBorder(Color.blue, lineWidth: 1.5)
-                        )
-                }
-                .buttonStyle(.plain)
+                .padding(.horizontal)
+                .padding(.top, 8)
+                .padding(.bottom, 8)
+                .background(.bar)
             }
-            .padding(.horizontal)
-            .padding(.top, 8)
-            .padding(.bottom, 8)
-            .background(.bar)
         }
         .onAppear {
             stopLegacyTimerIfNeeded()

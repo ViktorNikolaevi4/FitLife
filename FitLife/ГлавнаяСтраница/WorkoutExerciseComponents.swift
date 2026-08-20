@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 private let workoutCardBackground = Color(.secondarySystemBackground)
 private let workoutCardInsetBackground = Color(.tertiarySystemBackground)
@@ -99,9 +100,130 @@ struct WorkoutSetRow: View {
 
 }
 
+private enum WorkoutExerciseDetailTab: String, CaseIterable, Identifiable {
+    case workout
+    case records
+    case notes
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .workout: return "Тренировка"
+        case .records: return "Рекорды"
+        case .notes: return "Заметки"
+        }
+    }
+}
+
+private struct WorkoutExerciseHistoryEntry: Identifiable {
+    let exerciseID: UUID
+    let sessionID: UUID
+    let date: Date
+    let completedSetCount: Int
+    let estimatedOneRepMax: Double?
+    let maxWeight: Double?
+    let maxReps: Int?
+    let volume: Double?
+    let userNote: String
+
+    var id: String { "\(sessionID.uuidString)-\(exerciseID.uuidString)" }
+}
+
+private struct WorkoutExercisePersonalBests {
+    let estimatedOneRepMax: Double?
+    let maxWeight: Double?
+    let maxReps: Int?
+    let maxVolume: Double?
+
+    init(history: [WorkoutExerciseHistoryEntry]) {
+        estimatedOneRepMax = history.compactMap(\.estimatedOneRepMax).max()
+        maxWeight = history.compactMap(\.maxWeight).max()
+        maxReps = history.compactMap(\.maxReps).max()
+        maxVolume = history.compactMap(\.volume).max()
+    }
+}
+
+private func workoutExerciseHistory(
+    matching exercise: WorkoutExercise,
+    in sessions: [WorkoutSession],
+    ownerId: String?
+) -> [WorkoutExerciseHistoryEntry] {
+    let normalizedName = normalizedWorkoutExerciseName(exercise.name)
+
+    return sessions
+        .filter { session in
+            guard let ownerId, ownerId.isEmpty == false else { return true }
+            return session.ownerId == ownerId
+        }
+        .flatMap { session in
+            session.exerciseItems.compactMap { historicalExercise in
+                guard normalizedWorkoutExerciseName(historicalExercise.name) == normalizedName else {
+                    return nil
+                }
+
+                let completedSets = historicalExercise.setItems.filter(\.isCompleted)
+                let repetitionSets = completedSets.filter {
+                    $0.metricType == .reps && resolvedWorkoutSetReps($0) > 0
+                }
+                let maxWeight = repetitionSets
+                    .map(resolvedWorkoutSetWeight)
+                    .filter { $0 > 0 }
+                    .max()
+                let maxReps = repetitionSets
+                    .map(resolvedWorkoutSetReps)
+                    .max()
+                let oneRepMax = repetitionSets
+                    .map { set -> Double in
+                        let weight = resolvedWorkoutSetWeight(set)
+                        let reps = Double(resolvedWorkoutSetReps(set))
+                        return weight > 0 ? weight * (1 + reps / 30) : 0
+                    }
+                    .filter { $0 > 0 }
+                    .max()
+                let volume = repetitionSets.reduce(0.0) { partial, set in
+                    partial + resolvedWorkoutSetWeight(set) * Double(resolvedWorkoutSetReps(set))
+                }
+
+                guard completedSets.isEmpty == false || historicalExercise.userNote.isEmpty == false else {
+                    return nil
+                }
+
+                return WorkoutExerciseHistoryEntry(
+                    exerciseID: historicalExercise.id,
+                    sessionID: session.id,
+                    date: session.endedAt ?? session.createdAt,
+                    completedSetCount: completedSets.count,
+                    estimatedOneRepMax: oneRepMax,
+                    maxWeight: maxWeight,
+                    maxReps: maxReps,
+                    volume: volume > 0 ? volume : nil,
+                    userNote: historicalExercise.userNote
+                )
+            }
+        }
+        .sorted { $0.date > $1.date }
+}
+
+private func normalizedWorkoutExerciseName(_ name: String) -> String {
+    name
+        .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+        .split(whereSeparator: \.isWhitespace)
+        .joined(separator: " ")
+}
+
+private func resolvedWorkoutSetWeight(_ set: WorkoutSet) -> Double {
+    set.actualWeight ?? set.weight
+}
+
+private func resolvedWorkoutSetReps(_ set: WorkoutSet) -> Int {
+    set.actualReps ?? set.reps
+}
+
 struct WorkoutExerciseDetailScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: \WorkoutSession.createdAt, order: .reverse) private var workoutHistory: [WorkoutSession]
 
     @Bindable var exercise: WorkoutExercise
     let followingExercises: [WorkoutExercise]
@@ -118,6 +240,8 @@ struct WorkoutExerciseDetailScreen: View {
     @State private var showIncompleteSetsConfirmation = false
     @State private var showNextExerciseIncompleteConfirmation = false
     @State private var showDeleteExerciseConfirmation = false
+    @State private var selectedDetailTab = WorkoutExerciseDetailTab.workout
+    @State private var isClosingScreen = false
 
     init(
         exercise: WorkoutExercise,
@@ -174,13 +298,40 @@ struct WorkoutExerciseDetailScreen: View {
         )
     }
 
+    private var exerciseHistory: [WorkoutExerciseHistoryEntry] {
+        workoutExerciseHistory(
+            matching: exercise,
+            in: workoutHistory,
+            ownerId: exercise.session?.ownerId
+        )
+    }
+
+    private var personalBests: WorkoutExercisePersonalBests {
+        WorkoutExercisePersonalBests(history: exerciseHistory)
+    }
+
+    private var previousNotes: [WorkoutExerciseHistoryEntry] {
+        exerciseHistory.filter {
+            $0.exerciseID != exercise.id &&
+            $0.userNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        }
+    }
+
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 18) {
-                exerciseOverview
-                setCards
-                trainerCommentCard
-                personalNoteCard
+                detailTabs
+
+                switch selectedDetailTab {
+                case .workout:
+                    exerciseOverview
+                    setCards
+                    trainerCommentCard
+                case .records:
+                    personalBestsContent
+                case .notes:
+                    notesContent
+                }
             }
             .padding(.horizontal)
             .padding(.top, 12)
@@ -189,12 +340,13 @@ struct WorkoutExerciseDetailScreen: View {
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .navigationTitle(exercise.name)
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
         .toolbar(.visible, for: .navigationBar)
         .navigationDestination(item: $activeSetGroup) { group in
             WorkoutSetMethodRunnerScreen(exercise: exercise, groupID: group.id)
         }
         .safeAreaInset(edge: .bottom) {
-            if isPersonalNoteFocused == false {
+            if selectedDetailTab == .workout && isPersonalNoteFocused == false {
                 completionAction
                     .padding(.horizontal)
                     .padding(.vertical, 10)
@@ -203,7 +355,10 @@ struct WorkoutExerciseDetailScreen: View {
             }
         }
         .animation(.easeInOut(duration: 0.18), value: isPersonalNoteFocused)
-        .onDisappear(perform: persistPersonalNote)
+        .onDisappear {
+            dismissPersonalNoteKeyboard()
+            persistPersonalNote()
+        }
         .confirmationDialog(
             "Остались невыполненные подходы",
             isPresented: $showIncompleteSetsConfirmation,
@@ -234,6 +389,15 @@ struct WorkoutExerciseDetailScreen: View {
             }
         }
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(action: closeExerciseScreen) {
+                    Image(systemName: "chevron.left")
+                        .font(.headline.weight(.semibold))
+                }
+                .disabled(isClosingScreen)
+                .accessibilityLabel("Назад к списку упражнений")
+            }
+
             if onDeleteExercise != nil {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -250,7 +414,7 @@ struct WorkoutExerciseDetailScreen: View {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 Button("Готово") {
-                    isPersonalNoteFocused = false
+                    dismissPersonalNoteKeyboard()
                 }
             }
         }
@@ -335,6 +499,103 @@ struct WorkoutExerciseDetailScreen: View {
             Button("Отмена", role: .cancel) {}
         } message: {
             Text("Выберите способ выполнения нового подхода.")
+        }
+    }
+
+    private var detailTabs: some View {
+        HStack(spacing: 0) {
+            ForEach(WorkoutExerciseDetailTab.allCases) { tab in
+                Button {
+                    isPersonalNoteFocused = false
+                    persistPersonalNote()
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        selectedDetailTab = tab
+                    }
+                } label: {
+                    VStack(spacing: 8) {
+                        Text(tab.title)
+                            .font(.subheadline.weight(selectedDetailTab == tab ? .semibold : .medium))
+                            .foregroundStyle(selectedDetailTab == tab ? Color.blue : Color.secondary)
+                            .frame(maxWidth: .infinity)
+
+                        Capsule()
+                            .fill(selectedDetailTab == tab ? Color.blue : Color.clear)
+                            .frame(height: 3)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selectedDetailTab == tab ? .isSelected : [])
+            }
+        }
+        .padding(.horizontal, 4)
+    }
+
+    private var personalBestsContent: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Личные рекорды")
+                    .font(.title3.weight(.bold))
+                Spacer()
+                Text("По выполненным подходам")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            LazyVGrid(
+                columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
+                spacing: 12
+            ) {
+                WorkoutPersonalBestCard(
+                    title: "Расчётный 1ПМ",
+                    value: personalBests.estimatedOneRepMax.map { "\(formattedWorkoutWeight($0)) кг" } ?? "—",
+                    icon: "chart.line.uptrend.xyaxis"
+                )
+                WorkoutPersonalBestCard(
+                    title: "Максимальный вес",
+                    value: personalBests.maxWeight.map { "\(formattedWorkoutWeight($0)) кг" } ?? "—",
+                    icon: "dumbbell.fill"
+                )
+                WorkoutPersonalBestCard(
+                    title: "Максимум повторений",
+                    value: personalBests.maxReps.map(String.init) ?? "—",
+                    icon: "target"
+                )
+                WorkoutPersonalBestCard(
+                    title: "Максимальный объём",
+                    value: personalBests.maxVolume.map { "\(formattedWorkoutWeight($0)) кг" } ?? "—",
+                    icon: "square.stack.3d.up.fill"
+                )
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("История")
+                    .font(.title3.weight(.bold))
+
+                if exerciseHistory.isEmpty {
+                    WorkoutExerciseEmptyHistoryCard()
+                } else {
+                    ForEach(exerciseHistory.prefix(10)) { entry in
+                        WorkoutExerciseHistoryRow(entry: entry)
+                    }
+                }
+            }
+        }
+    }
+
+    private var notesContent: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            personalNoteCard
+
+            if previousNotes.isEmpty == false {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Прошлые заметки")
+                        .font(.title3.weight(.bold))
+
+                    ForEach(previousNotes.prefix(6)) { entry in
+                        WorkoutExercisePreviousNoteCard(entry: entry)
+                    }
+                }
+            }
         }
     }
 
@@ -745,6 +1006,29 @@ struct WorkoutExerciseDetailScreen: View {
         exercise.userNote = trimmedNote
         try? modelContext.save()
     }
+
+    private func dismissPersonalNoteKeyboard() {
+        isPersonalNoteFocused = false
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
+    }
+
+    private func closeExerciseScreen() {
+        guard isClosingScreen == false else { return }
+        isClosingScreen = true
+        dismissPersonalNoteKeyboard()
+        persistPersonalNote()
+
+        // Give UIKit one layout pass to remove the keyboard safe-area before
+        // the parent screen restores its pinned bottom action panel.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            dismiss()
+        }
+    }
 }
 
 private struct WorkoutSetHorizontalCard: View {
@@ -829,6 +1113,133 @@ private struct WorkoutExerciseMetricCard: View {
         .padding(.vertical, 12)
         .background(RoundedRectangle(cornerRadius: 16).fill(workoutCardBackground))
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(workoutCardBorder))
+    }
+}
+
+private struct WorkoutPersonalBestCard: View {
+    let title: String
+    let value: String
+    let icon: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Image(systemName: icon)
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.blue)
+                Spacer()
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Text(value)
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, minHeight: 116, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 20).fill(workoutCardBackground))
+        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(workoutCardBorder))
+    }
+}
+
+private struct WorkoutExerciseHistoryRow: View {
+    let entry: WorkoutExerciseHistoryEntry
+
+    private var summary: String {
+        var parts = ["\(entry.completedSetCount) подх."]
+        if let maxWeight = entry.maxWeight {
+            parts.append("макс. \(formattedWorkoutWeight(maxWeight)) кг")
+        }
+        if let volume = entry.volume {
+            parts.append("объём \(formattedWorkoutWeight(volume)) кг")
+        }
+        return parts.joined(separator: " • ")
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "calendar")
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(.blue)
+                .frame(width: 36, height: 36)
+                .background(Color.blue.opacity(0.12), in: Circle())
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(entry.date.formatted(date: .abbreviated, time: .omitted))
+                    .font(.subheadline.weight(.semibold))
+                Text(summary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+
+            Spacer(minLength: 0)
+
+            if let oneRepMax = entry.estimatedOneRepMax {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("1ПМ")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Text("\(formattedWorkoutWeight(oneRepMax)) кг")
+                        .font(.subheadline.weight(.bold))
+                }
+            }
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 18).fill(workoutCardBackground))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(workoutCardBorder))
+    }
+}
+
+private struct WorkoutExerciseEmptyHistoryCard: View {
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "chart.bar.xaxis")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Рекордов пока нет")
+                    .font(.subheadline.weight(.semibold))
+                Text("Отметьте хотя бы один подход выполненным.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 18).fill(workoutCardBackground))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(workoutCardBorder))
+    }
+}
+
+private struct WorkoutExercisePreviousNoteCard: View {
+    let entry: WorkoutExerciseHistoryEntry
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(entry.date.formatted(date: .abbreviated, time: .omitted))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            Text(entry.userNote)
+                .font(.subheadline)
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 18).fill(workoutCardBackground))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(workoutCardBorder))
     }
 }
 
