@@ -326,6 +326,7 @@ struct ClientNutritionReportComposerScreen: View {
     @State private var previewReport: CoachingNutritionReport?
     @State private var isLoadingPreview = false
     @State private var previewError: String?
+    @State private var showQueuedConfirmation = false
 
     private var selectedGender: Gender { Gender(rawValue: activeGenderRaw) ?? .male }
     private var reportDate: Date {
@@ -390,8 +391,10 @@ struct ClientNutritionReportComposerScreen: View {
                                 previewReport.with(comment: comment),
                                 senderName: sessionStore.profile?.displayName ?? ""
                             )
-                            if store.errorMessage == nil {
+                            if store.reportDeliveryStatus == .delivered {
                                 dismiss()
+                            } else if store.reportDeliveryStatus == .queued {
+                                showQueuedConfirmation = true
                             }
                         }
                     } label: {
@@ -425,6 +428,11 @@ struct ClientNutritionReportComposerScreen: View {
         .onChange(of: selectedPreset) { _, _ in loadPreview() }
         .onChange(of: customDate) { _, _ in
             if selectedPreset == .date { loadPreview() }
+        }
+        .alert("Отчёт сохранён в очереди", isPresented: $showQueuedConfirmation) {
+            Button("Готово") { dismiss() }
+        } message: {
+            Text("Он автоматически отправится тренеру, когда соединение с сервером восстановится.")
         }
     }
 

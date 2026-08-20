@@ -1,5 +1,6 @@
 import Foundation
 import FirebaseAuth
+import FirebaseCore
 import FirebaseFirestore
 
 @MainActor
@@ -122,24 +123,86 @@ final class AppSessionStore: ObservableObject {
         }
     }
 
-    func deleteCurrentAccount() async -> Bool {
+    func deleteCurrentAccount(password: String) async -> Bool {
         authErrorMessage = nil
 
-        guard let user = auth.currentUser else {
+        guard
+            let user = auth.currentUser,
+            let email = user.email,
+            password.isEmpty == false
+        else {
             return false
         }
 
-        let userId = user.uid
-
         do {
-            try await firestore.collection("users").document(userId).delete()
+            let credential = EmailAuthProvider.credential(withEmail: email, password: password)
+            try await user.reauthenticate(with: credential)
+            try await requestServerAccountDataDeletion(for: user)
             try await user.delete()
+            try? auth.signOut()
             profile = nil
             firebaseUser = nil
             return true
         } catch {
             authErrorMessage = AppErrorPresenter.message(for: error)
             return false
+        }
+    }
+
+    private func requestServerAccountDataDeletion(for user: User) async throws {
+        guard
+            let projectId = FirebaseApp.app()?.options.projectID,
+            let endpoint = URL(
+                string: "https://europe-west1-\(projectId).cloudfunctions.net/deleteCurrentAccountData"
+            )
+        else {
+            throw URLError(.badURL)
+        }
+
+        let idToken = try await refreshedIDToken(for: user)
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 300
+        request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["confirm": true])
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw URLError(.badServerResponse)
+        }
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let error = payload?["error"] as? [String: Any]
+            let code = error?["code"] as? String ?? "account_deletion_failed"
+            throw NSError(
+                domain: "FitLife.AccountDeletion",
+                code: httpResponse.statusCode,
+                userInfo: [NSLocalizedDescriptionKey: accountDeletionErrorMessage(for: code)]
+            )
+        }
+    }
+
+    private func refreshedIDToken(for user: User) async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
+            user.getIDTokenForcingRefresh(true) { token, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if let token, token.isEmpty == false {
+                    continuation.resume(returning: token)
+                } else {
+                    continuation.resume(throwing: URLError(.userAuthenticationRequired))
+                }
+            }
+        }
+    }
+
+    private func accountDeletionErrorMessage(for code: String) -> String {
+        switch code {
+        case "recent_login_required":
+            return AppLocalizer.string("settings.account.delete.reauthentication_required")
+        default:
+            return AppLocalizer.string("settings.account.delete.failed")
         }
     }
 

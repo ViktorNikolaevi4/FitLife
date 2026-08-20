@@ -162,6 +162,58 @@ exports.reconcileUnreadNotifications = onRequest(
   }
 );
 
+// Deletes every Firestore record associated with the authenticated account.
+// Authentication itself is deleted by the iOS client only after this request
+// succeeds, so an interrupted request can be retried safely.
+exports.deleteCurrentAccountData = onRequest(
+  {
+    region: "europe-west1",
+    timeoutSeconds: 540,
+    memory: "512MiB",
+    invoker: "public"
+  },
+  async (request, response) => {
+    setJsonResponseHeaders(response);
+
+    if (request.method === "OPTIONS") {
+      response.status(204).send("");
+      return;
+    }
+    if (request.method !== "POST") {
+      response.status(405).json({ error: { code: "method_not_allowed" } });
+      return;
+    }
+
+    try {
+      const decodedToken = await verifyAuthorization(request);
+      if (request.body?.confirm !== true) {
+        response.status(400).json({ error: { code: "confirmation_required" } });
+        return;
+      }
+
+      // The app reauthenticates immediately before requesting deletion. Do not
+      // accept a token from a session that may have been left open for hours.
+      const authenticatedAtSeconds = Number(decodedToken.auth_time || 0);
+      const tokenAgeSeconds = Math.floor(Date.now() / 1000) - authenticatedAtSeconds;
+      if (authenticatedAtSeconds <= 0 || tokenAgeSeconds > 15 * 60) {
+        response.status(401).json({ error: { code: "recent_login_required" } });
+        return;
+      }
+
+      const deletedDocumentCount = await deleteAccountFirestoreData(decodedToken.uid);
+      response.status(200).json({ deleted: true, deletedDocumentCount });
+    } catch (error) {
+      logger.error("Account data deletion failed", {
+        code: error.code || "unknown",
+        message: error.message || "unknown_error"
+      });
+      response.status(error.status || 500).json({
+        error: { code: error.code || "account_deletion_failed" }
+      });
+    }
+  }
+);
+
 const TYPE_CONFIG = {
   coaching_request_submitted: {
     ru: {
@@ -917,6 +969,50 @@ async function markPushPermanentlyFailed(eventId, reason) {
     },
     { merge: true }
   );
+}
+
+const ACCOUNT_COLLECTION_FIELDS = {
+  trainer_client_links: ["trainerId", "clientId", "createdByOwnerId"],
+  client_intakes: ["clientId"],
+  coaching_requests: ["clientId", "assignedTrainerId"],
+  progress_checkins: ["clientId", "trainerId"],
+  profile_update_requests: ["clientId", "trainerId"],
+  coaching_notes: ["clientId", "trainerId", "authorId"],
+  coaching_workout_reports: ["clientId", "trainerId"],
+  coaching_nutrition_reports: ["clientId", "trainerId"],
+  notification_events: ["recipientId", "senderId"],
+  workout_templates: ["trainerId"],
+  workout_assignments: ["clientId", "trainerId"]
+};
+
+async function deleteAccountFirestoreData(uid) {
+  const referencesByPath = new Map();
+
+  // These documents use the user's uid as their canonical document id. Query
+  // by field as well to cover legacy records that may have a different id.
+  for (const collectionName of ["client_intakes", "coaching_requests"]) {
+    const reference = db.collection(collectionName).doc(uid);
+    referencesByPath.set(reference.path, reference);
+  }
+
+  for (const [collectionName, fields] of Object.entries(ACCOUNT_COLLECTION_FIELDS)) {
+    for (const field of fields) {
+      const snapshot = await db.collection(collectionName).where(field, "==", uid).get();
+      for (const document of snapshot.docs) {
+        referencesByPath.set(document.ref.path, document.ref);
+      }
+    }
+  }
+
+  // recursiveDelete also removes exercises, blocks and push_devices stored in
+  // subcollections. It is safe when a referenced document no longer exists.
+  for (const reference of referencesByPath.values()) {
+    await db.recursiveDelete(reference);
+  }
+
+  const userReference = db.collection("users").doc(uid);
+  await db.recursiveDelete(userReference);
+  return referencesByPath.size + 1;
 }
 
 function setJsonResponseHeaders(response) {

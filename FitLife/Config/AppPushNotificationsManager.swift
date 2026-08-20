@@ -317,6 +317,13 @@ final class AppPushNotificationsManager: NSObject, ObservableObject {
         do {
             let userRef = firestore.collection("users").document(userId)
             let userSnapshot = try await userRef.getDocument()
+            guard userSnapshot.exists else {
+                if UserDefaults.standard.string(forKey: lastSyncedUserIdKey) == userId {
+                    UserDefaults.standard.removeObject(forKey: lastSyncedUserIdKey)
+                    UserDefaults.standard.removeObject(forKey: lastSyncedTokenKey)
+                }
+                return
+            }
             let lastFCMToken = userSnapshot.data()?["lastFCMToken"] as? String
             var fields: [String: Any] = [
                 "fcmTokens": FieldValue.arrayRemove([token]),

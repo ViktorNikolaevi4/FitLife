@@ -43,6 +43,7 @@ struct DashboardScreen: View {
     @State private var sheet: RationSheet? = nil
     @State private var showCalendar = false
     @State private var showSettings = false
+    @State private var showStepsSettings = false
 
     // Состояние разворота
     @State private var expandedMeals: Set<MealType> = []
@@ -107,6 +108,12 @@ struct DashboardScreen: View {
                             theme: theme,
                             onSubtract: { subtractWater(amount: Double(waterQuickAddML) / 1000.0) },
                             onAdd: { addWater(amount: Double(waterQuickAddML) / 1000.0) }
+                        )
+
+                        HealthKitStepsCard(
+                            date: selectedDate,
+                            theme: theme,
+                            onOpenSettings: { showStepsSettings = true }
                         )
 
                         TrainingDiaryCard(
@@ -194,6 +201,18 @@ struct DashboardScreen: View {
                 }
             }
             .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $showStepsSettings) {
+            NavigationStack {
+                HealthKitStepsSettingsScreen()
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button(AppLocalizer.string("common.done")) {
+                                showStepsSettings = false
+                            }
+                        }
+                    }
+            }
         }
     }
 

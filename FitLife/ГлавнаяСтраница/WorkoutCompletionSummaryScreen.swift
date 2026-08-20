@@ -12,6 +12,7 @@ struct WorkoutCompletionSummaryScreen: View {
     @State private var isCheckingConnection = true
     @State private var isSending = false
     @State private var didSend = false
+    @State private var isQueuedForDelivery = false
     @State private var connectionError = false
     @State private var errorMessage: String?
 
@@ -152,20 +153,20 @@ struct WorkoutCompletionSummaryScreen: View {
         } else if let activeLink {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 12) {
-                    Image(systemName: didSend ? "checkmark.circle.fill" : "person.crop.circle.badge.checkmark")
+                    Image(systemName: didSend ? "checkmark.circle.fill" : (isQueuedForDelivery ? "clock.badge.checkmark.fill" : "person.crop.circle.badge.checkmark"))
                         .font(.title2)
                         .foregroundStyle(didSend ? Color.green : Color.blue)
 
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(didSend ? "Отчёт отправлен" : "Поделиться с тренером")
+                        Text(didSend ? "Отчёт отправлен" : (isQueuedForDelivery ? "Отчёт ожидает отправки" : "Поделиться с тренером"))
                             .font(.headline)
-                        Text(didSend ? "\(trainerDisplayName) увидит результат тренировки." : "Связь одобрена · \(trainerDisplayName)")
+                        Text(didSend ? "\(trainerDisplayName) увидит результат тренировки." : (isQueuedForDelivery ? "Отправим автоматически после восстановления соединения." : "Связь одобрена · \(trainerDisplayName)"))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
                 }
 
-                if didSend == false {
+                if didSend == false && isQueuedForDelivery == false {
                     Divider()
                     Text("Тренеру будут доступны упражнения, выполненные подходы, фактические веса, повторения и ваши заметки.")
                         .font(.subheadline)
@@ -210,7 +211,7 @@ struct WorkoutCompletionSummaryScreen: View {
 
     private var bottomActions: some View {
         VStack(spacing: 10) {
-            if activeLink != nil && didSend == false {
+            if activeLink != nil && didSend == false && isQueuedForDelivery == false {
                 Button {
                     Task { await sendToTrainer() }
                 } label: {
@@ -333,28 +334,14 @@ struct WorkoutCompletionSummaryScreen: View {
             trainerId: link.trainerId,
             workouts: [CoachingWorkoutSnapshot(workout: workout)]
         )
-        let notification = AppNotificationEvent(
-            id: "workout-report-\(report.id)",
-            type: .workoutReportSent,
-            recipientId: link.trainerId,
-            senderId: link.clientId,
-            senderName: sessionStore.profile?.displayName ?? "",
-            targetType: .workoutReport,
-            targetId: report.id
-        )
-
         do {
-            let batch = firestore.batch()
-            batch.setData(
-                report.firestoreData,
-                forDocument: firestore.collection("coaching_workout_reports").document(report.id)
+            let result = try await CoachingReportDeliveryOutbox.shared.submitWorkoutReport(
+                report,
+                senderName: sessionStore.profile?.displayName ?? "",
+                firestore: firestore
             )
-            batch.setData(
-                notification.firestoreData,
-                forDocument: firestore.collection("notification_events").document(notification.id)
-            )
-            try await batch.commit()
-            didSend = true
+            didSend = result == .delivered
+            isQueuedForDelivery = result == .queued
             isSending = false
         } catch {
             errorMessage = AppErrorPresenter.message(for: error)

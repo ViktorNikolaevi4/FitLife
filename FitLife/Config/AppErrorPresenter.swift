@@ -6,6 +6,10 @@ enum AppErrorPresenter {
     static func message(for error: Error) -> String {
         let nsError = error as NSError
 
+        if nsError.domain == "FitLife.AccountDeletion" {
+            return nsError.localizedDescription
+        }
+
         if nsError.domain == NSURLErrorDomain {
             switch nsError.code {
             case NSURLErrorNotConnectedToInternet, NSURLErrorNetworkConnectionLost:

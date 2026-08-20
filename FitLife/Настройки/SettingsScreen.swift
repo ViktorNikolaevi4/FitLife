@@ -2,6 +2,7 @@ import SwiftUI
 import MessageUI
 import StoreKit
 import SwiftData
+import UserNotifications
 
 // MARK: - Settings
 
@@ -23,6 +24,7 @@ struct SettingsScreen: View {
     @State private var isSendingEmailVerification = false
     @State private var showDeleteAccountConfirmation = false
     @State private var isDeletingAccount = false
+    @State private var deleteAccountPassword = ""
 
     private var appLanguage: AppLanguage {
         AppLanguage.from(rawValue: appLanguageRaw)
@@ -98,6 +100,7 @@ struct SettingsScreen: View {
                         }
 
                         Button(role: .destructive) {
+                            deleteAccountPassword = ""
                             showDeleteAccountConfirmation = true
                         } label: {
                             if isDeletingAccount {
@@ -222,6 +225,16 @@ struct SettingsScreen: View {
                             title: appLanguage.localized("notifications.title")
                         )
                     }
+
+                    NavigationLink {
+                        HealthKitStepsSettingsScreen()
+                    } label: {
+                        SettingsRow(
+                            icon: "heart.fill",
+                            iconBg: .red,
+                            title: AppLocalizer.string("health.steps.settings_title")
+                        )
+                    }
                 }
 
                 Section {
@@ -292,10 +305,16 @@ struct SettingsScreen: View {
         }
         .alert(appLanguage.localized("settings.account.delete.alert.title"),
                isPresented: $showDeleteAccountConfirmation) {
+            SecureField(
+                appLanguage.localized("settings.account.delete.password.placeholder"),
+                text: $deleteAccountPassword
+            )
+            .textContentType(.password)
             Button(AppLocalizer.string("common.cancel"), role: .cancel) {}
             Button(appLanguage.localized("settings.account.delete.alert.confirm"), role: .destructive) {
                 deleteAccount()
             }
+            .disabled(deleteAccountPassword.isEmpty)
         } message: {
             Text(appLanguage.localized("settings.account.delete.alert.message"))
         }
@@ -318,15 +337,24 @@ struct SettingsScreen: View {
 
     private func deleteAccount() {
         guard let ownerId = sessionStore.firebaseUser?.uid else { return }
+        let password = deleteAccountPassword
         isDeletingAccount = true
         accountStatusMessage = nil
 
         Task {
-            deleteLocalData(for: ownerId)
-            let didDelete = await sessionStore.deleteCurrentAccount()
-            if didDelete == false {
-                accountStatusMessage = appLanguage.localized("settings.account.delete.failed")
+            // Stop queued report writes before the server enumerates documents,
+            // otherwise a background retry could recreate data during deletion.
+            await CoachingReportDeliveryOutbox.shared.removeAll(for: ownerId)
+            let didDelete = await sessionStore.deleteCurrentAccount(password: password)
+            if didDelete {
+                deleteLocalData(for: ownerId)
+                clearAccountPreferences()
+                clearLocalNotifications()
+            } else {
+                accountStatusMessage = sessionStore.authErrorMessage
+                    ?? appLanguage.localized("settings.account.delete.failed")
             }
+            deleteAccountPassword = ""
             isDeletingAccount = false
         }
     }
@@ -338,6 +366,8 @@ struct SettingsScreen: View {
             try deleteSwiftDataItems(FetchDescriptor<BodyMeasurements>(), ownerId: ownerId) { $0.ownerId }
             try deleteSwiftDataItems(FetchDescriptor<WorkoutSession>(), ownerId: ownerId) { $0.ownerId }
             try deleteSwiftDataItems(FetchDescriptor<UserData>(), ownerId: ownerId) { $0.ownerId }
+            try deleteAllSwiftDataItems(FetchDescriptor<CustomProduct>())
+            try deleteAllSwiftDataItems(FetchDescriptor<CustomWorkoutExerciseTemplate>())
             try modelContext.save()
         } catch {
             accountStatusMessage = AppErrorPresenter.message(for: error)
@@ -353,6 +383,46 @@ struct SettingsScreen: View {
         for item in items where itemOwnerId(item) == ownerId {
             modelContext.delete(item)
         }
+    }
+
+    private func deleteAllSwiftDataItems<T>(_ descriptor: FetchDescriptor<T>) throws where T: PersistentModel {
+        for item in try modelContext.fetch(descriptor) {
+            modelContext.delete(item)
+        }
+    }
+
+    private func clearAccountPreferences() {
+        let defaults = UserDefaults.standard
+        let exactKeys = [
+            "didOnboard",
+            Gender.appStorageKey,
+            WaterPortionPreference.appStorageKey,
+            HealthKitStepsPreference.enabledKey,
+            HealthKitStepsPreference.goalKey,
+            LocalReminderScheduler.mealRemindersEnabledKey,
+            LocalReminderScheduler.workoutReminderEnabledKey,
+            LocalReminderScheduler.unfinishedWorkoutReminderEnabledKey,
+            "notifications.weeklyCheckInReminder.enabled",
+            "favoriteProductNames",
+            "favoriteUSDASnapshots",
+            "usda.food.search.cache.v1",
+            "push.lastSyncedUserId",
+            "push.lastSyncedToken",
+            "push.deviceId"
+        ]
+        exactKeys.forEach(defaults.removeObject(forKey:))
+
+        for key in defaults.dictionaryRepresentation().keys where
+            key.hasPrefix("coaching.approved_intro_seen.") {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
+    private func clearLocalNotifications() {
+        let center = UNUserNotificationCenter.current()
+        center.removeAllPendingNotificationRequests()
+        center.removeAllDeliveredNotifications()
+        Task { try? await center.setBadgeCount(0) }
     }
 
     // MARK: Actions

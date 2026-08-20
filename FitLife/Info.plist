@@ -4,6 +4,8 @@
 <dict>
 	<key>OpenAIAPIKey</key>
 	<string>$(OPENAI_API_KEY)</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>FitLife использует данные о шагах, чтобы показывать вашу ежедневную активность и прогресс относительно цели.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

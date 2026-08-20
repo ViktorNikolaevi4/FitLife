@@ -10,6 +10,7 @@ struct RootView: View {
     @EnvironmentObject private var notificationsStore: AppNotificationsStore
     @EnvironmentObject private var pushNotificationsManager: AppPushNotificationsManager
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @Query private var users: [UserData]
     @State private var preparedOwnerId: String?
     @State private var isPreparingLocalData = false
@@ -87,6 +88,7 @@ struct RootView: View {
             refreshMealRemindersIfNeeded()
             refreshWorkoutRemindersIfNeeded()
             presentOpenedPushNotificationIfPossible()
+            retryPendingCoachingReports()
         }
         .onChange(of: currentOwnerId) { _, _ in
             prepareLocalDataIfNeeded()
@@ -95,6 +97,7 @@ struct RootView: View {
             refreshMealRemindersIfNeeded()
             refreshWorkoutRemindersIfNeeded()
             presentOpenedPushNotificationIfPossible()
+            retryPendingCoachingReports()
         }
         .onChange(of: pushNotificationsManager.openedNotification) { _, _ in
             presentOpenedPushNotificationIfPossible()
@@ -107,6 +110,11 @@ struct RootView: View {
         .onChange(of: activeGenderRaw) { _, _ in
             refreshMealRemindersIfNeeded()
             refreshWorkoutRemindersIfNeeded()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                retryPendingCoachingReports()
+            }
         }
         .overlay(alignment: .top) {
             if let banner = pushNotificationsManager.inAppNotificationBanner {
@@ -147,6 +155,13 @@ struct RootView: View {
         migrateLegacyLocalDataIfNeeded(to: currentOwnerId)
         preparedOwnerId = currentOwnerId
         isPreparingLocalData = false
+    }
+
+    private func retryPendingCoachingReports() {
+        guard let currentOwnerId else { return }
+        Task {
+            await CoachingReportDeliveryOutbox.shared.retryPending(for: currentOwnerId)
+        }
     }
 
     private func presentOpenedPushNotificationIfPossible() {

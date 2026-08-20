@@ -676,13 +676,15 @@ final class ClientCoachingHomeStore: ObservableObject {
     @Published private(set) var nutritionReports: [CoachingNutritionReport] = []
     @Published private(set) var isLoading = false
     @Published private(set) var isSubmitting = false
+    @Published private(set) var reportDeliveryStatus: CoachingReportDeliveryStatus = .idle
     @Published var errorMessage: String?
 
     private let clientId: String
     private let trainerId: String
     private let firestore: Firestore
     private var notesListener: ListenerRegistration?
-    private var activeWorkoutReportSubmissionID: UUID?
+    private var workoutReportsListener: ListenerRegistration?
+    private var nutritionReportsListener: ListenerRegistration?
 
     init(clientId: String, trainerId: String, firestore: Firestore = .firestore()) {
         self.clientId = clientId
@@ -694,33 +696,74 @@ final class ClientCoachingHomeStore: ObservableObject {
 
     deinit {
         notesListener?.remove()
+        workoutReportsListener?.remove()
+        nutritionReportsListener?.remove()
     }
 
     func startNotesListening() {
-        guard notesListener == nil else { return }
+        if notesListener == nil {
+            notesListener = firestore
+                .collection("coaching_notes")
+                .whereField("clientId", isEqualTo: clientId)
+                .whereField("trainerId", isEqualTo: trainerId)
+                .addSnapshotListener { [weak self] snapshot, _ in
+                    guard let snapshot else { return }
+                    let updatedNotes = snapshot.documents
+                        .compactMap { CoachingNote(id: $0.documentID, data: $0.data()) }
+                        .sorted { $0.createdAt > $1.createdAt }
 
-        notesListener = firestore
-            .collection("coaching_notes")
-            .whereField("clientId", isEqualTo: clientId)
-            .whereField("trainerId", isEqualTo: trainerId)
-            .addSnapshotListener { [weak self] snapshot, _ in
-                guard let snapshot else { return }
-                let updatedNotes = snapshot.documents
-                    .compactMap { CoachingNote(id: $0.documentID, data: $0.data()) }
-                    .sorted { $0.createdAt > $1.createdAt }
-
-                Task { @MainActor [weak self] in
-                    self?.notes = updatedNotes
+                    Task { @MainActor [weak self] in
+                        self?.notes = updatedNotes
+                    }
                 }
-            }
+        }
+
+        if workoutReportsListener == nil {
+            workoutReportsListener = firestore
+                .collection("coaching_workout_reports")
+                .whereField("clientId", isEqualTo: clientId)
+                .whereField("trainerId", isEqualTo: trainerId)
+                .addSnapshotListener { [weak self] snapshot, _ in
+                    guard let snapshot else { return }
+                    let reports = snapshot.documents
+                        .compactMap { CoachingWorkoutReport(id: $0.documentID, data: $0.data()) }
+                        .sorted { $0.createdAt > $1.createdAt }
+
+                    Task { @MainActor [weak self] in
+                        self?.workoutReports = reports
+                    }
+                }
+        }
+
+        if nutritionReportsListener == nil {
+            nutritionReportsListener = firestore
+                .collection("coaching_nutrition_reports")
+                .whereField("clientId", isEqualTo: clientId)
+                .whereField("trainerId", isEqualTo: trainerId)
+                .addSnapshotListener { [weak self] snapshot, _ in
+                    guard let snapshot else { return }
+                    let reports = snapshot.documents
+                        .compactMap { CoachingNutritionReport(id: $0.documentID, data: $0.data()) }
+                        .sorted { $0.createdAt > $1.createdAt }
+
+                    Task { @MainActor [weak self] in
+                        self?.nutritionReports = reports
+                    }
+                }
+        }
     }
 
     func stopNotesListening() {
         notesListener?.remove()
         notesListener = nil
+        workoutReportsListener?.remove()
+        workoutReportsListener = nil
+        nutritionReportsListener?.remove()
+        nutritionReportsListener = nil
     }
 
     func load() async {
+        await CoachingReportDeliveryOutbox.shared.retryPending(for: clientId, firestore: firestore)
         isLoading = true
         errorMessage = nil
 
@@ -893,20 +936,9 @@ final class ClientCoachingHomeStore: ObservableObject {
     func sendWorkoutReport(workouts: [WorkoutSession], senderName: String = "") async {
         guard workouts.isEmpty == false else { return }
 
-        let submissionID = UUID()
-        activeWorkoutReportSubmissionID = submissionID
         isSubmitting = true
+        reportDeliveryStatus = .sending
         errorMessage = nil
-
-        let delayedConnectionNotice = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 8_000_000_000)
-            guard Task.isCancelled == false,
-                  self?.activeWorkoutReportSubmissionID == submissionID,
-                  self?.isSubmitting == true else {
-                return
-            }
-            self?.errorMessage = AppLocalizer.string("coaching.workouts.error.connection")
-        }
 
         let report = CoachingWorkoutReport(
             clientId: clientId,
@@ -915,66 +947,39 @@ final class ClientCoachingHomeStore: ObservableObject {
         )
 
         do {
-            let reportRef = firestore
-                .collection("coaching_workout_reports")
-                .document(report.id)
-            let notification = AppNotificationEvent(
-                id: "workout-report-\(report.id)",
-                type: .workoutReportSent,
-                recipientId: trainerId,
-                senderId: clientId,
+            let result = try await CoachingReportDeliveryOutbox.shared.submitWorkoutReport(
+                report,
                 senderName: senderName,
-                targetType: .workoutReport,
-                targetId: report.id
+                firestore: firestore
             )
-            let notificationRef = firestore
-                .collection("notification_events")
-                .document(notification.id)
-            let batch = firestore.batch()
-            batch.setData(report.firestoreData, forDocument: reportRef)
-            batch.setData(notification.firestoreData, forDocument: notificationRef)
-            try await batch.commit()
-            delayedConnectionNotice.cancel()
-            activeWorkoutReportSubmissionID = nil
+            reportDeliveryStatus = result == .delivered ? .delivered : .queued
             errorMessage = nil
             isSubmitting = false
-            await load()
+            if result == .delivered { await load() }
         } catch {
-            delayedConnectionNotice.cancel()
-            activeWorkoutReportSubmissionID = nil
             errorMessage = AppErrorPresenter.message(for: error)
+            reportDeliveryStatus = .failed(errorMessage ?? error.localizedDescription)
             isSubmitting = false
         }
     }
 
     func sendNutritionReport(_ report: CoachingNutritionReport, senderName: String = "") async {
         isSubmitting = true
+        reportDeliveryStatus = .sending
         errorMessage = nil
 
         do {
-            let reportRef = firestore
-                .collection("coaching_nutrition_reports")
-                .document(report.id)
-            let notification = AppNotificationEvent(
-                id: "nutrition-report-\(report.id)",
-                type: .nutritionReportSent,
-                recipientId: trainerId,
-                senderId: clientId,
+            let result = try await CoachingReportDeliveryOutbox.shared.submitNutritionReport(
+                report,
                 senderName: senderName,
-                targetType: .nutritionReport,
-                targetId: report.id
+                firestore: firestore
             )
-            let notificationRef = firestore
-                .collection("notification_events")
-                .document(notification.id)
-            let batch = firestore.batch()
-            batch.setData(report.firestoreData, forDocument: reportRef)
-            batch.setData(notification.firestoreData, forDocument: notificationRef)
-            try await batch.commit()
+            reportDeliveryStatus = result == .delivered ? .delivered : .queued
             isSubmitting = false
-            await load()
+            if result == .delivered { await load() }
         } catch {
             errorMessage = AppErrorPresenter.message(for: error)
+            reportDeliveryStatus = .failed(errorMessage ?? error.localizedDescription)
             isSubmitting = false
         }
     }
@@ -1039,6 +1044,8 @@ final class TrainerClientSupportStore: ObservableObject {
     private let client: AppUserProfile
     private let firestore: Firestore
     private var notesListener: ListenerRegistration?
+    private var workoutReportsListener: ListenerRegistration?
+    private var nutritionReportsListener: ListenerRegistration?
 
     var connectedClientId: String { client.id }
 
@@ -1050,30 +1057,70 @@ final class TrainerClientSupportStore: ObservableObject {
 
     deinit {
         notesListener?.remove()
+        workoutReportsListener?.remove()
+        nutritionReportsListener?.remove()
     }
 
     func startNotesListening() {
-        guard notesListener == nil else { return }
+        if notesListener == nil {
+            notesListener = firestore
+                .collection("coaching_notes")
+                .whereField("clientId", isEqualTo: client.id)
+                .whereField("trainerId", isEqualTo: trainerId)
+                .addSnapshotListener { [weak self] snapshot, _ in
+                    guard let snapshot else { return }
+                    let updatedNotes = snapshot.documents
+                        .compactMap { CoachingNote(id: $0.documentID, data: $0.data()) }
+                        .sorted { $0.createdAt > $1.createdAt }
 
-        notesListener = firestore
-            .collection("coaching_notes")
-            .whereField("clientId", isEqualTo: client.id)
-            .whereField("trainerId", isEqualTo: trainerId)
-            .addSnapshotListener { [weak self] snapshot, _ in
-                guard let snapshot else { return }
-                let updatedNotes = snapshot.documents
-                    .compactMap { CoachingNote(id: $0.documentID, data: $0.data()) }
-                    .sorted { $0.createdAt > $1.createdAt }
-
-                Task { @MainActor [weak self] in
-                    self?.notes = updatedNotes
+                    Task { @MainActor [weak self] in
+                        self?.notes = updatedNotes
+                    }
                 }
-            }
+        }
+
+        if workoutReportsListener == nil {
+            workoutReportsListener = firestore
+                .collection("coaching_workout_reports")
+                .whereField("clientId", isEqualTo: client.id)
+                .whereField("trainerId", isEqualTo: trainerId)
+                .addSnapshotListener { [weak self] snapshot, _ in
+                    guard let snapshot else { return }
+                    let reports = snapshot.documents
+                        .compactMap { CoachingWorkoutReport(id: $0.documentID, data: $0.data()) }
+                        .sorted { $0.createdAt > $1.createdAt }
+
+                    Task { @MainActor [weak self] in
+                        self?.workoutReports = reports
+                    }
+                }
+        }
+
+        if nutritionReportsListener == nil {
+            nutritionReportsListener = firestore
+                .collection("coaching_nutrition_reports")
+                .whereField("clientId", isEqualTo: client.id)
+                .whereField("trainerId", isEqualTo: trainerId)
+                .addSnapshotListener { [weak self] snapshot, _ in
+                    guard let snapshot else { return }
+                    let reports = snapshot.documents
+                        .compactMap { CoachingNutritionReport(id: $0.documentID, data: $0.data()) }
+                        .sorted { $0.createdAt > $1.createdAt }
+
+                    Task { @MainActor [weak self] in
+                        self?.nutritionReports = reports
+                    }
+                }
+        }
     }
 
     func stopNotesListening() {
         notesListener?.remove()
         notesListener = nil
+        workoutReportsListener?.remove()
+        workoutReportsListener = nil
+        nutritionReportsListener?.remove()
+        nutritionReportsListener = nil
     }
 
     func load() async {
@@ -1678,6 +1725,8 @@ private struct ClientCoachingChatScreen: View {
     var body: some View {
         CoachingChatContent(
             notes: store.notes,
+            workoutReports: store.workoutReports,
+            nutritionReports: store.nutritionReports,
             outgoingRole: .client,
             placeholder: AppLocalizer.string("coaching.notes.placeholder.client"),
             message: $noteMessage,
@@ -2798,6 +2847,8 @@ private struct TrainerClientChatScreen: View {
     var body: some View {
         CoachingChatContent(
             notes: store.notes,
+            workoutReports: store.workoutReports,
+            nutritionReports: store.nutritionReports,
             outgoingRole: .trainer,
             placeholder: AppLocalizer.string("coaching.notes.placeholder.trainer"),
             message: $noteMessage,
@@ -3300,8 +3351,32 @@ private struct CoachingNotesHistoryScreen: View {
     }
 }
 
+private enum CoachingChatTimelineItem: Identifiable {
+    case note(CoachingNote)
+    case workoutReport(CoachingWorkoutReport)
+    case nutritionReport(CoachingNutritionReport)
+
+    var id: String {
+        switch self {
+        case .note(let note): return "note-\(note.id)"
+        case .workoutReport(let report): return "workout-\(report.id)"
+        case .nutritionReport(let report): return "nutrition-\(report.id)"
+        }
+    }
+
+    var createdAt: Date {
+        switch self {
+        case .note(let note): return note.createdAt
+        case .workoutReport(let report): return report.createdAt
+        case .nutritionReport(let report): return report.createdAt
+        }
+    }
+}
+
 private struct CoachingChatContent: View {
     let notes: [CoachingNote]
+    let workoutReports: [CoachingWorkoutReport]
+    let nutritionReports: [CoachingNutritionReport]
     let outgoingRole: CoachingNoteAuthorRole
     let placeholder: String
     @Binding var message: String
@@ -3309,8 +3384,14 @@ private struct CoachingChatContent: View {
     let onSend: () async -> Void
     let onRequestDelete: (CoachingNote) -> Void
 
-    private var sortedNotes: [CoachingNote] {
-        notes.sorted { $0.createdAt < $1.createdAt }
+    @State private var selectedWorkoutReport: CoachingWorkoutReport?
+    @State private var selectedNutritionReport: CoachingNutritionReport?
+
+    private var timelineItems: [CoachingChatTimelineItem] {
+        let noteItems = notes.map(CoachingChatTimelineItem.note)
+        let workoutItems = workoutReports.map(CoachingChatTimelineItem.workoutReport)
+        let nutritionItems = nutritionReports.map(CoachingChatTimelineItem.nutritionReport)
+        return (noteItems + workoutItems + nutritionItems).sorted { $0.createdAt < $1.createdAt }
     }
 
     private var trimmedMessage: String {
@@ -3321,7 +3402,7 @@ private struct CoachingChatContent: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 10) {
-                    if sortedNotes.isEmpty {
+                    if timelineItems.isEmpty {
                         VStack(spacing: 10) {
                             Image(systemName: "bubble.left.and.bubble.right")
                                 .font(.title2.weight(.semibold))
@@ -3333,13 +3414,9 @@ private struct CoachingChatContent: View {
                         .frame(maxWidth: .infinity)
                         .padding(.top, 80)
                     } else {
-                        ForEach(sortedNotes) { note in
-                            CoachingChatBubble(
-                                note: note,
-                                isOutgoing: note.authorRole == outgoingRole,
-                                onRequestDelete: { onRequestDelete(note) }
-                            )
-                            .id(note.id)
+                        ForEach(timelineItems) { item in
+                            timelineRow(item)
+                                .id(item.id)
                         }
                     }
                 }
@@ -3355,9 +3432,43 @@ private struct CoachingChatContent: View {
             .onAppear {
                 scrollToLatest(proxy)
             }
-            .onChange(of: notes.count) { _, _ in
+            .onChange(of: timelineItems.count) { _, _ in
                 scrollToLatest(proxy)
             }
+            .sheet(item: $selectedWorkoutReport) { report in
+                NavigationStack {
+                    CoachingWorkoutReportDetailScreen(report: report)
+                }
+            }
+            .sheet(item: $selectedNutritionReport) { report in
+                NavigationStack {
+                    CoachingNutritionReportDetailScreen(report: report)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func timelineRow(_ item: CoachingChatTimelineItem) -> some View {
+        switch item {
+        case .note(let note):
+            CoachingChatBubble(
+                note: note,
+                isOutgoing: note.authorRole == outgoingRole,
+                onRequestDelete: { onRequestDelete(note) }
+            )
+        case .workoutReport(let report):
+            CoachingWorkoutReportChatCard(
+                report: report,
+                isOutgoing: outgoingRole == .client,
+                onOpen: { selectedWorkoutReport = report }
+            )
+        case .nutritionReport(let report):
+            CoachingNutritionReportChatCard(
+                report: report,
+                isOutgoing: outgoingRole == .client,
+                onOpen: { selectedNutritionReport = report }
+            )
         }
     }
 
@@ -3404,12 +3515,230 @@ private struct CoachingChatContent: View {
     }
 
     private func scrollToLatest(_ proxy: ScrollViewProxy) {
-        guard let lastId = sortedNotes.last?.id else { return }
+        guard let lastId = timelineItems.last?.id else { return }
         DispatchQueue.main.async {
             withAnimation(.easeOut(duration: 0.22)) {
                 proxy.scrollTo(lastId, anchor: .bottom)
             }
         }
+    }
+}
+
+private struct CoachingWorkoutReportChatCard: View {
+    let report: CoachingWorkoutReport
+    let isOutgoing: Bool
+    let onOpen: () -> Void
+
+    private var workoutTitle: String {
+        guard report.workouts.count == 1 else {
+            return "\(report.workouts.count) тренировки"
+        }
+        let title = report.workouts[0].title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return title.isEmpty ? "Завершённая тренировка" : title
+    }
+
+    private var totalExercises: Int {
+        report.workouts.reduce(0) { $0 + $1.exerciseCount }
+    }
+
+    private var totalSets: Int {
+        report.workouts.reduce(0) { $0 + $1.setCount }
+    }
+
+    private var completedSets: Int {
+        report.workouts.reduce(0) { $0 + $1.completedSetCount }
+    }
+
+    private var totalCalories: Int {
+        report.workouts.reduce(0) { $0 + $1.estimatedCalories }
+    }
+
+    var body: some View {
+        CoachingReportChatCardContainer(isOutgoing: isOutgoing) {
+            Button(action: onOpen) {
+                VStack(alignment: .leading, spacing: 12) {
+                    reportHeader
+
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(workoutTitle)
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                            .lineLimit(2)
+
+                        Text("\(totalExercises) упражнений · \(completedSets) из \(totalSets) подходов")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+
+                        if totalCalories > 0 {
+                            Label("\(totalCalories) ккал", systemImage: "flame.fill")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.orange)
+                        }
+                    }
+
+                    reportFooter
+                }
+                .padding(14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Открывает полный отчёт о тренировке")
+    }
+
+    private var reportHeader: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "dumbbell.fill")
+                .font(.headline)
+                .foregroundStyle(.white)
+                .frame(width: 36, height: 36)
+                .background(HomeColors.accent, in: RoundedRectangle(cornerRadius: 11))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Тренировка завершена")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.primary)
+                Text(report.createdAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 8)
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    private var reportFooter: some View {
+        HStack(spacing: 6) {
+            Text("Открыть отчёт")
+                .font(.subheadline.weight(.semibold))
+            Image(systemName: "arrow.up.right")
+                .font(.caption.weight(.bold))
+        }
+        .foregroundStyle(HomeColors.accent)
+        .padding(.top, 2)
+    }
+}
+
+private struct CoachingNutritionReportChatCard: View {
+    let report: CoachingNutritionReport
+    let isOutgoing: Bool
+    let onOpen: () -> Void
+
+    private var dateTitle: String {
+        if Calendar.current.isDate(report.dateFrom, inSameDayAs: report.dateTo) {
+            return report.dateFrom.formatted(date: .long, time: .omitted)
+        }
+        return "\(report.dateFrom.formatted(date: .abbreviated, time: .omitted)) – \(report.dateTo.formatted(date: .abbreviated, time: .omitted))"
+    }
+
+    var body: some View {
+        CoachingReportChatCardContainer(isOutgoing: isOutgoing) {
+            Button(action: onOpen) {
+                VStack(alignment: .leading, spacing: 12) {
+                    reportHeader
+
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(dateTitle)
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                            .lineLimit(2)
+
+                        Text("\(report.totalCalories) из \(report.calorieGoal) ккал")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+
+                        Text("Б \(rounded(report.protein)) г · Ж \(rounded(report.fat)) г · У \(rounded(report.carbs)) г")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.82)
+                    }
+
+                    reportFooter
+                }
+                .padding(14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Открывает полный отчёт по питанию")
+    }
+
+    private var reportHeader: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "fork.knife")
+                .font(.headline)
+                .foregroundStyle(.white)
+                .frame(width: 36, height: 36)
+                .background(Color.green, in: RoundedRectangle(cornerRadius: 11))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Отчёт по питанию")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.primary)
+                Text(report.createdAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 8)
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    private var reportFooter: some View {
+        HStack(spacing: 6) {
+            Text("Открыть отчёт")
+                .font(.subheadline.weight(.semibold))
+            Image(systemName: "arrow.up.right")
+                .font(.caption.weight(.bold))
+        }
+        .foregroundStyle(HomeColors.accent)
+        .padding(.top, 2)
+    }
+
+    private func rounded(_ value: Double) -> Int {
+        Int(value.rounded())
+    }
+}
+
+private struct CoachingReportChatCardContainer<Content: View>: View {
+    let isOutgoing: Bool
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        HStack {
+            if isOutgoing {
+                Spacer(minLength: 34)
+            }
+
+            content
+                .frame(maxWidth: 330, alignment: .leading)
+                .background {
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(Color(.secondarySystemGroupedBackground))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .strokeBorder(
+                            isOutgoing ? HomeColors.accent.opacity(0.35) : Color(.separator).opacity(0.25),
+                            lineWidth: 1
+                        )
+                }
+
+            if isOutgoing == false {
+                Spacer(minLength: 34)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: isOutgoing ? .trailing : .leading)
     }
 }
 
