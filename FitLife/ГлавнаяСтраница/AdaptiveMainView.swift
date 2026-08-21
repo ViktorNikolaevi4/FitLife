@@ -88,7 +88,6 @@ private struct IPadMainShell: View {
             DashboardScreen(
                 selectedDate: $selectedDate,
                 showsFloatingAddButton: .constant(false),
-                onOpenNutrition: { selectedTab = .nutrition },
                 onOpenWorkouts: { selectedTab = .workouts }
             )
             .id(refreshID)

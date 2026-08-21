@@ -5,14 +5,12 @@ struct DashboardScreen: View {
     // Дата
     @Binding var selectedDate: Date
     @Binding var showsFloatingAddButton: Bool
-    let onOpenNutrition: () -> Void
     let onOpenWorkouts: () -> Void
 
     // Данные
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var sessionStore: AppSessionStore
     @Query private var users: [UserData]
-    @Query private var workouts: [WorkoutSession]
 
     @AppStorage(Gender.appStorageKey) private var activeGenderRaw: String = Gender.male.rawValue
     @AppStorage(WaterPortionPreference.appStorageKey) private var waterQuickAddML: Int = WaterPortionPreference.defaultML
@@ -63,12 +61,10 @@ struct DashboardScreen: View {
     init(
         selectedDate: Binding<Date>,
         showsFloatingAddButton: Binding<Bool>,
-        onOpenNutrition: @escaping () -> Void,
         onOpenWorkouts: @escaping () -> Void
     ) {
         _selectedDate = selectedDate
         _showsFloatingAddButton = showsFloatingAddButton
-        self.onOpenNutrition = onOpenNutrition
         self.onOpenWorkouts = onOpenWorkouts
     }
 
@@ -81,8 +77,6 @@ struct DashboardScreen: View {
                     header(theme)
 
                     if let user = userData {
-                        let focus = todayFocus(for: user, theme: theme)
-
                         BalanceCard(
                             consumed: dailyConsumedCalories,
                             target: user.calories,
@@ -93,12 +87,6 @@ struct DashboardScreen: View {
                             onTapProtein: { selectedMacroDetail = .protein },
                             onTapFat: { selectedMacroDetail = .fat },
                             onTapCarbs: { selectedMacroDetail = .carbs }
-                        )
-
-                        TodayFocusCard(
-                            focus: focus,
-                            theme: theme,
-                            onAction: { handleTodayFocus(focus.action) }
                         )
 
                         WaterSummaryCard(
@@ -315,48 +303,6 @@ struct DashboardScreen: View {
 
     private func dailyWaterGoal(for user: UserData) -> Double {
         (user.weight * 35) / 1000.0
-    }
-
-    private func todayFocus(for user: UserData, theme: AppTheme) -> TodayFocus {
-        TodayFocusResolver.resolve(
-            consumedCalories: dailyConsumedCalories,
-            targetCalories: user.calories,
-            waterIntake: waterIntake,
-            waterGoal: dailyWaterGoal(for: user),
-            hasCompletedWorkoutToday: hasCompletedWorkoutToday(for: user, on: selectedDate),
-            theme: theme
-        )
-    }
-
-    private func hasCompletedWorkoutToday(for user: UserData, on date: Date) -> Bool {
-        let calendar = Calendar.current
-        let dayStart = calendar.startOfDay(for: date)
-        guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return false }
-
-        return workouts.contains { workout in
-            guard
-                workout.ownerId == user.ownerId,
-                workout.gender == user.gender,
-                let endedAt = workout.endedAt
-            else {
-                return false
-            }
-
-            return endedAt >= dayStart && endedAt < dayEnd
-        }
-    }
-
-    private func handleTodayFocus(_ action: TodayFocusAction) {
-        switch action {
-        case .addFood:
-            onOpenNutrition()
-        case .addWater:
-            addWater(amount: Double(waterQuickAddML) / 1000.0)
-        case .openWorkouts:
-            onOpenWorkouts()
-        case .none:
-            break
-        }
     }
 
     private func addWater(amount: Double) {
