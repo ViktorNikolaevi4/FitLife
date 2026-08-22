@@ -16,6 +16,28 @@ private func localizedWorkoutSessionTitle(_ title: String) -> String {
     return trimmedTitle
 }
 
+private enum ActiveWorkoutRoute: Identifiable, Hashable {
+    case exercise(WorkoutExercise)
+    case block(WorkoutBlock)
+
+    var id: String {
+        switch self {
+        case .exercise(let exercise):
+            return "exercise-\(exercise.id.uuidString)"
+        case .block(let block):
+            return "block-\(block.id.uuidString)"
+        }
+    }
+
+    static func == (lhs: ActiveWorkoutRoute, rhs: ActiveWorkoutRoute) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+}
+
 struct ActiveWorkoutScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -41,8 +63,7 @@ struct ActiveWorkoutScreen: View {
     @State private var shouldShowCompletionAfterEffortPicker = false
     @State private var isShowingCompletionSummary = false
     @State private var exerciseTemplates: [WorkoutExerciseTemplate] = []
-    @State private var selectedExercise: WorkoutExercise?
-    @State private var selectedBlock: WorkoutBlock?
+    @State private var activeWorkoutRoute: ActiveWorkoutRoute?
     @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
     private let firestore = Firestore.firestore()
 
@@ -146,7 +167,7 @@ struct ActiveWorkoutScreen: View {
                             if collapsedBlockIds.contains(group.id) == false {
                                 ForEach(group.exercises, id: \.id) { exercise in
                                     Button {
-                                        selectedExercise = exercise
+                                        activeWorkoutRoute = .exercise(exercise)
                                     } label: {
                                         WorkoutExerciseCard(exercise: exercise)
                                     }
@@ -189,79 +210,37 @@ struct ActiveWorkoutScreen: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .tabBar)
         .toolbar(.hidden, for: .navigationBar)
-        .navigationDestination(item: $selectedExercise) { exercise in
-            WorkoutExerciseDetailScreen(
-                exercise: exercise,
-                followingExercises: followingExercises(after: exercise),
-                onOpenExercise: { nextExercise in
-                    selectedExercise = nextExercise
-                },
-                onDeleteExercise: {
-                    deleteExercise(exercise)
-                },
-                onContinueWorkout: {
-                    selectedExercise = nil
-                    DispatchQueue.main.async {
-                        continueWorkout()
-                    }
-                }
-            )
-        }
-        .navigationDestination(item: $selectedBlock) { block in
-            WorkoutBlockRunnerScreen(
-                block: block,
-                onFinish: {
-                    selectedBlock = nil
-                    DispatchQueue.main.async {
-                        continueWorkout()
-                    }
-                }
-            )
+        .navigationDestination(item: $activeWorkoutRoute) { route in
+            workoutDestination(for: route)
+                .id(route.id)
         }
         .safeAreaInset(edge: .bottom) {
-            if selectedExercise == nil && selectedBlock == nil {
-                VStack(spacing: 10) {
+            if activeWorkoutRoute == nil {
+                Button {
                     if hasPendingWorkoutItem {
-                        Button(action: continueWorkout) {
-                            Label("Продолжить тренировку", systemImage: "play.circle.fill")
-                                .font(.headline.weight(.semibold))
-                                .foregroundStyle(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 17)
-                                .background(RoundedRectangle(cornerRadius: 20).fill(HomeColors.primaryActionGradient))
-                        }
-                        .buttonStyle(.plain)
+                        continueWorkout()
+                    } else {
+                        showFinishConfirmation = true
                     }
-
-                    Button(action: beginAddingExercise) {
-                        Text(AppLocalizer.string("workout.add.exercise"))
-                            .font(.headline.weight(.semibold))
-                            .foregroundStyle(.blue)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 15)
-                            .background(
-                                RoundedRectangle(cornerRadius: 20)
-                                    .strokeBorder(Color.blue, lineWidth: 1.5)
-                            )
-                    }
-                    .buttonStyle(.plain)
-
-                    Button(action: { showFinishConfirmation = true }) {
-                        Label(
-                            AppLocalizer.string("workout.finish"),
-                            systemImage: "checkmark.circle.fill"
-                        )
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 17)
-                        .background(
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(HomeColors.primaryActionGradient)
-                        )
-                    }
-                    .buttonStyle(.plain)
+                } label: {
+                    Label(
+                        hasPendingWorkoutItem
+                            ? "Продолжить тренировку"
+                            : AppLocalizer.string("workout.finish"),
+                        systemImage: hasPendingWorkoutItem
+                            ? "play.circle.fill"
+                            : "checkmark.circle.fill"
+                    )
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 17)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(HomeColors.primaryActionGradient)
+                    )
                 }
+                .buttonStyle(.plain)
                 .padding(.horizontal)
                 .padding(.top, 8)
                 .padding(.bottom, 8)
@@ -418,6 +397,26 @@ struct ActiveWorkoutScreen: View {
                     }
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func workoutDestination(for route: ActiveWorkoutRoute) -> some View {
+        switch route {
+        case .exercise(let exercise):
+            WorkoutExerciseFlowScreen(
+                initialExercise: exercise,
+                exerciseSequence: [exercise] + followingExercises(after: exercise),
+                onDeleteExercise: { deletedExercise in
+                    deleteExercise(deletedExercise)
+                },
+                onContinueWorkout: advanceWorkoutRoute
+            )
+        case .block(let block):
+            WorkoutBlockRunnerScreen(
+                block: block,
+                onFinish: advanceWorkoutRoute
+            )
         }
     }
 
@@ -907,20 +906,32 @@ struct ActiveWorkoutScreen: View {
     }
 
     private func continueWorkout() {
+        activeWorkoutRoute = nextPendingWorkoutRoute()
+    }
+
+    private func advanceWorkoutRoute() {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            activeWorkoutRoute = nextPendingWorkoutRoute()
+        }
+    }
+
+    private func nextPendingWorkoutRoute() -> ActiveWorkoutRoute? {
         for group in sortedBlockGroups {
             if let block = group.block,
                isRunnerBlock(block),
                block.isFinished == false,
                group.exercises.isEmpty == false {
-                selectedBlock = block
-                return
+                return .block(block)
             }
 
             if let exercise = group.exercises.first(where: { $0.isFinished == false }) {
-                selectedExercise = exercise
-                return
+                return .exercise(exercise)
             }
         }
+
+        return nil
     }
 
     private func isRunnerBlock(_ block: WorkoutBlock) -> Bool {
@@ -930,7 +941,7 @@ struct ActiveWorkoutScreen: View {
     private func runnerAction(for block: WorkoutBlock?) -> (() -> Void)? {
         guard let block, isRunnerBlock(block), block.exerciseItems.isEmpty == false else { return nil }
         return {
-            selectedBlock = block
+            activeWorkoutRoute = .block(block)
         }
     }
 

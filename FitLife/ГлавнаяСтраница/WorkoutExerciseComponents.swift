@@ -220,6 +220,92 @@ private func resolvedWorkoutSetReps(_ set: WorkoutSet) -> Int {
     set.actualReps ?? set.reps
 }
 
+struct WorkoutExerciseFlowScreen: View {
+    @State private var currentExercise: WorkoutExercise
+    @State private var contentOpacity = 1.0
+    @State private var showsCompletionFeedback = false
+    @State private var isTransitioning = false
+
+    let exerciseSequence: [WorkoutExercise]
+    let onDeleteExercise: (WorkoutExercise) -> Void
+    let onContinueWorkout: () -> Void
+
+    init(
+        initialExercise: WorkoutExercise,
+        exerciseSequence: [WorkoutExercise],
+        onDeleteExercise: @escaping (WorkoutExercise) -> Void,
+        onContinueWorkout: @escaping () -> Void
+    ) {
+        _currentExercise = State(initialValue: initialExercise)
+        self.exerciseSequence = exerciseSequence
+        self.onDeleteExercise = onDeleteExercise
+        self.onContinueWorkout = onContinueWorkout
+    }
+
+    private var followingExercises: [WorkoutExercise] {
+        guard let currentIndex = exerciseSequence.firstIndex(where: { $0.id == currentExercise.id }) else {
+            return []
+        }
+
+        return Array(exerciseSequence.dropFirst(currentIndex + 1))
+    }
+
+    var body: some View {
+        WorkoutExerciseDetailScreen(
+            exercise: currentExercise,
+            followingExercises: followingExercises,
+            onOpenExercise: transitionToExercise,
+            onDeleteExercise: {
+                onDeleteExercise(currentExercise)
+            },
+            onContinueWorkout: onContinueWorkout
+        )
+        .id(currentExercise.id)
+        .opacity(contentOpacity)
+        .overlay {
+            completionFeedback
+        }
+        .allowsHitTesting(!isTransitioning)
+    }
+
+    @ViewBuilder
+    private var completionFeedback: some View {
+        if showsCompletionFeedback {
+            Image(systemName: "checkmark")
+                .font(.system(size: 30, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 68, height: 68)
+                .background(Color.green, in: Circle())
+                .shadow(color: .black.opacity(0.18), radius: 16, y: 8)
+                .transition(.scale(scale: 0.86).combined(with: .opacity))
+                .accessibilityHidden(true)
+        }
+    }
+
+    private func transitionToExercise(_ nextExercise: WorkoutExercise) {
+        guard nextExercise.id != currentExercise.id, !isTransitioning else { return }
+
+        isTransitioning = true
+        withAnimation(.easeOut(duration: 0.12)) {
+            contentOpacity = 0
+            showsCompletionFeedback = true
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+            currentExercise = nextExercise
+
+            withAnimation(.easeInOut(duration: 0.22)) {
+                contentOpacity = 1
+                showsCompletionFeedback = false
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                isTransitioning = false
+            }
+        }
+    }
+}
+
 struct WorkoutExerciseDetailScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -798,11 +884,11 @@ struct WorkoutExerciseDetailScreen: View {
     }
 
     private func continueAfterCurrentExercise() {
-        dismiss()
-        guard let onContinueWorkout else { return }
-        DispatchQueue.main.async {
-            onContinueWorkout()
+        guard let onContinueWorkout else {
+            dismiss()
+            return
         }
+        onContinueWorkout()
     }
 
     private func openNextExercise() {
