@@ -181,6 +181,7 @@ struct ClientAssignedWorkoutsScreen: View {
 }
 
 struct ClientAssignmentDetailScreen: View {
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var sessionStore: AppSessionStore
 
@@ -319,7 +320,15 @@ struct ClientAssignmentDetailScreen: View {
         .background(Color(.systemGroupedBackground))
         .navigationTitle(assignment.titleSnapshot)
         .navigationDestination(item: $selectedWorkout) { workout in
-            ActiveWorkoutScreen(workout: workout)
+            ActiveWorkoutScreen(
+                workout: workout,
+                onWorkoutFlowCompleted: {
+                    selectedWorkout = nil
+                    DispatchQueue.main.async {
+                        dismiss()
+                    }
+                }
+            )
         }
         .safeAreaInset(edge: .bottom) {
             startAssignmentBar

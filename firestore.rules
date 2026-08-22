@@ -248,7 +248,12 @@ service cloud.firestore {
         && request.resource.data.clientId == request.auth.uid
         && clientHasTrainerAccess(request.resource.data.trainerId);
 
-      allow update: if isOwner();
+      allow update: if isOwner()
+        || (
+          isClient()
+          && resource.data.clientId == request.auth.uid
+          && request.resource.data == resource.data
+        );
 
       allow delete: if isOwner()
         || (isClient() && resource.data.clientId == request.auth.uid);
@@ -263,7 +268,12 @@ service cloud.firestore {
         && request.resource.data.clientId == request.auth.uid
         && clientHasTrainerAccess(request.resource.data.trainerId);
 
-      allow update: if isOwner();
+      allow update: if isOwner()
+        || (
+          isClient()
+          && resource.data.clientId == request.auth.uid
+          && request.resource.data == resource.data
+        );
 
       allow delete: if isOwner()
         || (isClient() && resource.data.clientId == request.auth.uid);
@@ -286,6 +296,11 @@ service cloud.firestore {
             "isRead",
             "isArchived"
           ])
+        )
+        || (
+          isSignedIn()
+          && resource.data.senderId == request.auth.uid
+          && request.resource.data == resource.data
         );
 
       allow delete: if isOwner();

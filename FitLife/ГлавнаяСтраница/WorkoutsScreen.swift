@@ -104,7 +104,12 @@ struct WorkoutsScreen: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(item: $selectedWorkout) { workout in
-                ActiveWorkoutScreen(workout: workout)
+                ActiveWorkoutScreen(
+                    workout: workout,
+                    onWorkoutFlowCompleted: {
+                        selectedWorkout = nil
+                    }
+                )
             }
             .navigationDestination(item: $selectedLastWorkout) { selection in
                 WorkoutDetailScreen(workout: selection.workout)

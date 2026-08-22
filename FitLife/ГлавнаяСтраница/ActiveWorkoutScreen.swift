@@ -23,6 +23,7 @@ struct ActiveWorkoutScreen: View {
     @Query private var users: [UserData]
 
     let workout: WorkoutSession
+    let onWorkoutFlowCompleted: (() -> Void)?
     @State private var isShowingExercisePicker = false
     @State private var isShowingBlockEditor = false
     @State private var isAddingBlock = false
@@ -44,6 +45,14 @@ struct ActiveWorkoutScreen: View {
     @State private var selectedBlock: WorkoutBlock?
     @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
     private let firestore = Firestore.firestore()
+
+    init(
+        workout: WorkoutSession,
+        onWorkoutFlowCompleted: (() -> Void)? = nil
+    ) {
+        self.workout = workout
+        self.onWorkoutFlowCompleted = onWorkoutFlowCompleted
+    }
 
     private var sortedExercises: [WorkoutExercise] {
         workout.exerciseItems.sorted { $0.orderIndex < $1.orderIndex }
@@ -402,7 +411,11 @@ struct ActiveWorkoutScreen: View {
             WorkoutCompletionSummaryScreen(workout: workout) {
                 isShowingCompletionSummary = false
                 DispatchQueue.main.async {
-                    dismiss()
+                    if let onWorkoutFlowCompleted {
+                        onWorkoutFlowCompleted()
+                    } else {
+                        dismiss()
+                    }
                 }
             }
         }

@@ -79,6 +79,10 @@ struct DashboardTrainerConnectionCard: View {
         }
     }
 
+    private var hasUnreadTrainerMessage: Bool {
+        unreadTrainerNotifications.contains { $0.type == .coachNoteReceived }
+    }
+
     private var refreshKey: String {
         let eventIDs = notificationsStore.notifications
             .filter { $0.type == .coachNoteReceived || $0.type == .workoutAssigned }
@@ -100,6 +104,15 @@ struct DashboardTrainerConnectionCard: View {
                                 .font(.headline.weight(.bold))
                                 .foregroundStyle(theme.primaryText)
                                 .lineLimit(1)
+
+                            if hasUnreadTrainerMessage {
+                                Image(systemName: "envelope.fill")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(theme.accent)
+                                    .frame(width: 26, height: 26)
+                                    .background(theme.accent.opacity(0.12), in: Circle())
+                                    .accessibilityLabel(AppLocalizer.string("dashboard.coach.new_message"))
+                            }
 
                             if !unreadTrainerNotifications.isEmpty {
                                 Text("\(unreadTrainerNotifications.count)")

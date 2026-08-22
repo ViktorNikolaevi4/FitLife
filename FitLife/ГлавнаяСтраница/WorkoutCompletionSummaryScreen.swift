@@ -343,6 +343,7 @@ struct WorkoutCompletionSummaryScreen: View {
             didSend = result == .delivered
             isQueuedForDelivery = result == .queued
             isSending = false
+            onDone()
         } catch {
             errorMessage = AppErrorPresenter.message(for: error)
             isSending = false

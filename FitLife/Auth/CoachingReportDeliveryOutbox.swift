@@ -200,25 +200,25 @@ actor CoachingReportDeliveryOutbox {
         do {
             let reportRef = firestore.collection(pending.collection).document(pending.id)
 
-            // Если сервер принял предыдущую попытку, но устройство не получило
-            // подтверждение, повторно создавать документы не нужно.
-            if try await reportRef.getDocument().exists == false {
-                if cancelledClientIDs.contains(pending.clientId) {
-                    deliveries.removeAll { $0.id == id }
-                    inFlightIDs.remove(id)
-                    persist()
-                    return
-                }
-                let reportData = try decodePropertyList(pending.reportData)
-                let notificationData = try decodePropertyList(pending.notificationData)
-                let notificationRef = firestore
-                    .collection("notification_events")
-                    .document(pending.notificationId)
-                let batch = firestore.batch()
-                batch.setData(reportData, forDocument: reportRef)
-                batch.setData(notificationData, forDocument: notificationRef)
-                try await batch.commit()
+            if cancelledClientIDs.contains(pending.clientId) {
+                deliveries.removeAll { $0.id == id }
+                inFlightIDs.remove(id)
+                persist()
+                return
             }
+
+            // Запись с постоянным id идемпотентна: при потере подтверждения
+            // очередь безопасно повторит тот же batch. Firestore Rules разрешают
+            // клиенту только точное повторение уже сохранённых данных.
+            let reportData = try decodePropertyList(pending.reportData)
+            let notificationData = try decodePropertyList(pending.notificationData)
+            let notificationRef = firestore
+                .collection("notification_events")
+                .document(pending.notificationId)
+            let batch = firestore.batch()
+            batch.setData(reportData, forDocument: reportRef)
+            batch.setData(notificationData, forDocument: notificationRef)
+            try await batch.commit()
 
             deliveries.removeAll { $0.id == id }
             persist()
