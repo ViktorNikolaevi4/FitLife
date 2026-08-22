@@ -13,6 +13,7 @@ struct DashboardTrainerConnectionCard: View {
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var notificationsStore: AppNotificationsStore
     @StateObject private var store: ClientCoachingStore
+    @State private var hasCompletedInitialLoad = false
 
     init(
         clientId: String,
@@ -50,9 +51,12 @@ struct DashboardTrainerConnectionCard: View {
             }
         }
         .padding(.horizontal)
-        .task(id: refreshKey) { await refresh() }
+        .task(id: refreshKey) {
+            await refresh()
+            hasCompletedInitialLoad = true
+        }
         .onAppear {
-            guard store.hasLoadedInitialState else { return }
+            guard hasCompletedInitialLoad, store.hasLoadedInitialState else { return }
             Task { await refresh() }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -107,9 +111,15 @@ struct DashboardTrainerConnectionCard: View {
                             }
                         }
 
-                        Text(AppLocalizer.string("dashboard.coach.your_trainer"))
-                            .font(.subheadline)
-                            .foregroundStyle(theme.secondaryText)
+                        HStack(spacing: 6) {
+                            Text(AppLocalizer.string("dashboard.coach.your_trainer"))
+                            if store.isUsingCachedData {
+                                Image(systemName: "cloud.slash")
+                                    .accessibilityLabel(AppLocalizer.string("dashboard.coach.cached_data"))
+                            }
+                        }
+                        .font(.subheadline)
+                        .foregroundStyle(theme.secondaryText)
                     }
 
                     Spacer(minLength: 8)

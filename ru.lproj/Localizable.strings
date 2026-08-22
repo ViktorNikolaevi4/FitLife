@@ -1242,3 +1242,4 @@
 "dashboard.coach.new_workout" = "Новая тренировка";
 "dashboard.coach.assigned_workout" = "Назначенная тренировка";
 "dashboard.coach.open_workout" = "Открыть";
+"dashboard.coach.cached_data" = "Показаны последние сохранённые данные";

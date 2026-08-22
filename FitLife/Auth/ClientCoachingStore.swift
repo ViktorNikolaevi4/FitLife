@@ -11,6 +11,7 @@ final class ClientCoachingStore: ObservableObject {
     @Published var latestActiveAssignment: WorkoutAssignment?
     @Published var isLoading = false
     @Published private(set) var hasLoadedInitialState = false
+    @Published private(set) var isUsingCachedData = false
     @Published var isSaving = false
     @Published var errorMessage: String?
 
@@ -20,6 +21,7 @@ final class ClientCoachingStore: ObservableObject {
     init(clientId: String, firestore: Firestore = .firestore()) {
         self.clientId = clientId
         self.firestore = firestore
+        restoreCachedConnection()
     }
 
     func load(
@@ -37,88 +39,217 @@ final class ClientCoachingStore: ObservableObject {
             )
         }
 
-        do {
-            async let intakeSnapshot = firestore.collection("client_intakes").document(clientId).getDocument()
-            async let requestSnapshot = firestore.collection("coaching_requests").document(clientId).getDocument()
-            async let activeLinksSnapshot = firestore
-                .collection("trainer_client_links")
-                .whereField("clientId", isEqualTo: clientId)
-                .whereField("status", isEqualTo: "active")
-                .getDocuments()
-            async let assignmentsSnapshot = firestore
-                .collection("workout_assignments")
-                .whereField("clientId", isEqualTo: clientId)
-                .order(by: "assignedAt", descending: true)
-                .getDocuments()
-
-            let (intakeDocument, requestDocument, activeLinksDocument, assignmentsDocument) = try await (
-                intakeSnapshot,
-                requestSnapshot,
-                activeLinksSnapshot,
-                assignmentsSnapshot
-            )
-
-            if let data = intakeDocument.data(),
-               let intake = ClientIntakeProfile(id: intakeDocument.documentID, data: data) {
-                self.intake = intake
-            } else {
-                self.intake = makeIntake(
-                    profile: profile,
-                    localUserData: localUserData,
-                    latestMeasurements: latestMeasurements
-                )
-            }
-
-            if let data = requestDocument.data(),
-               let request = CoachingRequest(id: requestDocument.documentID, data: data) {
-                self.request = request
-            } else {
-                self.request = nil
-            }
-
-            if let firstLink = activeLinksDocument.documents.first,
-               let link = TrainerClientLink(id: firstLink.documentID, data: firstLink.data()) {
-                self.activeLink = link
-                async let trainerSnapshotRequest = firestore.collection("users")
-                    .document(link.trainerId)
-                    .getDocument()
-                async let notesSnapshotRequest = firestore.collection("coaching_notes")
-                    .whereField("clientId", isEqualTo: clientId)
-                    .whereField("trainerId", isEqualTo: link.trainerId)
-                    .getDocuments()
-
-                let (trainerSnapshot, notesSnapshot) = try await (
-                    trainerSnapshotRequest,
-                    notesSnapshotRequest
-                )
-                if let data = trainerSnapshot.data(),
-                   let trainer = AppUserProfile(id: trainerSnapshot.documentID, data: data) {
-                    self.trainerProfile = trainer
-                }
-                self.latestNote = notesSnapshot.documents
-                    .compactMap { CoachingNote(id: $0.documentID, data: $0.data()) }
-                    .filter { $0.authorRole == .trainer }
-                    .max { $0.createdAt < $1.createdAt }
-                self.latestActiveAssignment = assignmentsDocument.documents
-                    .compactMap { WorkoutAssignment(id: $0.documentID, data: $0.data()) }
-                    .first {
-                        $0.trainerId == link.trainerId &&
-                        ($0.status == .assigned || $0.status == .started)
-                    }
-            } else {
-                self.activeLink = nil
-                self.trainerProfile = nil
-                self.latestNote = nil
-                self.latestActiveAssignment = nil
-            }
-
-            hasLoadedInitialState = true
-            isLoading = false
-        } catch {
-            errorMessage = AppErrorPresenter.message(for: error)
+        defer {
             hasLoadedInitialState = true
             isLoading = false
         }
+
+        async let supportingData: Void = refreshSupportingData(
+            profile: profile,
+            localUserData: localUserData,
+            latestMeasurements: latestMeasurements
+        )
+
+        var connectionWasLoadedFromServer = false
+        do {
+            let snapshot = try await activeLinksQuery.getDocuments(source: .server)
+            connectionWasLoadedFromServer = true
+
+            if let document = snapshot.documents.first,
+               let link = TrainerClientLink(id: document.documentID, data: document.data()) {
+                applyActiveConnection(link)
+            } else {
+                clearActiveConnection()
+            }
+        } catch {
+            if activeLink == nil {
+                await restoreConnectionFromFirestoreCache()
+            }
+
+            if activeLink == nil {
+                errorMessage = AppErrorPresenter.message(for: error)
+            }
+        }
+
+        var trainerContentWasLoadedFromServer = false
+        if let link = activeLink {
+            trainerContentWasLoadedFromServer = await refreshTrainerContent(for: link)
+        }
+
+        isUsingCachedData = activeLink != nil &&
+            !(connectionWasLoadedFromServer && trainerContentWasLoadedFromServer)
+
+        await supportingData
+    }
+
+    private var activeLinksQuery: Query {
+        firestore
+            .collection("trainer_client_links")
+            .whereField("clientId", isEqualTo: clientId)
+            .whereField("status", isEqualTo: "active")
+    }
+
+    private func refreshSupportingData(
+        profile: AppUserProfile,
+        localUserData: UserData?,
+        latestMeasurements: BodyMeasurements?
+    ) async {
+        async let intakeRequest = try? firestore
+            .collection("client_intakes")
+            .document(clientId)
+            .getDocument()
+        async let coachingRequest = try? firestore
+            .collection("coaching_requests")
+            .document(clientId)
+            .getDocument()
+
+        let (intakeDocument, requestDocument) = await (intakeRequest, coachingRequest)
+
+        if let intakeDocument,
+           let data = intakeDocument.data(),
+           let intake = ClientIntakeProfile(id: intakeDocument.documentID, data: data) {
+            self.intake = intake
+        } else if self.intake == nil {
+            self.intake = makeIntake(
+                profile: profile,
+                localUserData: localUserData,
+                latestMeasurements: latestMeasurements
+            )
+        }
+
+        if let requestDocument {
+            if let data = requestDocument.data(),
+               let request = CoachingRequest(id: requestDocument.documentID, data: data) {
+                self.request = request
+            } else if requestDocument.exists == false {
+                self.request = nil
+            }
+        }
+    }
+
+    private func refreshTrainerContent(for link: TrainerClientLink) async -> Bool {
+        _ = await applyTrainerContent(for: link, source: .cache)
+        let serverResults = await applyTrainerContent(for: link, source: .server)
+
+        if trainerProfile?.id == link.trainerId {
+            persistConnection(link)
+        }
+        return serverResults
+    }
+
+    private func applyTrainerContent(
+        for link: TrainerClientLink,
+        source: FirestoreSource
+    ) async -> Bool {
+        async let trainerRequest = try? firestore
+            .collection("users")
+            .document(link.trainerId)
+            .getDocument(source: source)
+        async let notesRequest = try? firestore
+            .collection("coaching_notes")
+            .whereField("clientId", isEqualTo: clientId)
+            .whereField("trainerId", isEqualTo: link.trainerId)
+            .getDocuments(source: source)
+        async let assignmentsRequest = try? firestore
+            .collection("workout_assignments")
+            .whereField("clientId", isEqualTo: clientId)
+            .order(by: "assignedAt", descending: true)
+            .getDocuments(source: source)
+
+        let (trainerSnapshot, notesSnapshot, assignmentsSnapshot) = await (
+            trainerRequest,
+            notesRequest,
+            assignmentsRequest
+        )
+
+        if let trainerSnapshot,
+           let data = trainerSnapshot.data(),
+           let trainer = AppUserProfile(id: trainerSnapshot.documentID, data: data) {
+            trainerProfile = trainer
+        }
+
+        if let notesSnapshot {
+            latestNote = notesSnapshot.documents
+                .compactMap { CoachingNote(id: $0.documentID, data: $0.data()) }
+                .filter { $0.authorRole == .trainer }
+                .max { $0.createdAt < $1.createdAt }
+        }
+
+        if let assignmentsSnapshot {
+            latestActiveAssignment = assignmentsSnapshot.documents
+                .compactMap { WorkoutAssignment(id: $0.documentID, data: $0.data()) }
+                .first {
+                    $0.trainerId == link.trainerId &&
+                    ($0.status == .assigned || $0.status == .started)
+                }
+        }
+
+        return trainerSnapshot != nil && notesSnapshot != nil && assignmentsSnapshot != nil
+    }
+
+    private func restoreConnectionFromFirestoreCache() async {
+        guard
+            let snapshot = try? await activeLinksQuery.getDocuments(source: .cache),
+            let document = snapshot.documents.first,
+            let link = TrainerClientLink(id: document.documentID, data: document.data())
+        else {
+            return
+        }
+
+        applyActiveConnection(link)
+    }
+
+    private func applyActiveConnection(_ link: TrainerClientLink) {
+        if activeLink?.trainerId != link.trainerId {
+            trainerProfile = nil
+            latestNote = nil
+            latestActiveAssignment = nil
+        }
+        activeLink = link
+        persistConnection(link)
+    }
+
+    private func clearActiveConnection() {
+        activeLink = nil
+        trainerProfile = nil
+        latestNote = nil
+        latestActiveAssignment = nil
+        isUsingCachedData = false
+        UserDefaults.standard.removeObject(forKey: connectionCacheKey)
+    }
+
+    private var connectionCacheKey: String {
+        "fitlife.dashboard.trainer-connection.\(clientId)"
+    }
+
+    private func persistConnection(_ link: TrainerClientLink) {
+        let trainer = trainerProfile?.id == link.trainerId ? trainerProfile : nil
+        let snapshot = CachedTrainerConnection(
+            linkId: link.id,
+            trainerId: link.trainerId,
+            clientId: link.clientId,
+            createdAt: link.createdAt,
+            createdByOwnerId: link.createdByOwnerId,
+            trainerDisplayName: trainer?.displayName,
+            trainerCreatedAt: trainer?.createdAt,
+            trainerIsActive: trainer?.isActive
+        )
+        guard let data = try? JSONEncoder().encode(snapshot) else { return }
+        UserDefaults.standard.set(data, forKey: connectionCacheKey)
+    }
+
+    private func restoreCachedConnection() {
+        guard
+            let data = UserDefaults.standard.data(forKey: connectionCacheKey),
+            let snapshot = try? JSONDecoder().decode(CachedTrainerConnection.self, from: data)
+        else {
+            return
+        }
+
+        activeLink = snapshot.link
+        trainerProfile = snapshot.trainerProfile
+        isUsingCachedData = true
+        hasLoadedInitialState = true
     }
 
     func saveDraft(profile: AppUserProfile) async {
@@ -257,5 +388,38 @@ final class ClientCoachingStore: ObservableObject {
     private func positive(_ value: Int?) -> Int? {
         guard let value, value > 0 else { return nil }
         return value
+    }
+}
+
+private struct CachedTrainerConnection: Codable {
+    let linkId: String
+    let trainerId: String
+    let clientId: String
+    let createdAt: Date
+    let createdByOwnerId: String
+    let trainerDisplayName: String?
+    let trainerCreatedAt: Date?
+    let trainerIsActive: Bool?
+
+    var link: TrainerClientLink {
+        TrainerClientLink(
+            id: linkId,
+            trainerId: trainerId,
+            clientId: clientId,
+            createdAt: createdAt,
+            createdByOwnerId: createdByOwnerId
+        )
+    }
+
+    var trainerProfile: AppUserProfile? {
+        guard let trainerDisplayName, trainerDisplayName.isEmpty == false else { return nil }
+        return AppUserProfile(
+            id: trainerId,
+            email: "",
+            displayName: trainerDisplayName,
+            role: .trainer,
+            createdAt: trainerCreatedAt ?? createdAt,
+            isActive: trainerIsActive ?? true
+        )
     }
 }

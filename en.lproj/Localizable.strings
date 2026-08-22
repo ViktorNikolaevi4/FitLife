@@ -1242,3 +1242,4 @@
 "dashboard.coach.new_workout" = "New workout";
 "dashboard.coach.assigned_workout" = "Assigned workout";
 "dashboard.coach.open_workout" = "Open";
+"dashboard.coach.cached_data" = "Showing the latest saved data";

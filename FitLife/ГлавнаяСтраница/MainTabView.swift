@@ -21,8 +21,6 @@ struct MainTabView: View {
     @State private var refreshID = UUID()
     @State private var selectedTab: MainTab = .home
     @State private var showsHomeFloatingAddButton = true
-    @State private var childHidesHomeFloatingAddButton = false
-    @State private var isShowingAIMealRecognition = false
 
     private var appLanguage: AppLanguage {
         AppLanguage.from(rawValue: appLanguageRaw)
@@ -32,12 +30,8 @@ struct MainTabView: View {
         Gender(rawValue: activeGenderRaw) ?? .male
     }
 
-    private var showsFloatingAddButton: Bool {
-        selectedTab == .home && showsHomeFloatingAddButton && childHidesHomeFloatingAddButton == false
-    }
-
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
+        ZStack {
             TabView(selection: $selectedTab) {
                 DashboardScreen(
                     selectedDate: $selectedDate,
@@ -71,36 +65,6 @@ struct MainTabView: View {
             .toolbarBackground(colorScheme == .dark ? Color.black.opacity(0.62) : Color(.systemBackground), for: .tabBar)
             .toolbarBackground(.visible, for: .tabBar)
             .toolbarColorScheme(colorScheme == .dark ? .dark : .light, for: .tabBar)
-            .onPreferenceChange(HomeFloatingAddButtonHiddenPreferenceKey.self) { isHidden in
-                childHidesHomeFloatingAddButton = isHidden
-            }
-
-            if showsFloatingAddButton {
-                Button(action: { isShowingAIMealRecognition = true }) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 28, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 58, height: 58)
-                        .background {
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            Color(hex: "347DFF"),
-                                            Color(hex: "1257E8")
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                        }
-                        .shadow(color: HomeDarkColors.blue.opacity(0.35), radius: 20, x: 0, y: 10)
-                        .shadow(color: .black.opacity(0.38), radius: 14, x: 0, y: 8)
-                }
-                .buttonStyle(.plain)
-                .padding(.trailing, 20)
-                .padding(.bottom, 74)
-            }
         }
         .onAppear {
             Self.configurePremiumTabBar(for: colorScheme)
@@ -116,13 +80,6 @@ struct MainTabView: View {
                 selectedDate: $selectedDate,
                 onMealAdded: { refreshID = UUID() },
                 preselectedMeal: preset
-            )
-        }
-        .sheet(isPresented: $isShowingAIMealRecognition) {
-            AIMealRecognitionFlowView(
-                selectedDate: selectedDate,
-                selectedGender: selectedGender,
-                onSaved: { refreshID = UUID() }
             )
         }
     }
