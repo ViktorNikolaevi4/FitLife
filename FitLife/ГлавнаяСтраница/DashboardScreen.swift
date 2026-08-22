@@ -91,22 +91,16 @@ struct DashboardScreen: View {
                                 localUserData: user,
                                 theme: theme,
                                 onOpenConnection: {
-                                    coachingDestination = DashboardCoachingDestination(
-                                        clientId: clientProfile.id,
-                                        opensChatInitially: false
-                                    )
+                                    coachingDestination = .connection(clientId: clientProfile.id)
                                 },
-                                onOpenChat: {
-                                    coachingDestination = DashboardCoachingDestination(
+                                onOpenChat: { trainerId in
+                                    coachingDestination = .chat(
                                         clientId: clientProfile.id,
-                                        opensChatInitially: true
+                                        trainerId: trainerId
                                     )
                                 },
                                 onOpenReports: {
-                                    coachingDestination = DashboardCoachingDestination(
-                                        clientId: clientProfile.id,
-                                        opensChatInitially: false
-                                    )
+                                    coachingDestination = .connection(clientId: clientProfile.id)
                                 },
                                 onOpenAssignment: { assignment in
                                     selectedTrainerAssignment = assignment
@@ -168,10 +162,15 @@ struct DashboardScreen: View {
                 SettingsScreenContainer(showsFloatingAddButton: $showsFloatingAddButton)
             }
             .navigationDestination(item: $coachingDestination) { destination in
-                ClientCoachingEntryScreen(
-                    clientId: destination.clientId,
-                    opensChatInitially: destination.opensChatInitially
-                )
+                switch destination {
+                case let .connection(clientId):
+                    ClientCoachingEntryScreen(clientId: clientId)
+                case let .chat(clientId, trainerId):
+                    ClientCoachingDirectChatScreen(
+                        clientId: clientId,
+                        trainerId: trainerId
+                    )
+                }
             }
             .navigationDestination(item: $selectedTrainerAssignment) { assignment in
                 ClientAssignmentDetailScreen(
@@ -492,9 +491,9 @@ struct DashboardScreen: View {
     }
 }
 
-private struct DashboardCoachingDestination: Hashable {
-    let clientId: String
-    let opensChatInitially: Bool
+private enum DashboardCoachingDestination: Hashable {
+    case connection(clientId: String)
+    case chat(clientId: String, trainerId: String)
 }
 
 private struct SettingsScreenContainer: View {

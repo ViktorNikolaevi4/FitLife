@@ -207,6 +207,8 @@ final class AppNotificationsStore: ObservableObject {
     private var isBootstrappingUnreadCounter = false
     private var hasReconciledUnreadCounter = false
     private var hasLoadedUnreadSnapshot = false
+    private var conversationsBeingMarkedRead: Set<String> = []
+    private var conversationsNeedingAnotherPass: Set<String> = []
     @Published private(set) var canLoadMore = false
     @Published private(set) var isLoadingMore = false
 
@@ -234,6 +236,8 @@ final class AppNotificationsStore: ObservableObject {
         isBootstrappingUnreadCounter = false
         hasReconciledUnreadCounter = false
         hasLoadedUnreadSnapshot = false
+        conversationsBeingMarkedRead = []
+        conversationsNeedingAnotherPass = []
 
         guard let userId, userId.isEmpty == false else { return }
 
@@ -308,6 +312,41 @@ final class AppNotificationsStore: ObservableObject {
         }
     }
 
+    /// Marks only incoming chat messages from one counterpart as read.
+    /// The query intentionally uses recipientId alone so it does not require
+    /// an additional composite Firestore index; sender and type are filtered
+    /// locally before the writes are committed.
+    func markConversationRead(
+        counterpartId: String,
+        incomingType: AppNotificationEventType
+    ) async {
+        guard
+            let userId = currentUserId,
+            counterpartId.isEmpty == false
+        else { return }
+
+        let operationKey = "\(counterpartId)|\(incomingType.rawValue)"
+        guard conversationsBeingMarkedRead.insert(operationKey).inserted else {
+            conversationsNeedingAnotherPass.insert(operationKey)
+            return
+        }
+
+        defer {
+            conversationsBeingMarkedRead.remove(operationKey)
+            conversationsNeedingAnotherPass.remove(operationKey)
+        }
+
+        repeat {
+            conversationsNeedingAnotherPass.remove(operationKey)
+            await markConversationReadPass(
+                userId: userId,
+                counterpartId: counterpartId,
+                incomingType: incomingType
+            )
+        } while currentUserId == userId
+            && conversationsNeedingAnotherPass.contains(operationKey)
+    }
+
     func markAllRead() async {
         do {
             guard let userId = currentUserId else { return }
@@ -351,6 +390,81 @@ final class AppNotificationsStore: ObservableObject {
         } catch {
             #if DEBUG
             print("Failed to mark all notifications as read:", error.localizedDescription)
+            #endif
+        }
+    }
+
+    private func markConversationReadPass(
+        userId: String,
+        counterpartId: String,
+        incomingType: AppNotificationEventType
+    ) async {
+        guard currentUserId == userId else { return }
+
+        // Remove already loaded events immediately. The chat and application
+        // badges therefore react to the tap without waiting for the network.
+        let optimisticDocumentIds: Set<String> = Set(notifications.compactMap { notification -> String? in
+            guard
+                notification.recipientId == userId,
+                notification.senderId == counterpartId,
+                notification.type == incomingType,
+                notification.isRead == false,
+                notification.isArchived == false,
+                notification.isEphemeral == false
+            else { return nil }
+            return notification.id
+        })
+
+        if optimisticDocumentIds.isEmpty == false {
+            for documentId in optimisticDocumentIds {
+                loadedDocuments.removeValue(forKey: documentId)
+            }
+            serverUnreadCount = max(0, serverUnreadCount - optimisticDocumentIds.count)
+            rebuildNotifications()
+        }
+
+        do {
+            let snapshot = try await firestore
+                .collection("notification_events")
+                .whereField("recipientId", isEqualTo: userId)
+                .getDocuments()
+
+            guard currentUserId == userId else { return }
+            let unreadDocuments = snapshot.documents.filter { document in
+                let data = document.data()
+                return (data["senderId"] as? String) == counterpartId
+                    && (data["type"] as? String) == incomingType.rawValue
+                    && (data["isRead"] as? Bool) != true
+                    && (data["isArchived"] as? Bool) != true
+            }
+
+            for startIndex in stride(from: 0, to: unreadDocuments.count, by: 450) {
+                let endIndex = min(startIndex + 450, unreadDocuments.count)
+                let documents = unreadDocuments[startIndex..<endIndex]
+                let batch = firestore.batch()
+
+                for document in documents {
+                    batch.setData(["isRead": true], forDocument: document.reference, merge: true)
+                }
+                batch.setData(
+                    unreadCounterUpdate(by: -documents.count),
+                    forDocument: firestore.collection("users").document(userId),
+                    merge: true
+                )
+                try await batch.commit()
+            }
+
+            guard currentUserId == userId else { return }
+            for document in unreadDocuments {
+                loadedDocuments.removeValue(forKey: document.documentID)
+            }
+            let additionallyReadCount = max(0, unreadDocuments.count - optimisticDocumentIds.count)
+            serverUnreadCount = max(0, serverUnreadCount - additionallyReadCount)
+            rebuildNotifications()
+            await reconcileUnreadCounter(for: userId)
+        } catch {
+            #if DEBUG
+            print("Failed to mark conversation notifications as read:", error.localizedDescription)
             #endif
         }
     }

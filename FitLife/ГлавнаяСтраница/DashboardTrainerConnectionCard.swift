@@ -6,7 +6,7 @@ struct DashboardTrainerConnectionCard: View {
     let localUserData: UserData?
     let theme: AppTheme
     let onOpenConnection: () -> Void
-    let onOpenChat: () -> Void
+    let onOpenChat: (String) -> Void
     let onOpenReports: () -> Void
     let onOpenAssignment: (WorkoutAssignment) -> Void
 
@@ -21,7 +21,7 @@ struct DashboardTrainerConnectionCard: View {
         localUserData: UserData?,
         theme: AppTheme,
         onOpenConnection: @escaping () -> Void,
-        onOpenChat: @escaping () -> Void,
+        onOpenChat: @escaping (String) -> Void,
         onOpenReports: @escaping () -> Void,
         onOpenAssignment: @escaping (WorkoutAssignment) -> Void
     ) {
@@ -94,7 +94,7 @@ struct DashboardTrainerConnectionCard: View {
 
     private var activeTrainerCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Button(action: onOpenConnection) {
+            Button(action: openChat) {
                 HStack(spacing: 14) {
                     trainerAvatar
 
@@ -482,12 +482,17 @@ struct DashboardTrainerConnectionCard: View {
     }
 
     private func openChat() {
-        let notifications = unreadTrainerNotifications.filter { $0.type == .coachNoteReceived }
-        onOpenChat()
+        let trainerId = store.activeLink?.trainerId ?? ""
+        guard trainerId.isEmpty == false else {
+            onOpenConnection()
+            return
+        }
+        onOpenChat(trainerId)
         Task {
-            for notification in notifications {
-                await notificationsStore.markRead(notification)
-            }
+            await notificationsStore.markConversationRead(
+                counterpartId: trainerId,
+                incomingType: .coachNoteReceived
+            )
         }
     }
 
@@ -507,7 +512,7 @@ struct DashboardTrainerConnectionCard: View {
         switch latestTrainerEvent {
         case .note: openChat()
         case let .assignment(assignment): openAssignment(assignment)
-        case nil: onOpenConnection()
+        case nil: openChat()
         }
     }
 

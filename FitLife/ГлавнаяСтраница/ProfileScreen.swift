@@ -923,17 +923,11 @@ private struct ProfileHeroCard: View {
                 } else if
                     let urlString = sessionStore.profile?.photoURL,
                     let url = URL(string: urlString) {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image.resizable().scaledToFill()
-                        case .empty:
-                            ProgressView().tint(theme.accent)
-                        case .failure:
-                            fallbackProfileIcon
-                        @unknown default:
-                            fallbackProfileIcon
-                        }
+                    CachedProfileAvatarImage(
+                        url: url,
+                        cacheKey: profilePhotoCacheKey
+                    ) {
+                        fallbackProfileIcon
                     }
                 } else {
                     fallbackProfileIcon
@@ -992,6 +986,7 @@ private struct ProfileHeroCard: View {
 
             previewImage = preparedImage
             try await sessionStore.updateProfilePhoto(with: uploadData)
+            try? ProfileAvatarImageCache.save(data: uploadData, cacheKey: profilePhotoCacheKey)
         } catch {
             previewImage = nil
             photoErrorMessage = AppErrorPresenter.message(for: error)
@@ -1007,6 +1002,7 @@ private struct ProfileHeroCard: View {
         do {
             try await sessionStore.removeProfilePhoto()
             previewImage = nil
+            ProfileAvatarImageCache.remove(cacheKey: profilePhotoCacheKey)
         } catch {
             photoErrorMessage = AppErrorPresenter.message(for: error)
             isShowingPhotoError = true
@@ -1029,6 +1025,94 @@ private struct ProfileHeroCard: View {
         return UIGraphicsImageRenderer(size: targetSize, format: format).image { _ in
             image.draw(in: CGRect(origin: .zero, size: targetSize))
         }
+    }
+
+    private var profilePhotoCacheKey: String {
+        ownerId ?? sessionStore.firebaseUser?.uid ?? "current-user"
+    }
+}
+
+private struct CachedProfileAvatarImage<Placeholder: View>: View {
+    let url: URL
+    private let cacheKey: String
+    private let placeholder: Placeholder
+    @State private var image: UIImage?
+
+    init(
+        url: URL,
+        cacheKey: String,
+        @ViewBuilder placeholder: () -> Placeholder
+    ) {
+        self.url = url
+        self.cacheKey = cacheKey
+        self.placeholder = placeholder()
+        _image = State(initialValue: ProfileAvatarImageCache.read(cacheKey: cacheKey))
+    }
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                placeholder
+            }
+        }
+        .task(id: url.absoluteString) {
+            await refreshImage()
+        }
+    }
+
+    @MainActor
+    private func refreshImage() async {
+        var request = URLRequest(url: url)
+        request.cachePolicy = .returnCacheDataElseLoad
+
+        guard
+            let (data, response) = try? await URLSession.shared.data(for: request),
+            let httpResponse = response as? HTTPURLResponse,
+            (200..<300).contains(httpResponse.statusCode),
+            let downloadedImage = UIImage(data: data)
+        else { return }
+
+        image = downloadedImage
+        try? ProfileAvatarImageCache.save(data: data, cacheKey: cacheKey)
+    }
+}
+
+private enum ProfileAvatarImageCache {
+    static func read(cacheKey: String) -> UIImage? {
+        guard let url = cacheURL(cacheKey: cacheKey) else { return nil }
+        return UIImage(contentsOfFile: url.path)
+    }
+
+    static func save(data: Data, cacheKey: String) throws {
+        guard let url = cacheURL(cacheKey: cacheKey) else { return }
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try data.write(to: url, options: .atomic)
+    }
+
+    static func remove(cacheKey: String) {
+        guard let url = cacheURL(cacheKey: cacheKey) else { return }
+        try? FileManager.default.removeItem(at: url)
+    }
+
+    private static func cacheURL(cacheKey: String) -> URL? {
+        guard let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        let safeKey = cacheKey.replacingOccurrences(
+            of: "[^A-Za-z0-9_-]",
+            with: "_",
+            options: .regularExpression
+        )
+        return root
+            .appendingPathComponent("FitLifeProfileAvatars", isDirectory: true)
+            .appendingPathComponent("\(safeKey).image")
     }
 }
 

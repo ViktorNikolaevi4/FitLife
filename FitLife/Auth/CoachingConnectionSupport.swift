@@ -1709,6 +1709,32 @@ struct ClientCoachingHomeScreen: View {
     }
 }
 
+struct ClientCoachingDirectChatScreen: View {
+    let clientId: String
+    let trainerId: String
+
+    @StateObject private var store: ClientCoachingHomeStore
+    @State private var noteMessage = ""
+
+    init(clientId: String, trainerId: String) {
+        self.clientId = clientId
+        self.trainerId = trainerId
+        _store = StateObject(
+            wrappedValue: ClientCoachingHomeStore(
+                clientId: clientId,
+                trainerId: trainerId
+            )
+        )
+    }
+
+    var body: some View {
+        ClientCoachingChatScreen(
+            store: store,
+            noteMessage: $noteMessage
+        )
+    }
+}
+
 private struct ClientCoachingChatScreen: View {
     @ObservedObject var store: ClientCoachingHomeStore
     @Binding var noteMessage: String
@@ -1716,6 +1742,7 @@ private struct ClientCoachingChatScreen: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var sessionStore: AppSessionStore
     @EnvironmentObject private var pushNotificationsManager: AppPushNotificationsManager
+    @EnvironmentObject private var notificationsStore: AppNotificationsStore
     @State private var pendingDelete: CoachingNote?
 
     private var trimmedMessage: String {
@@ -1750,6 +1777,15 @@ private struct ClientCoachingChatScreen: View {
                 isVisible: true
             )
             store.startNotesListening()
+            markIncomingMessagesRead()
+        }
+        .onReceive(notificationsStore.$notifications) { notifications in
+            guard notifications.contains(where: {
+                $0.type == .coachNoteReceived
+                    && $0.senderId == store.connectedTrainerId
+                    && $0.isRead == false
+            }) else { return }
+            markIncomingMessagesRead()
         }
         .onDisappear {
             pushNotificationsManager.setChatVisible(
@@ -1781,6 +1817,17 @@ private struct ClientCoachingChatScreen: View {
             }
         } message: {
             Text(AppLocalizer.string("coaching.history.delete.message"))
+        }
+    }
+
+    private func markIncomingMessagesRead() {
+        let trainerId = store.connectedTrainerId
+        guard trainerId.isEmpty == false else { return }
+        Task {
+            await notificationsStore.markConversationRead(
+                counterpartId: trainerId,
+                incomingType: .coachNoteReceived
+            )
         }
     }
 }
@@ -2838,6 +2885,7 @@ private struct TrainerClientChatScreen: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var sessionStore: AppSessionStore
     @EnvironmentObject private var pushNotificationsManager: AppPushNotificationsManager
+    @EnvironmentObject private var notificationsStore: AppNotificationsStore
     @State private var pendingDelete: CoachingNote?
 
     private var trimmedMessage: String {
@@ -2872,6 +2920,15 @@ private struct TrainerClientChatScreen: View {
                 isVisible: true
             )
             store.startNotesListening()
+            markIncomingMessagesRead()
+        }
+        .onReceive(notificationsStore.$notifications) { notifications in
+            guard notifications.contains(where: {
+                $0.type == .clientNoteReceived
+                    && $0.senderId == store.connectedClientId
+                    && $0.isRead == false
+            }) else { return }
+            markIncomingMessagesRead()
         }
         .onDisappear {
             pushNotificationsManager.setChatVisible(
@@ -2903,6 +2960,17 @@ private struct TrainerClientChatScreen: View {
             }
         } message: {
             Text(AppLocalizer.string("coaching.history.delete.message"))
+        }
+    }
+
+    private func markIncomingMessagesRead() {
+        let clientId = store.connectedClientId
+        guard clientId.isEmpty == false else { return }
+        Task {
+            await notificationsStore.markConversationRead(
+                counterpartId: clientId,
+                incomingType: .clientNoteReceived
+            )
         }
     }
 }
@@ -3386,6 +3454,7 @@ private struct CoachingChatContent: View {
 
     @State private var selectedWorkoutReport: CoachingWorkoutReport?
     @State private var selectedNutritionReport: CoachingNutritionReport?
+    @State private var hasPositionedInitially = false
 
     private var timelineItems: [CoachingChatTimelineItem] {
         let noteItems = notes.map(CoachingChatTimelineItem.note)
@@ -3424,16 +3493,18 @@ private struct CoachingChatContent: View {
                 .padding(.top, 16)
                 .padding(.bottom, 12)
             }
+            .defaultScrollAnchor(.bottom)
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
             .safeAreaInset(edge: .bottom) {
                 chatComposer
                     .background(.ultraThinMaterial)
             }
             .onAppear {
-                scrollToLatest(proxy)
+                scrollToLatest(proxy, animated: false)
             }
-            .onChange(of: timelineItems.count) { _, _ in
-                scrollToLatest(proxy)
+            .onChange(of: timelineItems.last?.id) { _, latestItemID in
+                guard latestItemID != nil else { return }
+                scrollToLatest(proxy, animated: hasPositionedInitially)
             }
             .sheet(item: $selectedWorkoutReport) { report in
                 NavigationStack {
@@ -3514,12 +3585,21 @@ private struct CoachingChatContent: View {
         .padding(.bottom, 8)
     }
 
-    private func scrollToLatest(_ proxy: ScrollViewProxy) {
+    private func scrollToLatest(_ proxy: ScrollViewProxy, animated: Bool) {
         guard let lastId = timelineItems.last?.id else { return }
         DispatchQueue.main.async {
-            withAnimation(.easeOut(duration: 0.22)) {
-                proxy.scrollTo(lastId, anchor: .bottom)
+            if animated {
+                withAnimation(.easeOut(duration: 0.22)) {
+                    proxy.scrollTo(lastId, anchor: .bottom)
+                }
+            } else {
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    proxy.scrollTo(lastId, anchor: .bottom)
+                }
             }
+            hasPositionedInitially = true
         }
     }
 }
