@@ -323,15 +323,32 @@ struct DashboardTrainerConnectionCard: View {
     }
 
     private var trainerAvatar: some View {
-        Circle()
-            .fill(LinearGradient(colors: [theme.accent, theme.accentDeep], startPoint: .topLeading, endPoint: .bottomTrailing))
-            .frame(width: 58, height: 58)
-            .overlay {
-                Text(trainerInitials)
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(.white)
+        ZStack {
+            Circle()
+                .fill(LinearGradient(colors: [theme.accent, theme.accentDeep], startPoint: .topLeading, endPoint: .bottomTrailing))
+
+            if
+                let urlString = store.trainerProfile?.photoURL,
+                let url = URL(string: urlString) {
+                CachedTrainerAvatarImage(
+                    url: url,
+                    cacheKey: store.trainerProfile?.id ?? clientId,
+                    placeholder: { trainerInitialsView }
+                )
+            } else {
+                trainerInitialsView
             }
-            .accessibilityHidden(true)
+        }
+        .frame(width: 58, height: 58)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(theme.border.opacity(0.55), lineWidth: 1))
+        .accessibilityHidden(true)
+    }
+
+    private var trainerInitialsView: some View {
+        Text(trainerInitials)
+            .font(.headline.weight(.bold))
+            .foregroundStyle(.white)
     }
 
     private var trainerInitials: String {
@@ -484,6 +501,84 @@ struct DashboardTrainerConnectionCard: View {
     @MainActor
     private func refresh() async {
         await store.load(profile: profile, localUserData: localUserData, latestMeasurements: nil)
+    }
+}
+
+private struct CachedTrainerAvatarImage<Placeholder: View>: View {
+    let url: URL
+    private let cacheKey: String
+    private let placeholder: Placeholder
+    @State private var image: UIImage?
+
+    init(
+        url: URL,
+        cacheKey: String,
+        @ViewBuilder placeholder: () -> Placeholder
+    ) {
+        self.url = url
+        self.cacheKey = cacheKey
+        self.placeholder = placeholder()
+        _image = State(initialValue: Self.readCachedImage(cacheKey: cacheKey))
+    }
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                placeholder
+            }
+        }
+        .task(id: url.absoluteString) {
+            await refreshImage()
+        }
+    }
+
+    private func refreshImage() async {
+        var request = URLRequest(url: url)
+        request.cachePolicy = .returnCacheDataElseLoad
+
+        guard
+            let (data, response) = try? await URLSession.shared.data(for: request),
+            let httpResponse = response as? HTTPURLResponse,
+            (200..<300).contains(httpResponse.statusCode),
+            let downloadedImage = UIImage(data: data)
+        else {
+            return
+        }
+
+        image = downloadedImage
+        try? Self.save(data: data, cacheKey: cacheKey)
+    }
+
+    private static func readCachedImage(cacheKey: String) -> UIImage? {
+        guard let url = cacheURL(cacheKey: cacheKey) else { return nil }
+        return UIImage(contentsOfFile: url.path)
+    }
+
+    private static func save(data: Data, cacheKey: String) throws {
+        guard let url = cacheURL(cacheKey: cacheKey) else { return }
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try data.write(to: url, options: .atomic)
+    }
+
+    private static func cacheURL(cacheKey: String) -> URL? {
+        guard let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        let safeKey = cacheKey.replacingOccurrences(
+            of: "[^A-Za-z0-9_-]",
+            with: "_",
+            options: .regularExpression
+        )
+        return root
+            .appendingPathComponent("FitLifeTrainerAvatars", isDirectory: true)
+            .appendingPathComponent("\(safeKey).image")
     }
 }
 

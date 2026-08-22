@@ -1,5 +1,7 @@
 import SwiftUI
 import SwiftData
+import PhotosUI
+import UIKit
 
 private let profileCardBackground = Color(.secondarySystemBackground)
 private let profileCardBorder = Color(.separator).opacity(0.40)
@@ -778,6 +780,14 @@ private struct ProfileHeroCard: View {
     let gender: Gender
 
     @Environment(\.colorScheme) private var colorScheme
+    @EnvironmentObject private var sessionStore: AppSessionStore
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var previewImage: UIImage?
+    @State private var isShowingPhotoActions = false
+    @State private var isShowingPhotoPicker = false
+    @State private var isUploadingPhoto = false
+    @State private var photoErrorMessage = ""
+    @State private var isShowingPhotoError = false
 
     private var theme: AppTheme { AppTheme(colorScheme) }
 
@@ -796,7 +806,13 @@ private struct ProfileHeroCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 16) {
-                ProfileIconTile(systemImage: "person.fill", tint: theme.accent, size: 58, cornerRadius: 29)
+                Button {
+                    isShowingPhotoActions = true
+                } label: {
+                    profileAvatar
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(AppLocalizer.string("profile.photo.change"))
 
                 VStack(alignment: .leading, spacing: 5) {
                     Text(AppLocalizer.string("tab.profile"))
@@ -857,6 +873,162 @@ private struct ProfileHeroCard: View {
             showsShadow: false
         )
         .padding(.horizontal)
+        .confirmationDialog(
+            AppLocalizer.string("profile.photo.title"),
+            isPresented: $isShowingPhotoActions,
+            titleVisibility: .visible
+        ) {
+            Button(AppLocalizer.string("profile.photo.choose")) {
+                Task {
+                    try? await Task.sleep(for: .milliseconds(200))
+                    isShowingPhotoPicker = true
+                }
+            }
+
+            if sessionStore.profile?.photoURL != nil || previewImage != nil {
+                Button(AppLocalizer.string("profile.photo.remove"), role: .destructive) {
+                    Task { await removeProfilePhoto() }
+                }
+            }
+
+            Button(AppLocalizer.string("common.cancel"), role: .cancel) {}
+        }
+        .photosPicker(
+            isPresented: $isShowingPhotoPicker,
+            selection: $selectedPhotoItem,
+            matching: .images,
+            preferredItemEncoding: .current
+        )
+        .onChange(of: selectedPhotoItem) { _, item in
+            guard let item else { return }
+            Task { await uploadProfilePhoto(from: item) }
+        }
+        .alert(AppLocalizer.string("common.error"), isPresented: $isShowingPhotoError) {
+            Button(AppLocalizer.string("common.ok"), role: .cancel) {}
+        } message: {
+            Text(photoErrorMessage)
+        }
+    }
+
+    private var profileAvatar: some View {
+        ZStack(alignment: .bottomTrailing) {
+            ZStack {
+                Circle()
+                    .fill(theme.accent.opacity(theme.isDark ? 0.18 : 0.11))
+
+                if let previewImage {
+                    Image(uiImage: previewImage)
+                        .resizable()
+                        .scaledToFill()
+                } else if
+                    let urlString = sessionStore.profile?.photoURL,
+                    let url = URL(string: urlString) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image.resizable().scaledToFill()
+                        case .empty:
+                            ProgressView().tint(theme.accent)
+                        case .failure:
+                            fallbackProfileIcon
+                        @unknown default:
+                            fallbackProfileIcon
+                        }
+                    }
+                } else {
+                    fallbackProfileIcon
+                }
+            }
+            .frame(width: 68, height: 68)
+            .clipShape(Circle())
+            .overlay(Circle().stroke(theme.accent.opacity(0.22), lineWidth: 1))
+
+            ZStack {
+                Circle()
+                    .fill(theme.accent)
+                if isUploadingPhoto {
+                    ProgressView()
+                        .tint(.white)
+                        .scaleEffect(0.65)
+                } else {
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+            }
+            .frame(width: 23, height: 23)
+            .overlay(Circle().stroke(theme.card, lineWidth: 2))
+        }
+        .opacity(isUploadingPhoto ? 0.82 : 1)
+    }
+
+    private var fallbackProfileIcon: some View {
+        Image(systemName: "person.fill")
+            .font(.system(size: 24, weight: .semibold))
+            .foregroundStyle(theme.accent)
+    }
+
+    @MainActor
+    private func uploadProfilePhoto(from item: PhotosPickerItem) async {
+        isUploadingPhoto = true
+        defer {
+            isUploadingPhoto = false
+            selectedPhotoItem = nil
+        }
+
+        do {
+            guard
+                let sourceData = try await item.loadTransferable(type: Data.self),
+                let image = UIImage(data: sourceData),
+                let preparedImage = Self.preparedProfileImage(from: image),
+                let uploadData = preparedImage.jpegData(compressionQuality: 0.82)
+            else {
+                throw NSError(
+                    domain: "FitLife.ProfilePhoto",
+                    code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: AppLocalizer.string("profile.photo.invalid")]
+                )
+            }
+
+            previewImage = preparedImage
+            try await sessionStore.updateProfilePhoto(with: uploadData)
+        } catch {
+            previewImage = nil
+            photoErrorMessage = AppErrorPresenter.message(for: error)
+            isShowingPhotoError = true
+        }
+    }
+
+    @MainActor
+    private func removeProfilePhoto() async {
+        isUploadingPhoto = true
+        defer { isUploadingPhoto = false }
+
+        do {
+            try await sessionStore.removeProfilePhoto()
+            previewImage = nil
+        } catch {
+            photoErrorMessage = AppErrorPresenter.message(for: error)
+            isShowingPhotoError = true
+        }
+    }
+
+    private static func preparedProfileImage(from image: UIImage) -> UIImage? {
+        let maximumDimension: CGFloat = 1_024
+        let sourceSize = image.size
+        guard sourceSize.width > 0, sourceSize.height > 0 else { return nil }
+
+        let scale = min(1, maximumDimension / max(sourceSize.width, sourceSize.height))
+        let targetSize = CGSize(
+            width: max(1, (sourceSize.width * scale).rounded()),
+            height: max(1, (sourceSize.height * scale).rounded())
+        )
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: targetSize, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: targetSize))
+        }
     }
 }
 

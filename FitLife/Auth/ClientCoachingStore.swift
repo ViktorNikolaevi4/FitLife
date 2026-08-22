@@ -17,11 +17,20 @@ final class ClientCoachingStore: ObservableObject {
 
     private let clientId: String
     private let firestore: Firestore
+    private var trainerProfileListener: ListenerRegistration?
 
     init(clientId: String, firestore: Firestore = .firestore()) {
         self.clientId = clientId
         self.firestore = firestore
         restoreCachedConnection()
+
+        if let link = activeLink {
+            observeTrainerProfile(for: link)
+        }
+    }
+
+    deinit {
+        trainerProfileListener?.remove()
     }
 
     func load(
@@ -207,15 +216,41 @@ final class ClientCoachingStore: ObservableObject {
         }
         activeLink = link
         persistConnection(link)
+        observeTrainerProfile(for: link)
     }
 
     private func clearActiveConnection() {
+        trainerProfileListener?.remove()
+        trainerProfileListener = nil
         activeLink = nil
         trainerProfile = nil
         latestNote = nil
         latestActiveAssignment = nil
         isUsingCachedData = false
         UserDefaults.standard.removeObject(forKey: connectionCacheKey)
+    }
+
+    private func observeTrainerProfile(for link: TrainerClientLink) {
+        trainerProfileListener?.remove()
+        trainerProfileListener = firestore
+            .collection("users")
+            .document(link.trainerId)
+            .addSnapshotListener { [weak self] snapshot, _ in
+                guard
+                    let self,
+                    let snapshot,
+                    let data = snapshot.data(),
+                    let trainer = AppUserProfile(id: snapshot.documentID, data: data)
+                else {
+                    return
+                }
+
+                Task { @MainActor in
+                    guard self.activeLink?.trainerId == trainer.id else { return }
+                    self.trainerProfile = trainer
+                    self.persistConnection(link)
+                }
+            }
     }
 
     private var connectionCacheKey: String {
@@ -232,7 +267,10 @@ final class ClientCoachingStore: ObservableObject {
             createdByOwnerId: link.createdByOwnerId,
             trainerDisplayName: trainer?.displayName,
             trainerCreatedAt: trainer?.createdAt,
-            trainerIsActive: trainer?.isActive
+            trainerIsActive: trainer?.isActive,
+            trainerPhotoURL: trainer?.photoURL,
+            latestNote: latestNote.map(CachedCoachingNote.init),
+            latestAssignment: latestActiveAssignment.map(CachedWorkoutAssignment.init)
         )
         guard let data = try? JSONEncoder().encode(snapshot) else { return }
         UserDefaults.standard.set(data, forKey: connectionCacheKey)
@@ -248,6 +286,8 @@ final class ClientCoachingStore: ObservableObject {
 
         activeLink = snapshot.link
         trainerProfile = snapshot.trainerProfile
+        latestNote = snapshot.latestNote?.note
+        latestActiveAssignment = snapshot.latestAssignment?.assignment
         isUsingCachedData = true
         hasLoadedInitialState = true
     }
@@ -400,6 +440,9 @@ private struct CachedTrainerConnection: Codable {
     let trainerDisplayName: String?
     let trainerCreatedAt: Date?
     let trainerIsActive: Bool?
+    let trainerPhotoURL: String?
+    let latestNote: CachedCoachingNote?
+    let latestAssignment: CachedWorkoutAssignment?
 
     var link: TrainerClientLink {
         TrainerClientLink(
@@ -419,7 +462,79 @@ private struct CachedTrainerConnection: Codable {
             displayName: trainerDisplayName,
             role: .trainer,
             createdAt: trainerCreatedAt ?? createdAt,
-            isActive: trainerIsActive ?? true
+            isActive: trainerIsActive ?? true,
+            photoURL: trainerPhotoURL
+        )
+    }
+}
+
+private struct CachedCoachingNote: Codable {
+    let id: String
+    let clientId: String
+    let trainerId: String
+    let authorId: String
+    let authorRole: String
+    let message: String
+    let createdAt: Date
+
+    init(_ note: CoachingNote) {
+        id = note.id
+        clientId = note.clientId
+        trainerId = note.trainerId
+        authorId = note.authorId
+        authorRole = note.authorRole.rawValue
+        message = note.message
+        createdAt = note.createdAt
+    }
+
+    var note: CoachingNote? {
+        guard let role = CoachingNoteAuthorRole(rawValue: authorRole) else { return nil }
+        return CoachingNote(
+            id: id,
+            clientId: clientId,
+            trainerId: trainerId,
+            authorId: authorId,
+            authorRole: role,
+            message: message,
+            createdAt: createdAt
+        )
+    }
+}
+
+private struct CachedWorkoutAssignment: Codable {
+    let id: String
+    let trainerId: String
+    let clientId: String
+    let templateId: String
+    let titleSnapshot: String
+    let notesSnapshot: String
+    let exerciseCount: Int
+    let assignedAt: Date
+    let status: WorkoutAssignmentStatus
+
+    init(_ assignment: WorkoutAssignment) {
+        id = assignment.id
+        trainerId = assignment.trainerId
+        clientId = assignment.clientId
+        templateId = assignment.templateId
+        titleSnapshot = assignment.titleSnapshot
+        notesSnapshot = assignment.notesSnapshot
+        exerciseCount = assignment.exerciseCount
+        assignedAt = assignment.assignedAt
+        status = assignment.status
+    }
+
+    var assignment: WorkoutAssignment {
+        WorkoutAssignment(
+            id: id,
+            trainerId: trainerId,
+            clientId: clientId,
+            templateId: templateId,
+            titleSnapshot: titleSnapshot,
+            notesSnapshot: notesSnapshot,
+            exerciseCount: exerciseCount,
+            assignedAt: assignedAt,
+            status: status
         )
     }
 }

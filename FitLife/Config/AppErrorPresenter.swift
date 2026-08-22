@@ -6,7 +6,7 @@ enum AppErrorPresenter {
     static func message(for error: Error) -> String {
         let nsError = error as NSError
 
-        if nsError.domain == "FitLife.AccountDeletion" {
+        if nsError.domain == "FitLife.AccountDeletion" || nsError.domain == "FitLife.ProfilePhoto" {
             return nsError.localizedDescription
         }
 

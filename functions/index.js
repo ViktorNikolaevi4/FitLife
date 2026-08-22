@@ -201,7 +201,12 @@ exports.deleteCurrentAccountData = onRequest(
       }
 
       const deletedDocumentCount = await deleteAccountFirestoreData(decodedToken.uid);
-      response.status(200).json({ deleted: true, deletedDocumentCount });
+      const deletedStorageObjectCount = await deleteAccountStorageData(decodedToken.uid);
+      response.status(200).json({
+        deleted: true,
+        deletedDocumentCount,
+        deletedStorageObjectCount
+      });
     } catch (error) {
       logger.error("Account data deletion failed", {
         code: error.code || "unknown",
@@ -1013,6 +1018,14 @@ async function deleteAccountFirestoreData(uid) {
   const userReference = db.collection("users").doc(uid);
   await db.recursiveDelete(userReference);
   return referencesByPath.size + 1;
+}
+
+async function deleteAccountStorageData(uid) {
+  const [files] = await admin.storage().bucket().getFiles({
+    prefix: `profile_photos/${uid}/`
+  });
+  await Promise.all(files.map((file) => file.delete({ ignoreNotFound: true })));
+  return files.length;
 }
 
 function setJsonResponseHeaders(response) {

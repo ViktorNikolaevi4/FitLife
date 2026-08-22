@@ -65,14 +65,20 @@ service cloud.firestore {
             "displayName",
             "role",
             "createdAt",
-            "isActive"
+            "isActive",
+            "photoURL",
+            "photoUpdatedAt"
           ])
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.email is string
           && request.resource.data.displayName is string
           && request.resource.data.role == "client"
           && request.resource.data.createdAt is timestamp
-          && request.resource.data.isActive == true;
+          && request.resource.data.isActive == true
+          && (!request.resource.data.keys().hasAny(["photoURL"])
+            || request.resource.data.photoURL is string)
+          && (!request.resource.data.keys().hasAny(["photoUpdatedAt"])
+            || request.resource.data.photoUpdatedAt is timestamp);
       }
 
       function isSafeSelfUserUpdate() {
@@ -85,14 +91,20 @@ service cloud.firestore {
             "pushTokenUpdatedAt",
             "unreadNotificationCount",
             "unreadCounterInitialized",
-            "unreadCounterUpdatedAt"
-          ]);
+            "unreadCounterUpdatedAt",
+            "photoURL",
+            "photoUpdatedAt"
+          ])
+          && (!request.resource.data.keys().hasAny(["photoURL"])
+            || request.resource.data.photoURL is string)
+          && (!request.resource.data.keys().hasAny(["photoUpdatedAt"])
+            || request.resource.data.photoUpdatedAt is timestamp);
       }
 
       allow read: if isOwner()
         || isSelf()
         || trainerHasClientAccess(userId)
-        || (isClient() && resource.data.role == "trainer" && resource.data.isActive == true)
+        || clientHasTrainerAccess(userId)
         || (isTrainer() && resource.data.role == "trainer" && resource.data.isActive == true);
 
       allow create: if isValidUserCreate();

@@ -1243,3 +1243,9 @@
 "dashboard.coach.assigned_workout" = "Assigned workout";
 "dashboard.coach.open_workout" = "Open";
 "dashboard.coach.cached_data" = "Showing the latest saved data";
+"common.error" = "Error";
+"profile.photo.title" = "Profile photo";
+"profile.photo.choose" = "Choose Photo";
+"profile.photo.remove" = "Remove Photo";
+"profile.photo.change" = "Change profile photo";
+"profile.photo.invalid" = "The selected photo could not be processed.";

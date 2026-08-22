@@ -2,6 +2,7 @@ import Foundation
 import FirebaseAuth
 import FirebaseCore
 import FirebaseFirestore
+import FirebaseStorage
 
 @MainActor
 final class AppSessionStore: ObservableObject {
@@ -120,6 +121,74 @@ final class AppSessionStore: ObservableObject {
             firebaseUser = auth.currentUser
         } catch {
             authErrorMessage = AppErrorPresenter.message(for: error)
+        }
+    }
+
+    func updateProfilePhoto(with data: Data) async throws {
+        guard let user = auth.currentUser, data.isEmpty == false else {
+            throw URLError(.userAuthenticationRequired)
+        }
+
+        let oldPhotoURL = profile?.photoURL
+        let filename = "avatar-\(UUID().uuidString).jpg"
+        let reference = Storage.storage().reference()
+            .child("profile_photos")
+            .child(user.uid)
+            .child(filename)
+        let metadata = StorageMetadata()
+        metadata.contentType = "image/jpeg"
+        metadata.cacheControl = "public,max-age=86400"
+
+        do {
+            _ = try await reference.putDataAsync(data, metadata: metadata)
+            let downloadURL = try await reference.downloadURL()
+            try await firestore.collection("users").document(user.uid).setData(
+                [
+                    "photoURL": downloadURL.absoluteString,
+                    "photoUpdatedAt": FieldValue.serverTimestamp()
+                ],
+                merge: true
+            )
+
+            if var updatedProfile = profile {
+                updatedProfile.photoURL = downloadURL.absoluteString
+                profile = updatedProfile
+            }
+            await deleteStoredPhotoIfNeeded(urlString: oldPhotoURL, excluding: downloadURL.absoluteString)
+        } catch {
+            try? await reference.delete()
+            throw error
+        }
+    }
+
+    func removeProfilePhoto() async throws {
+        guard let user = auth.currentUser else {
+            throw URLError(.userAuthenticationRequired)
+        }
+
+        let oldPhotoURL = profile?.photoURL
+        try await firestore.collection("users").document(user.uid).updateData([
+            "photoURL": FieldValue.delete(),
+            "photoUpdatedAt": FieldValue.serverTimestamp()
+        ])
+        if var updatedProfile = profile {
+            updatedProfile.photoURL = nil
+            profile = updatedProfile
+        }
+        await deleteStoredPhotoIfNeeded(urlString: oldPhotoURL)
+    }
+
+    private func deleteStoredPhotoIfNeeded(urlString: String?, excluding retainedURL: String? = nil) async {
+        guard
+            let urlString,
+            urlString.isEmpty == false,
+            urlString != retainedURL
+        else { return }
+
+        do {
+            try await Storage.storage().reference(forURL: urlString).delete()
+        } catch {
+            logAuthDiagnostic("Old profile photo cleanup failed", error)
         }
     }
 
