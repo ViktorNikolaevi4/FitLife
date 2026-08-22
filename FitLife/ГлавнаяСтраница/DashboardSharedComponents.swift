@@ -297,9 +297,9 @@ struct WaterSummaryCard: View {
     private func waterControlButton(systemImage: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 19, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(theme.primaryText)
-                .frame(width: 44, height: 44)
+                .frame(width: 34, height: 34)
                 .background {
                     Circle()
                         .fill(
@@ -323,36 +323,40 @@ struct WaterSummaryCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .center) {
-                HStack(spacing: 8) {
-                    Image(systemName: "drop.fill")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(theme.accent)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "drop.fill")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(theme.accent)
 
-                    Text(AppLocalizer.string("tab.water"))
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(theme.primaryText)
-                }
+                Text(AppLocalizer.string("tab.water"))
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(theme.primaryText)
 
-                Spacer()
-
-                HStack(spacing: 12) {
-                    waterControlButton(systemImage: "minus", action: onSubtract)
-
-                    Text(AppLocalizer.format("unit.ml.value", quickAddML))
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(theme.tertiaryText)
-                        .frame(minWidth: 56)
-
-                    waterControlButton(systemImage: "plus", action: onAdd)
-                }
+                Spacer(minLength: 0)
             }
 
             Text(AppLocalizer.format("water.progress.liters", intake, goal))
-                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .font(.system(size: 20, weight: .bold, design: .rounded))
                 .foregroundStyle(theme.primaryText)
                 .contentTransition(.numericText())
+                .lineLimit(1)
+                .minimumScaleFactor(0.68)
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: 6) {
+                waterControlButton(systemImage: "minus", action: onSubtract)
+
+                Text(AppLocalizer.format("unit.ml.value", quickAddML))
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(theme.tertiaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                    .frame(maxWidth: .infinity)
+
+                waterControlButton(systemImage: "plus", action: onAdd)
+            }
 
             ThickProgressBar(
                 fraction: progress,
@@ -361,9 +365,9 @@ struct WaterSummaryCard: View {
                 height: 5
             )
         }
-        .padding(20)
+        .padding(16)
+        .frame(maxWidth: .infinity, minHeight: 172, alignment: .leading)
         .adaptiveHomeCard(theme: theme, cornerRadius: HomeDarkMetrics.cardCornerRadius)
-        .padding(.horizontal)
     }
 }
 

@@ -7,6 +7,8 @@ final class ClientCoachingStore: ObservableObject {
     @Published var request: CoachingRequest?
     @Published var activeLink: TrainerClientLink?
     @Published var trainerProfile: AppUserProfile?
+    @Published var latestNote: CoachingNote?
+    @Published var latestActiveAssignment: WorkoutAssignment?
     @Published var isLoading = false
     @Published private(set) var hasLoadedInitialState = false
     @Published var isSaving = false
@@ -43,8 +45,18 @@ final class ClientCoachingStore: ObservableObject {
                 .whereField("clientId", isEqualTo: clientId)
                 .whereField("status", isEqualTo: "active")
                 .getDocuments()
+            async let assignmentsSnapshot = firestore
+                .collection("workout_assignments")
+                .whereField("clientId", isEqualTo: clientId)
+                .order(by: "assignedAt", descending: true)
+                .getDocuments()
 
-            let (intakeDocument, requestDocument, activeLinksDocument) = try await (intakeSnapshot, requestSnapshot, activeLinksSnapshot)
+            let (intakeDocument, requestDocument, activeLinksDocument, assignmentsDocument) = try await (
+                intakeSnapshot,
+                requestSnapshot,
+                activeLinksSnapshot,
+                assignmentsSnapshot
+            )
 
             if let data = intakeDocument.data(),
                let intake = ClientIntakeProfile(id: intakeDocument.documentID, data: data) {
@@ -67,14 +79,37 @@ final class ClientCoachingStore: ObservableObject {
             if let firstLink = activeLinksDocument.documents.first,
                let link = TrainerClientLink(id: firstLink.documentID, data: firstLink.data()) {
                 self.activeLink = link
-                let trainerSnapshot = try await firestore.collection("users").document(link.trainerId).getDocument()
+                async let trainerSnapshotRequest = firestore.collection("users")
+                    .document(link.trainerId)
+                    .getDocument()
+                async let notesSnapshotRequest = firestore.collection("coaching_notes")
+                    .whereField("clientId", isEqualTo: clientId)
+                    .whereField("trainerId", isEqualTo: link.trainerId)
+                    .getDocuments()
+
+                let (trainerSnapshot, notesSnapshot) = try await (
+                    trainerSnapshotRequest,
+                    notesSnapshotRequest
+                )
                 if let data = trainerSnapshot.data(),
                    let trainer = AppUserProfile(id: trainerSnapshot.documentID, data: data) {
                     self.trainerProfile = trainer
                 }
+                self.latestNote = notesSnapshot.documents
+                    .compactMap { CoachingNote(id: $0.documentID, data: $0.data()) }
+                    .filter { $0.authorRole == .trainer }
+                    .max { $0.createdAt < $1.createdAt }
+                self.latestActiveAssignment = assignmentsDocument.documents
+                    .compactMap { WorkoutAssignment(id: $0.documentID, data: $0.data()) }
+                    .first {
+                        $0.trainerId == link.trainerId &&
+                        ($0.status == .assigned || $0.status == .started)
+                    }
             } else {
                 self.activeLink = nil
                 self.trainerProfile = nil
+                self.latestNote = nil
+                self.latestActiveAssignment = nil
             }
 
             hasLoadedInitialState = true

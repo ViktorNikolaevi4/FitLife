@@ -42,6 +42,8 @@ struct DashboardScreen: View {
     @State private var showCalendar = false
     @State private var showSettings = false
     @State private var showStepsSettings = false
+    @State private var coachingDestination: DashboardCoachingDestination?
+    @State private var selectedTrainerAssignment: WorkoutAssignment?
 
     // Состояние разворота
     @State private var expandedMeals: Set<MealType> = []
@@ -56,6 +58,11 @@ struct DashboardScreen: View {
     private var userData: UserData? {
         guard let currentOwnerId = sessionStore.firebaseUser?.uid else { return nil }
         return users.first(where: { $0.gender == selectedGender && $0.ownerId == currentOwnerId })
+    }
+
+    private var clientProfile: AppUserProfile? {
+        guard sessionStore.profile?.role == .client else { return nil }
+        return sessionStore.profile
     }
 
     init(
@@ -77,6 +84,36 @@ struct DashboardScreen: View {
                     header(theme)
 
                     if let user = userData {
+                        if let clientProfile {
+                            DashboardTrainerConnectionCard(
+                                clientId: clientProfile.id,
+                                profile: clientProfile,
+                                localUserData: user,
+                                theme: theme,
+                                onOpenConnection: {
+                                    coachingDestination = DashboardCoachingDestination(
+                                        clientId: clientProfile.id,
+                                        opensChatInitially: false
+                                    )
+                                },
+                                onOpenChat: {
+                                    coachingDestination = DashboardCoachingDestination(
+                                        clientId: clientProfile.id,
+                                        opensChatInitially: true
+                                    )
+                                },
+                                onOpenReports: {
+                                    coachingDestination = DashboardCoachingDestination(
+                                        clientId: clientProfile.id,
+                                        opensChatInitially: false
+                                    )
+                                },
+                                onOpenAssignment: { assignment in
+                                    selectedTrainerAssignment = assignment
+                                }
+                            )
+                        }
+
                         BalanceCard(
                             consumed: dailyConsumedCalories,
                             target: user.calories,
@@ -89,26 +126,31 @@ struct DashboardScreen: View {
                             onTapCarbs: { selectedMacroDetail = .carbs }
                         )
 
-                        WaterSummaryCard(
-                            intake: waterIntake,
-                            goal: dailyWaterGoal(for: user),
-                            quickAddML: waterQuickAddML,
-                            theme: theme,
-                            onSubtract: { subtractWater(amount: Double(waterQuickAddML) / 1000.0) },
-                            onAdd: { addWater(amount: Double(waterQuickAddML) / 1000.0) }
-                        )
+                        HStack(spacing: 12) {
+                            HealthKitStepsCard(
+                                date: selectedDate,
+                                theme: theme,
+                                onOpenSettings: { showStepsSettings = true }
+                            )
 
-                        HealthKitStepsCard(
-                            date: selectedDate,
-                            theme: theme,
-                            onOpenSettings: { showStepsSettings = true }
-                        )
+                            WaterSummaryCard(
+                                intake: waterIntake,
+                                goal: dailyWaterGoal(for: user),
+                                quickAddML: waterQuickAddML,
+                                theme: theme,
+                                onSubtract: { subtractWater(amount: Double(waterQuickAddML) / 1000.0) },
+                                onAdd: { addWater(amount: Double(waterQuickAddML) / 1000.0) }
+                            )
+                        }
+                        .padding(.horizontal)
 
-                        TrainingDiaryCard(
-                            theme: theme,
-                            title: AppLocalizer.string("training.diary"),
-                            onOpen: onOpenWorkouts
-                        )
+                        if clientProfile == nil {
+                            TrainingDiaryCard(
+                                theme: theme,
+                                title: AppLocalizer.string("training.diary"),
+                                onOpen: onOpenWorkouts
+                            )
+                        }
                     } else {
                         ContentUnavailableView(
                             AppLocalizer.string("dashboard.no_user_data"),
@@ -124,6 +166,18 @@ struct DashboardScreen: View {
             .navigationBarHidden(true)
             .navigationDestination(isPresented: $showSettings) {
                 SettingsScreenContainer(showsFloatingAddButton: $showsFloatingAddButton)
+            }
+            .navigationDestination(item: $coachingDestination) { destination in
+                ClientCoachingEntryScreen(
+                    clientId: destination.clientId,
+                    opensChatInitially: destination.opensChatInitially
+                )
+            }
+            .navigationDestination(item: $selectedTrainerAssignment) { assignment in
+                ClientAssignmentDetailScreen(
+                    assignment: assignment,
+                    trainerName: nil
+                )
             }
         }
         .onAppear { ensureUserIfNeeded(); recalcFor(selectedDate) }
@@ -436,6 +490,11 @@ struct DashboardScreen: View {
     private func resetFoodState() {
         apply(snapshot: FoodDaySnapshot.from(entries: []))
     }
+}
+
+private struct DashboardCoachingDestination: Hashable {
+    let clientId: String
+    let opensChatInitially: Bool
 }
 
 private struct SettingsScreenContainer: View {
