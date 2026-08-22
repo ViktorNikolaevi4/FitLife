@@ -675,6 +675,7 @@ final class ClientCoachingHomeStore: ObservableObject {
     @Published private(set) var workoutReports: [CoachingWorkoutReport] = []
     @Published private(set) var nutritionReports: [CoachingNutritionReport] = []
     @Published private(set) var isLoading = false
+    @Published private(set) var hasLoadedInitialState = false
     @Published private(set) var isSubmitting = false
     @Published private(set) var reportDeliveryStatus: CoachingReportDeliveryStatus = .idle
     @Published var errorMessage: String?
@@ -682,14 +683,53 @@ final class ClientCoachingHomeStore: ObservableObject {
     private let clientId: String
     private let trainerId: String
     private let firestore: Firestore
+    private let cacheKey: CacheKey
     private var notesListener: ListenerRegistration?
     private var workoutReportsListener: ListenerRegistration?
     private var nutritionReportsListener: ListenerRegistration?
+
+    private struct CacheKey: Hashable {
+        let clientId: String
+        let trainerId: String
+    }
+
+    private struct Snapshot {
+        var checkIns: [ProgressCheckIn]
+        var updateRequests: [ProfileUpdateRequest]
+        var notes: [CoachingNote]
+        var workoutReports: [CoachingWorkoutReport]
+        var nutritionReports: [CoachingNutritionReport]
+        var isComplete: Bool
+        var updatedAt: Date
+
+        var hasAnyData: Bool {
+            checkIns.isEmpty == false ||
+                updateRequests.isEmpty == false ||
+                notes.isEmpty == false ||
+                workoutReports.isEmpty == false ||
+                nutritionReports.isEmpty == false
+        }
+    }
+
+    // A small stale-while-revalidate cache makes repeated navigation instant.
+    private static var snapshotCache: [CacheKey: Snapshot] = [:]
+    private static let maximumCachedConnections = 12
 
     init(clientId: String, trainerId: String, firestore: Firestore = .firestore()) {
         self.clientId = clientId
         self.trainerId = trainerId
         self.firestore = firestore
+        let cacheKey = CacheKey(clientId: clientId, trainerId: trainerId)
+        self.cacheKey = cacheKey
+
+        if let cached = Self.snapshotCache[cacheKey] {
+            checkIns = cached.checkIns
+            updateRequests = cached.updateRequests
+            notes = cached.notes
+            workoutReports = cached.workoutReports
+            nutritionReports = cached.nutritionReports
+            hasLoadedInitialState = cached.isComplete
+        }
     }
 
     var connectedTrainerId: String { trainerId }
@@ -714,6 +754,7 @@ final class ClientCoachingHomeStore: ObservableObject {
 
                     Task { @MainActor [weak self] in
                         self?.notes = updatedNotes
+                        self?.cacheCurrentState(isComplete: nil)
                     }
                 }
         }
@@ -731,6 +772,7 @@ final class ClientCoachingHomeStore: ObservableObject {
 
                     Task { @MainActor [weak self] in
                         self?.workoutReports = reports
+                        self?.cacheCurrentState(isComplete: nil)
                     }
                 }
         }
@@ -748,6 +790,7 @@ final class ClientCoachingHomeStore: ObservableObject {
 
                     Task { @MainActor [weak self] in
                         self?.nutritionReports = reports
+                        self?.cacheCurrentState(isComplete: nil)
                     }
                 }
         }
@@ -763,65 +806,108 @@ final class ClientCoachingHomeStore: ObservableObject {
     }
 
     func load() async {
-        await CoachingReportDeliveryOutbox.shared.retryPending(for: clientId, firestore: firestore)
         isLoading = true
         errorMessage = nil
+        Task {
+            await CoachingReportDeliveryOutbox.shared.retryPending(for: clientId, firestore: firestore)
+        }
+
+        if hasLoadedInitialState == false,
+           let cachedSnapshot = try? await fetchSnapshot(source: .cache),
+           cachedSnapshot.hasAnyData {
+            apply(cachedSnapshot, isComplete: true)
+        }
 
         do {
-            async let checkInsSnapshot = firestore
-                .collection("progress_checkins")
-                .whereField("clientId", isEqualTo: clientId)
-                .getDocuments()
-
-            async let requestsSnapshot = firestore
-                .collection("profile_update_requests")
-                .whereField("clientId", isEqualTo: clientId)
-                .getDocuments()
-
-            async let notesSnapshot = firestore
-                .collection("coaching_notes")
-                .whereField("clientId", isEqualTo: clientId)
-                .getDocuments()
-
-            async let workoutReportsSnapshot = firestore
-                .collection("coaching_workout_reports")
-                .whereField("clientId", isEqualTo: clientId)
-                .whereField("trainerId", isEqualTo: trainerId)
-                .getDocuments()
-
-            async let nutritionReportsSnapshot = firestore
-                .collection("coaching_nutrition_reports")
-                .whereField("clientId", isEqualTo: clientId)
-                .whereField("trainerId", isEqualTo: trainerId)
-                .getDocuments()
-
-            let (checkInDocs, requestDocs, noteDocs, workoutReportDocs, nutritionReportDocs) = try await (
-                checkInsSnapshot,
-                requestsSnapshot,
-                notesSnapshot,
-                workoutReportsSnapshot,
-                nutritionReportsSnapshot
-            )
-
-            checkIns = checkInDocs.documents.compactMap { ProgressCheckIn(id: $0.documentID, data: $0.data()) }
-                .sorted { $0.createdAt > $1.createdAt }
-
-            updateRequests = requestDocs.documents.compactMap { ProfileUpdateRequest(id: $0.documentID, data: $0.data()) }
-                .sorted { $0.createdAt > $1.createdAt }
-
-            notes = noteDocs.documents.compactMap { CoachingNote(id: $0.documentID, data: $0.data()) }
-                .sorted { $0.createdAt > $1.createdAt }
-
-            workoutReports = workoutReportDocs.documents.compactMap { CoachingWorkoutReport(id: $0.documentID, data: $0.data()) }
-                .sorted { $0.createdAt > $1.createdAt }
-
-            nutritionReports = nutritionReportDocs.documents.compactMap { CoachingNutritionReport(id: $0.documentID, data: $0.data()) }
-                .sorted { $0.createdAt > $1.createdAt }
-
+            let freshSnapshot = try await fetchSnapshot(source: .default)
+            apply(freshSnapshot, isComplete: true)
             isLoading = false
         } catch {
             errorMessage = AppErrorPresenter.message(for: error)
+            hasLoadedInitialState = true
             isLoading = false
+        }
+    }
+
+    private func fetchSnapshot(source: FirestoreSource) async throws -> Snapshot {
+        async let checkInsSnapshot = firestore
+            .collection("progress_checkins")
+            .whereField("clientId", isEqualTo: clientId)
+            .getDocuments(source: source)
+
+        async let requestsSnapshot = firestore
+            .collection("profile_update_requests")
+            .whereField("clientId", isEqualTo: clientId)
+            .getDocuments(source: source)
+
+        async let notesSnapshot = firestore
+            .collection("coaching_notes")
+            .whereField("clientId", isEqualTo: clientId)
+            .whereField("trainerId", isEqualTo: trainerId)
+            .getDocuments(source: source)
+
+        async let workoutReportsSnapshot = firestore
+            .collection("coaching_workout_reports")
+            .whereField("clientId", isEqualTo: clientId)
+            .whereField("trainerId", isEqualTo: trainerId)
+            .getDocuments(source: source)
+
+        async let nutritionReportsSnapshot = firestore
+            .collection("coaching_nutrition_reports")
+            .whereField("clientId", isEqualTo: clientId)
+            .whereField("trainerId", isEqualTo: trainerId)
+            .getDocuments(source: source)
+
+        let (checkInDocs, requestDocs, noteDocs, workoutReportDocs, nutritionReportDocs) = try await (
+            checkInsSnapshot,
+            requestsSnapshot,
+            notesSnapshot,
+            workoutReportsSnapshot,
+            nutritionReportsSnapshot
+        )
+
+        return Snapshot(
+            checkIns: checkInDocs.documents.compactMap { ProgressCheckIn(id: $0.documentID, data: $0.data()) }
+                .sorted { $0.createdAt > $1.createdAt },
+            updateRequests: requestDocs.documents.compactMap { ProfileUpdateRequest(id: $0.documentID, data: $0.data()) }
+                .sorted { $0.createdAt > $1.createdAt },
+            notes: noteDocs.documents.compactMap { CoachingNote(id: $0.documentID, data: $0.data()) }
+                .sorted { $0.createdAt > $1.createdAt },
+            workoutReports: workoutReportDocs.documents.compactMap { CoachingWorkoutReport(id: $0.documentID, data: $0.data()) }
+                .sorted { $0.createdAt > $1.createdAt },
+            nutritionReports: nutritionReportDocs.documents.compactMap { CoachingNutritionReport(id: $0.documentID, data: $0.data()) }
+                .sorted { $0.createdAt > $1.createdAt },
+            isComplete: true,
+            updatedAt: .now
+        )
+    }
+
+    private func apply(_ snapshot: Snapshot, isComplete: Bool) {
+        checkIns = snapshot.checkIns
+        updateRequests = snapshot.updateRequests
+        notes = snapshot.notes
+        workoutReports = snapshot.workoutReports
+        nutritionReports = snapshot.nutritionReports
+        hasLoadedInitialState = isComplete
+        cacheCurrentState(isComplete: isComplete)
+    }
+
+    private func cacheCurrentState(isComplete: Bool?) {
+        let wasComplete = Self.snapshotCache[cacheKey]?.isComplete ?? false
+        Self.snapshotCache[cacheKey] = Snapshot(
+            checkIns: checkIns,
+            updateRequests: updateRequests,
+            notes: notes,
+            workoutReports: workoutReports,
+            nutritionReports: nutritionReports,
+            isComplete: isComplete ?? wasComplete,
+            updatedAt: .now
+        )
+
+        if Self.snapshotCache.count > Self.maximumCachedConnections,
+           let oldestKey = Self.snapshotCache.min(by: { $0.value.updatedAt < $1.value.updatedAt })?.key,
+           oldestKey != cacheKey {
+            Self.snapshotCache.removeValue(forKey: oldestKey)
         }
     }
 
@@ -1336,26 +1422,7 @@ struct ClientCoachingHomeScreen: View {
                 }
 
                 trainerCard
-                notesSection
-                summaryNavigationCard(
-                    icon: "clock",
-                    title: AppLocalizer.string("coaching.checkin.history"),
-                    subtitle: store.checkIns.isEmpty ? AppLocalizer.string("coaching.checkin.empty") : latestCheckInSubtitle,
-                    action: { showAllCheckIns = true }
-                )
-                summaryNavigationCard(
-                    icon: "dumbbell.fill",
-                    title: AppLocalizer.string("coaching.workouts.section"),
-                    subtitle: workoutReportsSubtitle,
-                    action: { showAllWorkoutReports = true }
-                )
-                summaryNavigationCard(
-                    icon: "fork.knife",
-                    title: AppLocalizer.string("coaching.nutrition.section"),
-                    subtitle: nutritionReportsSubtitle,
-                    action: { showAllNutritionReports = true }
-                )
-                requestCard
+                coachingSummaryContent
             }
             .padding(.horizontal, 18)
             .padding(.top, 18)
@@ -1699,6 +1766,67 @@ struct ClientCoachingHomeScreen: View {
         }
     }
 
+    @ViewBuilder
+    private var coachingSummaryContent: some View {
+        if store.hasLoadedInitialState {
+            notesSection
+            summaryNavigationCard(
+                icon: "clock",
+                title: AppLocalizer.string("coaching.checkin.history"),
+                subtitle: store.checkIns.isEmpty ? AppLocalizer.string("coaching.checkin.empty") : latestCheckInSubtitle,
+                action: { showAllCheckIns = true }
+            )
+            summaryNavigationCard(
+                icon: "dumbbell.fill",
+                title: AppLocalizer.string("coaching.workouts.section"),
+                subtitle: workoutReportsSubtitle,
+                action: { showAllWorkoutReports = true }
+            )
+            summaryNavigationCard(
+                icon: "fork.knife",
+                title: AppLocalizer.string("coaching.nutrition.section"),
+                subtitle: nutritionReportsSubtitle,
+                action: { showAllNutritionReports = true }
+            )
+            requestCard
+        } else {
+            loadingSummaryCard(icon: "bubble.left.and.bubble.right")
+            loadingSummaryCard(icon: "clock")
+            loadingSummaryCard(icon: "dumbbell.fill")
+            loadingSummaryCard(icon: "fork.knife")
+        }
+    }
+
+    private func loadingSummaryCard(icon: String) -> some View {
+        HStack(spacing: 16) {
+            Image(systemName: icon)
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(HomeColors.accent)
+                .frame(width: 68, height: 68)
+                .background(HomeColors.accent.opacity(0.11), in: Circle())
+
+            VStack(alignment: .leading, spacing: 10) {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(Color(.tertiarySystemFill))
+                    .frame(width: 180, height: 18)
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(Color(.tertiarySystemFill))
+                    .frame(width: 128, height: 14)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(16)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(Color(.separator).opacity(0.16))
+        )
+        .shadow(color: cardShadow, radius: 14, x: 0, y: 6)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(AppLocalizer.string("dashboard.coach.loading"))
+    }
+
     private var notesSection: some View {
         summaryNavigationCard(
             icon: "bubble.left.and.bubble.right",
@@ -1732,6 +1860,7 @@ struct ClientCoachingDirectChatScreen: View {
             store: store,
             noteMessage: $noteMessage
         )
+        .toolbar(.hidden, for: .tabBar)
     }
 }
 

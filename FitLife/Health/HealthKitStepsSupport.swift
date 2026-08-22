@@ -1,5 +1,7 @@
 import SwiftUI
 import HealthKit
+import OSLog
+import UIKit
 
 enum HealthKitStepsPreference {
     static let enabledKey = "healthkit.steps.enabled"
@@ -20,9 +22,18 @@ final class HealthKitStepsStore: ObservableObject {
     @Published private(set) var weeklySteps: [HealthKitDailySteps] = []
     @Published private(set) var isLoading = false
     @Published private(set) var isAvailable = HKHealthStore.isHealthDataAvailable()
+    @Published private(set) var hasLoadedSteps = false
+    @Published private(set) var authorizationNeedsRequest = false
+    @Published private(set) var shouldOpenSettingsForPermission = false
     @Published private(set) var errorMessage: String?
+    @Published private(set) var warningMessage: String?
 
     private let healthStore = HKHealthStore()
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "FitLife",
+        category: "HealthKitSteps"
+    )
+    private var loadedDay: Date?
 
     func requestAccess() async -> Bool {
         guard isAvailable, let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else {
@@ -32,12 +43,17 @@ final class HealthKitStepsStore: ObservableObject {
 
         isLoading = true
         errorMessage = nil
+        warningMessage = nil
+        shouldOpenSettingsForPermission = false
         do {
             try await healthStore.requestAuthorization(toShare: [], read: [stepType])
+            authorizationNeedsRequest = false
             isLoading = false
             return true
         } catch {
-            errorMessage = AppErrorPresenter.message(for: error)
+            logger.error("HealthKit authorization request failed: \(error.localizedDescription, privacy: .public)")
+            shouldOpenSettingsForPermission = isPermissionError(error)
+            errorMessage = healthKitErrorMessage(for: error)
             isLoading = false
             return false
         }
@@ -56,17 +72,103 @@ final class HealthKitStepsStore: ObservableObject {
 
         isLoading = true
         errorMessage = nil
+        warningMessage = nil
+        shouldOpenSettingsForPermission = false
+
+        do {
+            authorizationNeedsRequest = try await needsAuthorizationRequest(for: stepType)
+        } catch {
+            logger.warning("Could not determine HealthKit authorization request status: \(error.localizedDescription, privacy: .public)")
+            authorizationNeedsRequest = false
+        }
+
+        guard authorizationNeedsRequest == false else {
+            if loadedDay.map({ calendar.isDate($0, inSameDayAs: date) }) != true {
+                steps = 0
+                hasLoadedSteps = false
+            }
+            errorMessage = AppLocalizer.string("health.steps.error.authorization_required")
+            isLoading = false
+            return
+        }
+
         do {
             let value = try await cumulativeSteps(type: stepType, start: start, end: end)
-            let week = try await cumulativeStepsByDay(type: stepType, containing: date)
             steps = max(0, Int(value.rounded()))
-            weeklySteps = week
+            loadedDay = start
+            hasLoadedSteps = true
         } catch {
-            steps = 0
+            logger.error("Daily HealthKit steps query failed: \(error.localizedDescription, privacy: .public)")
+            if loadedDay.map({ calendar.isDate($0, inSameDayAs: date) }) != true {
+                steps = 0
+                hasLoadedSteps = false
+            }
+            shouldOpenSettingsForPermission = isPermissionError(error)
+            errorMessage = healthKitErrorMessage(for: error)
+            isLoading = false
+            return
+        }
+
+        do {
+            weeklySteps = try await cumulativeStepsByDay(type: stepType, containing: date)
+        } catch {
+            logger.warning("Weekly HealthKit steps query failed: \(error.localizedDescription, privacy: .public)")
             weeklySteps = []
-            errorMessage = AppErrorPresenter.message(for: error)
+            warningMessage = AppLocalizer.string("health.steps.warning.week_unavailable")
         }
         isLoading = false
+    }
+
+    func hasLoadedSteps(for date: Date) -> Bool {
+        guard let loadedDay else { return false }
+        return hasLoadedSteps && Calendar.current.isDate(loadedDay, inSameDayAs: date)
+    }
+
+    private func needsAuthorizationRequest(for stepType: HKQuantityType) async throws -> Bool {
+        try await withCheckedThrowingContinuation { continuation in
+            healthStore.getRequestStatusForAuthorization(toShare: [], read: [stepType]) { status, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: status == .shouldRequest)
+                }
+            }
+        }
+    }
+
+    private func healthKitErrorMessage(for error: Error) -> String {
+        let nsError = error as NSError
+        guard nsError.domain == HKErrorDomain,
+              let code = HKError.Code(rawValue: nsError.code) else {
+            return AppLocalizer.string("health.steps.error.generic")
+        }
+
+        switch code {
+        case .errorAuthorizationDenied, .errorAuthorizationNotDetermined, .errorRequiredAuthorizationDenied:
+            return AppLocalizer.string("health.steps.error.permission")
+        case .errorDatabaseInaccessible:
+            return AppLocalizer.string("health.steps.error.device_locked")
+        case .errorHealthDataRestricted:
+            return AppLocalizer.string("health.steps.error.restricted")
+        case .errorHealthDataUnavailable:
+            return AppLocalizer.string("health.steps.unavailable")
+        case .errorUserCanceled:
+            return AppLocalizer.string("health.steps.error.authorization_required")
+        default:
+            return AppLocalizer.string("health.steps.error.generic")
+        }
+    }
+
+    private func isPermissionError(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        guard nsError.domain == HKErrorDomain,
+              let code = HKError.Code(rawValue: nsError.code) else { return false }
+        return code == .errorAuthorizationDenied || code == .errorRequiredAuthorizationDenied
+    }
+
+    nonisolated private static func isNoDataError(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        return nsError.domain == HKErrorDomain && nsError.code == HKError.Code.errorNoData.rawValue
     }
 
     private func cumulativeSteps(type: HKQuantityType, start: Date, end: Date) async throws -> Double {
@@ -82,6 +184,10 @@ final class HealthKitStepsStore: ObservableObject {
                 options: .cumulativeSum
             ) { _, statistics, error in
                 if let error {
+                    if Self.isNoDataError(error) {
+                        continuation.resume(returning: 0)
+                        return
+                    }
                     continuation.resume(throwing: error)
                     return
                 }
@@ -121,6 +227,10 @@ final class HealthKitStepsStore: ObservableObject {
 
             query.initialResultsHandler = { _, collection, error in
                 if let error {
+                    if Self.isNoDataError(error) {
+                        continuation.resume(returning: [])
+                        return
+                    }
                     continuation.resume(throwing: error)
                     return
                 }
@@ -188,11 +298,18 @@ struct HealthKitStepsCard: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.72)
 
-                    WeeklyStepsMiniChart(
-                        values: store.weeklySteps,
-                        selectedDate: date,
-                        theme: theme
-                    )
+                    if store.weeklySteps.isEmpty == false {
+                        WeeklyStepsMiniChart(
+                            values: store.weeklySteps,
+                            selectedDate: date,
+                            theme: theme
+                        )
+                    } else if store.warningMessage != nil {
+                        Text(AppLocalizer.string("health.steps.warning.week_unavailable"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
                 } else {
                     Text(statusText)
                         .font(.subheadline.weight(.medium))
@@ -228,14 +345,16 @@ struct HealthKitStepsCard: View {
         if isEnabled == false {
             return AppLocalizer.string("health.steps.connect_hint")
         }
-        if let errorMessage = store.errorMessage, errorMessage.isEmpty == false {
+        if let errorMessage = store.errorMessage,
+           errorMessage.isEmpty == false,
+           store.hasLoadedSteps(for: date) == false {
             return AppLocalizer.string("health.steps.retry_hint")
         }
         return AppLocalizer.format("health.steps.count", store.steps)
     }
 
     private var canShowSteps: Bool {
-        isEnabled && store.isAvailable && store.errorMessage == nil
+        isEnabled && store.isAvailable && store.hasLoadedSteps(for: date)
     }
 }
 
@@ -294,6 +413,7 @@ struct HealthKitStepsSettingsScreen: View {
     @StateObject private var store = HealthKitStepsStore()
     @AppStorage(HealthKitStepsPreference.enabledKey) private var isEnabled = false
     @AppStorage(HealthKitStepsPreference.goalKey) private var goal = HealthKitStepsPreference.defaultGoal
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         List {
@@ -354,6 +474,9 @@ struct HealthKitStepsSettingsScreen: View {
                         Spacer()
                         if store.isLoading {
                             ProgressView()
+                        } else if store.hasLoadedSteps(for: .now) == false {
+                            Text("—")
+                                .font(.headline)
                         } else {
                             Text(store.steps.formatted())
                                 .font(.headline)
@@ -362,6 +485,21 @@ struct HealthKitStepsSettingsScreen: View {
 
                     Button(AppLocalizer.string("health.steps.refresh")) {
                         Task { await store.loadSteps(for: .now) }
+                    }
+
+                    if store.authorizationNeedsRequest {
+                        Button(AppLocalizer.string("health.steps.grant_access")) {
+                            Task {
+                                if await store.requestAccess() {
+                                    await store.loadSteps(for: .now)
+                                }
+                            }
+                        }
+                    } else if store.shouldOpenSettingsForPermission {
+                        Button(AppLocalizer.string("health.steps.open_settings")) {
+                            guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                            openURL(url)
+                        }
                     }
 
                     Button(AppLocalizer.string("health.steps.disable"), role: .destructive) {
@@ -376,6 +514,13 @@ struct HealthKitStepsSettingsScreen: View {
                         .foregroundStyle(.orange)
                 }
             }
+
+            if let warningMessage = store.warningMessage, warningMessage.isEmpty == false {
+                Section {
+                    Label(warningMessage, systemImage: "chart.bar.xaxis")
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
         .navigationTitle(AppLocalizer.string("health.steps.settings_title"))
         .navigationBarTitleDisplayMode(.inline)
@@ -386,6 +531,7 @@ struct HealthKitStepsSettingsScreen: View {
 
     private var connectionStatus: String {
         if store.isAvailable == false { return AppLocalizer.string("health.steps.unavailable") }
+        if store.authorizationNeedsRequest { return AppLocalizer.string("health.steps.access_required") }
         return AppLocalizer.string(isEnabled ? "health.steps.enabled" : "health.steps.disabled")
     }
 }

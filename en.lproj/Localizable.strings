@@ -1219,6 +1219,15 @@
 "health.steps.enabled" = "Steps are enabled in FitLife";
 "health.steps.disabled" = "Not connected";
 "health.steps.unavailable" = "Apple Health isn't available on this device";
+"health.steps.access_required" = "Step access is required";
+"health.steps.grant_access" = "Allow step access";
+"health.steps.open_settings" = "Open iPhone Settings";
+"health.steps.error.authorization_required" = "Allow FitLife to read your step count from Apple Health.";
+"health.steps.error.permission" = "FitLife can't access your steps. Allow access in iPhone Settings: Health → Data Access & Devices → FitLife.";
+"health.steps.error.device_locked" = "Apple Health data is protected. Unlock your iPhone and refresh your steps again.";
+"health.steps.error.restricted" = "Access to Apple Health is restricted by this device's settings.";
+"health.steps.error.generic" = "FitLife couldn't read your steps from Apple Health. Try refreshing the data again.";
+"health.steps.warning.week_unavailable" = "Today's steps are up to date, but the weekly chart is temporarily unavailable.";
 "health.steps.privacy" = "FitLife requests access only to your step count. The data stays on your iPhone and isn't sent to your trainer.";
 "dashboard.coach.personal_title" = "Personal trainer";
 "dashboard.coach.personal_subtitle" = "Get personalized programs, comments, and feedback on your results.";

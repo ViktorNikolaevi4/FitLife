@@ -1219,6 +1219,15 @@
 "health.steps.enabled" = "Шаги включены в FitLife";
 "health.steps.disabled" = "Не подключено";
 "health.steps.unavailable" = "Apple Health недоступен на этом устройстве";
+"health.steps.access_required" = "Требуется доступ к шагам";
+"health.steps.grant_access" = "Предоставить доступ к шагам";
+"health.steps.open_settings" = "Открыть настройки iPhone";
+"health.steps.error.authorization_required" = "Разрешите FitLife читать количество шагов из Apple Health.";
+"health.steps.error.permission" = "Нет доступа к шагам. Разрешите его в настройках iPhone: Здоровье → Доступ к данным и устройства → FitLife.";
+"health.steps.error.device_locked" = "Данные Apple Health защищены. Разблокируйте iPhone и обновите шаги ещё раз.";
+"health.steps.error.restricted" = "Доступ к Apple Health ограничен настройками устройства.";
+"health.steps.error.generic" = "Не удалось прочитать шаги из Apple Health. Попробуйте обновить данные ещё раз.";
+"health.steps.warning.week_unavailable" = "Шаги за сегодня обновлены, но график недели временно недоступен.";
 "health.steps.privacy" = "FitLife запрашивает доступ только к количеству шагов. Данные остаются на iPhone и не отправляются тренеру.";
 "dashboard.coach.personal_title" = "Персональный тренер";
 "dashboard.coach.personal_subtitle" = "Получайте индивидуальные программы, комментарии и обратную связь по результатам.";

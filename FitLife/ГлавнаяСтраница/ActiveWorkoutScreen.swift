@@ -130,6 +130,9 @@ struct ActiveWorkoutScreen: View {
     private var shouldShowEmptyState: Bool {
         sortedExercises.isEmpty && workout.blockItems.isEmpty
     }
+    private var hasExercises: Bool {
+        sortedExercises.isEmpty == false
+    }
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -217,19 +220,25 @@ struct ActiveWorkoutScreen: View {
         .safeAreaInset(edge: .bottom) {
             if activeWorkoutRoute == nil {
                 Button {
-                    if hasPendingWorkoutItem {
+                    if hasExercises == false {
+                        beginAddingExercise()
+                    } else if hasPendingWorkoutItem {
                         continueWorkout()
                     } else {
                         showFinishConfirmation = true
                     }
                 } label: {
                     Label(
-                        hasPendingWorkoutItem
-                            ? "Продолжить тренировку"
-                            : AppLocalizer.string("workout.finish"),
-                        systemImage: hasPendingWorkoutItem
-                            ? "play.circle.fill"
-                            : "checkmark.circle.fill"
+                        hasExercises == false
+                            ? AppLocalizer.string("workout.add.exercise")
+                            : hasPendingWorkoutItem
+                                ? "Продолжить тренировку"
+                                : AppLocalizer.string("workout.finish"),
+                        systemImage: hasExercises == false
+                            ? "plus.circle.fill"
+                            : hasPendingWorkoutItem
+                                ? "play.circle.fill"
+                                : "checkmark.circle.fill"
                     )
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(.white)
