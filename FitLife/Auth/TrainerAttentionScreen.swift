@@ -112,6 +112,8 @@ final class TrainerAttentionStore: ObservableObject {
     }
 
     func load() async {
+        guard isLoading == false else { return }
+
         isLoading = true
         errorMessage = nil
 
@@ -317,15 +319,35 @@ struct TrainerAttentionScreen: View {
 
     @StateObject private var store: TrainerAttentionStore
     @State private var selectedFilter: TrainerAttentionStatus?
+    @State private var showsAllMessages = false
 
     init(trainerId: String) {
         self.trainerId = trainerId
         _store = StateObject(wrappedValue: TrainerAttentionStore(trainerId: trainerId))
     }
 
-    private var filteredItems: [TrainerAttentionClientItem] {
-        guard let selectedFilter else { return store.items }
-        return store.items.filter { $0.statuses.contains(selectedFilter) }
+    private var messageItems: [TrainerAttentionClientItem] {
+        store.items
+            .filter { $0.statuses.contains(.waitingReply) && $0.activity.lastNote != nil }
+            .sorted {
+                ($0.activity.lastNote?.createdAt ?? .distantPast) >
+                    ($1.activity.lastNote?.createdAt ?? .distantPast)
+            }
+    }
+
+    private var visibleMessageItems: [TrainerAttentionClientItem] {
+        showsAllMessages ? messageItems : Array(messageItems.prefix(3))
+    }
+
+    private var queueItems: [TrainerAttentionClientItem] {
+        store.items.filter { item in
+            item.statuses.contains { $0 != .waitingReply }
+        }
+    }
+
+    private var filteredQueueItems: [TrainerAttentionClientItem] {
+        guard let selectedFilter else { return queueItems }
+        return queueItems.filter { $0.statuses.contains(selectedFilter) }
     }
 
     var body: some View {
@@ -338,53 +360,93 @@ struct TrainerAttentionScreen: View {
                 }
             }
 
-            Section {
-                TrainerAttentionSummaryCard(
-                    attentionCount: store.items.count,
-                    clientCount: store.allClientCount
-                )
-            }
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+            if messageItems.isEmpty == false {
+                Section {
+                    ForEach(visibleMessageItems) { item in
+                        NavigationLink {
+                            TrainerClientSupportScreen(
+                                trainerId: trainerId,
+                                client: item.client,
+                                opensChatInitially: true
+                            )
+                        } label: {
+                            TrainerAttentionMessageRow(item: item)
+                        }
+                    }
 
-            if store.items.isEmpty == false {
+                    if messageItems.count > 3 {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showsAllMessages.toggle()
+                            }
+                        } label: {
+                            Label(
+                                showsAllMessages
+                                    ? AppLocalizer.string("trainer.attention.messages.collapse")
+                                    : AppLocalizer.format("trainer.attention.messages.show_all", messageItems.count),
+                                systemImage: showsAllMessages ? "chevron.up" : "chevron.down"
+                            )
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity, alignment: .center)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.blue)
+                    }
+                } header: {
+                    HStack {
+                        Text(AppLocalizer.string("trainer.attention.messages.title"))
+                        Spacer()
+                        Text(messageItems.count.formatted())
+                            .foregroundStyle(.blue)
+                    }
+                }
+            }
+
+            if queueItems.isEmpty == false {
                 Section {
                     TrainerAttentionFilterBar(selection: $selectedFilter)
                 }
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-            }
 
-            Section(AppLocalizer.string("trainer.attention.section")) {
-                ForEach(filteredItems) { item in
-                    NavigationLink {
-                        TrainerClientSupportScreen(trainerId: trainerId, client: item.client)
-                    } label: {
-                        TrainerAttentionClientRow(item: item)
+                Section(AppLocalizer.string("trainer.attention.queue.title")) {
+                    if filteredQueueItems.isEmpty {
+                        Label(
+                            AppLocalizer.string("trainer.attention.queue.empty"),
+                            systemImage: "checkmark.circle"
+                        )
+                        .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(filteredQueueItems) { item in
+                            NavigationLink {
+                                TrainerClientSupportScreen(trainerId: trainerId, client: item.client)
+                            } label: {
+                                TrainerAttentionClientRow(
+                                    item: item,
+                                    statuses: item.statuses.filter { $0 != .waitingReply }
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
         .overlay {
-            if store.isLoading {
+            if store.isLoading && store.items.isEmpty {
                 ProgressView()
-            } else if store.items.isEmpty {
+            } else if store.items.isEmpty && store.errorMessage == nil {
                 ContentUnavailableView(
                     AppLocalizer.string("trainer.attention.empty.title"),
                     systemImage: "checkmark.seal",
                     description: Text(AppLocalizer.string("trainer.attention.empty.subtitle"))
                 )
-            } else if filteredItems.isEmpty {
-                ContentUnavailableView(
-                    AppLocalizer.string("trainer.attention.filter.empty.title"),
-                    systemImage: "line.3.horizontal.decrease.circle",
-                    description: Text(AppLocalizer.string("trainer.attention.filter.empty.subtitle"))
-                )
             }
         }
         .navigationTitle(AppLocalizer.string("trainer.attention.title"))
-        .task {
-            await store.load()
+        .onAppear {
+            Task {
+                await store.load()
+            }
         }
         .refreshable {
             await store.load()
@@ -392,33 +454,53 @@ struct TrainerAttentionScreen: View {
     }
 }
 
-private struct TrainerAttentionSummaryCard: View {
-    let attentionCount: Int
-    let clientCount: Int
+private struct TrainerAttentionMessageRow: View {
+    let item: TrainerAttentionClientItem
 
     var body: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.orange.opacity(0.16))
-                Image(systemName: "exclamationmark.bubble.fill")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(.orange)
-            }
-            .frame(width: 54, height: 54)
+        HStack(alignment: .top, spacing: 12) {
+            TrainerAttentionAvatar(profile: item.client, size: 48)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(AppLocalizer.format("trainer.attention.summary.title", attentionCount))
-                    .font(.headline.weight(.semibold))
-                Text(AppLocalizer.format("trainer.attention.summary.subtitle", clientCount))
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text(item.client.displayName)
+                        .font(.headline)
+                        .lineLimit(1)
+
+                    Circle()
+                        .fill(.blue)
+                        .frame(width: 8, height: 8)
+
+                    Spacer(minLength: 8)
+
+                    if let createdAt = item.activity.lastNote?.createdAt {
+                        Text(messageDate(createdAt))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let message = item.activity.lastNote?.message {
+                    Text(message)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                Label(AppLocalizer.string("trainer.attention.messages.reply"), systemImage: "arrowshape.turn.up.left.fill")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.blue)
             }
-
-            Spacer()
         }
-        .padding(16)
-        .background(RoundedRectangle(cornerRadius: 20).fill(Color(.secondarySystemGroupedBackground)))
+        .padding(.vertical, 5)
+    }
+
+    private func messageDate(_ date: Date) -> String {
+        if Calendar.current.isDateInToday(date) {
+            return date.formatted(date: .omitted, time: .shortened)
+        }
+        return date.formatted(date: .abbreviated, time: .omitted)
     }
 }
 
@@ -435,7 +517,7 @@ private struct TrainerAttentionFilterBar: View {
                     action: { selection = nil }
                 )
 
-                ForEach(TrainerAttentionStatus.allCases) { status in
+                ForEach(TrainerAttentionStatus.allCases.filter { $0 != .waitingReply }) { status in
                     TrainerAttentionFilterChip(
                         title: status.title,
                         tint: status.tint,
@@ -469,17 +551,12 @@ private struct TrainerAttentionFilterChip: View {
 
 private struct TrainerAttentionClientRow: View {
     let item: TrainerAttentionClientItem
+    let statuses: [TrainerAttentionStatus]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 12) {
-                Circle()
-                    .fill(Color.blue.opacity(0.14))
-                    .frame(width: 44, height: 44)
-                    .overlay {
-                        Image(systemName: "person.fill")
-                            .foregroundStyle(.blue)
-                    }
+                TrainerAttentionAvatar(profile: item.client, size: 44)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(item.client.displayName)
@@ -493,7 +570,7 @@ private struct TrainerAttentionClientRow: View {
             }
 
             FlowLayout(spacing: 6) {
-                ForEach(item.statuses) { status in
+                ForEach(statuses) { status in
                     Label(status.title, systemImage: status.iconName)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(status.tint)
@@ -523,6 +600,44 @@ private struct TrainerAttentionClientRow: View {
     }
 }
 
+private struct TrainerAttentionAvatar: View {
+    let profile: AppUserProfile
+    let size: CGFloat
+
+    var body: some View {
+        Group {
+            if let photoURL = profile.photoURL,
+               let url = URL(string: photoURL) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case let .success(image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    default:
+                        fallback
+                    }
+                }
+            } else {
+                fallback
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .accessibilityHidden(true)
+    }
+
+    private var fallback: some View {
+        Circle()
+            .fill(Color.blue.opacity(0.14))
+            .overlay {
+                Text(String(profile.displayName.prefix(1)).uppercased())
+                    .font(.system(size: size * 0.38, weight: .semibold))
+                    .foregroundStyle(.blue)
+            }
+    }
+}
+
 private struct FlowLayout<Content: View>: View {
     let spacing: CGFloat
     @ViewBuilder let content: Content
@@ -540,15 +655,6 @@ private struct FlowLayout<Content: View>: View {
             VStack(alignment: .leading, spacing: spacing) {
                 content
             }
-        }
-    }
-}
-
-private extension Array {
-    func chunked(into size: Int) -> [[Element]] {
-        guard size > 0 else { return [self] }
-        return stride(from: 0, to: count, by: size).map {
-            Array(self[$0..<Swift.min($0 + size, count)])
         }
     }
 }

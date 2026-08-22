@@ -247,7 +247,13 @@
 "trainer.clients.section" = "Назначенные клиенты";
 "trainer.clients.empty.title" = "Клиенты не назначены";
 "trainer.clients.empty.subtitle" = "Когда owner привяжет к тебе клиентов, они появятся здесь.";
-"trainer.attention.title" = "Требуют внимания";
+"trainer.attention.title" = "Очередь";
+"trainer.attention.messages.title" = "Новые сообщения";
+"trainer.attention.messages.reply" = "Ответить";
+"trainer.attention.messages.show_all" = "Все сообщения (%d)";
+"trainer.attention.messages.collapse" = "Свернуть";
+"trainer.attention.queue.title" = "Остальная очередь";
+"trainer.attention.queue.empty" = "По выбранному фильтру задач нет";
 "trainer.attention.section" = "Клиенты";
 "trainer.attention.filter.all" = "Все";
 "trainer.attention.summary.title" = "Требуют внимания: %d";

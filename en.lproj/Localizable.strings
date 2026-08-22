@@ -247,7 +247,13 @@
 "trainer.clients.section" = "Assigned Clients";
 "trainer.clients.empty.title" = "No clients assigned";
 "trainer.clients.empty.subtitle" = "Clients will appear here after the owner links them to you.";
-"trainer.attention.title" = "Need Attention";
+"trainer.attention.title" = "Queue";
+"trainer.attention.messages.title" = "New Messages";
+"trainer.attention.messages.reply" = "Reply";
+"trainer.attention.messages.show_all" = "All Messages (%d)";
+"trainer.attention.messages.collapse" = "Show Less";
+"trainer.attention.queue.title" = "Other Follow-ups";
+"trainer.attention.queue.empty" = "No tasks match this filter";
 "trainer.attention.section" = "Clients";
 "trainer.attention.filter.all" = "All";
 "trainer.attention.summary.title" = "Need attention: %d";
