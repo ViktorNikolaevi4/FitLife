@@ -78,9 +78,11 @@ enum WorkoutExerciseIcon {
     static let singleArmTricepsExtension = "Разгибание одной руки"
     static let closeGripBenchPress = "Жим лёжа узким хватом"
     static let tricepsFocusedDips = "Отжимания на брусьях с акцентом на трицепс"
+    static let benchDips = "Обратные отжимания от лавки"
     static let overheadDumbbellTricepsExtension = "Разгибание гантели из-за головы"
     static let dumbbellKickback = "Кикбэк с гантелью"
     static let sidePlank = "БоковаяПланка"
+    static let elbowPlank = "Планка на локтях"
     static let lunges = "Выпады "
     static let reverseLunges = "Выпады назад"
     static let bulgarianSplitSquat = "Болгарские выпады"
@@ -93,6 +95,7 @@ enum WorkoutExerciseIcon {
     static let barbellSquat = "Приседания со штангой"
     static let frontSquat = "Фронтальные приседания"
     static let gobletSquat = "Гоблет-приседания"
+    static let kettlebellSquat = "Приседания с гирей"
     static let zercherSquat = "Приседания Зерхера"
     static let hackSquat = "Гак-приседания"
     static let pistolSquat = "Пистолетик"
@@ -864,6 +867,16 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.bench_dips"),
+            systemImage: WorkoutExerciseIcon.benchDips,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 5.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
             name: AppLocalizer.string("workout.exercise.overhead_dumbbell_triceps_extension"),
             systemImage: WorkoutExerciseIcon.overheadDumbbellTricepsExtension,
             accentName: "blue",
@@ -1014,6 +1027,16 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.kettlebell_squat"),
+            systemImage: WorkoutExerciseIcon.kettlebellSquat,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 5.5,
+            defaultSets: [
+                WorkoutDraftSet(weight: 16, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
             name: AppLocalizer.string("workout.exercise.sumo_squat"),
             systemImage: WorkoutExerciseIcon.sumoSquat,
             accentName: "blue",
@@ -1131,6 +1154,16 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             metValue: 8.0,
             defaultSets: [
                 WorkoutDraftSet(weight: 0, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.elbow_plank"),
+            systemImage: WorkoutExerciseIcon.elbowPlank,
+            accentName: "blue",
+            activityType: .core,
+            metValue: 3.5,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, durationSeconds: 45, metricType: .duration)
             ]
         ),
         WorkoutExerciseTemplate(

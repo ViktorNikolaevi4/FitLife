@@ -320,7 +320,7 @@ struct HealthKitStepsCard: View {
                 }
             }
             .padding(16)
-            .frame(maxWidth: .infinity, minHeight: 172, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 172, alignment: .topLeading)
             .adaptiveHomeCard(theme: theme, cornerRadius: HomeDarkMetrics.cardCornerRadius)
         }
         .buttonStyle(.plain)

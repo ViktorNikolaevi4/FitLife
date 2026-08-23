@@ -684,6 +684,7 @@
 "workout.exercise.single_arm_triceps_extension" = "Разгибание одной руки";
 "workout.exercise.close_grip_bench_press" = "Жим лёжа узким хватом";
 "workout.exercise.triceps_focused_dips" = "Отжимания на брусьях с акцентом на трицепс";
+"workout.exercise.bench_dips" = "Обратные отжимания от лавки";
 "workout.exercise.overhead_dumbbell_triceps_extension" = "Разгибание гантели из-за головы";
 "workout.exercise.dumbbell_kickback" = "Кикбэк с гантелью";
 "workout.exercise.pullups" = "Подтягивания";
@@ -696,6 +697,7 @@
 "workout.exercise.barbell_squat" = "Приседания со штангой";
 "workout.exercise.front_squat" = "Фронтальные приседания";
 "workout.exercise.goblet_squat" = "Гоблет-приседания";
+"workout.exercise.kettlebell_squat" = "Приседания с гирей";
 "workout.exercise.sumo_squat" = "Приседания сумо";
 "workout.exercise.zercher_squat" = "Приседания Зерхера";
 "workout.exercise.hack_squat" = "Гак-приседания";
@@ -708,6 +710,7 @@
 "workout.exercise.bulgarian_split_squat" = "Болгарские выпады";
 "workout.exercise.jumping_lunges" = "Прыжковые выпады";
 "workout.exercise.box_jumps" = "Прыжки на тумбу";
+"workout.exercise.elbow_plank" = "Планка на локтях";
 "workout.exercise.side_plank" = "Боковая планка";
 "workout.exercise.deadlift" = "Становая тяга";
 "workout.exercise.classic_deadlift" = "Классическая становая тяга";

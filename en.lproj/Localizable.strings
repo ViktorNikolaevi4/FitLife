@@ -684,6 +684,7 @@
 "workout.exercise.single_arm_triceps_extension" = "Single-Arm Triceps Extension";
 "workout.exercise.close_grip_bench_press" = "Close-Grip Bench Press";
 "workout.exercise.triceps_focused_dips" = "Triceps-Focused Dips";
+"workout.exercise.bench_dips" = "Bench Dips";
 "workout.exercise.overhead_dumbbell_triceps_extension" = "Overhead Dumbbell Triceps Extension";
 "workout.exercise.dumbbell_kickback" = "Dumbbell Kickback";
 "workout.exercise.pullups" = "Pull-Ups";
@@ -696,6 +697,7 @@
 "workout.exercise.barbell_squat" = "Barbell Squat";
 "workout.exercise.front_squat" = "Front Squat";
 "workout.exercise.goblet_squat" = "Goblet Squat";
+"workout.exercise.kettlebell_squat" = "Kettlebell Squat";
 "workout.exercise.sumo_squat" = "Sumo Squat";
 "workout.exercise.zercher_squat" = "Zercher Squat";
 "workout.exercise.hack_squat" = "Hack Squat";
@@ -708,6 +710,7 @@
 "workout.exercise.bulgarian_split_squat" = "Bulgarian Split Squat";
 "workout.exercise.jumping_lunges" = "Jumping Lunges";
 "workout.exercise.box_jumps" = "Box Jumps";
+"workout.exercise.elbow_plank" = "Forearm Plank";
 "workout.exercise.side_plank" = "Side Plank";
 "workout.exercise.deadlift" = "Deadlift";
 "workout.exercise.classic_deadlift" = "Conventional Deadlift";
