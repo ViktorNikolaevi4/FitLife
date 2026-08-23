@@ -465,6 +465,8 @@ struct WorkoutSetMethodRunnerScreen: View {
     @State private var currentStepIndex = 0
     @State private var isResting = false
     @State private var restEndsAt: Date?
+    @State private var lastCuedRestEnd: Date?
+    @State private var lastCuedSecond: Int?
     @State private var actualWeights: [UUID: Double]
     @State private var actualReps: [UUID: Int]
     @FocusState private var isInputFocused: Bool
@@ -535,6 +537,7 @@ struct WorkoutSetMethodRunnerScreen: View {
         }
         .onReceive(ticker) { date in
             now = date
+            playRestCueIfNeeded()
             if isResting && remainingRest == 0 {
                 advanceAfterRest()
             }
@@ -740,6 +743,29 @@ struct WorkoutSetMethodRunnerScreen: View {
         isResting = false
         restEndsAt = nil
         currentStepIndex = min(currentStepIndex + 1, max(steps.count - 1, 0))
+    }
+
+    private func playRestCueIfNeeded() {
+        guard isResting, let restEnd = restEndsAt else {
+            lastCuedRestEnd = nil
+            lastCuedSecond = nil
+            return
+        }
+
+        if lastCuedRestEnd != restEnd {
+            lastCuedRestEnd = restEnd
+            lastCuedSecond = nil
+        }
+
+        let seconds = remainingRest
+        guard lastCuedSecond != seconds else { return }
+        lastCuedSecond = seconds
+
+        if (1...3).contains(seconds) {
+            WorkoutTimerCuePlayer.shared.countdownTick()
+        } else if seconds == 0 {
+            WorkoutTimerCuePlayer.shared.phaseCompleted()
+        }
     }
 
     private func weightBinding(for step: WorkoutSet) -> Binding<Double> {

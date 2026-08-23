@@ -732,6 +732,7 @@ func workoutBlockSubtitle(
     title: String,
     type: WorkoutBlockType,
     mode: WorkoutBlockMode,
+    preset explicitPreset: WorkoutBlockPreset? = nil,
     rounds: Int,
     exerciseCount: Int,
     durationMinutes: Int,
@@ -739,9 +740,19 @@ func workoutBlockSubtitle(
     restSeconds: Int,
     restBetweenRoundsSeconds: Int
 ) -> String {
-    let preset = WorkoutBlockPreset.inferred(title: title, type: type, mode: mode)
+    let preset = explicitPreset ?? WorkoutBlockPreset.inferred(title: title, type: type, mode: mode)
 
     switch preset {
+    case .superset:
+        return circuitSubtitle(
+            mode: .rounds,
+            rounds: rounds,
+            exerciseCount: exerciseCount,
+            durationMinutes: durationMinutes,
+            workSeconds: workSeconds,
+            restSeconds: restSeconds,
+            restBetweenRoundsSeconds: restBetweenRoundsSeconds
+        )
     case .dropSet:
         return AppLocalizer.format("workout.block.drop_set.summary", rounds, exerciseCount, restBetweenRoundsSeconds)
     case .clusterSet:

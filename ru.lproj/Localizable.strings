@@ -1267,3 +1267,7 @@
 "profile.photo.remove" = "Удалить фотографию";
 "profile.photo.change" = "Изменить фото профиля";
 "profile.photo.invalid" = "Не удалось обработать выбранную фотографию.";
+"workout.timer.settings.title" = "Таймер тренировки";
+"workout.timer.settings.sound" = "Звуковые сигналы";
+"workout.timer.settings.haptics" = "Вибрация";
+"workout.timer.settings.footer" = "Короткие сигналы прозвучат за 3, 2 и 1 секунду, а отдельный сигнал — при завершении этапа.";

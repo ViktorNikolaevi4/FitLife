@@ -13,6 +13,8 @@ struct WorkoutBlockRunnerScreen: View {
     @State private var now = Date()
     @State private var showSkipConfirmation = false
     @State private var showRestartConfirmation = false
+    @State private var lastCuedPhaseEnd: Date?
+    @State private var lastCuedSecond: Int?
 
     private let ticker = Timer.publish(every: 0.25, on: .main, in: .common).autoconnect()
 
@@ -125,6 +127,7 @@ struct WorkoutBlockRunnerScreen: View {
         }
         .onReceive(ticker) { date in
             now = date
+            playTimerCueIfNeeded()
             handleTimerTick()
         }
         .confirmationDialog(
@@ -733,6 +736,30 @@ struct WorkoutBlockRunnerScreen: View {
             }
         } else {
             finishBlock(markExercisesFinished: true)
+        }
+    }
+
+    private func playTimerCueIfNeeded() {
+        guard block.runnerPhase == .work || block.runnerPhase == .rest,
+              let phaseEnd = block.phaseEndsAt else {
+            lastCuedPhaseEnd = nil
+            lastCuedSecond = nil
+            return
+        }
+
+        if lastCuedPhaseEnd != phaseEnd {
+            lastCuedPhaseEnd = phaseEnd
+            lastCuedSecond = nil
+        }
+
+        let seconds = remainingSeconds
+        guard lastCuedSecond != seconds else { return }
+        lastCuedSecond = seconds
+
+        if (1...3).contains(seconds) {
+            WorkoutTimerCuePlayer.shared.countdownTick()
+        } else if seconds == 0 {
+            WorkoutTimerCuePlayer.shared.phaseCompleted()
         }
     }
 

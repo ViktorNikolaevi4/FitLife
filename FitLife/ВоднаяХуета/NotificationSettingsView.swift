@@ -12,6 +12,8 @@ struct NotificationSettingsView: View {
     @AppStorage(LocalReminderScheduler.workoutReminderEnabledKey) private var workoutReminderEnabled = false
     @AppStorage(LocalReminderScheduler.unfinishedWorkoutReminderEnabledKey) private var unfinishedWorkoutReminderEnabled = false
     @AppStorage("notifications.weeklyCheckInReminder.enabled") private var weeklyCheckInReminderEnabled = false
+    @AppStorage(WorkoutTimerCueSettings.soundEnabledKey) private var workoutTimerSoundEnabled = true
+    @AppStorage(WorkoutTimerCueSettings.hapticsEnabledKey) private var workoutTimerHapticsEnabled = true
 
     @State private var isNotificationEnabled = false
     @State private var selectedStartTime = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: .now)!
@@ -39,6 +41,22 @@ struct NotificationSettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Toggle(
+                        AppLocalizer.string("workout.timer.settings.sound"),
+                        isOn: $workoutTimerSoundEnabled
+                    )
+                    Toggle(
+                        AppLocalizer.string("workout.timer.settings.haptics"),
+                        isOn: $workoutTimerHapticsEnabled
+                    )
+                    Text(AppLocalizer.string("workout.timer.settings.footer"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text(AppLocalizer.string("workout.timer.settings.title"))
+                }
+
                 Section {
                     Toggle(AppLocalizer.string("notifications.water.enable"), isOn: $isNotificationEnabled)
                         .onChange(of: isNotificationEnabled) { _, isEnabled in

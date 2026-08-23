@@ -107,6 +107,13 @@ struct WorkoutTemplateExerciseItem: Identifiable, Hashable {
     }
 }
 
+private extension Array where Element == WorkoutDraftSet {
+    func fillingRepeatingRounds(upTo requiredCount: Int) -> [WorkoutDraftSet] {
+        guard let last, count < requiredCount else { return self }
+        return self + Array(repeating: last, count: requiredCount - count)
+    }
+}
+
 enum WorkoutBlockGroupKind: String, CaseIterable, Codable {
     case standard, pyramid, superset, circuit
 
@@ -148,6 +155,7 @@ struct WorkoutTemplateBlockItem: Identifiable, Hashable {
     let title: String
     let typeRawValue: String
     let modeRawValue: String
+    let presetRawValue: String
     let orderIndex: Int
     let rounds: Int
     let durationMinutes: Int
@@ -162,6 +170,7 @@ struct WorkoutTemplateBlockItem: Identifiable, Hashable {
         title: String,
         type: WorkoutBlockType,
         mode: WorkoutBlockMode = .rounds,
+        preset: WorkoutBlockPreset? = nil,
         orderIndex: Int,
         rounds: Int = 1,
         durationMinutes: Int = 12,
@@ -175,6 +184,7 @@ struct WorkoutTemplateBlockItem: Identifiable, Hashable {
         self.title = title
         self.typeRawValue = type.rawValue
         self.modeRawValue = mode.rawValue
+        self.presetRawValue = (preset ?? WorkoutBlockPreset.inferred(title: title, type: type, mode: mode)).rawValue
         self.orderIndex = orderIndex
         self.rounds = rounds
         self.durationMinutes = durationMinutes
@@ -198,6 +208,10 @@ struct WorkoutTemplateBlockItem: Identifiable, Hashable {
         self.title = title
         self.typeRawValue = typeRawValue
         self.modeRawValue = (data["modeRawValue"] as? String) ?? WorkoutBlockMode.rounds.rawValue
+        let resolvedType = WorkoutBlockType(rawValue: typeRawValue) ?? .strength
+        let resolvedMode = WorkoutBlockMode(rawValue: self.modeRawValue) ?? .rounds
+        self.presetRawValue = (data["presetRawValue"] as? String)
+            ?? WorkoutBlockPreset.inferred(title: title, type: resolvedType, mode: resolvedMode).rawValue
         self.orderIndex = orderIndex
         self.rounds = (data["rounds"] as? Int) ?? 1
         self.durationMinutes = (data["durationMinutes"] as? Int) ?? 12
@@ -212,6 +226,7 @@ struct WorkoutTemplateBlockItem: Identifiable, Hashable {
             "title": title,
             "typeRawValue": typeRawValue,
             "modeRawValue": modeRawValue,
+            "presetRawValue": presetRawValue,
             "orderIndex": orderIndex,
             "rounds": rounds,
             "durationMinutes": durationMinutes,
@@ -230,6 +245,20 @@ struct WorkoutTemplateBlockItem: Identifiable, Hashable {
         WorkoutBlockMode(rawValue: modeRawValue) ?? .rounds
     }
 
+    var preset: WorkoutBlockPreset {
+        WorkoutBlockPreset(rawValue: presetRawValue)
+            ?? WorkoutBlockPreset.inferred(title: title, type: type, mode: mode)
+    }
+
+    var requiredSetCountPerExercise: Int {
+        switch preset {
+        case .superset, .circuit, .rft, .pyramid, .dropSet, .clusterSet, .ladder:
+            return min(max(rounds, 1), 12)
+        default:
+            return 1
+        }
+    }
+
     var displayTitle: String {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmedTitle.isEmpty {
@@ -239,7 +268,7 @@ struct WorkoutTemplateBlockItem: Identifiable, Hashable {
     }
 
     func subtitle(exerciseCount: Int) -> String {
-        workoutBlockSubtitle(title: displayTitle, type: type, mode: mode, rounds: rounds, exerciseCount: exerciseCount, durationMinutes: durationMinutes, workSeconds: workSeconds, restSeconds: restSeconds, restBetweenRoundsSeconds: restBetweenRoundsSeconds)
+        workoutBlockSubtitle(title: displayTitle, type: type, mode: mode, preset: preset, rounds: rounds, exerciseCount: exerciseCount, durationMinutes: durationMinutes, workSeconds: workSeconds, restSeconds: restSeconds, restBetweenRoundsSeconds: restBetweenRoundsSeconds)
     }
 }
 
@@ -294,11 +323,58 @@ final class WorkoutTemplateContentStore: ObservableObject {
                     data: document.data()
                 )
             }
+            await migrateLegacyRoundDrivenSetsIfNeeded()
             isLoading = false
         } catch {
             errorMessage = error.localizedDescription
             isLoading = false
         }
+    }
+
+    /// Repairs drafts saved by older versions where a multi-round block kept
+    /// only one physical set per exercise. The UI is updated immediately; the
+    /// Firestore write is best-effort so a migration failure never hides data.
+    private func migrateLegacyRoundDrivenSetsIfNeeded() async {
+        let blocksByID = Dictionary(uniqueKeysWithValues: blocks.map { ($0.id, $0) })
+        var changedItems: [WorkoutTemplateExerciseItem] = []
+
+        exercises = exercises.map { exercise in
+            guard let blockID = exercise.blockId,
+                  let block = blocksByID[blockID] else { return exercise }
+            let expandedSets = exercise.sets.fillingRepeatingRounds(
+                upTo: block.requiredSetCountPerExercise
+            )
+            guard expandedSets.count != exercise.sets.count else { return exercise }
+
+            let updated = WorkoutTemplateExerciseItem(
+                id: exercise.id,
+                templateId: exercise.templateId,
+                blockId: exercise.blockId,
+                groupId: exercise.groupId,
+                name: exercise.name,
+                systemImage: exercise.systemImage,
+                accentName: exercise.accentName,
+                activityType: exercise.activityType,
+                metValue: exercise.metValue,
+                orderIndex: exercise.orderIndex,
+                sets: expandedSets,
+                note: exercise.note
+            )
+            changedItems.append(updated)
+            return updated
+        }
+
+        guard changedItems.isEmpty == false else { return }
+        let batch = firestore.batch()
+        for item in changedItems {
+            let ref = firestore
+                .collection("workout_templates")
+                .document(template.id)
+                .collection("exercises")
+                .document(item.id)
+            batch.setData(item.firestoreData, forDocument: ref)
+        }
+        try? await batch.commit()
     }
 
     func addExercise(_ draft: WorkoutExerciseDraft) async {
@@ -344,6 +420,7 @@ final class WorkoutTemplateContentStore: ObservableObject {
         title: String,
         type: WorkoutBlockType,
         mode: WorkoutBlockMode,
+        preset: WorkoutBlockPreset? = nil,
         rounds: Int,
         durationMinutes: Int,
         workSeconds: Int,
@@ -364,6 +441,7 @@ final class WorkoutTemplateContentStore: ObservableObject {
                 title: title,
                 type: type,
                 mode: mode,
+                preset: preset,
                 orderIndex: blocks.count,
                 rounds: rounds,
                 durationMinutes: durationMinutes,
@@ -389,6 +467,7 @@ final class WorkoutTemplateContentStore: ObservableObject {
             let templateRef = firestore.collection("workout_templates").document(template.id)
             let batch = firestore.batch()
             var newBlocks: [WorkoutTemplateBlockItem] = []
+            var updatedBlocksByID: [String: WorkoutTemplateBlockItem] = [:]
             var newExercises: [WorkoutTemplateExerciseItem] = []
             var nextBlockIndex = blocks.count
             var nextExerciseIndex = exercises.count
@@ -405,7 +484,27 @@ final class WorkoutTemplateContentStore: ObservableObject {
 
                 let destinationBlock: WorkoutTemplateBlockItem
                 if let existingBlock {
-                    destinationBlock = existingBlock
+                    let updatedBlock = WorkoutTemplateBlockItem(
+                        id: existingBlock.id,
+                        templateId: existingBlock.templateId,
+                        title: generatedBlock.title,
+                        type: generatedBlock.workoutBlockType,
+                        mode: generatedBlock.workoutBlockMode,
+                        preset: generatedBlock.workoutPreset,
+                        orderIndex: existingBlock.orderIndex,
+                        rounds: generatedBlock.rounds,
+                        durationMinutes: generatedBlock.durationMinutes,
+                        workSeconds: generatedBlock.workSeconds,
+                        restSeconds: generatedBlock.restSeconds,
+                        restBetweenRoundsSeconds: generatedBlock.restBetweenRoundsSeconds,
+                        groups: existingBlock.groups
+                    )
+                    batch.setData(
+                        updatedBlock.firestoreData,
+                        forDocument: templateRef.collection("blocks").document(existingBlock.id)
+                    )
+                    updatedBlocksByID[existingBlock.id] = updatedBlock
+                    destinationBlock = updatedBlock
                 } else {
                     let blockRef = templateRef.collection("blocks").document()
                     let block = WorkoutTemplateBlockItem(
@@ -414,6 +513,7 @@ final class WorkoutTemplateContentStore: ObservableObject {
                         title: generatedBlock.title,
                         type: generatedBlock.workoutBlockType,
                         mode: generatedBlock.workoutBlockMode,
+                        preset: generatedBlock.workoutPreset,
                         orderIndex: nextBlockIndex,
                         rounds: generatedBlock.rounds,
                         durationMinutes: generatedBlock.durationMinutes,
@@ -450,6 +550,7 @@ final class WorkoutTemplateContentStore: ObservableObject {
 
             guard newExercises.isEmpty == false else { return }
             try await batch.commit()
+            blocks = blocks.map { updatedBlocksByID[$0.id] ?? $0 }
             blocks.append(contentsOf: newBlocks)
             exercises.append(contentsOf: newExercises)
         } catch {
@@ -481,6 +582,7 @@ final class WorkoutTemplateContentStore: ObservableObject {
             title: block.title,
             type: block.type,
             mode: block.mode,
+            preset: block.preset,
             orderIndex: block.orderIndex,
             rounds: block.rounds,
             durationMinutes: block.durationMinutes,

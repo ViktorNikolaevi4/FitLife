@@ -277,6 +277,7 @@ final class ClientAssignedWorkoutsStore: ObservableObject {
                     title: remoteBlock.displayTitle,
                     type: remoteBlock.type,
                     mode: remoteBlock.mode,
+                    preset: remoteBlock.preset,
                     orderIndex: remoteBlock.orderIndex,
                     rounds: remoteBlock.rounds,
                     durationMinutes: remoteBlock.durationMinutes,
@@ -305,7 +306,23 @@ final class ClientAssignedWorkoutsStore: ObservableObject {
                     block.exerciseItems.append(exercise)
                 }
 
-                for (index, remoteSet) in remoteExercise.sets.enumerated() {
+                let requiredSetCount = remoteExercise.blockId
+                    .flatMap { remoteBlockID in
+                        remoteBlocks.first { $0.id == remoteBlockID }
+                    }?
+                    .requiredSetCountPerExercise ?? 1
+                let normalizedSets: [WorkoutDraftSet]
+                if let lastSet = remoteExercise.sets.last,
+                   remoteExercise.sets.count < requiredSetCount {
+                    normalizedSets = remoteExercise.sets + Array(
+                        repeating: lastSet,
+                        count: requiredSetCount - remoteExercise.sets.count
+                    )
+                } else {
+                    normalizedSets = remoteExercise.sets
+                }
+
+                for (index, remoteSet) in normalizedSets.enumerated() {
                     let set = WorkoutSet(
                         orderIndex: index,
                         weight: remoteSet.weight,

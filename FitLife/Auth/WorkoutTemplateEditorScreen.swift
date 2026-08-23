@@ -266,6 +266,7 @@ struct WorkoutTemplateEditorScreen: View {
                     title: draft.resolvedTitle,
                     type: draft.type,
                     mode: draft.mode,
+                    preset: draft.preset,
                     rounds: draft.rounds,
                     durationMinutes: draft.durationMinutes,
                     workSeconds: draft.workSeconds,
@@ -731,11 +732,14 @@ struct AIWorkoutGeneratorScreen: View {
         isGenerating = true
         Task {
             do {
-                draft = try await generator.generate(
+                let generatedDraft = try await generator.generate(
                     command: trimmedCommand,
                     language: language,
                     existingBlocks: existingBlocks
                 )
+                // Preview the same normalized prescriptions that will actually
+                // be persisted, so the trainer can verify round/set counts.
+                draft = generatedDraft.resolvingExercises(using: workoutTemplates())
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -748,6 +752,7 @@ struct AIWorkoutGeneratorScreen: View {
             title: block.title,
             type: block.workoutBlockType,
             mode: block.workoutBlockMode,
+            preset: block.workoutPreset,
             rounds: block.rounds,
             exerciseCount: block.exercises.count,
             durationMinutes: block.durationMinutes,

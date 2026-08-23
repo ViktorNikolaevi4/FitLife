@@ -10,6 +10,9 @@ struct AIWorkoutDraft: Decodable, Identifiable {
 struct AIWorkoutDraftBlock: Decodable, Identifiable {
     let title: String
     let targetBlockId: String?
+    /// Explicit block semantics. Optional so drafts created by older app versions
+    /// can still be decoded and migrated through the legacy type/mode fields.
+    let preset: String?
     let type: String
     let mode: String
     let rounds: Int
@@ -21,12 +24,35 @@ struct AIWorkoutDraftBlock: Decodable, Identifiable {
 
     var id: String { title + "-" + type }
 
+    var workoutPreset: WorkoutBlockPreset {
+        if let preset, let explicitPreset = WorkoutBlockPreset(rawValue: preset) {
+            return explicitPreset
+        }
+        return WorkoutBlockPreset.inferred(
+            title: title,
+            type: WorkoutBlockType(rawValue: type) ?? .main,
+            mode: WorkoutBlockMode(rawValue: mode) ?? .rounds
+        )
+    }
+
     var workoutBlockType: WorkoutBlockType {
-        WorkoutBlockType(rawValue: type) ?? .main
+        workoutPreset.blockType
     }
 
     var workoutBlockMode: WorkoutBlockMode {
-        WorkoutBlockMode(rawValue: mode) ?? .rounds
+        workoutPreset.mode
+    }
+
+    /// These formats execute every exercise once per round/stage. Therefore the
+    /// persisted set list must contain a real set for every round; otherwise the
+    /// runner can repeat visually while history and reports still count one set.
+    var repeatsEveryExerciseEachRound: Bool {
+        switch workoutPreset {
+        case .superset, .circuit, .rft, .pyramid, .dropSet, .clusterSet, .ladder:
+            return true
+        default:
+            return false
+        }
     }
 }
 
@@ -73,28 +99,48 @@ extension AIWorkoutDraft {
         AIWorkoutDraft(
             summary: summary,
             blocks: blocks.map { block in
-                AIWorkoutDraftBlock(
+                let normalizedRounds = block.repeatsEveryExerciseEachRound
+                    ? min(max(block.rounds, 1), 12)
+                    : max(block.rounds, 1)
+                return AIWorkoutDraftBlock(
                     title: block.title,
                     targetBlockId: block.targetBlockId,
+                    preset: block.workoutPreset.rawValue,
                     type: block.type,
                     mode: block.mode,
-                    rounds: block.rounds,
+                    rounds: normalizedRounds,
                     durationMinutes: block.durationMinutes,
                     workSeconds: block.workSeconds,
                     restSeconds: block.restSeconds,
                     restBetweenRoundsSeconds: block.restBetweenRoundsSeconds,
                     exercises: block.exercises.map { exercise in
-                        guard let template = catalog.bestMatch(for: exercise.name) else {
-                            return exercise
+                        var resolvedExercise = exercise
+                        if let template = catalog.bestMatch(for: exercise.name) {
+                            resolvedExercise = AIWorkoutDraftExercise(
+                                name: template.name,
+                                systemImage: template.systemImage,
+                                accentName: template.accentName,
+                                activityType: template.activityType.rawValue,
+                                metValue: template.metValue,
+                                note: exercise.note,
+                                sets: exercise.sets
+                            )
+                        }
+
+                        guard block.repeatsEveryExerciseEachRound,
+                              let lastSet = resolvedExercise.sets.last,
+                              resolvedExercise.sets.count < normalizedRounds else {
+                            return resolvedExercise
                         }
                         return AIWorkoutDraftExercise(
-                            name: template.name,
-                            systemImage: template.systemImage,
-                            accentName: template.accentName,
-                            activityType: template.activityType.rawValue,
-                            metValue: template.metValue,
-                            note: exercise.note,
-                            sets: exercise.sets
+                            name: resolvedExercise.name,
+                            systemImage: resolvedExercise.systemImage,
+                            accentName: resolvedExercise.accentName,
+                            activityType: resolvedExercise.activityType,
+                            metValue: resolvedExercise.metValue,
+                            note: resolvedExercise.note,
+                            sets: resolvedExercise.sets
+                                + Array(repeating: lastSet, count: normalizedRounds - resolvedExercise.sets.count)
                         )
                     }
                 )
@@ -305,12 +351,16 @@ actor AIWorkoutDraftGenerator {
             "type": "object",
             "additionalProperties": false,
             "required": [
-                "title", "targetBlockId", "type", "mode", "rounds", "durationMinutes",
+                "title", "targetBlockId", "preset", "type", "mode", "rounds", "durationMinutes",
                 "workSeconds", "restSeconds", "restBetweenRoundsSeconds", "exercises"
             ],
             "properties": [
                 "title": ["type": "string"],
                 "targetBlockId": ["type": ["string", "null"]],
+                "preset": [
+                    "type": "string",
+                    "enum": WorkoutBlockPreset.allCases.map(\.rawValue)
+                ],
                 "type": ["type": "string", "enum": ["warmup", "strength", "main", "superset", "circuit", "stretching", "cooldown"]],
                 "mode": ["type": "string", "enum": ["rounds", "amrap", "tabata", "emom"]],
                 "rounds": ["type": "integer", "minimum": 0, "maximum": 100],
@@ -341,15 +391,15 @@ actor AIWorkoutDraftGenerator {
     private func systemPrompt(language: String) -> String {
         """
         You are a fitness-programming assistant for certified trainers. Convert the trainer's instruction into a conservative workout TEMPLATE DRAFT. Return JSON only and respond in \(language).
-        Return an object with a short string field summary and a blocks array. Each block has title, targetBlockId (a current template block id or null), type (warmup|strength|main|superset|circuit|stretching|cooldown), mode (rounds|amrap|tabata|emom), rounds, durationMinutes, workSeconds, restSeconds, restBetweenRoundsSeconds, and exercises. Each exercise has name, systemImage, accentName (blue|green|orange|purple|teal|red), activityType (strength|cardio|hiit|core|mobility), metValue, note, and sets. Each set has weight, reps, durationSeconds, metricType (reps|duration).
+        Return an object with a short string field summary and a blocks array. Each block has title, targetBlockId (a current template block id or null), preset (warmup|strength|superset|circuit|hiit|tabata|amrap|emom|e2mom|e3mom|forTime|rft|pyramid|dropSet|clusterSet|ladder|mobility|stretching|cooldown), type (warmup|strength|main|superset|circuit|stretching|cooldown), mode (rounds|amrap|tabata|emom), rounds, durationMinutes, workSeconds, restSeconds, restBetweenRoundsSeconds, and exercises. preset is the source of truth; type and mode must match that preset. Each exercise has name, systemImage, accentName (blue|green|orange|purple|teal|red), activityType (strength|cardio|hiit|core|mobility), metValue, note, and sets. Each set has weight, reps, durationSeconds, metricType (reps|duration).
         Rules: current template blocks are provided in the user message. If the trainer refers to an existing block by name, set targetBlockId to that exact id and add exercises to it. Only use null when a new block is actually requested. If no section or workout format is explicitly requested, return EXACTLY ONE block: title "Силовой блок" in Russian or "Strength block" in English, type "strength", and put every requested exercise in it. Never make a block from an exercise name; "bench press" must be an exercise inside the strength block, not a block named "bench press". Create multiple blocks only when the instruction explicitly asks for warmup, cooldown, a circuit/AMRAP/Tabata, or named separate sections. Create only what the trainer asked; do not provide medical advice; never guess a working weight — use 0 when it is not supplied.
-        Sets are the source of truth: output one sets array item for EVERY prescribed set. Never put a prescription for sets, reps, weight, duration, or rest only into note. For example, "5 sets of 5 reps at 70 kg" must return five set objects, each {weight: 70, reps: 5, durationSeconds: 0, metricType: "reps"}; "2 sets of 15 at 20 kg, then 4 sets of 15 at 40 kg" must return six set objects in that exact order. "10x10" means 10 set objects of 10 reps. Use note only for coaching cues or explanations. Use duration only for timed exercises; use valid values; no more than 5 blocks, 20 exercises, or 12 sets per exercise; no markdown.
+        rounds means how many times the complete block sequence is performed. sets are the source of truth for exercise history and reports: output one sets array item for EVERY prescribed set. For superset, circuit, rft, pyramid, dropSet, clusterSet, and ladder, every exercise must have at least one set object per round/stage; repeat identical objects when prescriptions are identical. Thus a superset for 3 sets has rounds=3 and three set objects for each exercise. A circular warmup for 2 rounds is preset circuit, type circuit, mode rounds, rounds=2, and two set objects per exercise. A normal strength exercise for 3 sets remains preset strength, rounds=1, and has three set objects. Never put a prescription for sets, reps, weight, duration, or rest only into note. For example, "5 sets of 5 reps at 70 kg" must return five set objects, each {weight: 70, reps: 5, durationSeconds: 0, metricType: "reps"}; "2 sets of 15 at 20 kg, then 4 sets of 15 at 40 kg" must return six set objects in that exact order. "10x10" means 10 set objects of 10 reps. Use note only for coaching cues or explanations. Use duration only for timed exercises; use valid values; no more than 5 blocks, 20 exercises, or 12 sets per exercise; no markdown.
         """
     }
 
     private func repairSystemPrompt(language: String) -> String {
         """
-        You repair workout-template draft JSON for certified trainers. Return JSON only and respond in \(language). Rebuild the draft from the original trainer instruction, correcting the invalid draft if useful. Use exactly this schema: {summary:String, blocks:[{title:String,targetBlockId:String|null,type:String,mode:String,rounds:Int,durationMinutes:Int,workSeconds:Int,restSeconds:Int,restBetweenRoundsSeconds:Int,exercises:[{name:String,systemImage:String,accentName:String,activityType:String,metValue:Double,note:String,sets:[{weight:Double,reps:Int,durationSeconds:Int,metricType:String}]}]}]}. Every block must contain at least one exercise. Use only type warmup|strength|main|superset|circuit|stretching|cooldown, mode rounds|amrap|tabata|emom, accentName blue|green|orange|purple|teal|red, activityType strength|cardio|hiit|core|mobility, metricType reps|duration. Preserve every prescribed set as individual objects. Never add markdown or explanation.
+        You repair workout-template draft JSON for certified trainers. Return JSON only and respond in \(language). Rebuild the draft from the original trainer instruction, correcting the invalid draft if useful. Use exactly this schema: {summary:String, blocks:[{title:String,targetBlockId:String|null,preset:String,type:String,mode:String,rounds:Int,durationMinutes:Int,workSeconds:Int,restSeconds:Int,restBetweenRoundsSeconds:Int,exercises:[{name:String,systemImage:String,accentName:String,activityType:String,metValue:Double,note:String,sets:[{weight:Double,reps:Int,durationSeconds:Int,metricType:String}]}]}]}. Every block must contain at least one exercise. Use only preset warmup|strength|superset|circuit|hiit|tabata|amrap|emom|e2mom|e3mom|forTime|rft|pyramid|dropSet|clusterSet|ladder|mobility|stretching|cooldown, type warmup|strength|main|superset|circuit|stretching|cooldown, mode rounds|amrap|tabata|emom, accentName blue|green|orange|purple|teal|red, activityType strength|cardio|hiit|core|mobility, metricType reps|duration. Preserve every prescribed set as individual objects. For superset, circuit, rft, pyramid, dropSet, clusterSet, and ladder, every exercise needs at least one set object per round/stage. Never add markdown or explanation.
         """
     }
 

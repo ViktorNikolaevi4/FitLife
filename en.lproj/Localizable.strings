@@ -1267,3 +1267,7 @@
 "profile.photo.remove" = "Remove Photo";
 "profile.photo.change" = "Change profile photo";
 "profile.photo.invalid" = "The selected photo could not be processed.";
+"workout.timer.settings.title" = "Workout timer";
+"workout.timer.settings.sound" = "Sound cues";
+"workout.timer.settings.haptics" = "Haptics";
+"workout.timer.settings.footer" = "Short cues play at 3, 2, and 1 seconds, followed by a distinct cue when the stage ends.";
