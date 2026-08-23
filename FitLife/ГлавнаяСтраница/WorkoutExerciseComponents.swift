@@ -116,7 +116,7 @@ private enum WorkoutExerciseDetailTab: String, CaseIterable, Identifiable {
     }
 }
 
-private struct WorkoutExerciseHistoryEntry: Identifiable {
+struct WorkoutExerciseHistoryEntry: Identifiable {
     let exerciseID: UUID
     let sessionID: UUID
     let date: Date
@@ -130,7 +130,7 @@ private struct WorkoutExerciseHistoryEntry: Identifiable {
     var id: String { "\(sessionID.uuidString)-\(exerciseID.uuidString)" }
 }
 
-private struct WorkoutExercisePersonalBests {
+struct WorkoutExercisePersonalBests {
     let estimatedOneRepMax: Double?
     let maxWeight: Double?
     let maxReps: Int?
@@ -144,7 +144,7 @@ private struct WorkoutExercisePersonalBests {
     }
 }
 
-private func workoutExerciseHistory(
+func workoutExerciseHistory(
     matching exercise: WorkoutExercise,
     in sessions: [WorkoutSession],
     ownerId: String?
@@ -161,51 +161,57 @@ private func workoutExerciseHistory(
                 guard normalizedWorkoutExerciseName(historicalExercise.name) == normalizedName else {
                     return nil
                 }
-
-                let completedSets = historicalExercise.setItems.filter(\.isCompleted)
-                let repetitionSets = completedSets.filter {
-                    $0.metricType == .reps && resolvedWorkoutSetReps($0) > 0
-                }
-                let maxWeight = repetitionSets
-                    .map(resolvedWorkoutSetWeight)
-                    .filter { $0 > 0 }
-                    .max()
-                let maxReps = repetitionSets
-                    .map(resolvedWorkoutSetReps)
-                    .max()
-                let oneRepMax = repetitionSets
-                    .map { set -> Double in
-                        let weight = resolvedWorkoutSetWeight(set)
-                        let reps = Double(resolvedWorkoutSetReps(set))
-                        return weight > 0 ? weight * (1 + reps / 30) : 0
-                    }
-                    .filter { $0 > 0 }
-                    .max()
-                let volume = repetitionSets.reduce(0.0) { partial, set in
-                    partial + resolvedWorkoutSetWeight(set) * Double(resolvedWorkoutSetReps(set))
-                }
-
-                guard completedSets.isEmpty == false || historicalExercise.userNote.isEmpty == false else {
-                    return nil
-                }
-
-                return WorkoutExerciseHistoryEntry(
-                    exerciseID: historicalExercise.id,
-                    sessionID: session.id,
-                    date: session.endedAt ?? session.createdAt,
-                    completedSetCount: completedSets.count,
-                    estimatedOneRepMax: oneRepMax,
-                    maxWeight: maxWeight,
-                    maxReps: maxReps,
-                    volume: volume > 0 ? volume : nil,
-                    userNote: historicalExercise.userNote
-                )
+                return workoutExerciseHistoryEntry(for: historicalExercise, in: session)
             }
         }
         .sorted { $0.date > $1.date }
 }
 
-private func normalizedWorkoutExerciseName(_ name: String) -> String {
+func workoutExerciseHistoryEntry(
+    for exercise: WorkoutExercise,
+    in session: WorkoutSession
+) -> WorkoutExerciseHistoryEntry? {
+    let completedSets = exercise.setItems.filter(\.isCompleted)
+    let repetitionSets = completedSets.filter {
+        $0.metricType == .reps && resolvedWorkoutSetReps($0) > 0
+    }
+    let maxWeight = repetitionSets
+        .map(resolvedWorkoutSetWeight)
+        .filter { $0 > 0 }
+        .max()
+    let maxReps = repetitionSets
+        .map(resolvedWorkoutSetReps)
+        .max()
+    let oneRepMax = repetitionSets
+        .map { set -> Double in
+            let weight = resolvedWorkoutSetWeight(set)
+            let reps = Double(resolvedWorkoutSetReps(set))
+            return weight > 0 ? weight * (1 + reps / 30) : 0
+        }
+        .filter { $0 > 0 }
+        .max()
+    let volume = repetitionSets.reduce(0.0) { partial, set in
+        partial + resolvedWorkoutSetWeight(set) * Double(resolvedWorkoutSetReps(set))
+    }
+
+    guard completedSets.isEmpty == false || exercise.userNote.isEmpty == false else {
+        return nil
+    }
+
+    return WorkoutExerciseHistoryEntry(
+        exerciseID: exercise.id,
+        sessionID: session.id,
+        date: session.endedAt ?? session.createdAt,
+        completedSetCount: completedSets.count,
+        estimatedOneRepMax: oneRepMax,
+        maxWeight: maxWeight,
+        maxReps: maxReps,
+        volume: volume > 0 ? volume : nil,
+        userNote: exercise.userNote
+    )
+}
+
+func normalizedWorkoutExerciseName(_ name: String) -> String {
     name
         .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
         .split(whereSeparator: \.isWhitespace)
@@ -1202,7 +1208,7 @@ private struct WorkoutExerciseMetricCard: View {
     }
 }
 
-private struct WorkoutPersonalBestCard: View {
+struct WorkoutPersonalBestCard: View {
     let title: String
     let value: String
     let icon: String
@@ -1236,7 +1242,7 @@ private struct WorkoutPersonalBestCard: View {
     }
 }
 
-private struct WorkoutExerciseHistoryRow: View {
+struct WorkoutExerciseHistoryRow: View {
     let entry: WorkoutExerciseHistoryEntry
 
     private var summary: String {
@@ -1286,7 +1292,7 @@ private struct WorkoutExerciseHistoryRow: View {
     }
 }
 
-private struct WorkoutExerciseEmptyHistoryCard: View {
+struct WorkoutExerciseEmptyHistoryCard: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "chart.bar.xaxis")

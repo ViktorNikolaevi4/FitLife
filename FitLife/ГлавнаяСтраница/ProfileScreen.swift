@@ -863,6 +863,39 @@ private struct ProfileHeroCard: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+
+                Rectangle()
+                    .fill(theme.border.opacity(theme.isDark ? 0.70 : 0.55))
+                    .frame(height: 1)
+                    .padding(.top, 2)
+
+                NavigationLink {
+                    WorkoutExerciseRecordsLibraryScreen()
+                } label: {
+                    HStack(spacing: 12) {
+                        ProfileIconTile(systemImage: "trophy.fill", tint: theme.accent, size: 40, cornerRadius: 12)
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(AppLocalizer.string("profile.exercise_records.title"))
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(theme.primaryText)
+
+                            Text(AppLocalizer.string("profile.exercise_records.subtitle"))
+                                .font(.caption)
+                                .foregroundStyle(theme.secondaryText)
+                                .lineLimit(2)
+                        }
+
+                        Spacer(minLength: 8)
+
+                        Image(systemName: "chevron.right")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(theme.tertiaryText)
+                    }
+                    .padding(.vertical, 2)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
