@@ -1288,6 +1288,8 @@
 "profile.exercise_records.personal_bests" = "Personal bests";
 "profile.exercise_records.completed_only" = "From completed sets";
 "profile.exercise_records.one_rep_max" = "Estimated 1RM";
+"profile.exercise_records.achieved_one_rep_max" = "Achieved 1RM";
+"profile.exercise_records.ten_rep_max" = "10RM";
 "profile.exercise_records.max_weight" = "Maximum weight";
 "profile.exercise_records.max_reps" = "Maximum reps";
 "profile.exercise_records.max_volume" = "Maximum volume";

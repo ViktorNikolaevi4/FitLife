@@ -16,6 +16,7 @@ enum CoachingReportDeliveryStatus: Equatable {
 
 private struct PendingCoachingReportDelivery: Codable, Identifiable {
     let id: String
+    let targetId: String?
     let clientId: String
     let collection: String
     let reportData: Data
@@ -77,6 +78,7 @@ actor CoachingReportDeliveryOutbox {
         )
         return try await enqueueAndStart(
             id: report.id,
+            targetId: report.id,
             clientId: report.clientId,
             collection: "coaching_workout_reports",
             reportData: report.firestoreData,
@@ -97,10 +99,11 @@ actor CoachingReportDeliveryOutbox {
             senderId: report.clientId,
             senderName: senderName,
             targetType: .nutritionReport,
-            targetId: report.id
+            targetId: report.firestoreDocumentId
         )
         return try await enqueueAndStart(
             id: report.id,
+            targetId: report.firestoreDocumentId,
             clientId: report.clientId,
             collection: "coaching_nutrition_reports",
             reportData: report.firestoreData,
@@ -128,6 +131,7 @@ actor CoachingReportDeliveryOutbox {
 
     private func enqueueAndStart(
         id: String,
+        targetId: String,
         clientId: String,
         collection: String,
         reportData: [String: Any],
@@ -139,6 +143,7 @@ actor CoachingReportDeliveryOutbox {
         if deliveries.contains(where: { $0.id == id }) == false {
             let pending = PendingCoachingReportDelivery(
                 id: id,
+                targetId: targetId,
                 clientId: clientId,
                 collection: collection,
                 reportData: try encodePropertyList(reportData),
@@ -198,7 +203,9 @@ actor CoachingReportDeliveryOutbox {
         }
 
         do {
-            let reportRef = firestore.collection(pending.collection).document(pending.id)
+            // Старые элементы очереди не содержат targetId и продолжают
+            // доставляться в прежний документ с идентификатором отправки.
+            let reportRef = firestore.collection(pending.collection).document(pending.targetId ?? pending.id)
 
             if cancelledClientIDs.contains(pending.clientId) {
                 deliveries.removeAll { $0.id == id }

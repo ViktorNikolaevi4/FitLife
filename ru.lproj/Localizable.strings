@@ -1288,6 +1288,8 @@
 "profile.exercise_records.personal_bests" = "Личные рекорды";
 "profile.exercise_records.completed_only" = "По выполненным подходам";
 "profile.exercise_records.one_rep_max" = "Расчётный 1ПМ";
+"profile.exercise_records.achieved_one_rep_max" = "Реализованный 1ПМ";
+"profile.exercise_records.ten_rep_max" = "10ПМ";
 "profile.exercise_records.max_weight" = "Максимальный вес";
 "profile.exercise_records.max_reps" = "Максимум повторений";
 "profile.exercise_records.max_volume" = "Максимальный объём";

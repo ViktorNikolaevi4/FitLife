@@ -439,6 +439,16 @@ private struct WorkoutExerciseRecordDetailScreen: View {
                     icon: "chart.line.uptrend.xyaxis"
                 )
                 WorkoutPersonalBestCard(
+                    title: AppLocalizer.string("profile.exercise_records.achieved_one_rep_max"),
+                    value: record.personalBests.achievedOneRepMax.map { "\(formattedWorkoutWeight($0)) \(AppLocalizer.string("unit.kg"))" } ?? "—",
+                    icon: "medal.fill"
+                )
+                WorkoutPersonalBestCard(
+                    title: AppLocalizer.string("profile.exercise_records.ten_rep_max"),
+                    value: record.personalBests.tenRepMax.map { "\(formattedWorkoutWeight($0)) \(AppLocalizer.string("unit.kg"))" } ?? "—",
+                    icon: "10.circle.fill"
+                )
+                WorkoutPersonalBestCard(
                     title: AppLocalizer.string("profile.exercise_records.max_weight"),
                     value: record.personalBests.maxWeight.map { "\(formattedWorkoutWeight($0)) \(AppLocalizer.string("unit.kg"))" } ?? "—",
                     icon: "dumbbell.fill"

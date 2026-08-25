@@ -10,14 +10,14 @@ struct ClientCoachingEntryScreen: View {
     @Query(sort: \BodyMeasurements.date, order: .reverse) private var measurements: [BodyMeasurements]
     @StateObject private var store: ClientCoachingStore
     @State private var isEditing = false
-    @State private var didAcknowledgeApprovedConnection: Bool
+    @State private var isApprovalBannerPresented: Bool
 
     init(clientId: String, opensChatInitially: Bool = false) {
         self.clientId = clientId
         self.opensChatInitially = opensChatInitially
         _store = StateObject(wrappedValue: ClientCoachingStore(clientId: clientId))
-        _didAcknowledgeApprovedConnection = State(
-            initialValue: UserDefaults.standard.bool(forKey: Self.approvedIntroSeenKey(for: clientId))
+        _isApprovalBannerPresented = State(
+            initialValue: !UserDefaults.standard.bool(forKey: Self.approvedIntroSeenKey(for: clientId))
         )
     }
 
@@ -27,11 +27,6 @@ struct ClientCoachingEntryScreen: View {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color(.systemGroupedBackground))
-            } else if store.activeLink != nil && didAcknowledgeApprovedConnection == false {
-                ClientCoachingApprovedScreen(trainer: store.trainerProfile) {
-                    UserDefaults.standard.set(true, forKey: Self.approvedIntroSeenKey(for: clientId))
-                    didAcknowledgeApprovedConnection = true
-                }
             } else if store.activeLink != nil {
                 ClientCoachingLinkedScreen(
                     clientId: clientId,
@@ -49,6 +44,29 @@ struct ClientCoachingEntryScreen: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .overlay(alignment: .top) {
+            if store.activeLink != nil && isApprovalBannerPresented {
+                ClientCoachingApprovalBanner(trainer: store.trainerProfile) {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        isApprovalBannerPresented = false
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(10)
+            }
+        }
+        .task(id: store.activeLink?.id) {
+            guard store.activeLink != nil, isApprovalBannerPresented else { return }
+            UserDefaults.standard.set(true, forKey: Self.approvedIntroSeenKey(for: clientId))
+
+            try? await Task.sleep(for: .seconds(4))
+            guard Task.isCancelled == false else { return }
+            withAnimation(.easeOut(duration: 0.2)) {
+                isApprovalBannerPresented = false
+            }
+        }
         .task(id: sessionStore.profile?.id) {
             guard let profile = sessionStore.profile else { return }
             await store.load(
@@ -625,64 +643,44 @@ private struct ClientCoachingStatusScreen: View {
     }
 }
 
-private struct ClientCoachingApprovedScreen: View {
+private struct ClientCoachingApprovalBanner: View {
     let trainer: AppUserProfile?
-    let onContinue: () -> Void
+    let onDismiss: () -> Void
 
     var body: some View {
-        VStack(spacing: 24) {
-            Spacer(minLength: 40)
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.title2)
+                .foregroundStyle(.green)
 
-            VStack(spacing: 18) {
-                ZStack {
-                    Circle()
-                        .fill(Color.accentColor.opacity(0.14))
-                    Image(systemName: "checkmark.seal.fill")
-                        .font(.system(size: 50, weight: .semibold))
-                        .foregroundStyle(Color.accentColor)
-                }
-                .frame(width: 104, height: 104)
-
-                VStack(spacing: 10) {
-                    Text(AppLocalizer.string("coaching.approved.title"))
-                        .font(.largeTitle.weight(.bold))
-                        .multilineTextAlignment(.center)
-
-                    Text(approvedMessage)
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(AppLocalizer.string("coaching.approved.title"))
+                    .font(.subheadline.weight(.semibold))
+                Text(approvedMessage)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
             }
-            .padding(.horizontal, 24)
 
-            Button {
-                onContinue()
-            } label: {
-                HStack(spacing: 10) {
-                    Text(AppLocalizer.string("coaching.approved.action"))
-                    Image(systemName: "arrow.right")
-                }
-                .font(.headline.weight(.semibold))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 15)
+            Spacer(minLength: 0)
+
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(Color.secondary.opacity(0.12)))
             }
-            .buttonStyle(.borderedProminent)
-            .padding(.horizontal, 24)
-
-            Text(AppLocalizer.string("coaching.approved.hint"))
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 30)
-
-            Spacer(minLength: 80)
+            .buttonStyle(.plain)
+            .accessibilityLabel(AppLocalizer.string("common.close"))
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
-        .navigationTitle(AppLocalizer.string("workouts.connection"))
-        .navigationBarTitleDisplayMode(.inline)
+        .padding(14)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.green.opacity(0.28), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.12), radius: 14, y: 6)
     }
 
     private var approvedMessage: String {

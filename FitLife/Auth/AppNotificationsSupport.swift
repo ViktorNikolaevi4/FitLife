@@ -767,7 +767,9 @@ struct AppNotificationDestinationScreen: View {
             switch notification.type {
             case .coachNoteReceived:
                 ClientCoachingEntryScreen(clientId: profile.id, opensChatInitially: true)
-            case .profileUpdateRequested, .coachingRequestApproved, .coachingRequestRejected:
+            case .coachingRequestApproved:
+                ClientCoachingEntryScreen(clientId: profile.id)
+            case .profileUpdateRequested, .coachingRequestRejected:
                 ClientNotificationBridgeScreen(notification: notification, clientId: profile.id)
             case .coachingRequestSubmitted, .workoutReportSent, .nutritionReportSent, .checkInSubmitted, .clientNoteReceived, .workoutAssigned:
                 ClientCoachingEntryScreen(clientId: profile.id)

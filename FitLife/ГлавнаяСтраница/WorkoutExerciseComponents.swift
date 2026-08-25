@@ -122,6 +122,8 @@ struct WorkoutExerciseHistoryEntry: Identifiable {
     let date: Date
     let completedSetCount: Int
     let estimatedOneRepMax: Double?
+    let achievedOneRepMax: Double?
+    let tenRepMax: Double?
     let maxWeight: Double?
     let maxReps: Int?
     let volume: Double?
@@ -132,12 +134,16 @@ struct WorkoutExerciseHistoryEntry: Identifiable {
 
 struct WorkoutExercisePersonalBests {
     let estimatedOneRepMax: Double?
+    let achievedOneRepMax: Double?
+    let tenRepMax: Double?
     let maxWeight: Double?
     let maxReps: Int?
     let maxVolume: Double?
 
     init(history: [WorkoutExerciseHistoryEntry]) {
         estimatedOneRepMax = history.compactMap(\.estimatedOneRepMax).max()
+        achievedOneRepMax = history.compactMap(\.achievedOneRepMax).max()
+        tenRepMax = history.compactMap(\.tenRepMax).max()
         maxWeight = history.compactMap(\.maxWeight).max()
         maxReps = history.compactMap(\.maxReps).max()
         maxVolume = history.compactMap(\.volume).max()
@@ -190,6 +196,16 @@ func workoutExerciseHistoryEntry(
         }
         .filter { $0 > 0 }
         .max()
+    let achievedOneRepMax = repetitionSets
+        .filter { resolvedWorkoutSetReps($0) == 1 }
+        .map(resolvedWorkoutSetWeight)
+        .filter { $0 > 0 }
+        .max()
+    let tenRepMax = repetitionSets
+        .filter { resolvedWorkoutSetReps($0) >= 10 }
+        .map(resolvedWorkoutSetWeight)
+        .filter { $0 > 0 }
+        .max()
     let volume = repetitionSets.reduce(0.0) { partial, set in
         partial + resolvedWorkoutSetWeight(set) * Double(resolvedWorkoutSetReps(set))
     }
@@ -204,6 +220,8 @@ func workoutExerciseHistoryEntry(
         date: session.endedAt ?? session.createdAt,
         completedSetCount: completedSets.count,
         estimatedOneRepMax: oneRepMax,
+        achievedOneRepMax: achievedOneRepMax,
+        tenRepMax: tenRepMax,
         maxWeight: maxWeight,
         maxReps: maxReps,
         volume: volume > 0 ? volume : nil,
@@ -641,6 +659,16 @@ struct WorkoutExerciseDetailScreen: View {
                     title: "Расчётный 1ПМ",
                     value: personalBests.estimatedOneRepMax.map { "\(formattedWorkoutWeight($0)) кг" } ?? "—",
                     icon: "chart.line.uptrend.xyaxis"
+                )
+                WorkoutPersonalBestCard(
+                    title: "Реализованный 1ПМ",
+                    value: personalBests.achievedOneRepMax.map { "\(formattedWorkoutWeight($0)) кг" } ?? "—",
+                    icon: "medal.fill"
+                )
+                WorkoutPersonalBestCard(
+                    title: "10ПМ",
+                    value: personalBests.tenRepMax.map { "\(formattedWorkoutWeight($0)) кг" } ?? "—",
+                    icon: "10.circle.fill"
                 )
                 WorkoutPersonalBestCard(
                     title: "Максимальный вес",

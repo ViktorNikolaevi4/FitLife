@@ -116,6 +116,12 @@ struct CoachingNutritionReport: Identifiable, Hashable {
     let carbGoal: Int
     let meals: [CoachingNutritionMealSnapshot]
 
+    /// Один документ Firestore на клиента, тренера и календарный день.
+    /// `id` остаётся уникальным идентификатором попытки отправки для outbox.
+    var firestoreDocumentId: String {
+        "\(clientId)_\(trainerId)_\(Int(dateFrom.timeIntervalSince1970))"
+    }
+
     init(
         id: String = UUID().uuidString,
         clientId: String,

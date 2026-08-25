@@ -1,6 +1,15 @@
 {
   "indexes": [
     {
+      "collectionGroup": "progress_checkins",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "clientId", "order": "ASCENDING" },
+        { "fieldPath": "trainerId", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "coaching_nutrition_reports",
       "queryScope": "COLLECTION",
       "fields": [

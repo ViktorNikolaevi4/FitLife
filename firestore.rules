@@ -272,7 +272,11 @@ service cloud.firestore {
         || (
           isClient()
           && resource.data.clientId == request.auth.uid
-          && request.resource.data == resource.data
+          && request.resource.data.clientId == resource.data.clientId
+          && request.resource.data.trainerId == resource.data.trainerId
+          && request.resource.data.dateFrom == resource.data.dateFrom
+          && request.resource.data.dateTo == resource.data.dateTo
+          && request.resource.data.createdAt >= resource.data.createdAt
         );
 
       allow delete: if isOwner()
