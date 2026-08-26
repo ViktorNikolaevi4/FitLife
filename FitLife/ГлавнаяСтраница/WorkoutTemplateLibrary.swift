@@ -4,7 +4,7 @@ import UIKit
 
 enum WorkoutExerciseIcon {
     static let cleanAndJerk = "CleanAndJerk"
-    static let barbellClean = "Взятие на грудь"
+    static let barbellClean = "Взятие на грудь 1"
     static let horizontalPullUps = "Горизонтальные подтягивания"
     static let hangingLegRaise = "Подъём ног в висе"
     static let lyingLegRaise = "Подъём ног лежа"
@@ -34,6 +34,8 @@ enum WorkoutExerciseIcon {
     static let dumbbellPullover = "Пуловер с гантелью"
     static let shoulderPress = "ЖимНаПлечи"
     static let standingBarbellPress = "Жим штанги стоя"
+    static let barbellPushPress = "Швунг со штангой"
+    static let dumbbellPushPress = "Швунг с гантелями"
     static let seatedDumbbellPress = "Жим гантелей сидя"
     static let arnoldPress = "Жим Арнольда"
     static let machineShoulderPress = "Жим плечами в тренажёре"
@@ -62,6 +64,7 @@ enum WorkoutExerciseIcon {
     static let machineHipAbduction = "Отведение ног в тренажёре "
     static let bandedSeatedHipAbduction = "Отведение ног с резинкой сидя"
     static let stepUpKneeDrive = "Подъём на платформу с подъёмом колена"
+    static let boxStepUp = "Зашагивания на тумбу"
     static let biceps = "Бицепс"
     static let barbellBicepsCurl = "Сгибание штанги на бицепс"
     static let ezBarBicepsCurl = "Сгибание EZ-штанги на бицепс"
@@ -447,6 +450,26 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.barbell_push_press"),
+            systemImage: WorkoutExerciseIcon.barbellPushPress,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 6.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 30, reps: 8)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.dumbbell_push_press"),
+            systemImage: WorkoutExerciseIcon.dumbbellPushPress,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 6.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 12, reps: 8)
+            ]
+        ),
+        WorkoutExerciseTemplate(
             name: AppLocalizer.string("workout.exercise.seated_dumbbell_press"),
             systemImage: WorkoutExerciseIcon.seatedDumbbellPress,
             accentName: "blue",
@@ -684,6 +707,16 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             metValue: 5.5,
             defaultSets: [
                 WorkoutDraftSet(weight: 0, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.box_step_up"),
+            systemImage: WorkoutExerciseIcon.boxStepUp,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 5.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, reps: 10)
             ]
         ),
         WorkoutExerciseTemplate(

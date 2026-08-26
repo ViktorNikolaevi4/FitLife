@@ -642,6 +642,8 @@
 "workout.exercise.one_arm_row" = "Тяга одной рукой";
 "workout.exercise.press" = "Жим плечами";
 "workout.exercise.standing_barbell_press" = "Жим штанги стоя";
+"workout.exercise.barbell_push_press" = "Швунг со штангой";
+"workout.exercise.dumbbell_push_press" = "Швунг с гантелями";
 "workout.exercise.seated_dumbbell_press" = "Жим гантелей сидя";
 "workout.exercise.arnold_press" = "Жим Арнольда";
 "workout.exercise.machine_shoulder_press" = "Жим плечами в тренажёре";
@@ -666,6 +668,7 @@
 "workout.exercise.machine_hip_abduction" = "Отведение ног в тренажёре";
 "workout.exercise.banded_seated_hip_abduction" = "Отведение ног с резинкой сидя";
 "workout.exercise.step_up_knee_drive" = "Подъём на платформу с подъёмом колена";
+"workout.exercise.box_step_up" = "Зашагивания на тумбу";
 "workout.exercise.core" = "Пресс";
 "workout.exercise.lower_abs" = "Пресс нижний";
 "workout.exercise.biceps" = "Бицепс";

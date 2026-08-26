@@ -642,6 +642,8 @@
 "workout.exercise.one_arm_row" = "One-Arm Row";
 "workout.exercise.press" = "Shoulder Press";
 "workout.exercise.standing_barbell_press" = "Standing Barbell Press";
+"workout.exercise.barbell_push_press" = "Barbell Push Press";
+"workout.exercise.dumbbell_push_press" = "Dumbbell Push Press";
 "workout.exercise.seated_dumbbell_press" = "Seated Dumbbell Press";
 "workout.exercise.arnold_press" = "Arnold Press";
 "workout.exercise.machine_shoulder_press" = "Machine Shoulder Press";
@@ -666,6 +668,7 @@
 "workout.exercise.machine_hip_abduction" = "Seated Hip Abduction";
 "workout.exercise.banded_seated_hip_abduction" = "Seated Banded Hip Abduction";
 "workout.exercise.step_up_knee_drive" = "Step-Up with Knee Drive";
+"workout.exercise.box_step_up" = "Box Step-Up";
 "workout.exercise.core" = "Core";
 "workout.exercise.lower_abs" = "Lower Abs";
 "workout.exercise.biceps" = "Biceps Curl";
