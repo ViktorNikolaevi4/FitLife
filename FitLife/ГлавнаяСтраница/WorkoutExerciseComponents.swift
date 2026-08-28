@@ -229,11 +229,49 @@ func workoutExerciseHistoryEntry(
     )
 }
 
-func normalizedWorkoutExerciseName(_ name: String) -> String {
+private func baseNormalizedWorkoutExerciseName(_ name: String) -> String {
     name
         .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
         .split(whereSeparator: \.isWhitespace)
         .joined(separator: " ")
+}
+
+private let workoutExerciseIdentityAliases: [String: String] = {
+    let groups: [(identity: String, names: [String])] = [
+        (
+            "catalog.barbell_bent_over_row",
+            ["Тяга в наклоне", "Тяга штанги в наклоне", "Bent-Over Row", "Barbell Bent-Over Row"]
+        ),
+        (
+            "catalog.one_arm_dumbbell_row",
+            ["Тяга одной рукой", "Тяга гантели одной рукой", "One-Arm Row", "One-Arm Dumbbell Row"]
+        ),
+        (
+            "catalog.classic_deadlift",
+            ["Становая тяга", "Классическая становая тяга", "Deadlift", "Conventional Deadlift"]
+        ),
+        (
+            "catalog.barbell_snatch",
+            ["Рывок", "Рывок штанги", "Snatch", "Barbell Snatch"]
+        ),
+        (
+            "catalog.barbell_squat",
+            ["Приседания", "Приседания со штангой", "Squats", "Barbell Squat"]
+        )
+    ]
+
+    return groups.reduce(into: [:]) { aliases, group in
+        for name in group.names {
+            aliases[baseNormalizedWorkoutExerciseName(name)] = group.identity
+        }
+    }
+}()
+
+/// Stable identity used to join exercise history even when a catalog entry was
+/// renamed, localized, or replaced with a more precise semantic equivalent.
+func normalizedWorkoutExerciseName(_ name: String) -> String {
+    let normalizedName = baseNormalizedWorkoutExerciseName(name)
+    return workoutExerciseIdentityAliases[normalizedName] ?? normalizedName
 }
 
 private func resolvedWorkoutSetWeight(_ set: WorkoutSet) -> Double {

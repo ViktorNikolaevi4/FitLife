@@ -70,6 +70,10 @@ struct WorkoutExerciseRecordsLibraryScreen: View {
             guard let ownerID, ownerID.isEmpty == false else { return true }
             return session.ownerId == ownerID
         }
+        let catalogTemplates = Dictionary(
+            workoutTemplates().map { (normalizedWorkoutExerciseName($0.name), $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
 
         var accumulators: [String: WorkoutExerciseRecordAccumulator] = [:]
         for session in sessions {
@@ -88,10 +92,11 @@ struct WorkoutExerciseRecordsLibraryScreen: View {
                     accumulator.history.append(entry)
                     accumulators[key] = accumulator
                 } else {
+                    let catalogTemplate = catalogTemplates[key]
                     accumulators[key] = WorkoutExerciseRecordAccumulator(
-                        name: exercise.name,
-                        systemImage: exercise.systemImage,
-                        accentName: exercise.accentName,
+                        name: catalogTemplate?.name ?? exercise.name,
+                        systemImage: catalogTemplate?.systemImage ?? exercise.systemImage,
+                        accentName: catalogTemplate?.accentName ?? exercise.accentName,
                         sessionIDs: [session.id],
                         history: [entry]
                     )
