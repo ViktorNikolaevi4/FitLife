@@ -104,37 +104,28 @@ struct WorkoutCompletionSummaryScreen: View {
     }
 
     private var metricsGrid: some View {
-        LazyVGrid(
-            columns: [
-                GridItem(.flexible(), spacing: 12),
-                GridItem(.flexible(), spacing: 12)
-            ],
-            spacing: 12
-        ) {
-            WorkoutCompletionMetricCard(
-                title: "Длительность",
-                value: formattedDuration,
-                icon: "clock.fill",
-                tint: .blue
-            )
+        VStack(spacing: 12) {
             WorkoutCompletionMetricCard(
                 title: "Калории",
                 value: "\(workout.estimatedCalories) ккал",
                 icon: "flame.fill",
                 tint: .orange
             )
-            WorkoutCompletionMetricCard(
-                title: "Упражнения",
-                value: "\(completedExerciseCount) из \(exerciseCount)",
-                icon: "figure.strengthtraining.traditional",
-                tint: .indigo
-            )
-            WorkoutCompletionMetricCard(
-                title: "Подходы",
-                value: "\(completedSetCount) из \(setGroups.count)",
-                icon: "square.stack.3d.up.fill",
-                tint: .green
-            )
+
+            HStack(spacing: 12) {
+                WorkoutCompletionMetricCard(
+                    title: "Упражнения",
+                    value: "\(completedExerciseCount) из \(exerciseCount)",
+                    icon: "figure.strengthtraining.traditional",
+                    tint: .indigo
+                )
+                WorkoutCompletionMetricCard(
+                    title: "Подходы",
+                    value: "\(completedSetCount) из \(setGroups.count)",
+                    icon: "square.stack.3d.up.fill",
+                    tint: .green
+                )
+            }
         }
     }
 
@@ -272,16 +263,6 @@ struct WorkoutCompletionSummaryScreen: View {
             return "Активная тренировка"
         }
         return trimmed
-    }
-
-    private var formattedDuration: String {
-        let seconds = max(0, workout.elapsedSeconds)
-        let hours = seconds / 3_600
-        let minutes = (seconds % 3_600) / 60
-        if hours > 0 {
-            return "\(hours) ч \(minutes) мин"
-        }
-        return "\(max(1, minutes)) мин"
     }
 
     @MainActor

@@ -124,6 +124,47 @@ final class HealthKitStepsStore: ObservableObject {
         return hasLoadedSteps && Calendar.current.isDate(loadedDay, inSameDayAs: date)
     }
 
+    func recentSevenDays(endingAt date: Date = .now) async -> [HealthKitDailySteps]? {
+        guard isAvailable, let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else {
+            errorMessage = AppLocalizer.string("health.steps.unavailable")
+            return nil
+        }
+
+        isLoading = true
+        errorMessage = nil
+        warningMessage = nil
+        shouldOpenSettingsForPermission = false
+
+        do {
+            authorizationNeedsRequest = try await needsAuthorizationRequest(for: stepType)
+            if authorizationNeedsRequest {
+                isLoading = false
+                errorMessage = AppLocalizer.string("health.steps.error.authorization_required")
+                return nil
+            }
+
+            let calendar = Calendar.current
+            let endDay = calendar.startOfDay(for: date)
+            guard let startDay = calendar.date(byAdding: .day, value: -6, to: endDay) else {
+                isLoading = false
+                return nil
+            }
+            let values = try await cumulativeStepsByDay(
+                type: stepType,
+                startDay: startDay,
+                dayCount: 7
+            )
+            isLoading = false
+            return values
+        } catch {
+            logger.warning("Recent HealthKit steps query failed: \(error.localizedDescription, privacy: .public)")
+            shouldOpenSettingsForPermission = isPermissionError(error)
+            errorMessage = healthKitErrorMessage(for: error)
+            isLoading = false
+            return nil
+        }
+    }
+
     private func needsAuthorizationRequest(for stepType: HKQuantityType) async throws -> Bool {
         try await withCheckedThrowingContinuation { continuation in
             healthStore.getRequestStatusForAuthorization(toShare: [], read: [stepType]) { status, error in
@@ -206,22 +247,34 @@ final class HealthKitStepsStore: ObservableObject {
         let selectedDay = calendar.startOfDay(for: date)
         let weekday = calendar.component(.weekday, from: selectedDay)
         let distanceFromMonday = (weekday + 5) % 7
-        guard
-            let weekStart = calendar.date(byAdding: .day, value: -distanceFromMonday, to: selectedDay),
-            let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart)
-        else { return [] }
+        guard let weekStart = calendar.date(byAdding: .day, value: -distanceFromMonday, to: selectedDay) else {
+            return []
+        }
+
+        return try await cumulativeStepsByDay(type: type, startDay: weekStart, dayCount: 7)
+    }
+
+    private func cumulativeStepsByDay(
+        type: HKQuantityType,
+        startDay: Date,
+        dayCount: Int
+    ) async throws -> [HealthKitDailySteps] {
+        let calendar = Calendar.current
+        guard let rangeEnd = calendar.date(byAdding: .day, value: dayCount, to: startDay) else {
+            return []
+        }
 
         return try await withCheckedThrowingContinuation { continuation in
             let predicate = HKQuery.predicateForSamples(
-                withStart: weekStart,
-                end: weekEnd,
+                withStart: startDay,
+                end: rangeEnd,
                 options: [.strictStartDate, .strictEndDate]
             )
             let query = HKStatisticsCollectionQuery(
                 quantityType: type,
                 quantitySamplePredicate: predicate,
                 options: .cumulativeSum,
-                anchorDate: weekStart,
+                anchorDate: startDay,
                 intervalComponents: DateComponents(day: 1)
             )
 
@@ -237,16 +290,16 @@ final class HealthKitStepsStore: ObservableObject {
 
                 var valuesByDay: [Date: Int] = [:]
                 collection?.enumerateStatistics(
-                    from: weekStart,
-                    to: weekEnd.addingTimeInterval(-1)
+                    from: startDay,
+                    to: rangeEnd.addingTimeInterval(-1)
                 ) { statistics, _ in
                     let day = calendar.startOfDay(for: statistics.startDate)
                     let value = statistics.sumQuantity()?.doubleValue(for: .count()) ?? 0
                     valuesByDay[day] = max(0, Int(value.rounded()))
                 }
 
-                let values = (0..<7).compactMap { offset -> HealthKitDailySteps? in
-                    guard let day = calendar.date(byAdding: .day, value: offset, to: weekStart) else {
+                let values = (0..<dayCount).compactMap { offset -> HealthKitDailySteps? in
+                    guard let day = calendar.date(byAdding: .day, value: offset, to: startDay) else {
                         return nil
                     }
                     return HealthKitDailySteps(date: day, steps: valuesByDay[day] ?? 0)

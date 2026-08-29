@@ -12,6 +12,7 @@ struct WorkoutBlockRunnerScreen: View {
 
     @State private var now = Date()
     @State private var showSkipConfirmation = false
+    @State private var showCompleteBlockConfirmation = false
     @State private var showRestartConfirmation = false
     @State private var lastCuedPhaseEnd: Date?
     @State private var lastCuedSecond: Int?
@@ -32,6 +33,11 @@ struct WorkoutBlockRunnerScreen: View {
 
     private var isTimedBlock: Bool {
         isIntervalBlock || block.mode == .amrap || block.mode == .emom || preset == .forTime
+    }
+
+    private var isRestPhase: Bool {
+        block.runnerPhase == .rest ||
+            (block.runnerPhase == .paused && block.phaseBeforePause == .rest)
     }
 
     private var currentExercise: WorkoutExercise? {
@@ -59,7 +65,14 @@ struct WorkoutBlockRunnerScreen: View {
         switch block.runnerPhase {
         case .rest:
             return max(block.restSeconds > 0 ? block.restSeconds : block.restBetweenRoundsSeconds, 1)
-        case .work, .paused:
+        case .paused:
+            if block.phaseBeforePause == .rest {
+                return max(block.restSeconds > 0 ? block.restSeconds : block.restBetweenRoundsSeconds, 1)
+            }
+            if isIntervalBlock { return max(block.workSeconds, 1) }
+            if block.mode == .emom { return emomIntervalSeconds }
+            return max(block.durationMinutes * 60, 1)
+        case .work:
             if isIntervalBlock { return max(block.workSeconds, 1) }
             if block.mode == .emom { return emomIntervalSeconds }
             return max(block.durationMinutes * 60, 1)
@@ -88,6 +101,8 @@ struct WorkoutBlockRunnerScreen: View {
 
                 if isTimedBlock {
                     timerCard
+                } else if isRestPhase {
+                    restCountdownCard
                 }
 
                 if isIntervalBlock {
@@ -96,7 +111,7 @@ struct WorkoutBlockRunnerScreen: View {
 
                 exerciseSequenceCard
 
-                if block.restBetweenRoundsSeconds > 0 && isIntervalBlock == false {
+                if block.restBetweenRoundsSeconds > 0 && isIntervalBlock == false && isRestPhase == false {
                     infoCard(
                         icon: "timer",
                         title: "Отдых после раунда",
@@ -108,12 +123,36 @@ struct WorkoutBlockRunnerScreen: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
-            .padding(.bottom, 150)
+            .padding(.bottom, 230)
         }
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .navigationTitle(block.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
+        .toolbar {
+            if showsBlockActionsMenu {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button {
+                            showCompleteBlockConfirmation = true
+                        } label: {
+                            Label(completeBlockActionTitle, systemImage: "checkmark.circle")
+                        }
+
+                        Button(role: .destructive) {
+                            showSkipConfirmation = true
+                        } label: {
+                            Label("Пропустить блок", systemImage: "forward.end.fill")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.headline.weight(.semibold))
+                            .frame(width: 34, height: 34)
+                    }
+                    .accessibilityLabel("Действия с блоком")
+                }
+            }
+        }
         .safeAreaInset(edge: .bottom) {
             controls
                 .padding(.horizontal, 16)
@@ -129,6 +168,18 @@ struct WorkoutBlockRunnerScreen: View {
             now = date
             playTimerCueIfNeeded()
             handleTimerTick()
+        }
+        .confirmationDialog(
+            "Завершить весь блок?",
+            isPresented: $showCompleteBlockConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Да, отметить всё выполненным") {
+                completeEntireBlock()
+            }
+            Button("Продолжить тренировку", role: .cancel) {}
+        } message: {
+            Text("Все оставшиеся упражнения, подходы и раунды будут отмечены выполненными.")
         }
         .confirmationDialog(
             "Пропустить блок?",
@@ -256,6 +307,46 @@ struct WorkoutBlockRunnerScreen: View {
         .padding(18)
         .background(RoundedRectangle(cornerRadius: 24).fill(Color(.secondarySystemBackground)))
         .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(Color(.separator).opacity(0.35)))
+    }
+
+    private var restCountdownCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(block.runnerPhase == .paused ? "ОТДЫХ НА ПАУЗЕ" : "ОТДЫХ")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.blue)
+                    Text(formatClock(remainingSeconds))
+                        .font(.system(size: 48, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                }
+
+                Spacer()
+
+                Image(systemName: block.runnerPhase == .paused ? "pause.fill" : "timer")
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(.blue)
+                    .frame(width: 52, height: 52)
+                    .background(Circle().fill(Color.blue.opacity(0.12)))
+            }
+
+            ProgressView(value: timerProgress)
+                .tint(.blue)
+
+            Text(restNextStepTitle)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .padding(18)
+        .background(RoundedRectangle(cornerRadius: 22).fill(Color(.secondarySystemBackground)))
+        .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(Color(.separator).opacity(0.35)))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Отдых, осталось \(remainingSeconds) секунд. \(restNextStepTitle)")
+    }
+
+    private var restNextStepTitle: String {
+        let nextRound = min(block.currentRoundIndex + 2, totalRounds)
+        return "Далее: раунд \(nextRound) из \(totalRounds)"
     }
 
     private var phaseTitle: String {
@@ -500,15 +591,104 @@ struct WorkoutBlockRunnerScreen: View {
                 .padding(.vertical, 15)
                 .background(RoundedRectangle(cornerRadius: 18).strokeBorder(Color.blue, lineWidth: 1.5))
                 .buttonStyle(.plain)
-            } else {
-                Button(secondaryActionTitle, action: secondaryAction)
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(.blue)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 15)
-                    .background(RoundedRectangle(cornerRadius: 18).strokeBorder(Color.blue, lineWidth: 1.5))
+            } else if block.runnerPhase == .rest {
+                HStack {
+                    Spacer()
+                    Button {
+                        pauseTimer()
+                    } label: {
+                        Label("Пауза", systemImage: "pause.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 28)
+                            .padding(.vertical, 11)
+                    }
+                    .foregroundStyle(.secondary)
+                    .background(
+                        Capsule()
+                            .fill(Color(.secondarySystemBackground))
+                    )
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(Color(.separator).opacity(0.6), lineWidth: 1)
+                    )
                     .buttonStyle(.plain)
+                    Spacer()
+                }
+            } else if block.runnerPhase == .work {
+                if showsContextualSecondaryAction {
+                    Button(secondaryActionTitle, action: secondaryAction)
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.blue)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 13)
+                        .background(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.blue, lineWidth: 1.5))
+                        .buttonStyle(.plain)
+                }
+
+                HStack(spacing: 10) {
+                    Button {
+                        showCompleteBlockConfirmation = true
+                    } label: {
+                        Label(completeBlockActionTitle, systemImage: "checkmark.circle")
+                            .font(.subheadline.weight(.semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 13)
+                    }
+                    .foregroundStyle(.blue)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.blue.opacity(0.10))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .strokeBorder(Color.blue.opacity(0.75), lineWidth: 1.25)
+                    )
+                    .buttonStyle(.plain)
+
+                    Button {
+                        showSkipConfirmation = true
+                    } label: {
+                        Label("Пропустить", systemImage: "forward.end.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 13)
+                    }
+                    .foregroundStyle(.secondary)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(.secondarySystemBackground))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .strokeBorder(Color(.separator).opacity(0.6), lineWidth: 1)
+                    )
+                    .buttonStyle(.plain)
+                }
             }
+        }
+    }
+
+    private var showsBlockActionsMenu: Bool {
+        block.runnerPhase == .ready || block.runnerPhase == .rest || block.runnerPhase == .paused
+    }
+
+    private var showsContextualSecondaryAction: Bool {
+        if isIntervalBlock && block.runnerPhase == .work { return true }
+        if block.mode == .amrap && block.runnerPhase == .work { return true }
+        return false
+    }
+
+    private var completeBlockActionTitle: String {
+        switch preset {
+        case .superset: return "Весь суперсет"
+        case .circuit: return "Весь круг"
+        case .tabata: return "Вся табата"
+        case .clusterSet: return "Весь кластер"
+        default: return "Весь блок"
         }
     }
 
@@ -517,7 +697,7 @@ struct WorkoutBlockRunnerScreen: View {
         case .ready: return "Начать блок"
         case .paused: return "Продолжить"
         case .completed: return "Вернуться к тренировке"
-        case .rest: return "Пауза"
+        case .rest: return "Пропустить отдых"
         case .work:
             if isTimedBlock { return "Пауза" }
             return "Завершить \(currentExerciseLabel)"
@@ -528,7 +708,7 @@ struct WorkoutBlockRunnerScreen: View {
         switch block.runnerPhase {
         case .ready, .paused: return "play.fill"
         case .completed: return "checkmark.circle.fill"
-        case .rest: return "pause.fill"
+        case .rest: return "forward.end.fill"
         case .work: return isTimedBlock ? "pause.fill" : "checkmark.circle.fill"
         }
     }
@@ -557,7 +737,7 @@ struct WorkoutBlockRunnerScreen: View {
             onFinish()
             dismiss()
         case .rest:
-            pauseTimer()
+            finishRest()
         case .work:
             if isTimedBlock { pauseTimer() } else { completeCurrentExercise() }
         }
@@ -691,6 +871,17 @@ struct WorkoutBlockRunnerScreen: View {
         save()
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         onFinish()
+    }
+
+    private func completeEntireBlock() {
+        for exercise in exercises {
+            exercise.isFinished = true
+            exercise.setItems.forEach { $0.isCompleted = true }
+        }
+        if isIntervalBlock || block.mode == .emom {
+            block.completedIntervalIndexes = Set(0..<totalRounds)
+        }
+        finishBlock(markExercisesFinished: false)
     }
 
     private func restartBlock() {

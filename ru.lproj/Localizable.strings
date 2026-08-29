@@ -1423,3 +1423,17 @@
 "coaching.checkin.chat.weekly.summary" = "Самочувствие %d/10 · Сон %d/10 · Мотивация %d/10 · RPE %d/10";
 "coaching.checkin.chat.monthly.summary" = "Вес %.1f кг · Талия %.1f см";
 "coaching.checkin.chat.legacy.summary" = "Вес %.1f кг · Самочувствие %d/5 · План %d/5";
+"coaching.checkin.weekly.steps.question" = "Приложить шаги за последние 7 дней?";
+"coaching.checkin.weekly.steps.hint" = "Перед отправкой можно проверить данные Apple Health.";
+"coaching.checkin.steps.title" = "Шаги за 7 дней";
+"coaching.checkin.steps.disabled" = "Шаги Apple Health выключены в FitLife. Check-in можно отправить без них.";
+"coaching.checkin.steps.connect" = "Подключить Apple Health";
+"coaching.checkin.steps.loading" = "Загружаем активность за 7 дней…";
+"coaching.checkin.steps.attach" = "Приложить шаги к check-in";
+"coaching.checkin.steps.average" = "Среднее в день";
+"coaching.checkin.steps.total" = "Всего";
+"coaching.checkin.steps.goal_days" = "Дней с целью";
+"coaching.checkin.steps.goal" = "Дневная цель: %@ шагов";
+"coaching.checkin.steps.unavailable" = "Не удалось получить шаги за последние 7 дней.";
+"coaching.checkin.steps.retry" = "Повторить загрузку";
+"coaching.checkin.chat.steps.summary" = "В среднем %d шагов · цель выполнена %d из %d дней";

@@ -108,6 +108,35 @@ enum ProgressCheckInKind: String, Codable, Hashable {
     case monthly
 }
 
+struct CheckInDailySteps: Identifiable, Hashable {
+    let date: Date
+    let steps: Int
+
+    var id: Date { date }
+
+    init(date: Date, steps: Int) {
+        self.date = Calendar.current.startOfDay(for: date)
+        self.steps = max(0, steps)
+    }
+
+    init?(data: [String: Any]) {
+        let date: Date
+        if let timestamp = data["date"] as? Timestamp {
+            date = timestamp.dateValue()
+        } else if let storedDate = data["date"] as? Date {
+            date = storedDate
+        } else {
+            return nil
+        }
+        let steps = (data["steps"] as? NSNumber)?.intValue ?? (data["steps"] as? Int ?? 0)
+        self.init(date: date, steps: steps)
+    }
+
+    var firestoreData: [String: Any] {
+        ["date": Timestamp(date: date), "steps": steps]
+    }
+}
+
 struct ProgressCheckIn: Identifiable, Hashable {
     let id: String
     let clientId: String
@@ -128,6 +157,8 @@ struct ProgressCheckIn: Identifiable, Hashable {
     let hasPain: Bool
     let painNotes: String
     let notes: String
+    let stepGoal: Int
+    let dailySteps: [CheckInDailySteps]
     let createdAt: Date
 
     init(
@@ -135,7 +166,7 @@ struct ProgressCheckIn: Identifiable, Hashable {
         clientId: String,
         trainerId: String,
         kind: ProgressCheckInKind = .legacy,
-        schemaVersion: Int = 2,
+        schemaVersion: Int = 3,
         weight: Double,
         waist: Double,
         chest: Double,
@@ -150,6 +181,8 @@ struct ProgressCheckIn: Identifiable, Hashable {
         hasPain: Bool = false,
         painNotes: String = "",
         notes: String,
+        stepGoal: Int = 0,
+        dailySteps: [CheckInDailySteps] = [],
         createdAt: Date = .now
     ) {
         self.id = id
@@ -171,6 +204,8 @@ struct ProgressCheckIn: Identifiable, Hashable {
         self.hasPain = hasPain
         self.painNotes = painNotes
         self.notes = notes
+        self.stepGoal = max(0, stepGoal)
+        self.dailySteps = dailySteps.sorted { $0.date < $1.date }
         self.createdAt = createdAt
     }
 
@@ -211,6 +246,10 @@ struct ProgressCheckIn: Identifiable, Hashable {
         self.hasPain = data["hasPain"] as? Bool ?? false
         self.painNotes = data["painNotes"] as? String ?? ""
         self.notes = data["notes"] as? String ?? ""
+        self.stepGoal = intValue("stepGoal")
+        self.dailySteps = (data["dailySteps"] as? [[String: Any]] ?? [])
+            .compactMap(CheckInDailySteps.init(data:))
+            .sorted { $0.date < $1.date }
         if let timestamp = data["createdAt"] as? Timestamp {
             self.createdAt = timestamp.dateValue()
         } else {
@@ -238,12 +277,21 @@ struct ProgressCheckIn: Identifiable, Hashable {
             "hasPain": hasPain,
             "painNotes": painNotes,
             "notes": notes,
+            "stepGoal": stepGoal,
+            "dailySteps": dailySteps.map(\.firestoreData),
             "createdAt": createdAt
         ]
     }
 
     var includesWellbeing: Bool { kind != .monthly }
     var includesMeasurements: Bool { kind != .weekly }
+    var hasStepSnapshot: Bool { dailySteps.isEmpty == false }
+    var totalSteps: Int { dailySteps.reduce(0) { $0 + $1.steps } }
+    var averageSteps: Int { dailySteps.isEmpty ? 0 : totalSteps / dailySteps.count }
+    var stepGoalDays: Int {
+        guard stepGoal > 0 else { return 0 }
+        return dailySteps.filter { $0.steps >= stepGoal }.count
+    }
 }
 
 struct ProfileUpdateRequest: Identifiable, Hashable {
@@ -1001,6 +1049,8 @@ final class ClientCoachingHomeStore: ObservableObject {
         hasPain: Bool,
         painNotes: String,
         notes: String,
+        stepGoal: Int = 0,
+        dailySteps: [CheckInDailySteps] = [],
         senderName: String = ""
     ) async {
         let checkIn = ProgressCheckIn(
@@ -1021,7 +1071,9 @@ final class ClientCoachingHomeStore: ObservableObject {
             rpe: rpe,
             hasPain: hasPain,
             painNotes: painNotes.trimmingCharacters(in: .whitespacesAndNewlines),
-            notes: notes
+            notes: notes,
+            stepGoal: stepGoal,
+            dailySteps: dailySteps
         )
 
         await submit(checkIn, senderName: senderName)
@@ -3545,7 +3597,89 @@ private struct CoachingCheckInDetailScreen: View {
                 metricTile("coaching.checkin.adherence", value: checkIn.adherence, icon: "checkmark.circle.fill")
                 metricTile("coaching.checkin.rpe", value: checkIn.rpe, icon: "chart.line.uptrend.xyaxis")
             }
+
+            if checkIn.hasStepSnapshot {
+                stepsSnapshotCard
+                    .padding(.top, 6)
+            }
         }
+    }
+
+    private var stepsSnapshotCard: some View {
+        let maximum = max(checkIn.dailySteps.map(\.steps).max() ?? 0, checkIn.stepGoal, 1)
+
+        return VStack(alignment: .leading, spacing: 16) {
+            Label(AppLocalizer.string("coaching.checkin.steps.title"), systemImage: "shoeprints.fill")
+                .font(.title3.weight(.bold))
+                .foregroundStyle(.primary)
+
+            HStack(spacing: 12) {
+                stepStatistic(
+                    title: AppLocalizer.string("coaching.checkin.steps.average"),
+                    value: formattedSteps(checkIn.averageSteps)
+                )
+                stepStatistic(
+                    title: AppLocalizer.string("coaching.checkin.steps.total"),
+                    value: formattedSteps(checkIn.totalSteps)
+                )
+                stepStatistic(
+                    title: AppLocalizer.string("coaching.checkin.steps.goal_days"),
+                    value: "\(checkIn.stepGoalDays)/\(checkIn.dailySteps.count)"
+                )
+            }
+
+            HStack(alignment: .bottom, spacing: 7) {
+                ForEach(checkIn.dailySteps) { day in
+                    VStack(spacing: 6) {
+                        Text(formattedSteps(day.steps))
+                            .font(.system(size: 9, weight: .semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.65)
+
+                        ZStack(alignment: .bottom) {
+                            Capsule().fill(Color.primary.opacity(0.08))
+                            Capsule()
+                                .fill(day.steps >= checkIn.stepGoal && checkIn.stepGoal > 0 ? Color.green : HomeColors.accent)
+                                .frame(height: max(4, 72 * Double(day.steps) / Double(maximum)))
+                        }
+                        .frame(height: 72)
+
+                        Text(day.date.formatted(.dateTime.weekday(.narrow)))
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(day.date.formatted(.dateTime.weekday(.wide))), \(formattedSteps(day.steps)) шагов")
+                }
+            }
+
+            if checkIn.stepGoal > 0 {
+                Text(AppLocalizer.format("coaching.checkin.steps.goal", formattedSteps(checkIn.stepGoal)))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(16)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    private func stepStatistic(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(value)
+                .font(.subheadline.weight(.bold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func formattedSteps(_ value: Int) -> String {
+        value.formatted(.number.grouping(.automatic))
     }
 
     private var monthlyContent: some View {
@@ -4427,6 +4561,20 @@ private struct CoachingCheckInChatCard: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+                if checkIn.hasStepSnapshot {
+                    Label(
+                        AppLocalizer.format(
+                            "coaching.checkin.chat.steps.summary",
+                            checkIn.averageSteps,
+                            checkIn.stepGoalDays,
+                            checkIn.dailySteps.count
+                        ),
+                        systemImage: "shoeprints.fill"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(HomeColors.accent)
+                }
             }
         case .monthly:
             VStack(alignment: .leading, spacing: 5) {

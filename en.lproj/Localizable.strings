@@ -1423,3 +1423,17 @@
 "coaching.checkin.chat.weekly.summary" = "Well-being %d/10 · Sleep %d/10 · Motivation %d/10 · RPE %d/10";
 "coaching.checkin.chat.monthly.summary" = "Weight %.1f kg · Waist %.1f cm";
 "coaching.checkin.chat.legacy.summary" = "Weight %.1f kg · Well-being %d/5 · Plan %d/5";
+"coaching.checkin.weekly.steps.question" = "Attach steps from the last 7 days?";
+"coaching.checkin.weekly.steps.hint" = "You can review Apple Health data before submitting.";
+"coaching.checkin.steps.title" = "Steps over 7 days";
+"coaching.checkin.steps.disabled" = "Apple Health steps are disabled in FitLife. You can submit the check-in without them.";
+"coaching.checkin.steps.connect" = "Connect Apple Health";
+"coaching.checkin.steps.loading" = "Loading activity from the last 7 days…";
+"coaching.checkin.steps.attach" = "Attach steps to check-in";
+"coaching.checkin.steps.average" = "Daily average";
+"coaching.checkin.steps.total" = "Total";
+"coaching.checkin.steps.goal_days" = "Goal days";
+"coaching.checkin.steps.goal" = "Daily goal: %@ steps";
+"coaching.checkin.steps.unavailable" = "Steps from the last 7 days could not be loaded.";
+"coaching.checkin.steps.retry" = "Try loading again";
+"coaching.checkin.chat.steps.summary" = "%d steps on average · goal reached on %d of %d days";

@@ -124,6 +124,7 @@ private enum WeeklyCheckInStep: Int, CaseIterable {
     case adherence
     case rpe
     case pain
+    case steps
     case comment
 
     var icon: String {
@@ -136,6 +137,7 @@ private enum WeeklyCheckInStep: Int, CaseIterable {
         case .adherence: return "checkmark.circle.fill"
         case .rpe: return "chart.line.uptrend.xyaxis"
         case .pain: return "cross.case.fill"
+        case .steps: return "shoeprints.fill"
         case .comment: return "text.bubble.fill"
         }
     }
@@ -166,7 +168,7 @@ private struct WeeklyCheckInDraft: Equatable {
             case .recovery: return recovery
             case .adherence: return adherence
             case .rpe: return rpe
-            case .pain, .comment: return 0
+            case .pain, .steps, .comment: return 0
             }
         }
         set {
@@ -178,7 +180,7 @@ private struct WeeklyCheckInDraft: Equatable {
             case .recovery: recovery = newValue
             case .adherence: adherence = newValue
             case .rpe: rpe = newValue
-            case .pain, .comment: break
+            case .pain, .steps, .comment: break
             }
         }
     }
@@ -193,6 +195,11 @@ private struct ClientWeeklyCheckInScreen: View {
     @State private var stepIndex = 0
     @State private var draft = WeeklyCheckInDraft()
     @State private var isComplete = false
+    @StateObject private var stepsStore = HealthKitStepsStore()
+    @AppStorage(HealthKitStepsPreference.enabledKey) private var stepsEnabled = false
+    @AppStorage(HealthKitStepsPreference.goalKey) private var stepGoal = HealthKitStepsPreference.defaultGoal
+    @State private var recentSteps: [HealthKitDailySteps] = []
+    @State private var attachSteps = true
 
     private var step: WeeklyCheckInStep { WeeklyCheckInStep.allCases[stepIndex] }
 
@@ -277,6 +284,8 @@ private struct ClientWeeklyCheckInScreen: View {
             scaleContent
         case .pain:
             painContent
+        case .steps:
+            stepsContent
         case .comment:
             commentContent
         }
@@ -352,6 +361,75 @@ private struct ClientWeeklyCheckInScreen: View {
         .background(cardBackground, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
     }
 
+    private var stepsContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if stepsEnabled == false {
+                Label(AppLocalizer.string("coaching.checkin.steps.disabled"), systemImage: "heart.slash")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                Button(AppLocalizer.string("coaching.checkin.steps.connect")) {
+                    stepsEnabled = true
+                    Task { await loadStepSnapshot(requestAccess: true) }
+                }
+                .font(.headline)
+                .foregroundStyle(.blue)
+            } else if stepsStore.isLoading {
+                HStack(spacing: 12) {
+                    ProgressView()
+                    Text(AppLocalizer.string("coaching.checkin.steps.loading"))
+                        .foregroundStyle(.secondary)
+                }
+            } else if recentSteps.count == 7 {
+                Toggle(AppLocalizer.string("coaching.checkin.steps.attach"), isOn: $attachSteps)
+                    .font(.headline)
+
+                Divider()
+
+                HStack {
+                    stepsSummary(
+                        AppLocalizer.string("coaching.checkin.steps.average"),
+                        value: formattedSteps(recentSteps.reduce(0) { $0 + $1.steps } / 7)
+                    )
+                    Spacer()
+                    stepsSummary(
+                        AppLocalizer.string("coaching.checkin.steps.goal_days"),
+                        value: "\(recentSteps.filter { $0.steps >= stepGoal }.count)/7"
+                    )
+                }
+
+                VStack(spacing: 0) {
+                    ForEach(recentSteps) { day in
+                        HStack {
+                            Text(day.date.formatted(.dateTime.weekday(.wide).day().month(.abbreviated)))
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text(formattedSteps(day.steps))
+                                .fontWeight(.semibold)
+                        }
+                        .padding(.vertical, 9)
+                        if day.id != recentSteps.last?.id { Divider() }
+                    }
+                }
+            } else {
+                Text(stepsStore.errorMessage ?? AppLocalizer.string("coaching.checkin.steps.unavailable"))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                Button(AppLocalizer.string("coaching.checkin.steps.retry")) {
+                    Task { await loadStepSnapshot(requestAccess: true) }
+                }
+                .font(.headline)
+                .foregroundStyle(.blue)
+            }
+        }
+        .padding(20)
+        .background(cardBackground, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .task {
+            await loadStepSnapshot(requestAccess: false)
+        }
+    }
+
     private var completionView: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 22) {
@@ -409,6 +487,10 @@ private struct ClientWeeklyCheckInScreen: View {
                 hasPain: draft.hasPain,
                 painNotes: draft.painNotes,
                 notes: draft.notes,
+                stepGoal: attachSteps && recentSteps.count == 7 ? stepGoal : 0,
+                dailySteps: attachSteps
+                    ? recentSteps.map { CheckInDailySteps(date: $0.date, steps: $0.steps) }
+                    : [],
                 senderName: sessionStore.profile?.displayName ?? ""
             )
             if store.errorMessage == nil { isComplete = true }
@@ -429,6 +511,50 @@ private struct ClientWeeklyCheckInScreen: View {
         .overlay(alignment: .bottom) {
             if showsDivider { Divider() }
         }
+    }
+
+    @MainActor
+    private func loadStepSnapshot(requestAccess: Bool) async {
+        guard stepsEnabled else {
+            recentSteps = []
+            attachSteps = false
+            return
+        }
+
+        if requestAccess && stepsStore.authorizationNeedsRequest {
+            guard await stepsStore.requestAccess() else {
+                recentSteps = []
+                attachSteps = false
+                return
+            }
+        }
+
+        var values = await stepsStore.recentSevenDays()
+        if values == nil && requestAccess && stepsStore.authorizationNeedsRequest {
+            guard await stepsStore.requestAccess() else {
+                recentSteps = []
+                attachSteps = false
+                return
+            }
+            values = await stepsStore.recentSevenDays()
+        }
+
+        recentSteps = values ?? []
+        attachSteps = recentSteps.count == 7
+    }
+
+    private func stepsSummary(_ title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(value)
+                .font(.title3.bold())
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func formattedSteps(_ value: Int) -> String {
+        value.formatted(.number.grouping(.automatic))
     }
 
     private func selectionButton(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
