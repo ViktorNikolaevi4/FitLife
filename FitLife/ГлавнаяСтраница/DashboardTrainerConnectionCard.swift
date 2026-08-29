@@ -93,9 +93,9 @@ struct DashboardTrainerConnectionCard: View {
     }
 
     private var activeTrainerCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
             Button(action: openChat) {
-                HStack(spacing: 14) {
+                HStack(spacing: 12) {
                     trainerAvatar
 
                     VStack(alignment: .leading, spacing: 3) {
@@ -144,10 +144,8 @@ struct DashboardTrainerConnectionCard: View {
             }
             .buttonStyle(.plain)
 
-            Divider().overlay(theme.divider)
-
             Button(action: openLatestEvent) {
-                VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         HStack(spacing: 6) {
                             Image(systemName: latestEventIcon)
@@ -172,8 +170,9 @@ struct DashboardTrainerConnectionCard: View {
                     Text(latestEventText)
                         .font(.subheadline)
                         .foregroundStyle(theme.primaryText)
-                        .lineLimit(2)
-                        .frame(maxWidth: .infinity, minHeight: 40, maxHeight: 40, alignment: .topLeading)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: .infinity, minHeight: 20, maxHeight: 20, alignment: .leading)
                 }
                 .contentShape(Rectangle())
             }
@@ -185,12 +184,14 @@ struct DashboardTrainerConnectionCard: View {
                         title: AppLocalizer.string("dashboard.coach.open_workout"),
                         icon: "dumbbell",
                         emphasized: true,
+                        height: 44,
                         action: { openAssignment(assignment) }
                     )
                     actionButton(
                         title: AppLocalizer.string("dashboard.coach.write"),
                         icon: "bubble.left",
                         emphasized: false,
+                        height: 44,
                         action: openChat
                     )
                 } else {
@@ -198,21 +199,23 @@ struct DashboardTrainerConnectionCard: View {
                         title: AppLocalizer.string("dashboard.coach.write"),
                         icon: "bubble.left",
                         emphasized: false,
+                        height: 44,
                         action: openChat
                     )
                     actionButton(
                         title: AppLocalizer.string("dashboard.coach.send_report"),
                         icon: "doc.text",
                         emphasized: true,
+                        height: 44,
                         action: onOpenReports
                     )
                 }
             }
         }
-        .padding(20)
-        .adaptiveHomeCard(theme: theme, cornerRadius: 26)
+        .padding(16)
+        .adaptiveHomeCard(theme: theme, cornerRadius: 24)
         .overlay {
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(isLatestEventUnread ? theme.accent : .clear, lineWidth: 1.2)
         }
     }
@@ -352,7 +355,7 @@ struct DashboardTrainerConnectionCard: View {
                 trainerInitialsView
             }
         }
-        .frame(width: 58, height: 58)
+        .frame(width: 52, height: 52)
         .clipShape(Circle())
         .overlay(Circle().stroke(theme.border.opacity(0.55), lineWidth: 1))
         .accessibilityHidden(true)
@@ -452,6 +455,7 @@ struct DashboardTrainerConnectionCard: View {
         title: String,
         icon: String,
         emphasized: Bool,
+        height: CGFloat = 48,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -460,7 +464,7 @@ struct DashboardTrainerConnectionCard: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.78)
                 .foregroundStyle(emphasized ? Color.white : theme.primaryText)
-                .frame(maxWidth: .infinity, minHeight: 48)
+                .frame(maxWidth: .infinity, minHeight: height)
                 .background(emphasized ? AnyShapeStyle(LinearGradient(colors: [theme.accent, theme.accentDeep], startPoint: .leading, endPoint: .trailing)) : AnyShapeStyle(theme.subtleFill))
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }

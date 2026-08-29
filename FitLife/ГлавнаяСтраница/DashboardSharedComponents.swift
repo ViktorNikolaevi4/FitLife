@@ -456,7 +456,7 @@ struct BalanceCard: View {
     var onTapFat: () -> Void = {}
     var onTapCarbs: () -> Void = {}
 
-    @State private var mode: RingDisplayMode = .target
+    @State private var mode: RingDisplayMode = .remaining
 
     private var progress: Double {
         safeProgress(current: consumed, goal: target)
@@ -472,22 +472,14 @@ struct BalanceCard: View {
 
     private var ringCaption: String {
         switch mode {
-        case .target:    return AppLocalizer.string("unit.kcal")
-        case .consumed:  return AppLocalizer.string("balance.consumed")
-        case .remaining: return AppLocalizer.string("balance.remaining")
-        }
-    }
-
-    // Текст для правого верхнего переключателя
-    private var modeTitle: String {
-        switch mode {
         case .target:    return AppLocalizer.string("balance.target")
         case .consumed:  return AppLocalizer.string("balance.consumed")
         case .remaining: return AppLocalizer.string("balance.remaining")
         }
     }
-    private var modeValueText: String {
-        AppLocalizer.format("unit.kcal.value", ringNumber)
+
+    private var targetValueText: String {
+        AppLocalizer.format("unit.kcal.value", target)
     }
     private func cycleMode() {
         switch mode {
@@ -505,7 +497,7 @@ struct BalanceCard: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 7) {
+            VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 8) {
                     Text(title)
                         .font(.subheadline.weight(.semibold))
@@ -532,7 +524,7 @@ struct BalanceCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 Text(AppLocalizer.string("balance.title"))
                     .font(.headline.weight(.semibold))
@@ -541,12 +533,12 @@ struct BalanceCard: View {
                 Spacer()
             }
             .padding(.horizontal)
-            .padding(.top, 12)
+            .padding(.top, 10)
 
-            HStack(alignment: .center, spacing: 22) {
+            HStack(alignment: .center, spacing: 18) {
                 Donut(
                     progress: progress,
-                    lineWidth: 13,
+                    lineWidth: 12,
                     track: theme.accent.opacity(0.16),
                     gradient: Gradient(colors: [
                         theme.accent,
@@ -554,11 +546,11 @@ struct BalanceCard: View {
                         theme.accent
                     ])
                 )
-                    .frame(width: 126, height: 126)
+                    .frame(width: 114, height: 114)
                     .overlay(
                         VStack(spacing: 2) {
                             Text(ringNumber.formatted(.number.grouping(.automatic)))
-                                .font(.system(size: 30, weight: .bold, design: .rounded))
+                                .font(.system(size: 28, weight: .bold, design: .rounded))
                                 .foregroundStyle(theme.primaryText)
                                 .minimumScaleFactor(0.75)
                                 .lineLimit(1)
@@ -581,17 +573,17 @@ struct BalanceCard: View {
                         }
                     }
 
-                VStack(alignment: .leading, spacing: 13) {
+                VStack(alignment: .leading, spacing: 10) {
                     Button(action: {
                         withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) { cycleMode() }
                     }) {
                         HStack(alignment: .top, spacing: 8) {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(modeTitle)
+                                Text(AppLocalizer.string("balance.target"))
                                     .font(.caption.weight(.semibold))
                                     .foregroundStyle(theme.tertiaryText)
 
-                                Text(modeValueText)
+                                Text(targetValueText)
                                     .font(.subheadline.weight(.semibold))
                                     .foregroundStyle(theme.secondaryText)
                                     .lineLimit(1)
@@ -634,7 +626,7 @@ struct BalanceCard: View {
                 .frame(maxWidth: .infinity)
             }
             .padding(.horizontal)
-            .padding(.bottom, 14)
+            .padding(.bottom, 12)
         }
         .adaptiveHomeCard(theme: theme, cornerRadius: HomeDarkMetrics.cardCornerRadius)
         .padding(.horizontal)
