@@ -170,9 +170,9 @@ struct DashboardTrainerConnectionCard: View {
                     Text(latestEventText)
                         .font(.subheadline)
                         .foregroundStyle(theme.primaryText)
-                        .lineLimit(1)
+                        .lineLimit(2)
                         .truncationMode(.tail)
-                        .frame(maxWidth: .infinity, minHeight: 20, maxHeight: 20, alignment: .leading)
+                        .frame(maxWidth: .infinity, minHeight: 40, maxHeight: 40, alignment: .topLeading)
                 }
                 .contentShape(Rectangle())
             }

@@ -299,6 +299,8 @@ struct HealthKitStepsCard: View {
                         .minimumScaleFactor(0.72)
 
                     if store.weeklySteps.isEmpty == false {
+                        Spacer(minLength: 0)
+
                         WeeklyStepsMiniChart(
                             values: store.weeklySteps,
                             selectedDate: date,
@@ -320,7 +322,7 @@ struct HealthKitStepsCard: View {
                 }
             }
             .padding(16)
-            .frame(maxWidth: .infinity, minHeight: 172, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: 172, maxHeight: 172, alignment: .topLeading)
             .adaptiveHomeCard(theme: theme, cornerRadius: HomeDarkMetrics.cardCornerRadius)
         }
         .buttonStyle(.plain)

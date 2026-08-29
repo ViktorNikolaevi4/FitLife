@@ -366,7 +366,7 @@ struct WaterSummaryCard: View {
             )
         }
         .padding(16)
-        .frame(maxWidth: .infinity, minHeight: 172, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 172, maxHeight: 172, alignment: .leading)
         .adaptiveHomeCard(theme: theme, cornerRadius: HomeDarkMetrics.cardCornerRadius)
     }
 }
@@ -525,12 +525,32 @@ struct BalanceCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top) {
+            HStack(alignment: .center, spacing: 12) {
                 Text(AppLocalizer.string("balance.title"))
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(theme.primaryText)
 
-                Spacer()
+                Spacer(minLength: 8)
+
+                Button(action: {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) { cycleMode() }
+                }) {
+                    HStack(spacing: 6) {
+                        Text(AppLocalizer.string("balance.target"))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(theme.tertiaryText)
+
+                        Text(targetValueText)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(theme.secondaryText)
+                            .lineLimit(1)
+
+                        Image(systemName: "chevron.down")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(theme.tertiaryText)
+                    }
+                }
+                .buttonStyle(.plain)
             }
             .padding(.horizontal)
             .padding(.top, 10)
@@ -574,31 +594,6 @@ struct BalanceCard: View {
                     }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Button(action: {
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) { cycleMode() }
-                    }) {
-                        HStack(alignment: .top, spacing: 8) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(AppLocalizer.string("balance.target"))
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(theme.tertiaryText)
-
-                                Text(targetValueText)
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(theme.secondaryText)
-                                    .lineLimit(1)
-                            }
-
-                            Spacer(minLength: 4)
-
-                            Image(systemName: "chevron.down")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(theme.tertiaryText)
-                                .padding(.top, 2)
-                        }
-                    }
-                    .buttonStyle(.plain)
-
                     balanceMacroRow(
                         title: AppLocalizer.string("macro.protein"),
                         current: proteins.current,
