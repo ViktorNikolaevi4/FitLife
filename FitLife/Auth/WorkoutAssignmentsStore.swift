@@ -8,6 +8,7 @@ final class WorkoutTemplateAssignmentStore: ObservableObject {
     @Published private(set) var isLoading = false
     @Published var errorMessage: String?
     @Published private(set) var assignedClientIds: Set<String> = []
+    @Published private(set) var assigningClientIds: Set<String> = []
 
     private let template: WorkoutTemplate
     private let firestore: Firestore
@@ -32,7 +33,13 @@ final class WorkoutTemplateAssignmentStore: ObservableObject {
                 .collection("workout_assignments")
                 .whereField("trainerId", isEqualTo: template.trainerId)
                 .whereField("templateId", isEqualTo: template.id)
-                .whereField("status", isEqualTo: WorkoutAssignmentStatus.assigned.rawValue)
+                .whereField(
+                    "status",
+                    in: [
+                        WorkoutAssignmentStatus.assigned.rawValue,
+                        WorkoutAssignmentStatus.started.rawValue
+                    ]
+                )
                 .getDocuments()
 
             let (linkDocs, assignmentDocs) = try await (linksSnapshot, assignmentsSnapshot)
@@ -68,6 +75,13 @@ final class WorkoutTemplateAssignmentStore: ObservableObject {
     }
 
     func assignTemplate(to client: AppUserProfile, exerciseCount: Int) async -> Bool {
+        guard isAssigned(clientId: client.id) == false,
+              assigningClientIds.contains(client.id) == false else {
+            return false
+        }
+
+        assigningClientIds.insert(client.id)
+        defer { assigningClientIds.remove(client.id) }
         errorMessage = nil
 
         do {
@@ -152,6 +166,10 @@ final class WorkoutTemplateAssignmentStore: ObservableObject {
 
     func isAssigned(clientId: String) -> Bool {
         assignedClientIds.contains(clientId)
+    }
+
+    func isAssigning(clientId: String) -> Bool {
+        assigningClientIds.contains(clientId)
     }
 }
 

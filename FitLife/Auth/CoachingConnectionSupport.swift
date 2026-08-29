@@ -741,6 +741,7 @@ final class ClientCoachingHomeStore: ObservableObject {
     private let trainerId: String
     private let firestore: Firestore
     private let cacheKey: CacheKey
+    private var checkInsListener: ListenerRegistration?
     private var notesListener: ListenerRegistration?
     private var workoutReportsListener: ListenerRegistration?
     private var nutritionReportsListener: ListenerRegistration?
@@ -792,12 +793,31 @@ final class ClientCoachingHomeStore: ObservableObject {
     var connectedTrainerId: String { trainerId }
 
     deinit {
+        checkInsListener?.remove()
         notesListener?.remove()
         workoutReportsListener?.remove()
         nutritionReportsListener?.remove()
     }
 
     func startNotesListening() {
+        if checkInsListener == nil {
+            checkInsListener = firestore
+                .collection("progress_checkins")
+                .whereField("clientId", isEqualTo: clientId)
+                .whereField("trainerId", isEqualTo: trainerId)
+                .addSnapshotListener { [weak self] snapshot, _ in
+                    guard let snapshot else { return }
+                    let checkIns = snapshot.documents
+                        .compactMap { ProgressCheckIn(id: $0.documentID, data: $0.data()) }
+                        .sorted { $0.createdAt > $1.createdAt }
+
+                    Task { @MainActor [weak self] in
+                        self?.checkIns = checkIns
+                        self?.cacheCurrentState(isComplete: nil)
+                    }
+                }
+        }
+
         if notesListener == nil {
             notesListener = firestore
                 .collection("coaching_notes")
@@ -854,6 +874,8 @@ final class ClientCoachingHomeStore: ObservableObject {
     }
 
     func stopNotesListening() {
+        checkInsListener?.remove()
+        checkInsListener = nil
         notesListener?.remove()
         notesListener = nil
         workoutReportsListener?.remove()
@@ -1218,14 +1240,17 @@ final class TrainerClientSupportStore: ObservableObject {
     @Published private(set) var updateRequests: [ProfileUpdateRequest] = []
     @Published private(set) var notes: [CoachingNote] = []
     @Published private(set) var workoutReports: [CoachingWorkoutReport] = []
+    @Published private(set) var workoutAssignments: [WorkoutAssignment] = []
     @Published private(set) var nutritionReports: [CoachingNutritionReport] = []
     @Published private(set) var isLoading = false
     @Published private(set) var isSubmitting = false
+    @Published private(set) var deletingAssignmentIds: Set<String> = []
     @Published var errorMessage: String?
 
     private let trainerId: String
     private let client: AppUserProfile
     private let firestore: Firestore
+    private var checkInsListener: ListenerRegistration?
     private var notesListener: ListenerRegistration?
     private var workoutReportsListener: ListenerRegistration?
     private var nutritionReportsListener: ListenerRegistration?
@@ -1239,12 +1264,30 @@ final class TrainerClientSupportStore: ObservableObject {
     }
 
     deinit {
+        checkInsListener?.remove()
         notesListener?.remove()
         workoutReportsListener?.remove()
         nutritionReportsListener?.remove()
     }
 
     func startNotesListening() {
+        if checkInsListener == nil {
+            checkInsListener = firestore
+                .collection("progress_checkins")
+                .whereField("clientId", isEqualTo: client.id)
+                .whereField("trainerId", isEqualTo: trainerId)
+                .addSnapshotListener { [weak self] snapshot, _ in
+                    guard let snapshot else { return }
+                    let checkIns = snapshot.documents
+                        .compactMap { ProgressCheckIn(id: $0.documentID, data: $0.data()) }
+                        .sorted { $0.createdAt > $1.createdAt }
+
+                    Task { @MainActor [weak self] in
+                        self?.checkIns = checkIns
+                    }
+                }
+        }
+
         if notesListener == nil {
             notesListener = firestore
                 .collection("coaching_notes")
@@ -1298,6 +1341,8 @@ final class TrainerClientSupportStore: ObservableObject {
     }
 
     func stopNotesListening() {
+        checkInsListener?.remove()
+        checkInsListener = nil
         notesListener?.remove()
         notesListener = nil
         workoutReportsListener?.remove()
@@ -1345,19 +1390,26 @@ final class TrainerClientSupportStore: ObservableObject {
                 .whereField("trainerId", isEqualTo: trainerId)
                 .getDocuments()
 
+            async let workoutAssignmentsSnapshot = firestore
+                .collection("workout_assignments")
+                .whereField("clientId", isEqualTo: client.id)
+                .whereField("trainerId", isEqualTo: trainerId)
+                .getDocuments()
+
             async let nutritionReportsSnapshot = firestore
                 .collection("coaching_nutrition_reports")
                 .whereField("clientId", isEqualTo: client.id)
                 .whereField("trainerId", isEqualTo: trainerId)
                 .getDocuments()
 
-            let (intakeDoc, activeLinkDoc, checkInDocs, requestDocs, noteDocs, workoutReportDocs, nutritionReportDocs) = try await (
+            let (intakeDoc, activeLinkDoc, checkInDocs, requestDocs, noteDocs, workoutReportDocs, workoutAssignmentDocs, nutritionReportDocs) = try await (
                 intakeSnapshot,
                 activeLinkSnapshot,
                 checkInsSnapshot,
                 requestsSnapshot,
                 notesSnapshot,
                 workoutReportsSnapshot,
+                workoutAssignmentsSnapshot,
                 nutritionReportsSnapshot
             )
 
@@ -1375,6 +1427,11 @@ final class TrainerClientSupportStore: ObservableObject {
 
             workoutReports = workoutReportDocs.documents.compactMap { CoachingWorkoutReport(id: $0.documentID, data: $0.data()) }
                 .sorted { $0.createdAt > $1.createdAt }
+
+            workoutAssignments = workoutAssignmentDocs.documents
+                .compactMap { WorkoutAssignment(id: $0.documentID, data: $0.data()) }
+                .filter { $0.trainerId == trainerId }
+                .sorted { $0.assignedAt > $1.assignedAt }
 
             nutritionReports = nutritionReportDocs.documents.compactMap { CoachingNutritionReport(id: $0.documentID, data: $0.data()) }
                 .sorted { $0.createdAt > $1.createdAt }
@@ -1461,6 +1518,36 @@ final class TrainerClientSupportStore: ObservableObject {
                 .document(note.id)
                 .delete()
             await load()
+        } catch {
+            errorMessage = AppErrorPresenter.message(for: error)
+        }
+    }
+
+    func deleteWorkoutAssignment(_ assignment: WorkoutAssignment) async {
+        guard deletingAssignmentIds.contains(assignment.id) == false else { return }
+
+        deletingAssignmentIds.insert(assignment.id)
+        errorMessage = nil
+        defer { deletingAssignmentIds.remove(assignment.id) }
+
+        do {
+            let assignmentRef = firestore
+                .collection("workout_assignments")
+                .document(assignment.id)
+
+            async let exercisesSnapshot = assignmentRef.collection("exercises").getDocuments()
+            async let blocksSnapshot = assignmentRef.collection("blocks").getDocuments()
+            let (exerciseDocs, blockDocs) = try await (exercisesSnapshot, blocksSnapshot)
+
+            // Child rules verify ownership through the still-existing parent,
+            // so nested documents must be removed before the assignment itself.
+            let childBatch = firestore.batch()
+            exerciseDocs.documents.forEach { childBatch.deleteDocument($0.reference) }
+            blockDocs.documents.forEach { childBatch.deleteDocument($0.reference) }
+            try await childBatch.commit()
+            try await assignmentRef.delete()
+
+            workoutAssignments.removeAll { $0.id == assignment.id }
         } catch {
             errorMessage = AppErrorPresenter.message(for: error)
         }
@@ -1984,6 +2071,7 @@ private struct ClientCoachingChatScreen: View {
     var body: some View {
         CoachingChatContent(
             notes: store.notes,
+            checkIns: store.checkIns,
             workoutReports: store.workoutReports,
             nutritionReports: store.nutritionReports,
             outgoingRole: .client,
@@ -2240,11 +2328,6 @@ struct TrainerClientSupportScreen: View {
                 }
 
                 updateRequestsCard
-                if store.checkIns.contains(where: { $0.kind == .weekly }) {
-                    TrainerWeeklyCheckInOverviewCard(checkIns: store.checkIns) {
-                        showAllCheckIns = true
-                    }
-                }
                 trainerNavigationCard(
                     icon: "clock",
                     title: AppLocalizer.string("coaching.checkin.history"),
@@ -2310,7 +2393,12 @@ struct TrainerClientSupportScreen: View {
                     reports: store.workoutReports,
                     canDelete: false,
                     onDelete: nil,
-                    client: client
+                    client: client,
+                    assignments: store.workoutAssignments,
+                    deletingAssignmentIds: store.deletingAssignmentIds,
+                    onDeleteAssignment: { assignment in
+                        await store.deleteWorkoutAssignment(assignment)
+                    }
                 )
             }
         }
@@ -3049,6 +3137,7 @@ private struct TrainerClientChatScreen: View {
     var body: some View {
         CoachingChatContent(
             notes: store.notes,
+            checkIns: store.checkIns,
             workoutReports: store.workoutReports,
             nutritionReports: store.nutritionReports,
             outgoingRole: .trainer,
@@ -3306,6 +3395,7 @@ private struct CoachingCheckInHistoryScreen: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var pendingDelete: ProgressCheckIn?
+    @State private var selectedCheckIn: ProgressCheckIn?
 
     var body: some View {
         List {
@@ -3314,7 +3404,12 @@ private struct CoachingCheckInHistoryScreen: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(checkIns) { checkIn in
-                    CoachingCheckInRow(checkIn: checkIn, isTrainerView: isTrainerView)
+                    Button {
+                        selectedCheckIn = checkIn
+                    } label: {
+                        CoachingCheckInRow(checkIn: checkIn, isTrainerView: isTrainerView)
+                    }
+                    .buttonStyle(.plain)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             if canDelete {
                                 Button(role: .destructive) {
@@ -3334,6 +3429,11 @@ private struct CoachingCheckInHistoryScreen: View {
                 Button(AppLocalizer.string("common.close")) {
                     dismiss()
                 }
+            }
+        }
+        .sheet(item: $selectedCheckIn) { checkIn in
+            NavigationStack {
+                CoachingCheckInDetailScreen(checkIn: checkIn)
             }
         }
         .alert(AppLocalizer.string("coaching.history.delete.title"), isPresented: Binding(
@@ -3356,11 +3456,291 @@ private struct CoachingCheckInHistoryScreen: View {
     }
 }
 
+private struct CoachingCheckInDetailScreen: View {
+    let checkIn: ProgressCheckIn
+
+    @Environment(\.dismiss) private var dismiss
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12)
+    ]
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 18) {
+                headerCard
+
+                switch checkIn.kind {
+                case .weekly:
+                    weeklyContent
+                case .monthly:
+                    monthlyContent
+                case .legacy:
+                    legacyContent
+                }
+
+                if checkIn.hasPain {
+                    attentionCard
+                }
+
+                if checkIn.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                    textCard(
+                        title: AppLocalizer.string("coaching.checkin.detail.comment"),
+                        icon: "text.bubble.fill",
+                        tint: HomeColors.accent,
+                        text: checkIn.notes
+                    )
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 16)
+            .padding(.bottom, 30)
+        }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .navigationTitle(AppLocalizer.string("coaching.checkin.detail.title"))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(AppLocalizer.string("common.close")) {
+                    dismiss()
+                }
+            }
+        }
+    }
+
+    private var headerCard: some View {
+        HStack(spacing: 14) {
+            Image(systemName: headerIcon)
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 54, height: 54)
+                .background(headerTint, in: RoundedRectangle(cornerRadius: 17, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(checkInTitle)
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(.primary)
+                Text(checkIn.createdAt.formatted(date: .long, time: .shortened))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(16)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+
+    private var weeklyContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionTitle(AppLocalizer.string("coaching.checkin.detail.metrics"))
+
+            LazyVGrid(columns: columns, spacing: 12) {
+                metricTile("coaching.checkin.energy", value: checkIn.energy, icon: "bolt.fill")
+                metricTile("coaching.checkin.sleep", value: checkIn.sleep, icon: "moon.fill")
+                metricTile("coaching.checkin.stress", value: checkIn.stress, icon: "brain.head.profile")
+                metricTile("coaching.checkin.recovery", value: checkIn.recovery, icon: "heart.fill")
+                metricTile("coaching.checkin.motivation", value: checkIn.motivation, icon: "flame.fill")
+                metricTile("coaching.checkin.adherence", value: checkIn.adherence, icon: "checkmark.circle.fill")
+                metricTile("coaching.checkin.rpe", value: checkIn.rpe, icon: "chart.line.uptrend.xyaxis")
+            }
+        }
+    }
+
+    private var monthlyContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionTitle(AppLocalizer.string("coaching.checkin.monthly.heading"))
+
+            LazyVGrid(columns: columns, spacing: 12) {
+                measurementTile(
+                    title: AppLocalizer.string("coaching.intake.weight"),
+                    value: formatted(checkIn.weight),
+                    unit: AppLocalizer.string("coaching.unit.kg"),
+                    icon: "scalemass.fill"
+                )
+                measurementTile(
+                    title: AppLocalizer.string("coaching.intake.measurement.waist"),
+                    value: formatted(checkIn.waist),
+                    unit: AppLocalizer.string("coaching.unit.cm"),
+                    icon: "ruler.fill"
+                )
+                measurementTile(
+                    title: AppLocalizer.string("coaching.intake.measurement.chest"),
+                    value: formatted(checkIn.chest),
+                    unit: AppLocalizer.string("coaching.unit.cm"),
+                    icon: "figure.arms.open"
+                )
+                measurementTile(
+                    title: AppLocalizer.string("coaching.intake.measurement.hips"),
+                    value: formatted(checkIn.hips),
+                    unit: AppLocalizer.string("coaching.unit.cm"),
+                    icon: "figure.stand"
+                )
+            }
+        }
+    }
+
+    private var legacyContent: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            monthlyContent
+            VStack(alignment: .leading, spacing: 12) {
+                sectionTitle(AppLocalizer.string("coaching.checkin.section.state"))
+                LazyVGrid(columns: columns, spacing: 12) {
+                    legacyMetricTile("coaching.checkin.energy", value: checkIn.energy, icon: "bolt.fill")
+                    legacyMetricTile("coaching.checkin.adherence", value: checkIn.adherence, icon: "checkmark.circle.fill")
+                }
+            }
+        }
+    }
+
+    private var attentionCard: some View {
+        textCard(
+            title: AppLocalizer.string("coaching.checkin.detail.pain"),
+            icon: "exclamationmark.triangle.fill",
+            tint: .orange,
+            text: checkIn.painNotes.isEmpty
+                ? AppLocalizer.string("coaching.checkin.pain.reported")
+                : checkIn.painNotes
+        )
+    }
+
+    private func sectionTitle(_ title: String) -> some View {
+        Text(title)
+            .font(.title3.weight(.bold))
+            .foregroundStyle(.primary)
+    }
+
+    private func metricTile(_ key: String, value: Int, icon: String) -> some View {
+        scoreTile(
+            title: AppLocalizer.string(key),
+            value: value,
+            maximum: 10,
+            icon: icon
+        )
+    }
+
+    private func legacyMetricTile(_ key: String, value: Int, icon: String) -> some View {
+        scoreTile(
+            title: AppLocalizer.string(key),
+            value: value,
+            maximum: 5,
+            icon: icon
+        )
+    }
+
+    private func scoreTile(title: String, value: Int, maximum: Int, icon: String) -> some View {
+        let tint = scoreColor(value, maximum: maximum)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Image(systemName: icon)
+                    .foregroundStyle(tint)
+                Spacer()
+                Text("\(value)/\(maximum)")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(tint)
+            }
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, minHeight: 82, alignment: .leading)
+        .padding(14)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private func measurementTile(title: String, value: String, unit: String, icon: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Image(systemName: icon)
+                .foregroundStyle(HomeColors.accent)
+            Text("\(value) \(unit)")
+                .font(.title3.weight(.bold))
+                .foregroundStyle(.primary)
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, minHeight: 102, alignment: .leading)
+        .padding(14)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private func textCard(title: String, icon: String, tint: Color, text: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(title, systemImage: icon)
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(tint)
+            Text(text)
+                .font(.body)
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(tint.opacity(0.10), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    private var checkInTitle: String {
+        switch checkIn.kind {
+        case .weekly: return AppLocalizer.string("coaching.checkin.weekly.title")
+        case .monthly: return AppLocalizer.string("coaching.checkin.monthly.title")
+        case .legacy: return AppLocalizer.string("coaching.checkin.legacy.title")
+        }
+    }
+
+    private var headerIcon: String {
+        switch checkIn.kind {
+        case .weekly: return "waveform.path.ecg"
+        case .monthly: return "ruler.fill"
+        case .legacy: return "checkmark.circle.fill"
+        }
+    }
+
+    private var headerTint: Color {
+        checkIn.hasPain ? .orange : HomeColors.accent
+    }
+
+    private func scoreColor(_ value: Int, maximum: Int) -> Color {
+        let normalized = Double(value) / Double(max(maximum, 1)) * 10
+        switch normalized {
+        case ...2: return Color(red: 1, green: 0.22, blue: 0.24)
+        case ...4: return Color(red: 1, green: 0.38, blue: 0.08)
+        case ...6: return Color(red: 1, green: 0.78, blue: 0.05)
+        case ...8: return Color(red: 0.24, green: 0.82, blue: 0.35)
+        default: return Color(red: 0, green: 0.72, blue: 0.30)
+        }
+    }
+
+    private func formatted(_ value: Double) -> String {
+        String(format: "%.1f", value)
+    }
+}
+
+private enum CoachingWorkoutHistoryContent: String, CaseIterable, Identifiable {
+    case completed
+    case assigned
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .completed:
+            return AppLocalizer.string("coaching.workouts.history.completed")
+        case .assigned:
+            return AppLocalizer.string("coaching.workouts.history.assigned")
+        }
+    }
+}
+
 private struct CoachingWorkoutReportHistoryScreen: View {
     let reports: [CoachingWorkoutReport]
     let canDelete: Bool
     let onDelete: ((CoachingWorkoutReport) async -> Void)?
     let client: AppUserProfile?
+    let assignments: [WorkoutAssignment]
+    let deletingAssignmentIds: Set<String>
+    let onDeleteAssignment: ((WorkoutAssignment) async -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @State private var selectedRange: CoachingReportDateRange = .all
@@ -3369,17 +3749,25 @@ private struct CoachingWorkoutReportHistoryScreen: View {
     @State private var visibleReportCount = 50
     @State private var selectedWorkout: CoachingWorkoutHistoryItem?
     @State private var pendingDelete: CoachingWorkoutReport?
+    @State private var pendingAssignmentDelete: WorkoutAssignment?
+    @State private var selectedContent: CoachingWorkoutHistoryContent = .completed
 
     init(
         reports: [CoachingWorkoutReport],
         canDelete: Bool,
         onDelete: ((CoachingWorkoutReport) async -> Void)?,
-        client: AppUserProfile? = nil
+        client: AppUserProfile? = nil,
+        assignments: [WorkoutAssignment] = [],
+        deletingAssignmentIds: Set<String> = [],
+        onDeleteAssignment: ((WorkoutAssignment) async -> Void)? = nil
     ) {
         self.reports = reports
         self.canDelete = canDelete
         self.onDelete = onDelete
         self.client = client
+        self.assignments = assignments
+        self.deletingAssignmentIds = deletingAssignmentIds
+        self.onDeleteAssignment = onDeleteAssignment
     }
 
     private var filteredReports: [CoachingWorkoutReport] {
@@ -3418,53 +3806,66 @@ private struct CoachingWorkoutReportHistoryScreen: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 22) {
-                rangePicker
-
-                if reports.isEmpty {
-                    emptyState(AppLocalizer.string("coaching.workouts.empty.received"))
-                } else if filteredReports.isEmpty {
-                    emptyState(AppLocalizer.string("coaching.reports.range.empty"))
-                } else {
-                    ForEach(groupedWorkoutItems, id: \.date) { group in
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text(sectionTitle(for: group.date))
-                                .font(.title3.weight(.bold))
-
-                            VStack(spacing: 0) {
-                                ForEach(group.items) { item in
-                                    Button {
-                                        selectedWorkout = item
-                                    } label: {
-                                        CoachingWorkoutHistoryRow(item: item, client: client)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .contextMenu {
-                                        if canDelete {
-                                            Button(role: .destructive) {
-                                                pendingDelete = item.report
-                                            } label: {
-                                                Label(AppLocalizer.string("common.delete"), systemImage: "trash")
-                                            }
-                                        }
-                                    }
-
-                                    if item.id != group.items.last?.id {
-                                        Divider().padding(.leading, 76)
-                                    }
-                                }
-                            }
-                            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+                if onDeleteAssignment != nil {
+                    Picker(AppLocalizer.string("coaching.workouts.section"), selection: $selectedContent) {
+                        ForEach(CoachingWorkoutHistoryContent.allCases) { content in
+                            Text(content.title).tag(content)
                         }
                     }
+                    .pickerStyle(.segmented)
+                }
 
-                    if filteredReports.count > visibleReports.count {
-                        Button {
-                            visibleReportCount += 50
-                        } label: {
-                            Text(AppLocalizer.format("coaching.reports.show_more", filteredReports.count - visibleReports.count))
-                                .font(.headline)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
+                if selectedContent == .assigned, onDeleteAssignment != nil {
+                    assignedWorkoutsContent
+                } else {
+                    rangePicker
+
+                    if reports.isEmpty {
+                        emptyState(AppLocalizer.string("coaching.workouts.empty.received"))
+                    } else if filteredReports.isEmpty {
+                        emptyState(AppLocalizer.string("coaching.reports.range.empty"))
+                    } else {
+                        ForEach(groupedWorkoutItems, id: \.date) { group in
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(sectionTitle(for: group.date))
+                                    .font(.title3.weight(.bold))
+
+                                VStack(spacing: 0) {
+                                    ForEach(group.items) { item in
+                                        Button {
+                                            selectedWorkout = item
+                                        } label: {
+                                            CoachingWorkoutHistoryRow(item: item, client: client)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .contextMenu {
+                                            if canDelete {
+                                                Button(role: .destructive) {
+                                                    pendingDelete = item.report
+                                                } label: {
+                                                    Label(AppLocalizer.string("common.delete"), systemImage: "trash")
+                                                }
+                                            }
+                                        }
+
+                                        if item.id != group.items.last?.id {
+                                            Divider().padding(.leading, 76)
+                                        }
+                                    }
+                                }
+                                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+                            }
+                        }
+
+                        if filteredReports.count > visibleReports.count {
+                            Button {
+                                visibleReportCount += 50
+                            } label: {
+                                Text(AppLocalizer.format("coaching.reports.show_more", filteredReports.count - visibleReports.count))
+                                    .font(.headline)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 14)
+                            }
                         }
                     }
                 }
@@ -3507,6 +3908,103 @@ private struct CoachingWorkoutReportHistoryScreen: View {
             }
         } message: {
             Text(AppLocalizer.string("coaching.history.delete.message"))
+        }
+        .alert(AppLocalizer.string("coaching.workouts.assignment.delete.title"), isPresented: Binding(
+            get: { pendingAssignmentDelete != nil },
+            set: { if !$0 { pendingAssignmentDelete = nil } }
+        )) {
+            Button(AppLocalizer.string("common.cancel"), role: .cancel) {
+                pendingAssignmentDelete = nil
+            }
+            Button(AppLocalizer.string("common.delete"), role: .destructive) {
+                guard let pendingAssignmentDelete, let onDeleteAssignment else { return }
+                Task {
+                    await onDeleteAssignment(pendingAssignmentDelete)
+                }
+                self.pendingAssignmentDelete = nil
+            }
+        } message: {
+            Text(AppLocalizer.string("coaching.workouts.assignment.delete.message"))
+        }
+    }
+
+    @ViewBuilder
+    private var assignedWorkoutsContent: some View {
+        if assignments.isEmpty {
+            emptyState(AppLocalizer.string("coaching.workouts.assignments.empty"))
+        } else {
+            LazyVStack(spacing: 12) {
+                ForEach(assignments) { assignment in
+                    HStack(spacing: 14) {
+                        Image(systemName: "paperplane.fill")
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(Color.accentColor)
+                            .frame(width: 52, height: 52)
+                            .background(Circle().fill(Color.accentColor.opacity(0.12)))
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(assignment.titleSnapshot)
+                                .font(.headline.weight(.semibold))
+                                .foregroundStyle(.primary)
+                                .lineLimit(2)
+
+                            Text(AppLocalizer.format(
+                                "coaching.workouts.assignment.summary",
+                                assignment.exerciseCount,
+                                assignment.assignedAt.formatted(date: .abbreviated, time: .shortened)
+                            ))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+
+                            Text(AppLocalizer.string(assignment.status.localizationKey))
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(assignmentStatusColor(assignment.status))
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 5)
+                                .background(
+                                    Capsule().fill(assignmentStatusColor(assignment.status).opacity(0.14))
+                                )
+                        }
+
+                        Spacer(minLength: 6)
+
+                        if deletingAssignmentIds.contains(assignment.id) {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Button(role: .destructive) {
+                                pendingAssignmentDelete = assignment
+                            } label: {
+                                Image(systemName: "trash")
+                                    .font(.body.weight(.semibold))
+                                    .foregroundStyle(.red)
+                                    .frame(width: 44, height: 44)
+                                    .background(Circle().fill(Color.red.opacity(0.10)))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(AppLocalizer.string("common.delete"))
+                        }
+                    }
+                    .padding(16)
+                    .background(
+                        Color(.secondarySystemBackground),
+                        in: RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    )
+                }
+            }
+        }
+    }
+
+    private func assignmentStatusColor(_ status: WorkoutAssignmentStatus) -> Color {
+        switch status {
+        case .assigned:
+            return .blue
+        case .started:
+            return .orange
+        case .completed:
+            return .green
+        case .skipped:
+            return .secondary
         }
     }
 
@@ -3649,12 +4147,14 @@ private struct CoachingNotesHistoryScreen: View {
 
 private enum CoachingChatTimelineItem: Identifiable {
     case note(CoachingNote)
+    case checkIn(ProgressCheckIn)
     case workoutReport(CoachingWorkoutReport)
     case nutritionReport(CoachingNutritionReport)
 
     var id: String {
         switch self {
         case .note(let note): return "note-\(note.id)"
+        case .checkIn(let checkIn): return "checkin-\(checkIn.id)"
         case .workoutReport(let report): return "workout-\(report.id)"
         case .nutritionReport(let report): return "nutrition-\(report.id)"
         }
@@ -3663,6 +4163,7 @@ private enum CoachingChatTimelineItem: Identifiable {
     var createdAt: Date {
         switch self {
         case .note(let note): return note.createdAt
+        case .checkIn(let checkIn): return checkIn.createdAt
         case .workoutReport(let report): return report.createdAt
         case .nutritionReport(let report): return report.createdAt
         }
@@ -3671,6 +4172,7 @@ private enum CoachingChatTimelineItem: Identifiable {
 
 private struct CoachingChatContent: View {
     let notes: [CoachingNote]
+    let checkIns: [ProgressCheckIn]
     let workoutReports: [CoachingWorkoutReport]
     let nutritionReports: [CoachingNutritionReport]
     let outgoingRole: CoachingNoteAuthorRole
@@ -3682,13 +4184,15 @@ private struct CoachingChatContent: View {
 
     @State private var selectedWorkoutReport: CoachingWorkoutReport?
     @State private var selectedNutritionReport: CoachingNutritionReport?
+    @State private var selectedCheckIn: ProgressCheckIn?
     @State private var hasPositionedInitially = false
 
     private var timelineItems: [CoachingChatTimelineItem] {
         let noteItems = notes.map(CoachingChatTimelineItem.note)
+        let checkInItems = checkIns.map(CoachingChatTimelineItem.checkIn)
         let workoutItems = workoutReports.map(CoachingChatTimelineItem.workoutReport)
         let nutritionItems = nutritionReports.map(CoachingChatTimelineItem.nutritionReport)
-        return (noteItems + workoutItems + nutritionItems).sorted { $0.createdAt < $1.createdAt }
+        return (noteItems + checkInItems + workoutItems + nutritionItems).sorted { $0.createdAt < $1.createdAt }
     }
 
     private var trimmedMessage: String {
@@ -3744,6 +4248,11 @@ private struct CoachingChatContent: View {
                     CoachingNutritionReportDetailScreen(report: report)
                 }
             }
+            .sheet(item: $selectedCheckIn) { checkIn in
+                NavigationStack {
+                    CoachingCheckInDetailScreen(checkIn: checkIn)
+                }
+            }
         }
     }
 
@@ -3755,6 +4264,12 @@ private struct CoachingChatContent: View {
                 note: note,
                 isOutgoing: note.authorRole == outgoingRole,
                 onRequestDelete: { onRequestDelete(note) }
+            )
+        case .checkIn(let checkIn):
+            CoachingCheckInChatCard(
+                checkIn: checkIn,
+                isOutgoing: outgoingRole == .client,
+                onOpen: { selectedCheckIn = checkIn }
             )
         case .workoutReport(let report):
             CoachingWorkoutReportChatCard(
@@ -3828,6 +4343,118 @@ private struct CoachingChatContent: View {
                 }
             }
             hasPositionedInitially = true
+        }
+    }
+}
+
+private struct CoachingCheckInChatCard: View {
+    let checkIn: ProgressCheckIn
+    let isOutgoing: Bool
+    let onOpen: () -> Void
+
+    var body: some View {
+        CoachingReportChatCardContainer(isOutgoing: isOutgoing) {
+            Button(action: onOpen) {
+                VStack(alignment: .leading, spacing: 12) {
+                    header
+                    summary
+
+                    if checkIn.hasPain {
+                        Label(
+                            AppLocalizer.string("coaching.checkin.pain.reported"),
+                            systemImage: "exclamationmark.triangle.fill"
+                        )
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.orange)
+                    }
+
+                    HStack(spacing: 6) {
+                        Text(AppLocalizer.string("coaching.checkin.chat.open"))
+                            .font(.subheadline.weight(.semibold))
+                        Image(systemName: "arrow.up.right")
+                            .font(.caption.weight(.bold))
+                    }
+                    .foregroundStyle(HomeColors.accent)
+                }
+                .padding(14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(AppLocalizer.string("coaching.checkin.chat.open"))
+    }
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            Image(systemName: checkIn.kind == .monthly ? "ruler.fill" : "waveform.path.ecg")
+                .font(.headline)
+                .foregroundStyle(.white)
+                .frame(width: 36, height: 36)
+                .background(checkIn.hasPain ? Color.orange : HomeColors.accent, in: RoundedRectangle(cornerRadius: 11))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(AppLocalizer.string("coaching.checkin.chat.sent"))
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.primary)
+                Text(checkIn.createdAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 8)
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    @ViewBuilder
+    private var summary: some View {
+        switch checkIn.kind {
+        case .weekly:
+            VStack(alignment: .leading, spacing: 5) {
+                Text(AppLocalizer.string("coaching.checkin.weekly.title"))
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Text(AppLocalizer.format(
+                    "coaching.checkin.chat.weekly.summary",
+                    checkIn.energy,
+                    checkIn.sleep,
+                    checkIn.motivation,
+                    checkIn.rpe
+                ))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        case .monthly:
+            VStack(alignment: .leading, spacing: 5) {
+                Text(AppLocalizer.string("coaching.checkin.monthly.title"))
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Text(AppLocalizer.format(
+                    "coaching.checkin.chat.monthly.summary",
+                    checkIn.weight,
+                    checkIn.waist
+                ))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            }
+        case .legacy:
+            VStack(alignment: .leading, spacing: 5) {
+                Text(AppLocalizer.string("coaching.checkin.legacy.title"))
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Text(AppLocalizer.format(
+                    "coaching.checkin.chat.legacy.summary",
+                    checkIn.weight,
+                    checkIn.energy,
+                    checkIn.adherence
+                ))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            }
         }
     }
 }

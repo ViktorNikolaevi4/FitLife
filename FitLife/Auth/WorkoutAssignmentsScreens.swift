@@ -45,7 +45,11 @@ struct AssignWorkoutTemplateScreen: View {
 
                         Spacer()
 
-                        if store.isAssigned(clientId: client.id) {
+                        if store.isAssigning(clientId: client.id) {
+                            ProgressView()
+                                .controlSize(.small)
+                                .accessibilityLabel(AppLocalizer.string("trainer.assignments.sending"))
+                        } else if store.isAssigned(clientId: client.id) {
                             Label(appLanguage.localized("trainer.assignments.assigned"), systemImage: "checkmark.circle.fill")
                                 .font(.caption.weight(.medium))
                                 .foregroundStyle(.green)
@@ -57,6 +61,7 @@ struct AssignWorkoutTemplateScreen: View {
                             }
                             .buttonStyle(.borderedProminent)
                             .controlSize(.small)
+                            .disabled(store.isAssigning(clientId: client.id))
                         }
                     }
                     .padding(.vertical, 4)

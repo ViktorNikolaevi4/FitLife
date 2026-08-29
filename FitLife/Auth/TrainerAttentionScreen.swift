@@ -44,7 +44,7 @@ enum TrainerAttentionStatus: String, CaseIterable, Identifiable {
         case .noNutrition:
             return .green
         case .missedWorkouts:
-            return .red
+            return .orange
         }
     }
 
