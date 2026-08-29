@@ -783,7 +783,10 @@ struct AppNotificationDestinationScreen: View {
                     opensChatInitially: true
                 )
             case .checkInSubmitted:
-                TrainerNotificationBridgeScreen(notification: notification, trainerId: profile.id, clientId: notification.senderId)
+                TrainerClientNotificationDestination(
+                    trainerId: profile.id,
+                    clientId: notification.senderId
+                )
             case .coachingRequestSubmitted, .coachingRequestApproved, .coachingRequestRejected, .workoutReportSent, .nutritionReportSent, .coachNoteReceived, .workoutAssigned, .profileUpdateRequested:
                 TrainerClientNotificationDestination(trainerId: profile.id, clientId: notification.senderId)
             }
@@ -953,34 +956,6 @@ private struct CoachingRequestNotificationDestination: View {
         .task {
             await store.load()
         }
-    }
-}
-
-private struct TrainerNotificationBridgeScreen: View {
-    let notification: AppNotificationEvent
-    let trainerId: String
-    let clientId: String
-
-    @EnvironmentObject private var notificationsStore: AppNotificationsStore
-    @State private var openClientCard = false
-
-    var body: some View {
-        Color.clear
-            .navigationTitle(notification.localizedTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(AppLocalizer.string("notifications.inbox.move_to_client")) {
-                        Task {
-                            await notificationsStore.delete(notification)
-                            openClientCard = true
-                        }
-                    }
-                }
-            }
-            .navigationDestination(isPresented: $openClientCard) {
-                TrainerClientNotificationDestination(trainerId: trainerId, clientId: clientId)
-            }
     }
 }
 

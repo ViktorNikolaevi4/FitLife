@@ -102,16 +102,31 @@ enum CoachingNoteAuthorRole: String, Codable {
     case client
 }
 
+enum ProgressCheckInKind: String, Codable, Hashable {
+    case legacy
+    case weekly
+    case monthly
+}
+
 struct ProgressCheckIn: Identifiable, Hashable {
     let id: String
     let clientId: String
     let trainerId: String
+    let kind: ProgressCheckInKind
+    let schemaVersion: Int
     let weight: Double
     let waist: Double
     let chest: Double
     let hips: Double
     let energy: Int
+    let sleep: Int
+    let stress: Int
+    let motivation: Int
+    let recovery: Int
     let adherence: Int
+    let rpe: Int
+    let hasPain: Bool
+    let painNotes: String
     let notes: String
     let createdAt: Date
 
@@ -119,24 +134,42 @@ struct ProgressCheckIn: Identifiable, Hashable {
         id: String,
         clientId: String,
         trainerId: String,
+        kind: ProgressCheckInKind = .legacy,
+        schemaVersion: Int = 2,
         weight: Double,
         waist: Double,
         chest: Double,
         hips: Double,
         energy: Int,
+        sleep: Int = 0,
+        stress: Int = 0,
+        motivation: Int = 0,
+        recovery: Int = 0,
         adherence: Int,
+        rpe: Int = 0,
+        hasPain: Bool = false,
+        painNotes: String = "",
         notes: String,
         createdAt: Date = .now
     ) {
         self.id = id
         self.clientId = clientId
         self.trainerId = trainerId
+        self.kind = kind
+        self.schemaVersion = schemaVersion
         self.weight = weight
         self.waist = waist
         self.chest = chest
         self.hips = hips
         self.energy = energy
+        self.sleep = sleep
+        self.stress = stress
+        self.motivation = motivation
+        self.recovery = recovery
         self.adherence = adherence
+        self.rpe = rpe
+        self.hasPain = hasPain
+        self.painNotes = painNotes
         self.notes = notes
         self.createdAt = createdAt
     }
@@ -144,28 +177,40 @@ struct ProgressCheckIn: Identifiable, Hashable {
     init?(id: String, data: [String: Any]) {
         guard
             let clientId = data["clientId"] as? String,
-            let trainerId = data["trainerId"] as? String,
-            let weight = data["weight"] as? Double,
-            let waist = data["waist"] as? Double,
-            let chest = data["chest"] as? Double,
-            let hips = data["hips"] as? Double,
-            let energy = data["energy"] as? Int,
-            let adherence = data["adherence"] as? Int,
-            let notes = data["notes"] as? String
+            let trainerId = data["trainerId"] as? String
         else {
             return nil
+        }
+
+        func doubleValue(_ key: String) -> Double {
+            if let value = data[key] as? NSNumber { return value.doubleValue }
+            return data[key] as? Double ?? 0
+        }
+
+        func intValue(_ key: String) -> Int {
+            if let value = data[key] as? NSNumber { return value.intValue }
+            return data[key] as? Int ?? 0
         }
 
         self.id = id
         self.clientId = clientId
         self.trainerId = trainerId
-        self.weight = weight
-        self.waist = waist
-        self.chest = chest
-        self.hips = hips
-        self.energy = energy
-        self.adherence = adherence
-        self.notes = notes
+        self.kind = ProgressCheckInKind(rawValue: data["kind"] as? String ?? "") ?? .legacy
+        self.schemaVersion = intValue("schemaVersion")
+        self.weight = doubleValue("weight")
+        self.waist = doubleValue("waist")
+        self.chest = doubleValue("chest")
+        self.hips = doubleValue("hips")
+        self.energy = intValue("energy")
+        self.sleep = intValue("sleep")
+        self.stress = intValue("stress")
+        self.motivation = intValue("motivation")
+        self.recovery = intValue("recovery")
+        self.adherence = intValue("adherence")
+        self.rpe = intValue("rpe")
+        self.hasPain = data["hasPain"] as? Bool ?? false
+        self.painNotes = data["painNotes"] as? String ?? ""
+        self.notes = data["notes"] as? String ?? ""
         if let timestamp = data["createdAt"] as? Timestamp {
             self.createdAt = timestamp.dateValue()
         } else {
@@ -177,16 +222,28 @@ struct ProgressCheckIn: Identifiable, Hashable {
         [
             "clientId": clientId,
             "trainerId": trainerId,
+            "kind": kind.rawValue,
+            "schemaVersion": schemaVersion,
             "weight": weight,
             "waist": waist,
             "chest": chest,
             "hips": hips,
             "energy": energy,
+            "sleep": sleep,
+            "stress": stress,
+            "motivation": motivation,
+            "recovery": recovery,
             "adherence": adherence,
+            "rpe": rpe,
+            "hasPain": hasPain,
+            "painNotes": painNotes,
             "notes": notes,
             "createdAt": createdAt
         ]
     }
+
+    var includesWellbeing: Bool { kind != .monthly }
+    var includesMeasurements: Bool { kind != .weekly }
 }
 
 struct ProfileUpdateRequest: Identifiable, Hashable {
@@ -911,31 +968,71 @@ final class ClientCoachingHomeStore: ObservableObject {
         }
     }
 
-    func submitCheckIn(
-        weight: Double,
-        waist: Double,
-        chest: Double,
-        hips: Double,
+    func submitWeeklyCheckIn(
         energy: Int,
+        sleep: Int,
+        stress: Int,
+        motivation: Int,
+        recovery: Int,
         adherence: Int,
+        rpe: Int,
+        hasPain: Bool,
+        painNotes: String,
         notes: String,
         senderName: String = ""
     ) async {
-        isSubmitting = true
-        errorMessage = nil
-
         let checkIn = ProgressCheckIn(
             id: UUID().uuidString,
             clientId: clientId,
             trainerId: trainerId,
+            kind: .weekly,
+            weight: 0,
+            waist: 0,
+            chest: 0,
+            hips: 0,
+            energy: energy,
+            sleep: sleep,
+            stress: stress,
+            motivation: motivation,
+            recovery: recovery,
+            adherence: adherence,
+            rpe: rpe,
+            hasPain: hasPain,
+            painNotes: painNotes.trimmingCharacters(in: .whitespacesAndNewlines),
+            notes: notes
+        )
+
+        await submit(checkIn, senderName: senderName)
+    }
+
+    func submitMonthlyCheckIn(
+        weight: Double,
+        waist: Double,
+        chest: Double,
+        hips: Double,
+        notes: String,
+        senderName: String = ""
+    ) async {
+        let checkIn = ProgressCheckIn(
+            id: UUID().uuidString,
+            clientId: clientId,
+            trainerId: trainerId,
+            kind: .monthly,
             weight: weight,
             waist: waist,
             chest: chest,
             hips: hips,
-            energy: energy,
-            adherence: adherence,
-            notes: notes
+            energy: 0,
+            adherence: 0,
+            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines)
         )
+
+        await submit(checkIn, senderName: senderName)
+    }
+
+    private func submit(_ checkIn: ProgressCheckIn, senderName: String) async {
+        isSubmitting = true
+        errorMessage = nil
 
         do {
             try await firestore
@@ -1440,7 +1537,7 @@ struct ClientCoachingHomeScreen: View {
         }
         .sheet(isPresented: $showCheckInSheet) {
             NavigationStack {
-                ClientCheckInFormScreen(store: store)
+                ClientCheckInHubScreen(store: store)
             }
         }
         .sheet(isPresented: $showWorkoutReportSheet) {
@@ -1543,7 +1640,13 @@ struct ClientCoachingHomeScreen: View {
         guard let checkIn = store.checkIns.first else {
             return AppLocalizer.string("coaching.checkin.empty")
         }
-        return "\(checkIn.createdAt.formatted(date: .abbreviated, time: .omitted)) • \(String(format: "%.1f", checkIn.weight)) \(AppLocalizer.string("coaching.unit.kg"))"
+        let date = checkIn.createdAt.formatted(date: .abbreviated, time: .omitted)
+        switch checkIn.kind {
+        case .weekly:
+            return "\(date) • RPE \(checkIn.rpe)/10"
+        case .monthly, .legacy:
+            return "\(date) • \(String(format: "%.1f", checkIn.weight)) \(AppLocalizer.string("coaching.unit.kg"))"
+        }
     }
 
     private var workoutReportsSubtitle: String {
@@ -1961,94 +2064,6 @@ private struct ClientCoachingChatScreen: View {
     }
 }
 
-private struct ClientCheckInFormScreen: View {
-    @ObservedObject var store: ClientCoachingHomeStore
-    @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var sessionStore: AppSessionStore
-
-    @State private var weight: Double = 70
-    @State private var waist: Double = 80
-    @State private var chest: Double = 95
-    @State private var hips: Double = 95
-    @State private var energy = 3
-    @State private var adherence = 3
-    @State private var notes = ""
-
-    var body: some View {
-        Form {
-            Section(AppLocalizer.string("coaching.checkin.section.metrics")) {
-                metricField(AppLocalizer.string("coaching.intake.weight"), value: $weight, unit: AppLocalizer.string("coaching.unit.kg"), precision: .fractionLength(1))
-                metricField(AppLocalizer.string("coaching.intake.measurement.waist"), value: $waist, unit: AppLocalizer.string("coaching.unit.cm"), precision: .fractionLength(1))
-                metricField(AppLocalizer.string("coaching.intake.measurement.chest"), value: $chest, unit: AppLocalizer.string("coaching.unit.cm"), precision: .fractionLength(1))
-                metricField(AppLocalizer.string("coaching.intake.measurement.hips"), value: $hips, unit: AppLocalizer.string("coaching.unit.cm"), precision: .fractionLength(1))
-            }
-
-            Section(AppLocalizer.string("coaching.checkin.section.state")) {
-                Stepper("\(AppLocalizer.string("coaching.checkin.energy")): \(energy)/5", value: $energy, in: 1...5)
-                Stepper("\(AppLocalizer.string("coaching.checkin.adherence")): \(adherence)/5", value: $adherence, in: 1...5)
-                TextField(AppLocalizer.string("coaching.checkin.notes"), text: $notes, axis: .vertical)
-                    .lineLimit(3...6)
-            }
-
-            Section {
-                Button {
-                    Task {
-                        await store.submitCheckIn(
-                            weight: weight,
-                            waist: waist,
-                            chest: chest,
-                            hips: hips,
-                            energy: energy,
-                            adherence: adherence,
-                            notes: notes,
-                            senderName: sessionStore.profile?.displayName ?? ""
-                        )
-                        if store.errorMessage == nil {
-                            dismiss()
-                        }
-                    }
-                } label: {
-                    HStack {
-                        Text(AppLocalizer.string("coaching.checkin.action.submit"))
-                        Spacer()
-                        if store.isSubmitting {
-                            ProgressView()
-                        }
-                    }
-                }
-                .disabled(store.isSubmitting)
-            }
-        }
-        .navigationTitle(AppLocalizer.string("coaching.checkin.title"))
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button(AppLocalizer.string("common.cancel")) {
-                    dismiss()
-                }
-            }
-        }
-    }
-
-    private func metricField(
-        _ title: String,
-        value: Binding<Double>,
-        unit: String,
-        precision: FloatingPointFormatStyle<Double>.Configuration.Precision
-    ) -> some View {
-        HStack {
-            Text(title)
-            Spacer()
-            TextField("0", value: value, format: .number.precision(precision))
-                .keyboardType(.decimalPad)
-                .multilineTextAlignment(.trailing)
-                .frame(width: 90)
-            Text(unit)
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
 private struct ClientWorkoutReportComposerScreen: View {
     let workouts: [WorkoutSession]
 
@@ -2225,6 +2240,11 @@ struct TrainerClientSupportScreen: View {
                 }
 
                 updateRequestsCard
+                if store.checkIns.contains(where: { $0.kind == .weekly }) {
+                    TrainerWeeklyCheckInOverviewCard(checkIns: store.checkIns) {
+                        showAllCheckIns = true
+                    }
+                }
                 trainerNavigationCard(
                     icon: "clock",
                     title: AppLocalizer.string("coaching.checkin.history"),
@@ -2344,7 +2364,13 @@ struct TrainerClientSupportScreen: View {
         guard let checkIn = store.checkIns.first else {
             return AppLocalizer.string("coaching.checkin.empty")
         }
-        return "\(checkIn.createdAt.formatted(date: .abbreviated, time: .shortened)) • \(String(format: "%.1f", checkIn.weight)) \(AppLocalizer.string("coaching.unit.kg"))"
+        let date = checkIn.createdAt.formatted(date: .abbreviated, time: .shortened)
+        switch checkIn.kind {
+        case .weekly:
+            return "\(date) • RPE \(checkIn.rpe)/10"
+        case .monthly, .legacy:
+            return "\(date) • \(String(format: "%.1f", checkIn.weight)) \(AppLocalizer.string("coaching.unit.kg"))"
+        }
     }
 
     private var workoutReportsSubtitle: String {
@@ -2838,15 +2864,14 @@ private struct TrainerClientProgressSnapshot {
         return nutritionReports.filter { $0.createdAt >= periodStart || $0.dateTo >= periodStart }
     }
 
-    private var latestCheckIn: ProgressCheckIn? {
-        periodCheckIns.sorted { $0.createdAt > $1.createdAt }.first
+    private var measurementCheckIns: [ProgressCheckIn] {
+        periodCheckIns
+            .filter { $0.includesMeasurements && $0.weight > 0 }
+            .sorted { $0.createdAt > $1.createdAt }
     }
 
-    private var previousCheckIn: ProgressCheckIn? {
-        let sorted = periodCheckIns.sorted { $0.createdAt > $1.createdAt }
-        guard sorted.count > 1 else { return nil }
-        return sorted[1]
-    }
+    private var latestCheckIn: ProgressCheckIn? { measurementCheckIns.first }
+    private var previousCheckIn: ProgressCheckIn? { measurementCheckIns.dropFirst().first }
 
     var hasAnyData: Bool {
         checkIns.isEmpty == false || workoutReports.isEmpty == false || nutritionReports.isEmpty == false
@@ -3176,25 +3201,99 @@ private struct CoachingCheckInRow: View {
     let isTrainerView: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(checkIn.createdAt.formatted(date: .abbreviated, time: .omitted))
-                .font(.headline)
-            Text("\(AppLocalizer.string("coaching.intake.weight")): \(String(format: "%.1f", checkIn.weight)) \(AppLocalizer.string("coaching.unit.kg"))")
-                .foregroundStyle(.secondary)
-            if isTrainerView {
-                Text("\(AppLocalizer.string("coaching.intake.measurement.waist")): \(String(format: "%.1f", checkIn.waist)) • \(AppLocalizer.string("coaching.intake.measurement.chest")): \(String(format: "%.1f", checkIn.chest)) • \(AppLocalizer.string("coaching.intake.measurement.hips")): \(String(format: "%.1f", checkIn.hips))")
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(.headline)
+                Spacer()
+                Text(checkIn.createdAt.formatted(date: .abbreviated, time: .omitted))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Text("\(AppLocalizer.string("coaching.checkin.energy")): \(checkIn.energy)/5  •  \(AppLocalizer.string("coaching.checkin.adherence")): \(checkIn.adherence)/5")
+
+            switch checkIn.kind {
+            case .weekly:
+                weeklyContent
+            case .monthly:
+                measurementsContent
+            case .legacy:
+                legacyContent
+            }
+
+            if checkIn.hasPain {
+                Label(
+                    checkIn.painNotes.isEmpty
+                        ? AppLocalizer.string("coaching.checkin.pain.reported")
+                        : checkIn.painNotes,
+                    systemImage: "exclamationmark.triangle.fill"
+                )
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.orange)
+            }
+
             if checkIn.notes.isEmpty == false {
                 Text(checkIn.notes)
-                    .font(.caption)
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
+    }
+
+    private var title: String {
+        switch checkIn.kind {
+        case .weekly: return AppLocalizer.string("coaching.checkin.weekly.title")
+        case .monthly: return AppLocalizer.string("coaching.checkin.monthly.title")
+        case .legacy: return AppLocalizer.string("coaching.checkin.legacy.title")
+        }
+    }
+
+    private var weeklyContent: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            metricLine([
+                ("coaching.checkin.energy", checkIn.energy),
+                ("coaching.checkin.sleep", checkIn.sleep),
+                ("coaching.checkin.stress", checkIn.stress)
+            ], maximum: 10)
+            metricLine([
+                ("coaching.checkin.motivation", checkIn.motivation),
+                ("coaching.checkin.recovery", checkIn.recovery)
+            ], maximum: 10)
+            metricLine([
+                ("coaching.checkin.adherence", checkIn.adherence),
+                ("coaching.checkin.rpe", checkIn.rpe)
+            ], maximum: 10)
+        }
+    }
+
+    private var measurementsContent: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("\(AppLocalizer.string("coaching.intake.weight")): \(formatted(checkIn.weight)) \(AppLocalizer.string("coaching.unit.kg"))")
+            Text("\(AppLocalizer.string("coaching.intake.measurement.waist")): \(formatted(checkIn.waist)) • \(AppLocalizer.string("coaching.intake.measurement.chest")): \(formatted(checkIn.chest)) • \(AppLocalizer.string("coaching.intake.measurement.hips")): \(formatted(checkIn.hips)) \(AppLocalizer.string("coaching.unit.cm"))")
+        }
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+    }
+
+    private var legacyContent: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            measurementsContent
+            metricLine([
+                ("coaching.checkin.energy", checkIn.energy),
+                ("coaching.checkin.adherence", checkIn.adherence)
+            ], maximum: 5)
+        }
+    }
+
+    private func metricLine(_ metrics: [(String, Int)], maximum: Int) -> some View {
+        Text(metrics.map { "\(AppLocalizer.string($0.0)): \($0.1)/\(maximum)" }.joined(separator: "  •  "))
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func formatted(_ value: Double) -> String {
+        String(format: "%.1f", value)
     }
 }
 
