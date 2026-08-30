@@ -479,7 +479,8 @@ final class ClientAssignmentDetailStore: ObservableObject {
 @MainActor
 final class TrainerAssignmentsOverviewStore: ObservableObject {
     @Published private(set) var assignments: [WorkoutAssignment] = []
-    @Published private(set) var clientNamesById: [String: String] = [:]
+    @Published private(set) var clientsById: [String: AppUserProfile] = [:]
+    @Published private(set) var activeClientIds: Set<String> = []
     @Published private(set) var isLoading = false
     @Published var errorMessage: String?
 
@@ -496,28 +497,42 @@ final class TrainerAssignmentsOverviewStore: ObservableObject {
         errorMessage = nil
 
         do {
-            let snapshot = try await firestore
+            async let assignmentsSnapshot = firestore
                 .collection("workout_assignments")
                 .whereField("trainerId", isEqualTo: trainerId)
                 .order(by: "assignedAt", descending: true)
                 .getDocuments()
 
-            let loadedAssignments = snapshot.documents.compactMap { document in
+            async let linksSnapshot = firestore
+                .collection("trainer_client_links")
+                .whereField("trainerId", isEqualTo: trainerId)
+                .whereField("status", isEqualTo: "active")
+                .getDocuments()
+
+            let (assignmentDocs, linkDocs) = try await (assignmentsSnapshot, linksSnapshot)
+
+            let loadedAssignments = assignmentDocs.documents.compactMap { document in
                 WorkoutAssignment(id: document.documentID, data: document.data())
             }
             assignments = loadedAssignments
 
-            var names: [String: String] = [:]
-            for clientId in Set(loadedAssignments.map(\.clientId)) {
+            let linkedClientIds = Set(linkDocs.documents.compactMap { document in
+                TrainerClientLink(id: document.documentID, data: document.data())?.clientId
+            })
+            activeClientIds = linkedClientIds
+
+            let allClientIds = linkedClientIds.union(loadedAssignments.map(\.clientId))
+            var loadedClients: [String: AppUserProfile] = [:]
+            for clientId in allClientIds {
                 let snapshot = try await firestore.collection("users").document(clientId).getDocument()
                 guard let data = snapshot.data(),
                       let profile = AppUserProfile(id: snapshot.documentID, data: data) else {
                     continue
                 }
-                names[clientId] = profile.displayName
+                loadedClients[clientId] = profile
             }
 
-            clientNamesById = names
+            clientsById = loadedClients
             isLoading = false
         } catch {
             errorMessage = error.localizedDescription
@@ -526,10 +541,51 @@ final class TrainerAssignmentsOverviewStore: ObservableObject {
     }
 
     func clientName(for clientId: String) -> String? {
-        clientNamesById[clientId]
+        clientsById[clientId]?.displayName
     }
 
     func assignments(for status: WorkoutAssignmentStatus) -> [WorkoutAssignment] {
         assignments.filter { $0.status == status }
+    }
+
+    var clientSummaries: [TrainerAssignmentClientSummary] {
+        let assignmentsByClient = Dictionary(grouping: assignments, by: \.clientId)
+        let clientIds = activeClientIds.union(assignmentsByClient.keys)
+
+        return clientIds
+            .map { clientId in
+                let clientAssignments = (assignmentsByClient[clientId] ?? [])
+                    .sorted { $0.assignedAt > $1.assignedAt }
+                let profile = clientsById[clientId]
+                return TrainerAssignmentClientSummary(
+                    id: clientId,
+                    displayName: profile?.displayName ?? profile?.email ?? clientId,
+                    email: profile?.email ?? "",
+                    isActiveClient: activeClientIds.contains(clientId),
+                    assignments: clientAssignments
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.isActiveClient != rhs.isActiveClient {
+                    return lhs.isActiveClient
+                }
+                return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+            }
+    }
+}
+
+struct TrainerAssignmentClientSummary: Identifiable {
+    let id: String
+    let displayName: String
+    let email: String
+    let isActiveClient: Bool
+    let assignments: [WorkoutAssignment]
+
+    var activeAssignmentCount: Int {
+        assignments.filter { $0.status == .assigned || $0.status == .started }.count
+    }
+
+    var needsAssignment: Bool {
+        isActiveClient && activeAssignmentCount == 0
     }
 }

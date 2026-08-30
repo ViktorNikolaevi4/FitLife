@@ -42,6 +42,7 @@ struct DashboardScreen: View {
     @State private var showCalendar = false
     @State private var showSettings = false
     @State private var showStepsSettings = false
+    @State private var showTrainerCabinet = false
     @State private var coachingDestination: DashboardCoachingDestination?
     @State private var selectedTrainerAssignment: WorkoutAssignment?
 
@@ -138,7 +139,15 @@ struct DashboardScreen: View {
                         }
                         .padding(.horizontal)
 
-                        if clientProfile == nil {
+                        if sessionStore.currentRole == .trainer {
+                            TrainingDiaryCard(
+                                theme: theme,
+                                title: AppLocalizer.string("trainer.cabinet.title"),
+                                subtitle: AppLocalizer.string("trainer.cabinet.subtitle"),
+                                iconName: "person.2.fill",
+                                onOpen: { showTrainerCabinet = true }
+                            )
+                        } else if clientProfile == nil {
                             TrainingDiaryCard(
                                 theme: theme,
                                 title: AppLocalizer.string("training.diary"),
@@ -160,6 +169,21 @@ struct DashboardScreen: View {
             .navigationBarHidden(true)
             .navigationDestination(isPresented: $showSettings) {
                 SettingsScreenContainer(showsFloatingAddButton: $showsFloatingAddButton)
+            }
+            .navigationDestination(isPresented: $showTrainerCabinet) {
+                if let trainerId = sessionStore.firebaseUser?.uid,
+                   let currentUser = sessionStore.profile {
+                    TrainerCabinetScreen(
+                        trainerId: trainerId,
+                        currentUser: currentUser
+                    )
+                } else {
+                    ContentUnavailableView(
+                        AppLocalizer.string("trainer.cabinet.unavailable.title"),
+                        systemImage: "person.crop.circle.badge.exclamationmark",
+                        description: Text(AppLocalizer.string("trainer.cabinet.unavailable.subtitle"))
+                    )
+                }
             }
             .navigationDestination(item: $coachingDestination) { destination in
                 switch destination {

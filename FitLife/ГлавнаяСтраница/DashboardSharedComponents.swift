@@ -374,6 +374,8 @@ struct WaterSummaryCard: View {
 struct TrainingDiaryCard: View {
     let theme: AppTheme
     let title: String
+    var subtitle: String = AppLocalizer.string("training.diary.subtitle")
+    var iconName: String = "dumbbell.fill"
     let onOpen: () -> Void
 
     var body: some View {
@@ -397,7 +399,7 @@ struct TrainingDiaryCard: View {
                         }
                         .shadow(color: theme.accent.opacity(0.28), radius: 18, x: 0, y: 8)
 
-                    Image(systemName: "dumbbell.fill")
+                    Image(systemName: iconName)
                         .font(.system(size: 27, weight: .semibold))
                         .foregroundStyle(
                             LinearGradient(
@@ -418,7 +420,7 @@ struct TrainingDiaryCard: View {
                         .foregroundStyle(theme.primaryText)
                         .lineLimit(2)
 
-                    Text(AppLocalizer.string("training.diary.subtitle"))
+                    Text(subtitle)
                         .font(.subheadline)
                         .foregroundStyle(theme.secondaryText)
                         .lineLimit(2)

@@ -149,62 +149,6 @@ struct SettingsScreen: View {
                     }
                 }
 
-                if sessionStore.currentRole == .trainer,
-                   let trainerId = sessionStore.firebaseUser?.uid,
-                   let currentUser = sessionStore.profile {
-                    Section(appLanguage.localized("settings.trainer.section")) {
-                        NavigationLink {
-                            TrainerAttentionScreen(trainerId: trainerId)
-                        } label: {
-                            SettingsRow(
-                                icon: "exclamationmark.bubble.fill",
-                                iconBg: .red,
-                                title: appLanguage.localized("settings.trainer.attention")
-                            )
-                        }
-
-                        NavigationLink {
-                            TrainerAssignedClientsScreen(trainerId: trainerId)
-                        } label: {
-                            SettingsRow(
-                                icon: "person.2.fill",
-                                iconBg: .green,
-                                title: appLanguage.localized("settings.trainer.clients")
-                            )
-                        }
-
-                        NavigationLink {
-                            WorkoutTemplatesScreen(trainerId: trainerId)
-                        } label: {
-                            SettingsRow(
-                                icon: "doc.text.fill",
-                                iconBg: .orange,
-                                title: appLanguage.localized("settings.trainer.templates")
-                            )
-                        }
-
-                        NavigationLink {
-                            TrainerAssignmentsOverviewScreen(trainerId: trainerId)
-                        } label: {
-                            SettingsRow(
-                                icon: "list.bullet.clipboard",
-                                iconBg: .pink,
-                                title: appLanguage.localized("settings.trainer.assignments")
-                            )
-                        }
-
-                        NavigationLink {
-                            CoachingRequestsReviewScreen(currentUser: currentUser)
-                        } label: {
-                            SettingsRow(
-                                icon: "text.badge.checkmark",
-                                iconBg: .mint,
-                                title: appLanguage.localized("settings.trainer.requests")
-                            )
-                        }
-                    }
-                }
-
                 Section(appLanguage.localized("settings.language.section")) {
                     PremiumSegmentedPicker(
                         items: AppLanguage.allCases.map { language in
