@@ -422,6 +422,7 @@ final class ClientAssignmentDetailStore: ObservableObject {
     @Published private(set) var blocks: [WorkoutTemplateBlockItem] = []
     @Published private(set) var exercises: [WorkoutTemplateExerciseItem] = []
     @Published private(set) var isLoading = false
+    @Published private(set) var isCreatingEditableCopy = false
     @Published var errorMessage: String?
 
     private let assignment: WorkoutAssignment
@@ -472,6 +473,59 @@ final class ClientAssignmentDetailStore: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
             isLoading = false
+        }
+    }
+
+    /// Creates a new personal template from the immutable assignment snapshot.
+    /// The completed assignment itself stays untouched and remains a reliable history record.
+    func createEditableTemplateCopy() async -> WorkoutTemplate? {
+        guard exercises.isEmpty == false, isCreatingEditableCopy == false else { return nil }
+        isCreatingEditableCopy = true
+        defer { isCreatingEditableCopy = false }
+        errorMessage = nil
+
+        let templateRef = firestore.collection("workout_templates").document()
+        let now = Date()
+        let editableTemplate = WorkoutTemplate(
+            id: templateRef.documentID,
+            trainerId: assignment.trainerId,
+            title: AppLocalizer.format(
+                "trainer.assignment.reuse.copy_title",
+                assignment.titleSnapshot
+            ),
+            notes: assignment.notesSnapshot,
+            createdAt: now,
+            updatedAt: now
+        )
+
+        do {
+            // Child-write rules verify the already existing parent document.
+            try await templateRef.setData(editableTemplate.firestoreData)
+
+            do {
+                let batch = firestore.batch()
+                for block in blocks {
+                    batch.setData(
+                        block.firestoreData,
+                        forDocument: templateRef.collection("blocks").document(block.id)
+                    )
+                }
+                for exercise in exercises {
+                    batch.setData(
+                        exercise.firestoreData,
+                        forDocument: templateRef.collection("exercises").document(exercise.id)
+                    )
+                }
+                try await batch.commit()
+            } catch {
+                try? await templateRef.delete()
+                throw error
+            }
+
+            return editableTemplate
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
         }
     }
 }

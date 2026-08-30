@@ -365,6 +365,13 @@
 "trainer.overview.client.latest" = "Latest: %@";
 "trainer.overview.client.empty.title" = "No assignments yet";
 "trainer.overview.client.empty.subtitle" = "Workouts assigned to this client will appear here.";
+"trainer.assignment.detail.info" = "Information";
+"trainer.assignment.detail.status" = "Status";
+"trainer.assignment.detail.assigned_at" = "Assigned";
+"trainer.assignment.detail.reps" = "%d sets · %d reps";
+"trainer.assignment.detail.duration" = "%d sets · %d sec";
+"trainer.assignment.reuse.action" = "Create new from this workout";
+"trainer.assignment.reuse.copy_title" = "%@ — copy";
 "assignment.status.assigned" = "Assigned";
 "assignment.status.started" = "Started";
 "assignment.status.completed" = "Completed";

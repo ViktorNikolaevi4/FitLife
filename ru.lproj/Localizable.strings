@@ -365,6 +365,13 @@
 "trainer.overview.client.latest" = "Последняя: %@";
 "trainer.overview.client.empty.title" = "Назначений пока нет";
 "trainer.overview.client.empty.subtitle" = "Назначенные этому клиенту тренировки появятся здесь.";
+"trainer.assignment.detail.info" = "Информация";
+"trainer.assignment.detail.status" = "Статус";
+"trainer.assignment.detail.assigned_at" = "Назначена";
+"trainer.assignment.detail.reps" = "%d подх. · %d повт.";
+"trainer.assignment.detail.duration" = "%d подх. · %d сек.";
+"trainer.assignment.reuse.action" = "Создать новую на основе этой";
+"trainer.assignment.reuse.copy_title" = "%@ — копия";
 "assignment.status.assigned" = "Назначено";
 "assignment.status.started" = "Начато";
 "assignment.status.completed" = "Завершено";
