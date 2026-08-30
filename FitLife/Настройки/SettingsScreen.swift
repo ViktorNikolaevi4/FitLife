@@ -146,6 +146,16 @@ struct SettingsScreen: View {
                                 )
                             }
                         }
+
+                        NavigationLink {
+                            WorkoutTemplateModerationScreen()
+                        } label: {
+                            SettingsRow(
+                                icon: "books.vertical.fill",
+                                iconBg: .orange,
+                                title: appLanguage.localized("settings.admin.template_moderation")
+                            )
+                        }
                     }
                 }
 

@@ -328,6 +328,100 @@ service cloud.firestore {
       }
     }
 
+    // Curated, read-only templates maintained by the FitLife owner. Trainers
+    // import independent copies into workout_templates before editing them.
+    match /workout_template_library/{templateId} {
+      allow read: if isOwner() || isTrainer();
+      allow create, update, delete: if isOwner();
+
+      match /exercises/{exerciseId} {
+        allow read: if isOwner() || isTrainer();
+        allow write: if isOwner();
+      }
+
+      match /blocks/{blockId} {
+        allow read: if isOwner() || isTrainer();
+        allow write: if isOwner();
+      }
+    }
+
+    // Trainers submit snapshots of their own templates. Only the owner can
+    // review a submission and publish its independent copy to the library.
+    match /workout_template_submissions/{submissionId} {
+      function sourceTemplateBelongsToTrainer() {
+        return exists(/databases/$(database)/documents/workout_templates/$(request.resource.data.sourceTemplateId))
+          && get(/databases/$(database)/documents/workout_templates/$(request.resource.data.sourceTemplateId)).data.trainerId == request.auth.uid;
+      }
+
+      function isValidPendingSubmission() {
+        return request.resource.data.keys().hasOnly([
+            "trainerId",
+            "trainerName",
+            "sourceTemplateId",
+            "title",
+            "notes",
+            "exerciseCount",
+            "status",
+            "submittedAt",
+            "reviewNote"
+          ])
+          && request.resource.data.trainerId == request.auth.uid
+          && request.resource.data.trainerName is string
+          && request.resource.data.sourceTemplateId is string
+          && request.resource.data.title is string
+          && request.resource.data.notes is string
+          && request.resource.data.exerciseCount is int
+          && request.resource.data.exerciseCount > 0
+          && request.resource.data.status == "pending"
+          && request.resource.data.submittedAt is timestamp
+          && request.resource.data.reviewNote == ""
+          && sourceTemplateBelongsToTrainer();
+      }
+
+      allow read: if isOwner()
+        || (isTrainer() && resource.data.trainerId == request.auth.uid);
+
+      allow create: if isTrainer() && isValidPendingSubmission();
+
+      allow update: if isOwner()
+        || (
+          isTrainer()
+          && resource.data.trainerId == request.auth.uid
+          && resource.data.status == "rejected"
+          && isValidPendingSubmission()
+        );
+
+      allow delete: if isOwner();
+
+      match /exercises/{exerciseId} {
+        allow read: if isOwner()
+          || (
+            isTrainer()
+            && get(/databases/$(database)/documents/workout_template_submissions/$(submissionId)).data.trainerId == request.auth.uid
+          );
+        allow write: if isOwner()
+          || (
+            isTrainer()
+            && getAfter(/databases/$(database)/documents/workout_template_submissions/$(submissionId)).data.trainerId == request.auth.uid
+            && getAfter(/databases/$(database)/documents/workout_template_submissions/$(submissionId)).data.status == "pending"
+          );
+      }
+
+      match /blocks/{blockId} {
+        allow read: if isOwner()
+          || (
+            isTrainer()
+            && get(/databases/$(database)/documents/workout_template_submissions/$(submissionId)).data.trainerId == request.auth.uid
+          );
+        allow write: if isOwner()
+          || (
+            isTrainer()
+            && getAfter(/databases/$(database)/documents/workout_template_submissions/$(submissionId)).data.trainerId == request.auth.uid
+            && getAfter(/databases/$(database)/documents/workout_template_submissions/$(submissionId)).data.status == "pending"
+          );
+      }
+    }
+
     match /workout_assignments/{assignmentId} {
       allow create: if isTrainer()
         && request.auth.uid == request.resource.data.trainerId

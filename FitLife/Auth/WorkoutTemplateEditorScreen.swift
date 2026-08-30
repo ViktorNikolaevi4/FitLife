@@ -7,6 +7,7 @@ private let workoutTemplateEditorBorder = Color(.separator).opacity(0.22)
 struct WorkoutTemplateEditorScreen: View {
     let template: WorkoutTemplate
 
+    @EnvironmentObject private var sessionStore: AppSessionStore
     @StateObject private var store: WorkoutTemplateContentStore
     @State private var showAddExercise = false
     @State private var showAddBlock = false
@@ -22,6 +23,7 @@ struct WorkoutTemplateEditorScreen: View {
     @State private var pendingEmptyBlockDeletion: WorkoutTemplateBlockItem?
     @State private var pendingDeleteBlock: WorkoutTemplateBlockItem?
     @State private var editingExercise: WorkoutTemplateExerciseItem?
+    @State private var showLibrarySubmissionConfirmation = false
     @Query(sort: \CustomWorkoutExerciseTemplate.createdAt) private var customTemplates: [CustomWorkoutExerciseTemplate]
     @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
 
@@ -194,6 +196,15 @@ struct WorkoutTemplateEditorScreen: View {
                     }
                 }
             }
+
+            if template.sourceLibraryTemplateId == nil {
+                WorkoutTemplateSubmissionSection(
+                    submission: store.librarySubmission,
+                    isSubmitting: store.isSubmittingToLibrary,
+                    isSubmitDisabled: store.exercises.isEmpty,
+                    onSubmit: { showLibrarySubmissionConfirmation = true }
+                )
+            }
         }
         .listStyle(.insetGrouped)
         .navigationTitle(template.title)
@@ -341,6 +352,22 @@ struct WorkoutTemplateEditorScreen: View {
             }
         }
         .confirmationDialog(
+            AppLocalizer.string("trainer.templates.submission.confirm.title"),
+            isPresented: $showLibrarySubmissionConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(AppLocalizer.string("trainer.templates.submission.confirm.action")) {
+                Task {
+                    _ = await store.submitToLibrary(
+                        trainerName: sessionStore.profile?.displayName ?? ""
+                    )
+                }
+            }
+            Button(AppLocalizer.string("common.cancel"), role: .cancel) {}
+        } message: {
+            Text(AppLocalizer.string("trainer.templates.submission.confirm.message"))
+        }
+        .confirmationDialog(
             AppLocalizer.string("workout.exercise.delete.title"),
             isPresented: Binding(
                 get: { pendingDeleteExercise != nil },
@@ -464,6 +491,84 @@ struct WorkoutTemplateEditorScreen: View {
         }
         .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
         .listRowBackground(Color.clear)
+    }
+}
+
+private struct WorkoutTemplateSubmissionSection: View {
+    let submission: WorkoutTemplateSubmission?
+    let isSubmitting: Bool
+    let isSubmitDisabled: Bool
+    let onSubmit: () -> Void
+
+    var body: some View {
+        Section {
+            if let submission {
+                HStack(spacing: 12) {
+                    Image(systemName: icon(for: submission.status))
+                        .foregroundStyle(color(for: submission.status))
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(AppLocalizer.string(submission.status.localizationKey))
+                            .font(.headline)
+                        Text(submission.submittedAt.formatted(date: .abbreviated, time: .shortened))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if submission.status == .rejected,
+                   submission.reviewNote.isEmpty == false {
+                    Text(submission.reviewNote)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if canSubmit {
+                Button(action: onSubmit) {
+                    HStack {
+                        Label(buttonTitle, systemImage: "books.vertical.fill")
+                        Spacer()
+                        if isSubmitting {
+                            ProgressView()
+                        }
+                    }
+                }
+                .disabled(isSubmitDisabled || isSubmitting)
+            }
+        } header: {
+            Text(AppLocalizer.string("trainer.templates.submission.section"))
+        } footer: {
+            Text(AppLocalizer.string("trainer.templates.submission.footer"))
+        }
+    }
+
+    private var canSubmit: Bool {
+        submission?.status != .pending && submission?.status != .approved
+    }
+
+    private var buttonTitle: String {
+        AppLocalizer.string(
+            submission?.status == .rejected
+                ? "trainer.templates.submission.resubmit"
+                : "trainer.templates.submission.send"
+        )
+    }
+
+    private func color(for status: WorkoutTemplateSubmissionStatus) -> Color {
+        switch status {
+        case .pending: return .orange
+        case .approved: return .green
+        case .rejected: return .red
+        }
+    }
+
+    private func icon(for status: WorkoutTemplateSubmissionStatus) -> String {
+        switch status {
+        case .pending: return "clock.badge"
+        case .approved: return "checkmark.seal.fill"
+        case .rejected: return "xmark.octagon.fill"
+        }
     }
 }
 

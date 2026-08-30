@@ -277,6 +277,8 @@ final class WorkoutTemplateContentStore: ObservableObject {
     @Published private(set) var blocks: [WorkoutTemplateBlockItem] = []
     @Published private(set) var exercises: [WorkoutTemplateExerciseItem] = []
     @Published private(set) var isLoading = false
+    @Published private(set) var librarySubmission: WorkoutTemplateSubmission?
+    @Published private(set) var isSubmittingToLibrary = false
     @Published var errorMessage: String?
 
     private let template: WorkoutTemplate
@@ -324,10 +326,99 @@ final class WorkoutTemplateContentStore: ObservableObject {
                 )
             }
             await migrateLegacyRoundDrivenSetsIfNeeded()
+            await loadLibrarySubmission()
             isLoading = false
         } catch {
             errorMessage = error.localizedDescription
             isLoading = false
+        }
+    }
+
+    private var librarySubmissionID: String {
+        "\(template.trainerId)_\(template.id)"
+    }
+
+    private func loadLibrarySubmission() async {
+        do {
+            let snapshot = try await firestore
+                .collection("workout_template_submissions")
+                .whereField("trainerId", isEqualTo: template.trainerId)
+                .whereField("sourceTemplateId", isEqualTo: template.id)
+                .limit(to: 1)
+                .getDocuments()
+            guard let document = snapshot.documents.first else {
+                librarySubmission = nil
+                return
+            }
+            librarySubmission = WorkoutTemplateSubmission(
+                id: document.documentID,
+                data: document.data()
+            )
+        } catch {
+            // Submission state is supplementary and must not hide the template.
+            librarySubmission = nil
+        }
+    }
+
+    func submitToLibrary(trainerName: String) async -> Bool {
+        guard template.sourceLibraryTemplateId == nil,
+              exercises.isEmpty == false,
+              isSubmittingToLibrary == false,
+              librarySubmission?.status != .pending,
+              librarySubmission?.status != .approved else {
+            return false
+        }
+
+        isSubmittingToLibrary = true
+        defer { isSubmittingToLibrary = false }
+        errorMessage = nil
+
+        let submissionRef = firestore
+            .collection("workout_template_submissions")
+            .document(librarySubmissionID)
+        let normalizedTrainerName = trainerName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let submission = WorkoutTemplateSubmission(
+            id: submissionRef.documentID,
+            trainerId: template.trainerId,
+            trainerName: normalizedTrainerName,
+            sourceTemplateId: template.id,
+            title: template.title,
+            notes: template.notes,
+            exerciseCount: exercises.count
+        )
+
+        do {
+            var oldDocuments: [QueryDocumentSnapshot] = []
+            if librarySubmission?.status == .rejected {
+                async let oldExerciseDocs = submissionRef.collection("exercises").getDocuments()
+                async let oldBlockDocs = submissionRef.collection("blocks").getDocuments()
+                let (oldExercises, oldBlocks) = try await (oldExerciseDocs, oldBlockDocs)
+                oldDocuments = oldExercises.documents + oldBlocks.documents
+            }
+
+            let batch = firestore.batch()
+            batch.setData(submission.firestoreData, forDocument: submissionRef)
+            for document in oldDocuments {
+                batch.deleteDocument(document.reference)
+            }
+            for block in blocks {
+                batch.setData(
+                    block.firestoreData,
+                    forDocument: submissionRef.collection("blocks").document(block.id)
+                )
+            }
+            for exercise in exercises {
+                batch.setData(
+                    exercise.firestoreData,
+                    forDocument: submissionRef.collection("exercises").document(exercise.id)
+                )
+            }
+            try await batch.commit()
+            librarySubmission = submission
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
         }
     }
 
