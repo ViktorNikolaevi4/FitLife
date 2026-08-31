@@ -270,6 +270,24 @@ struct WorkoutTemplateBlockItem: Identifiable, Hashable {
     func subtitle(exerciseCount: Int) -> String {
         workoutBlockSubtitle(title: displayTitle, type: type, mode: mode, preset: preset, rounds: rounds, exerciseCount: exerciseCount, durationMinutes: durationMinutes, workSeconds: workSeconds, restSeconds: restSeconds, restBetweenRoundsSeconds: restBetweenRoundsSeconds)
     }
+
+    func replacingOrderIndex(_ orderIndex: Int) -> WorkoutTemplateBlockItem {
+        WorkoutTemplateBlockItem(
+            id: id,
+            templateId: templateId,
+            title: title,
+            type: type,
+            mode: mode,
+            preset: preset,
+            orderIndex: orderIndex,
+            rounds: rounds,
+            durationMinutes: durationMinutes,
+            workSeconds: workSeconds,
+            restSeconds: restSeconds,
+            restBetweenRoundsSeconds: restBetweenRoundsSeconds,
+            groups: groups
+        )
+    }
 }
 
 @MainActor
@@ -565,6 +583,9 @@ final class WorkoutTemplateContentStore: ObservableObject {
             var newExercises: [WorkoutTemplateExerciseItem] = []
             var nextBlockIndex = blocks.count
             var nextExerciseIndex = exercises.count
+            var orderedBlockIDs = blocks
+                .sorted { $0.orderIndex < $1.orderIndex }
+                .map(\.id)
 
             // Library templates are copied deterministically rather than being
             // described to the language model. This preserves their exact
@@ -607,6 +628,7 @@ final class WorkoutTemplateContentStore: ObservableObject {
                     copiedBlockIDs[sourceBlock.id] = copiedBlock.id
                     batch.setData(copiedBlock.firestoreData, forDocument: blockRef)
                     newBlocks.append(copiedBlock)
+                    orderedBlockIDs.append(copiedBlock.id)
                     nextBlockIndex += 1
                 }
 
@@ -643,11 +665,6 @@ final class WorkoutTemplateContentStore: ObservableObject {
             for generatedBlock in resolvedDraft.blocks {
                 let existingBlock = generatedBlock.targetBlockId.flatMap { targetID in
                     blocks.first { $0.id == targetID }
-                } ?? blocks.first { block in
-                    block.title.trimmingCharacters(in: .whitespacesAndNewlines)
-                        .caseInsensitiveCompare(
-                            generatedBlock.title.trimmingCharacters(in: .whitespacesAndNewlines)
-                        ) == .orderedSame
                 }
 
                 let destinationBlock: WorkoutTemplateBlockItem
@@ -691,6 +708,12 @@ final class WorkoutTemplateContentStore: ObservableObject {
                     )
                     batch.setData(block.firestoreData, forDocument: blockRef)
                     newBlocks.append(block)
+                    if let anchorID = generatedBlock.insertAfterBlockId,
+                       let anchorIndex = orderedBlockIDs.firstIndex(of: anchorID) {
+                        orderedBlockIDs.insert(block.id, at: anchorIndex + 1)
+                    } else {
+                        orderedBlockIDs.append(block.id)
+                    }
                     nextBlockIndex += 1
                     destinationBlock = block
                 }
@@ -717,9 +740,29 @@ final class WorkoutTemplateContentStore: ObservableObject {
             }
 
             guard newExercises.isEmpty == false else { return }
+
+            // Persist a single, collision-free order after all insertions. This
+            // lets a newly generated block sit immediately after its requested
+            // anchor without relying on duplicate integer order values.
+            let allBlocks = blocks.map { updatedBlocksByID[$0.id] ?? $0 } + newBlocks
+            let blocksByID = Dictionary(uniqueKeysWithValues: allBlocks.map { ($0.id, $0) })
+            let untrackedIDs = allBlocks
+                .map(\.id)
+                .filter { orderedBlockIDs.contains($0) == false }
+            let normalizedBlocks = (orderedBlockIDs + untrackedIDs)
+                .compactMap { blocksByID[$0] }
+                .enumerated()
+                .map { index, block in block.replacingOrderIndex(index) }
+
+            for block in normalizedBlocks {
+                batch.setData(
+                    block.firestoreData,
+                    forDocument: templateRef.collection("blocks").document(block.id)
+                )
+            }
+
             try await batch.commit()
-            blocks = blocks.map { updatedBlocksByID[$0.id] ?? $0 }
-            blocks.append(contentsOf: newBlocks)
+            blocks = normalizedBlocks
             exercises.append(contentsOf: newExercises)
         } catch {
             errorMessage = error.localizedDescription

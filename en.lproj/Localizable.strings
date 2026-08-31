@@ -1226,6 +1226,8 @@
 "coaching.nutrition.report.header" = "Nutrition report";
 "coaching.nutrition.detail.title" = "Nutrition Details";
 "coaching.nutrition.detail.comment" = "Client comment";
+"coaching.nutrition.detail.comment.expand" = "Show full comment";
+"coaching.nutrition.detail.comment.collapse" = "Show less";
 "coaching.nutrition.calories.value" = "%d / %d kcal";
 "coaching.nutrition.macros.value" = "P %d • F %d • C %d";
 "coaching.nutrition.macros.goal" = "Goal: P %d • F %d • C %d";

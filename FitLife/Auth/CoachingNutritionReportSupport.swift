@@ -635,17 +635,51 @@ struct CoachingNutritionReportDetailScreen: View {
     let report: CoachingNutritionReport
 
     @Environment(\.dismiss) private var dismiss
+    @State private var isCommentExpanded = false
+
+    private var hasLongComment: Bool {
+        report.comment.count > 55 || report.comment.contains(where: { $0.isNewline })
+    }
 
     var body: some View {
         List {
-            Section {
-                CoachingNutritionReportSummaryContent(report: report)
-            }
-
             if report.comment.isEmpty == false {
                 Section(AppLocalizer.string("coaching.nutrition.detail.comment")) {
-                    Text(report.comment)
+                    VStack(alignment: .leading, spacing: 10) {
+                        if isCommentExpanded {
+                            Text(report.comment)
+                                .lineLimit(Int.max)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else {
+                            Text(report.comment)
+                                .lineLimit(3)
+                        }
+
+                        if hasLongComment {
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    isCommentExpanded.toggle()
+                                }
+                            } label: {
+                                Label(
+                                    AppLocalizer.string(
+                                        isCommentExpanded
+                                            ? "coaching.nutrition.detail.comment.collapse"
+                                            : "coaching.nutrition.detail.comment.expand"
+                                    ),
+                                    systemImage: isCommentExpanded ? "chevron.up" : "chevron.down"
+                                )
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.blue)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
                 }
+            }
+
+            Section {
+                CoachingNutritionReportSummaryContent(report: report)
             }
         }
         .navigationTitle(AppLocalizer.string("coaching.nutrition.detail.title"))

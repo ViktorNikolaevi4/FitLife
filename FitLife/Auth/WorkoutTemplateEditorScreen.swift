@@ -296,9 +296,16 @@ struct WorkoutTemplateEditorScreen: View {
         .sheet(isPresented: $showAIGenerator) {
             AIWorkoutGeneratorScreen(
                 language: appLanguage,
-                existingBlocks: store.blocks.map {
-                    AIWorkoutExistingBlock(id: $0.id, title: $0.title, type: $0.typeRawValue)
-                }
+                existingBlocks: store.blocks
+                    .sorted { $0.orderIndex < $1.orderIndex }
+                    .map {
+                        AIWorkoutExistingBlock(
+                            id: $0.id,
+                            title: $0.title,
+                            type: $0.typeRawValue,
+                            orderIndex: $0.orderIndex
+                        )
+                    }
             ) { result in
                 Task {
                     await store.addGeneratedDraft(

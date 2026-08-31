@@ -120,6 +120,9 @@ struct AIWorkoutDraft: Decodable, Identifiable {
 struct AIWorkoutDraftBlock: Decodable, Identifiable {
     let title: String
     let targetBlockId: String?
+    /// Used only for a newly created block. Unlike `targetBlockId`, this never
+    /// means "merge"; it controls where the new block is inserted.
+    let insertAfterBlockId: String?
     /// Explicit block semantics. Optional so drafts created by older app versions
     /// can still be decoded and migrated through the legacy type/mode fields.
     let preset: String?
@@ -170,6 +173,7 @@ struct AIWorkoutExistingBlock: Encodable {
     let id: String
     let title: String
     let type: String
+    let orderIndex: Int
 }
 
 struct AIWorkoutDraftExercise: Decodable, Identifiable {
@@ -215,6 +219,7 @@ extension AIWorkoutDraft {
                 return AIWorkoutDraftBlock(
                     title: block.title,
                     targetBlockId: block.targetBlockId,
+                    insertAfterBlockId: block.insertAfterBlockId,
                     preset: block.workoutPreset.rawValue,
                     type: block.type,
                     mode: block.mode,
@@ -253,6 +258,45 @@ extension AIWorkoutDraft {
                                 + Array(repeating: lastSet, count: normalizedRounds - resolvedExercise.sets.count)
                         )
                     }
+                )
+            }
+        )
+    }
+
+    /// Models sometimes interpret "new superset after the old one" as an edit
+    /// because both blocks have the same display title. Make the user's explicit
+    /// creation intent authoritative: the referenced block becomes the insertion
+    /// anchor, never the merge destination.
+    func applyingPlacementIntent(from command: String) -> AIWorkoutDraft {
+        let normalized = command
+            .lowercased()
+            .folding(options: .diacriticInsensitive, locale: .current)
+        let explicitBlockCreationPhrases = [
+            "новый блок", "нового блока", "новый суперсет", "нового суперсета",
+            "новую разминку", "новый круг", "новую табату", "новый комплекс",
+            "отдельный блок", "отдельный суперсет", "отдельную разминку",
+            "еще один блок", "еще один суперсет", "ещё один блок", "ещё один суперсет",
+            "new block", "new superset", "new circuit", "new warmup", "another block",
+            "another superset", "separate block", "separate superset"
+        ]
+        guard explicitBlockCreationPhrases.contains(where: normalized.contains) else { return self }
+
+        return AIWorkoutDraft(
+            summary: summary,
+            blocks: blocks.map { block in
+                AIWorkoutDraftBlock(
+                    title: block.title,
+                    targetBlockId: nil,
+                    insertAfterBlockId: block.insertAfterBlockId ?? block.targetBlockId,
+                    preset: block.preset,
+                    type: block.type,
+                    mode: block.mode,
+                    rounds: block.rounds,
+                    durationMinutes: block.durationMinutes,
+                    workSeconds: block.workSeconds,
+                    restSeconds: block.restSeconds,
+                    restBetweenRoundsSeconds: block.restBetweenRoundsSeconds,
+                    exercises: block.exercises
                 )
             }
         )
@@ -363,7 +407,7 @@ actor AIWorkoutDraftGenerator {
         )
 
         if let draft = Self.decodeDraft(from: outputText) {
-            return draft
+            return draft.applyingPlacementIntent(from: command)
         }
 
         let repairedOutputText = try await requestOutput(
@@ -374,7 +418,7 @@ actor AIWorkoutDraftGenerator {
         guard let repairedDraft = Self.decodeDraft(from: repairedOutputText) else {
             throw AIWorkoutDraftGeneratorError.invalidResponse
         }
-        return repairedDraft
+        return repairedDraft.applyingPlacementIntent(from: command)
     }
 
     private func requestOutput(
@@ -461,12 +505,13 @@ actor AIWorkoutDraftGenerator {
             "type": "object",
             "additionalProperties": false,
             "required": [
-                "title", "targetBlockId", "preset", "type", "mode", "rounds", "durationMinutes",
+                "title", "targetBlockId", "insertAfterBlockId", "preset", "type", "mode", "rounds", "durationMinutes",
                 "workSeconds", "restSeconds", "restBetweenRoundsSeconds", "exercises"
             ],
             "properties": [
                 "title": ["type": "string"],
                 "targetBlockId": ["type": ["string", "null"]],
+                "insertAfterBlockId": ["type": ["string", "null"]],
                 "preset": [
                     "type": "string",
                     "enum": WorkoutBlockPreset.allCases.map(\.rawValue)
@@ -501,15 +546,15 @@ actor AIWorkoutDraftGenerator {
     private func systemPrompt(language: String) -> String {
         """
         You are a fitness-programming assistant for certified trainers. Convert the trainer's instruction into a conservative workout TEMPLATE DRAFT. Return JSON only and respond in \(language).
-        Return an object with a short string field summary and a blocks array. Each block has title, targetBlockId (a current template block id or null), preset (warmup|strength|superset|circuit|hiit|tabata|amrap|emom|e2mom|e3mom|forTime|rft|pyramid|dropSet|clusterSet|ladder|mobility|stretching|cooldown), type (warmup|strength|main|superset|circuit|stretching|cooldown), mode (rounds|amrap|tabata|emom), rounds, durationMinutes, workSeconds, restSeconds, restBetweenRoundsSeconds, and exercises. preset is the source of truth; type and mode must match that preset. Each exercise has name, systemImage, accentName (blue|green|orange|purple|teal|red), activityType (strength|cardio|hiit|core|mobility), metValue, note, and sets. Each set has weight, reps, durationSeconds, metricType (reps|duration).
-        Rules: current template blocks are provided in the user message. If the trainer refers to an existing block by name, set targetBlockId to that exact id and add exercises to it. Only use null when a new block is actually requested. If no section or workout format is explicitly requested, return EXACTLY ONE block: title "Силовой блок" in Russian or "Strength block" in English, type "strength", and put every requested exercise in it. Never make a block from an exercise name; "bench press" must be an exercise inside the strength block, not a block named "bench press". Create multiple blocks only when the instruction explicitly asks for warmup, cooldown, a circuit/AMRAP/Tabata, or named separate sections. Create only what the trainer asked; do not provide medical advice; never guess a working weight — use 0 when it is not supplied.
+        Return an object with a short string field summary and a blocks array. Each block has title, targetBlockId (a current template block id or null), insertAfterBlockId (a current template block id or null), preset (warmup|strength|superset|circuit|hiit|tabata|amrap|emom|e2mom|e3mom|forTime|rft|pyramid|dropSet|clusterSet|ladder|mobility|stretching|cooldown), type (warmup|strength|main|superset|circuit|stretching|cooldown), mode (rounds|amrap|tabata|emom), rounds, durationMinutes, workSeconds, restSeconds, restBetweenRoundsSeconds, and exercises. preset is the source of truth; type and mode must match that preset. Each exercise has name, systemImage, accentName (blue|green|orange|purple|teal|red), activityType (strength|cardio|hiit|core|mobility), metValue, note, and sets. Each set has weight, reps, durationSeconds, metricType (reps|duration).
+        Rules: current template blocks are provided in their current order in the user message. If the trainer asks to EDIT or ADD EXERCISES TO an existing block by name, set targetBlockId to that exact id and set insertAfterBlockId to null. If the trainer says NEW, ANOTHER, or SEPARATE block, targetBlockId MUST be null even when its title/type matches an existing block. When that new block must appear after an existing block, set insertAfterBlockId to the existing block's exact id. A new block named "Суперсет" must never be merged into an existing block merely because both titles are "Суперсет". If no section or workout format is explicitly requested, return EXACTLY ONE block: title "Силовой блок" in Russian or "Strength block" in English, type "strength", and put every requested exercise in it. Never make a block from an exercise name; "bench press" must be an exercise inside the strength block, not a block named "bench press". Create multiple blocks only when the instruction explicitly asks for warmup, cooldown, a circuit/AMRAP/Tabata, or named separate sections. Create only what the trainer asked; do not provide medical advice; never guess a working weight — use 0 when it is not supplied.
         rounds means how many times the complete block sequence is performed. sets are the source of truth for exercise history and reports: output one sets array item for EVERY prescribed set. For superset, circuit, rft, pyramid, dropSet, clusterSet, and ladder, every exercise must have at least one set object per round/stage; repeat identical objects when prescriptions are identical. Thus a superset for 3 sets has rounds=3 and three set objects for each exercise. A circular warmup for 2 rounds is preset circuit, type circuit, mode rounds, rounds=2, and two set objects per exercise. A normal strength exercise for 3 sets remains preset strength, rounds=1, and has three set objects. Never put a prescription for sets, reps, weight, duration, or rest only into note. For example, "5 sets of 5 reps at 70 kg" must return five set objects, each {weight: 70, reps: 5, durationSeconds: 0, metricType: "reps"}; "2 sets of 15 at 20 kg, then 4 sets of 15 at 40 kg" must return six set objects in that exact order. "10x10" means 10 set objects of 10 reps. Use note only for coaching cues or explanations. Use duration only for timed exercises; use valid values; no more than 5 blocks, 20 exercises, or 12 sets per exercise; no markdown.
         """
     }
 
     private func repairSystemPrompt(language: String) -> String {
         """
-        You repair workout-template draft JSON for certified trainers. Return JSON only and respond in \(language). Rebuild the draft from the original trainer instruction, correcting the invalid draft if useful. Use exactly this schema: {summary:String, blocks:[{title:String,targetBlockId:String|null,preset:String,type:String,mode:String,rounds:Int,durationMinutes:Int,workSeconds:Int,restSeconds:Int,restBetweenRoundsSeconds:Int,exercises:[{name:String,systemImage:String,accentName:String,activityType:String,metValue:Double,note:String,sets:[{weight:Double,reps:Int,durationSeconds:Int,metricType:String}]}]}]}. Every block must contain at least one exercise. Use only preset warmup|strength|superset|circuit|hiit|tabata|amrap|emom|e2mom|e3mom|forTime|rft|pyramid|dropSet|clusterSet|ladder|mobility|stretching|cooldown, type warmup|strength|main|superset|circuit|stretching|cooldown, mode rounds|amrap|tabata|emom, accentName blue|green|orange|purple|teal|red, activityType strength|cardio|hiit|core|mobility, metricType reps|duration. Preserve every prescribed set as individual objects. For superset, circuit, rft, pyramid, dropSet, clusterSet, and ladder, every exercise needs at least one set object per round/stage. Never add markdown or explanation.
+        You repair workout-template draft JSON for certified trainers. Return JSON only and respond in \(language). Rebuild the draft from the original trainer instruction, correcting the invalid draft if useful. Use exactly this schema: {summary:String, blocks:[{title:String,targetBlockId:String|null,insertAfterBlockId:String|null,preset:String,type:String,mode:String,rounds:Int,durationMinutes:Int,workSeconds:Int,restSeconds:Int,restBetweenRoundsSeconds:Int,exercises:[{name:String,systemImage:String,accentName:String,activityType:String,metValue:Double,note:String,sets:[{weight:Double,reps:Int,durationSeconds:Int,metricType:String}]}]}]}. Every block must contain at least one exercise. NEW/ANOTHER/SEPARATE blocks always have targetBlockId null; use insertAfterBlockId only to position a new block after an existing one. Use only preset warmup|strength|superset|circuit|hiit|tabata|amrap|emom|e2mom|e3mom|forTime|rft|pyramid|dropSet|clusterSet|ladder|mobility|stretching|cooldown, type warmup|strength|main|superset|circuit|stretching|cooldown, mode rounds|amrap|tabata|emom, accentName blue|green|orange|purple|teal|red, activityType strength|cardio|hiit|core|mobility, metricType reps|duration. Preserve every prescribed set as individual objects. For superset, circuit, rft, pyramid, dropSet, clusterSet, and ladder, every exercise needs at least one set object per round/stage. Never add markdown or explanation.
         """
     }
 

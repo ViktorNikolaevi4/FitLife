@@ -1226,6 +1226,8 @@
 "coaching.nutrition.report.header" = "Отчёт по питанию";
 "coaching.nutrition.detail.title" = "Детали питания";
 "coaching.nutrition.detail.comment" = "Комментарий клиента";
+"coaching.nutrition.detail.comment.expand" = "Показать полностью";
+"coaching.nutrition.detail.comment.collapse" = "Свернуть";
 "coaching.nutrition.calories.value" = "%d / %d ккал";
 "coaching.nutrition.macros.value" = "Б %d • Ж %d • У %d";
 "coaching.nutrition.macros.goal" = "Цель: Б %d • Ж %d • У %d";
