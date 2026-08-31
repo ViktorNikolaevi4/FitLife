@@ -32,6 +32,7 @@ enum WorkoutExerciseIcon {
     static let highToLowCableCrossover = "Кроссовер сверху вниз"
     static let lowToHighCableCrossover = "Кроссовер снизу вверх"
     static let pushUps = "Отжимания от пола"
+    static let kneePushUps = "Отжимание от колен"
     static let wideGripPushUps = "Отжимания с широкой постановкой рук"
     static let chestFocusedDips = "Отжимания на брусьях с акцентом на грудь"
     static let dumbbellPullover = "Пуловер с гантелью"
@@ -416,6 +417,16 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             metValue: 3.8,
             defaultSets: [
                 WorkoutDraftSet(weight: 0, reps: 15)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            name: AppLocalizer.string("workout.exercise.knee_push_ups"),
+            systemImage: WorkoutExerciseIcon.kneePushUps,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 3.5,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, reps: 12)
             ]
         ),
         WorkoutExerciseTemplate(

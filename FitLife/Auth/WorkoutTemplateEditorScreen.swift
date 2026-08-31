@@ -299,9 +299,12 @@ struct WorkoutTemplateEditorScreen: View {
                 existingBlocks: store.blocks.map {
                     AIWorkoutExistingBlock(id: $0.id, title: $0.title, type: $0.typeRawValue)
                 }
-            ) { draft in
+            ) { result in
                 Task {
-                    await store.addGeneratedDraft(draft)
+                    await store.addGeneratedDraft(
+                        result.draft,
+                        libraryTemplates: result.libraryTemplates
+                    )
                     showAIGenerator = false
                 }
             }
@@ -702,33 +705,34 @@ struct AIWorkoutGeneratorScreen: View {
 
     let language: AppLanguage
     let existingBlocks: [AIWorkoutExistingBlock]
-    let onAdd: (AIWorkoutDraft) -> Void
+    let onAdd: (AIWorkoutGenerationResult) -> Void
 
     @State private var command = ""
-    @State private var draft: AIWorkoutDraft?
+    @State private var result: AIWorkoutGenerationResult?
     @State private var errorMessage: String?
     @State private var isGenerating = false
 
     private let generator = AIWorkoutDraftGenerator()
+    private let libraryResolver = AIWorkoutLibraryResolver()
 
     var body: some View {
         NavigationStack {
             Group {
-                if let draft {
-                    draftPreview(draft)
+                if let result {
+                    draftPreview(result)
                 } else {
                     commandForm
                 }
             }
-            .navigationTitle(draft == nil ? "Тренировка с ИИ" : "Черновик тренировки")
+            .navigationTitle(result == nil ? "Тренировка с ИИ" : "Черновик тренировки")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(AppLocalizer.string("common.cancel")) { dismiss() }
                 }
-                if let draft {
+                if let result {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button("Добавить") { onAdd(draft) }
+                        Button("Добавить") { onAdd(result) }
                             .fontWeight(.semibold)
                     }
                 }
@@ -746,6 +750,10 @@ struct AIWorkoutGeneratorScreen: View {
 
                     Text("ИИ создаст черновик. Ничего не будет сохранено без вашего подтверждения.")
                         .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    Text("Можно использовать точное название: «Добавь шаблон Разминка 1». Готовый шаблон загрузится из библиотеки FitLife без изменений.")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
@@ -787,10 +795,32 @@ struct AIWorkoutGeneratorScreen: View {
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
     }
 
-    private func draftPreview(_ draft: AIWorkoutDraft) -> some View {
+    private func draftPreview(_ result: AIWorkoutGenerationResult) -> some View {
         List {
+            ForEach(result.libraryTemplates) { snapshot in
+                Section("Из библиотеки FitLife") {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(snapshot.template.title)
+                            .font(.headline)
+                        Text("Будет добавлен без изменений")
+                            .font(.caption)
+                            .foregroundStyle(.blue)
+                    }
+                    ForEach(snapshot.exercises) { exercise in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(exercise.name)
+                                .font(.body.weight(.semibold))
+                            Text(libraryExerciseSummary(exercise))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+
+            let draft = result.draft
             if draft.summary.isEmpty == false {
-                Section("Что создаст ИИ") {
+                Section(result.libraryTemplates.isEmpty ? "Что создаст ИИ" : "Дополнительно создаст ИИ") {
                     Text(draft.summary)
                         .font(.subheadline)
                 }
@@ -821,7 +851,7 @@ struct AIWorkoutGeneratorScreen: View {
 
             Section {
                 Button("Сформировать заново") {
-                    self.draft = nil
+                    self.result = nil
                     errorMessage = nil
                 }
                 .foregroundStyle(.blue)
@@ -837,14 +867,37 @@ struct AIWorkoutGeneratorScreen: View {
         isGenerating = true
         Task {
             do {
-                let generatedDraft = try await generator.generate(
-                    command: trimmedCommand,
-                    language: language,
-                    existingBlocks: existingBlocks
-                )
+                let libraryResolution = try await libraryResolver.resolve(command: trimmedCommand)
+                let generatedDraft: AIWorkoutDraft
+                if libraryResolution.needsAI {
+                    let includedTitles = libraryResolution.templates.map(\.template.title).joined(separator: ", ")
+                    let aiCommand = includedTitles.isEmpty
+                        ? trimmedCommand
+                        : "\(libraryResolution.remainingCommand)\nШаблоны FitLife уже добавлены точно: \(includedTitles). Не создавай их повторно."
+                    generatedDraft = try await generator.generate(
+                        command: aiCommand,
+                        language: language,
+                        existingBlocks: existingBlocks
+                    )
+                } else if libraryResolution.templates.isEmpty == false {
+                    generatedDraft = AIWorkoutDraft(
+                        summary: "Добавлено из библиотеки FitLife: "
+                            + libraryResolution.templates.map(\.template.title).joined(separator: ", "),
+                        blocks: []
+                    )
+                } else {
+                    generatedDraft = try await generator.generate(
+                        command: trimmedCommand,
+                        language: language,
+                        existingBlocks: existingBlocks
+                    )
+                }
                 // Preview the same normalized prescriptions that will actually
                 // be persisted, so the trainer can verify round/set counts.
-                draft = generatedDraft.resolvingExercises(using: workoutTemplates())
+                result = AIWorkoutGenerationResult(
+                    draft: generatedDraft.resolvingExercises(using: workoutTemplates()),
+                    libraryTemplates: libraryResolution.templates
+                )
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -877,6 +930,17 @@ struct AIWorkoutGeneratorScreen: View {
             )
         }
         return values.joined(separator: " · ")
+    }
+
+    private func libraryExerciseSummary(_ exercise: WorkoutTemplateExerciseItem) -> String {
+        exercise.sets.map { set in
+            formattedWorkoutSetValue(
+                weight: set.weight,
+                reps: set.reps,
+                durationSeconds: set.durationSeconds,
+                metricType: set.metricType
+            )
+        }.joined(separator: " · ")
     }
 }
 

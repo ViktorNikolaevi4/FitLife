@@ -135,80 +135,21 @@ struct ActiveWorkoutScreen: View {
     }
 
     var body: some View {
+        completionPresentations
+    }
+
+    private var baseContent: some View {
         ZStack(alignment: .topTrailing) {
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 16) {
-                activeWorkoutHeader
-                workoutControlsCard
-
-                if shouldShowEmptyState {
-                    emptyStateCard
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 12)
-                } else {
-                    LazyVStack(spacing: 14) {
-                        ForEach(sortedBlockGroups) { group in
-                            WorkoutBlockSectionHeader(
-                                title: group.title,
-                                subtitle: group.subtitle,
-                                iconName: blockIconName(for: group.block),
-                                onStart: runnerAction(for: group.block),
-                                isCompleted: group.block?.isFinished == true,
-                                onAddExercise: group.block.map { block in
-                                    {
-                                        exerciseTargetBlock = block
-                                        isShowingExercisePicker = true
-                                    }
-                                },
-                                isExpanded: collapsedBlockIds.contains(group.id) == false,
-                                onToggleExpanded: { toggleBlock(group.id) },
-                                onDelete: group.block.map { block in
-                                    { pendingDeleteBlock = block }
-                                }
-                            )
-
-                            if collapsedBlockIds.contains(group.id) == false {
-                                ForEach(group.exercises, id: \.id) { exercise in
-                                    Button {
-                                        activeWorkoutRoute = .exercise(exercise)
-                                    } label: {
-                                        WorkoutExerciseCard(exercise: exercise)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .contextMenu {
-                                        Button("Удалить упражнение", systemImage: "trash", role: .destructive) {
-                                            pendingDeleteExercise = exercise
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                    }
-                }
-                }
-                .padding(.horizontal)
-                .padding(.top, 16)
-                .padding(.bottom, 120)
-            }
+            workoutScrollContent
 
             if isShowingAddMenu {
-                Color.black.opacity(0.001)
-                    .ignoresSafeArea()
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation(.snappy(duration: 0.2)) {
-                            isShowingAddMenu = false
-                        }
-                    }
-
-                addActionsMenu
-                    .padding(.top, 70)
-                    .padding(.trailing, 18)
-                    .transition(.scale(scale: 0.92, anchor: .topTrailing).combined(with: .opacity))
-                    .zIndex(1)
+                addMenuOverlay
             }
         }
+    }
+
+    private var configuredContent: some View {
+        baseContent
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .tabBar)
@@ -218,43 +159,7 @@ struct ActiveWorkoutScreen: View {
                 .id(route.id)
         }
         .safeAreaInset(edge: .bottom) {
-            if activeWorkoutRoute == nil {
-                Button {
-                    if hasExercises == false {
-                        beginAddingExercise()
-                    } else if hasPendingWorkoutItem {
-                        continueWorkout()
-                    } else {
-                        showFinishConfirmation = true
-                    }
-                } label: {
-                    Label(
-                        hasExercises == false
-                            ? AppLocalizer.string("workout.add.exercise")
-                            : hasPendingWorkoutItem
-                                ? "Продолжить тренировку"
-                                : AppLocalizer.string("workout.finish"),
-                        systemImage: hasExercises == false
-                            ? "plus.circle.fill"
-                            : hasPendingWorkoutItem
-                                ? "play.circle.fill"
-                                : "checkmark.circle.fill"
-                    )
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 17)
-                    .background(
-                        RoundedRectangle(cornerRadius: 20)
-                            .fill(HomeColors.primaryActionGradient)
-                    )
-                }
-                .buttonStyle(.plain)
-                .padding(.horizontal)
-                .padding(.top, 8)
-                .padding(.bottom, 8)
-                .background(.bar)
-            }
+            bottomWorkoutAction
         }
         .onAppear {
             stopLegacyTimerIfNeeded()
@@ -262,6 +167,10 @@ struct ActiveWorkoutScreen: View {
             collapseExercisesIfNeeded()
             preloadExerciseTemplatesIfNeeded()
         }
+    }
+
+    private var creationPresentations: some View {
+        configuredContent
         .sheet(isPresented: $isShowingExercisePicker) {
             AddWorkoutExerciseScreen(
                 templates: exerciseTemplates.isEmpty ? workoutTemplates() : exerciseTemplates,
@@ -293,19 +202,20 @@ struct ActiveWorkoutScreen: View {
             AIWorkoutGeneratorScreen(
                 language: appLanguage,
                 existingBlocks: []
-            ) { draft in
-                addGeneratedDraft(draft)
+            ) { result in
+                addGeneratedResult(result)
                 isShowingAIGenerator = false
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
+    }
+
+    private var deletionPresentations: some View {
+        creationPresentations
         .confirmationDialog(
             "Удалить блок?",
-            isPresented: Binding(
-                get: { pendingDeleteBlock != nil },
-                set: { if $0 == false { pendingDeleteBlock = nil } }
-            ),
+            isPresented: deleteBlockDialogBinding,
             titleVisibility: .visible
         ) {
             Button("Удалить блок и упражнения", role: .destructive) {
@@ -324,10 +234,7 @@ struct ActiveWorkoutScreen: View {
         }
         .confirmationDialog(
             "Удалить упражнение?",
-            isPresented: Binding(
-                get: { pendingDeleteExercise != nil },
-                set: { if $0 == false { pendingDeleteExercise = nil } }
-            ),
+            isPresented: deleteExerciseDialogBinding,
             titleVisibility: .visible
         ) {
             Button("Удалить упражнение", role: .destructive) {
@@ -344,6 +251,10 @@ struct ActiveWorkoutScreen: View {
                 Text("«\(exercise.name)» и все его подходы будут удалены из этой тренировки.")
             }
         }
+    }
+
+    private var editingPresentations: some View {
+        deletionPresentations
         .sheet(isPresented: $isEditingWorkoutTitle) {
             EditWorkoutSessionTitleScreen(
                 workout: workout,
@@ -365,6 +276,10 @@ struct ActiveWorkoutScreen: View {
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
         }
+    }
+
+    private var effortPresentations: some View {
+        editingPresentations
         .confirmationDialog(
             AppLocalizer.string("workout.finish.confirm.title"),
             isPresented: $showFinishConfirmation,
@@ -395,6 +310,10 @@ struct ActiveWorkoutScreen: View {
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
         }
+    }
+
+    private var completionPresentations: some View {
+        effortPresentations
         .fullScreenCover(isPresented: $isShowingCompletionSummary) {
             WorkoutCompletionSummaryScreen(workout: workout) {
                 isShowingCompletionSummary = false
@@ -407,6 +326,158 @@ struct ActiveWorkoutScreen: View {
                 }
             }
         }
+    }
+
+    private var workoutScrollContent: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 16) {
+                activeWorkoutHeader
+                workoutControlsCard
+
+                if shouldShowEmptyState {
+                    emptyStateCard
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 12)
+                } else {
+                    workoutBlocksContent
+                }
+            }
+            .padding(.horizontal)
+            .padding(.top, 16)
+            .padding(.bottom, 120)
+        }
+    }
+
+    private var workoutBlocksContent: some View {
+        LazyVStack(spacing: 14) {
+            ForEach(sortedBlockGroups) { group in
+                blockGroupContent(group)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func blockGroupContent(_ group: WorkoutBlockExerciseGroup) -> some View {
+        WorkoutBlockSectionHeader(
+            title: group.title,
+            subtitle: group.subtitle,
+            iconName: blockIconName(for: group.block),
+            onStart: runnerAction(for: group.block),
+            isCompleted: group.block?.isFinished == true,
+            onAddExercise: addExerciseAction(for: group.block),
+            isExpanded: collapsedBlockIds.contains(group.id) == false,
+            onToggleExpanded: { toggleBlock(group.id) },
+            onDelete: deleteAction(for: group.block)
+        )
+
+        if collapsedBlockIds.contains(group.id) == false {
+            ForEach(group.exercises, id: \.id) { exercise in
+                exerciseCard(exercise)
+            }
+        }
+    }
+
+    private func exerciseCard(_ exercise: WorkoutExercise) -> some View {
+        Button {
+            activeWorkoutRoute = .exercise(exercise)
+        } label: {
+            WorkoutExerciseCard(exercise: exercise)
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button("Удалить упражнение", systemImage: "trash", role: .destructive) {
+                pendingDeleteExercise = exercise
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var addMenuOverlay: some View {
+        Color.black.opacity(0.001)
+            .ignoresSafeArea()
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.snappy(duration: 0.2)) {
+                    isShowingAddMenu = false
+                }
+            }
+
+        addActionsMenu
+            .padding(.top, 70)
+            .padding(.trailing, 18)
+            .transition(.scale(scale: 0.92, anchor: .topTrailing).combined(with: .opacity))
+            .zIndex(1)
+    }
+
+    @ViewBuilder
+    private var bottomWorkoutAction: some View {
+        if activeWorkoutRoute == nil {
+            Button(action: performBottomWorkoutAction) {
+                Label(bottomWorkoutActionTitle, systemImage: bottomWorkoutActionIcon)
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 17)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(HomeColors.primaryActionGradient)
+                    )
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal)
+            .padding(.top, 8)
+            .padding(.bottom, 8)
+            .background(.bar)
+        }
+    }
+
+    private var bottomWorkoutActionTitle: String {
+        if hasExercises == false { return AppLocalizer.string("workout.add.exercise") }
+        if hasPendingWorkoutItem { return "Продолжить тренировку" }
+        return AppLocalizer.string("workout.finish")
+    }
+
+    private var bottomWorkoutActionIcon: String {
+        if hasExercises == false { return "plus.circle.fill" }
+        if hasPendingWorkoutItem { return "play.circle.fill" }
+        return "checkmark.circle.fill"
+    }
+
+    private func performBottomWorkoutAction() {
+        if hasExercises == false {
+            beginAddingExercise()
+        } else if hasPendingWorkoutItem {
+            continueWorkout()
+        } else {
+            showFinishConfirmation = true
+        }
+    }
+
+    private func addExerciseAction(for block: WorkoutBlock?) -> (() -> Void)? {
+        guard let block else { return nil }
+        return {
+            exerciseTargetBlock = block
+            isShowingExercisePicker = true
+        }
+    }
+
+    private func deleteAction(for block: WorkoutBlock?) -> (() -> Void)? {
+        guard let block else { return nil }
+        return { pendingDeleteBlock = block }
+    }
+
+    private var deleteBlockDialogBinding: Binding<Bool> {
+        Binding(
+            get: { pendingDeleteBlock != nil },
+            set: { if $0 == false { pendingDeleteBlock = nil } }
+        )
+    }
+
+    private var deleteExerciseDialogBinding: Binding<Bool> {
+        Binding(
+            get: { pendingDeleteExercise != nil },
+            set: { if $0 == false { pendingDeleteExercise = nil } }
+        )
     }
 
     @ViewBuilder
@@ -761,11 +832,13 @@ struct ActiveWorkoutScreen: View {
         }
     }
 
-    private func addGeneratedDraft(_ draft: AIWorkoutDraft) {
-        let resolvedDraft = draft.resolvingExercises(
+    private func addGeneratedResult(_ result: AIWorkoutGenerationResult) {
+        let resolvedDraft = result.draft.resolvingExercises(
             using: exerciseTemplates.isEmpty ? workoutTemplates() : exerciseTemplates
         )
-        guard resolvedDraft.blocks.isEmpty == false else { return }
+        guard result.libraryTemplates.isEmpty == false || resolvedDraft.blocks.isEmpty == false else {
+            return
+        }
 
         for block in workout.blockItems where block.exerciseItems.isEmpty {
             workout.blockItems.removeAll { $0.id == block.id }
@@ -774,7 +847,120 @@ struct ActiveWorkoutScreen: View {
 
         var nextBlockIndex = workout.blockItems.count
         var nextExerciseIndex = workout.exerciseItems.count
-        for generatedBlock in resolvedDraft.blocks {
+
+        for snapshot in result.libraryTemplates {
+            appendLibraryTemplate(
+                snapshot,
+                nextBlockIndex: &nextBlockIndex,
+                nextExerciseIndex: &nextExerciseIndex
+            )
+        }
+
+        appendGeneratedDraft(
+            resolvedDraft,
+            nextBlockIndex: &nextBlockIndex,
+            nextExerciseIndex: &nextExerciseIndex
+        )
+        try? modelContext.save()
+    }
+
+    private func appendLibraryTemplate(
+        _ snapshot: AIWorkoutLibraryTemplateSnapshot,
+        nextBlockIndex: inout Int,
+        nextExerciseIndex: inout Int
+    ) {
+        var blocksBySourceID: [String: WorkoutBlock] = [:]
+        var requiredSetCounts: [String: Int] = [:]
+
+        for sourceBlock in snapshot.blocks.sorted(by: { $0.orderIndex < $1.orderIndex }) {
+            let block = WorkoutBlock(
+                title: sourceBlock.title,
+                type: sourceBlock.type,
+                mode: sourceBlock.mode,
+                preset: sourceBlock.preset,
+                orderIndex: nextBlockIndex,
+                rounds: sourceBlock.rounds,
+                durationMinutes: sourceBlock.durationMinutes,
+                workSeconds: sourceBlock.workSeconds,
+                restSeconds: sourceBlock.restSeconds,
+                restBetweenRoundsSeconds: sourceBlock.restBetweenRoundsSeconds
+            )
+            modelContext.insert(block)
+            workout.blockItems.append(block)
+            blocksBySourceID[sourceBlock.id] = block
+            requiredSetCounts[sourceBlock.id] = sourceBlock.requiredSetCountPerExercise
+            nextBlockIndex += 1
+        }
+
+        var fallbackBlock: WorkoutBlock?
+        for sourceExercise in snapshot.exercises.sorted(by: { $0.orderIndex < $1.orderIndex }) {
+            let destinationBlock: WorkoutBlock
+            if let sourceBlockID = sourceExercise.blockId,
+               let mappedBlock = blocksBySourceID[sourceBlockID] {
+                destinationBlock = mappedBlock
+            } else if let fallbackBlock {
+                destinationBlock = fallbackBlock
+            } else {
+                let newFallbackBlock = WorkoutBlock(
+                    title: snapshot.template.title,
+                    type: .strength,
+                    orderIndex: nextBlockIndex
+                )
+                modelContext.insert(newFallbackBlock)
+                workout.blockItems.append(newFallbackBlock)
+                fallbackBlock = newFallbackBlock
+                destinationBlock = newFallbackBlock
+                nextBlockIndex += 1
+            }
+
+            let requiredSetCount = sourceExercise.blockId
+                .flatMap { requiredSetCounts[$0] } ?? 1
+            appendLibraryExercise(
+                sourceExercise,
+                to: destinationBlock,
+                requiredSetCount: requiredSetCount,
+                orderIndex: nextExerciseIndex
+            )
+            nextExerciseIndex += 1
+        }
+    }
+
+    private func appendLibraryExercise(
+        _ source: WorkoutTemplateExerciseItem,
+        to block: WorkoutBlock,
+        requiredSetCount: Int,
+        orderIndex: Int
+    ) {
+        let exercise = WorkoutExercise(
+            name: source.name,
+            systemImage: source.systemImage,
+            accentName: source.accentName,
+            orderIndex: orderIndex,
+            note: source.note,
+            activityType: source.activityType,
+            metValue: source.metValue
+        )
+        exercise.session = workout
+        exercise.block = block
+
+        var normalizedSets = source.sets
+        if let lastSet = normalizedSets.last, normalizedSets.count < requiredSetCount {
+            normalizedSets += Array(
+                repeating: lastSet,
+                count: requiredSetCount - normalizedSets.count
+            )
+        }
+        appendSets(normalizedSets, to: exercise)
+        workout.exerciseItems.append(exercise)
+        block.exerciseItems.append(exercise)
+    }
+
+    private func appendGeneratedDraft(
+        _ draft: AIWorkoutDraft,
+        nextBlockIndex: inout Int,
+        nextExerciseIndex: inout Int
+    ) {
+        for generatedBlock in draft.blocks {
             let block = WorkoutBlock(
                 title: generatedBlock.title,
                 type: generatedBlock.workoutBlockType,
@@ -804,25 +990,27 @@ struct ActiveWorkoutScreen: View {
                 exercise.session = workout
                 exercise.block = block
 
-                for (setIndex, generatedSet) in generatedExercise.sets.enumerated() {
-                    let set = generatedSet.workoutSet
-                    let workoutSet = WorkoutSet(
-                        orderIndex: setIndex,
-                        weight: set.weight,
-                        reps: set.reps,
-                        durationSeconds: set.durationSeconds,
-                        metricType: set.metricType
-                    )
-                    workoutSet.exercise = exercise
-                    exercise.setItems.append(workoutSet)
-                }
+                appendSets(generatedExercise.sets.map(\.workoutSet), to: exercise)
 
                 workout.exerciseItems.append(exercise)
                 block.exerciseItems.append(exercise)
                 nextExerciseIndex += 1
             }
         }
-        try? modelContext.save()
+    }
+
+    private func appendSets(_ sourceSets: [WorkoutDraftSet], to exercise: WorkoutExercise) {
+        for (setIndex, sourceSet) in sourceSets.enumerated() {
+            let workoutSet = WorkoutSet(
+                orderIndex: setIndex,
+                weight: sourceSet.weight,
+                reps: sourceSet.reps,
+                durationSeconds: sourceSet.durationSeconds,
+                metricType: sourceSet.metricType
+            )
+            workoutSet.exercise = exercise
+            exercise.setItems.append(workoutSet)
+        }
     }
 
     private func defaultStrengthBlock() -> WorkoutBlock {

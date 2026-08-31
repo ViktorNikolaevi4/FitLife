@@ -550,7 +550,10 @@ final class WorkoutTemplateContentStore: ObservableObject {
         }
     }
 
-    func addGeneratedDraft(_ draft: AIWorkoutDraft) async {
+    func addGeneratedDraft(
+        _ draft: AIWorkoutDraft,
+        libraryTemplates: [AIWorkoutLibraryTemplateSnapshot] = []
+    ) async {
         errorMessage = nil
 
         do {
@@ -562,6 +565,80 @@ final class WorkoutTemplateContentStore: ObservableObject {
             var newExercises: [WorkoutTemplateExerciseItem] = []
             var nextBlockIndex = blocks.count
             var nextExerciseIndex = exercises.count
+
+            // Library templates are copied deterministically rather than being
+            // described to the language model. This preserves their exact
+            // blocks, groups, prescriptions and coaching notes.
+            for snapshot in libraryTemplates {
+                var copiedBlockIDs: [String: String] = [:]
+                var copiedGroupIDs: [String: String] = [:]
+
+                for sourceBlock in snapshot.blocks.sorted(by: { $0.orderIndex < $1.orderIndex }) {
+                    let blockRef = templateRef.collection("blocks").document()
+                    let copiedGroups = sourceBlock.groups
+                        .sorted(by: { $0.orderIndex < $1.orderIndex })
+                        .map { sourceGroup in
+                            let copiedGroup = WorkoutTemplateBlockGroupItem(
+                                title: sourceGroup.title,
+                                kind: sourceGroup.kind,
+                                note: sourceGroup.note,
+                                rounds: sourceGroup.rounds,
+                                restSeconds: sourceGroup.restSeconds,
+                                orderIndex: sourceGroup.orderIndex
+                            )
+                            copiedGroupIDs["\(sourceBlock.id)|\(sourceGroup.id)"] = copiedGroup.id
+                            return copiedGroup
+                        }
+                    let copiedBlock = WorkoutTemplateBlockItem(
+                        id: blockRef.documentID,
+                        templateId: template.id,
+                        title: sourceBlock.title,
+                        type: sourceBlock.type,
+                        mode: sourceBlock.mode,
+                        preset: sourceBlock.preset,
+                        orderIndex: nextBlockIndex,
+                        rounds: sourceBlock.rounds,
+                        durationMinutes: sourceBlock.durationMinutes,
+                        workSeconds: sourceBlock.workSeconds,
+                        restSeconds: sourceBlock.restSeconds,
+                        restBetweenRoundsSeconds: sourceBlock.restBetweenRoundsSeconds,
+                        groups: copiedGroups
+                    )
+                    copiedBlockIDs[sourceBlock.id] = copiedBlock.id
+                    batch.setData(copiedBlock.firestoreData, forDocument: blockRef)
+                    newBlocks.append(copiedBlock)
+                    nextBlockIndex += 1
+                }
+
+                for sourceExercise in snapshot.exercises.sorted(by: { $0.orderIndex < $1.orderIndex }) {
+                    let exerciseRef = templateRef.collection("exercises").document()
+                    let copiedBlockID = sourceExercise.blockId.flatMap { copiedBlockIDs[$0] }
+                    let copiedGroupID: String?
+                    if let sourceBlockID = sourceExercise.blockId,
+                       let sourceGroupID = sourceExercise.groupId {
+                        copiedGroupID = copiedGroupIDs["\(sourceBlockID)|\(sourceGroupID)"]
+                    } else {
+                        copiedGroupID = nil
+                    }
+                    let copiedExercise = WorkoutTemplateExerciseItem(
+                        id: exerciseRef.documentID,
+                        templateId: template.id,
+                        blockId: copiedBlockID,
+                        groupId: copiedGroupID,
+                        name: sourceExercise.name,
+                        systemImage: sourceExercise.systemImage,
+                        accentName: sourceExercise.accentName,
+                        activityType: sourceExercise.activityType,
+                        metValue: sourceExercise.metValue,
+                        orderIndex: nextExerciseIndex,
+                        sets: sourceExercise.sets,
+                        note: sourceExercise.note
+                    )
+                    batch.setData(copiedExercise.firestoreData, forDocument: exerciseRef)
+                    newExercises.append(copiedExercise)
+                    nextExerciseIndex += 1
+                }
+            }
 
             for generatedBlock in resolvedDraft.blocks {
                 let existingBlock = generatedBlock.targetBlockId.flatMap { targetID in

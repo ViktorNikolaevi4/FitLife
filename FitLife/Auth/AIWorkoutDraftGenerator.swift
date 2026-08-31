@@ -1,4 +1,114 @@
 import Foundation
+import FirebaseFirestore
+
+struct AIWorkoutLibraryTemplateSnapshot: Identifiable {
+    let template: LibraryWorkoutTemplate
+    let blocks: [WorkoutTemplateBlockItem]
+    let exercises: [WorkoutTemplateExerciseItem]
+
+    var id: String { template.id }
+}
+
+struct AIWorkoutGenerationResult {
+    let draft: AIWorkoutDraft
+    let libraryTemplates: [AIWorkoutLibraryTemplateSnapshot]
+}
+
+struct AIWorkoutLibraryResolution {
+    let templates: [AIWorkoutLibraryTemplateSnapshot]
+    let remainingCommand: String
+
+    var needsAI: Bool {
+        let ignoredWords: Set<String> = [
+            "возьми", "добавь", "добавить", "вставь", "вставить", "используй",
+            "в", "во", "к", "тренировку", "тренировке", "тренировки", "шаблон",
+            "шаблона", "из", "библиотеки", "библиотека", "fitlife", "и", "а",
+            "пожалуйста", "например", "готовый", "готового", "мне",
+            "add", "insert", "use", "to", "into", "workout", "template", "from",
+            "library", "please", "and", "the"
+        ]
+        return normalizedLibraryText(remainingCommand)
+            .split(separator: " ")
+            .map(String.init)
+            .contains { ignoredWords.contains($0) == false }
+    }
+}
+
+actor AIWorkoutLibraryResolver {
+    private let firestore: Firestore
+
+    init(firestore: Firestore = .firestore()) {
+        self.firestore = firestore
+    }
+
+    func resolve(command: String) async throws -> AIWorkoutLibraryResolution {
+        let snapshot = try await firestore
+            .collection("workout_template_library")
+            .whereField("isActive", isEqualTo: true)
+            .getDocuments()
+        let commandKey = normalizedLibraryText(command)
+        let candidates = snapshot.documents
+            .compactMap { LibraryWorkoutTemplate(id: $0.documentID, data: $0.data()) }
+            .filter {
+                let titleKey = normalizedLibraryText($0.title)
+                return titleKey.isEmpty == false
+                    && " \(commandKey) ".contains(" \(titleKey) ")
+            }
+            .sorted { normalizedLibraryText($0.title).count > normalizedLibraryText($1.title).count }
+
+        // Prefer the most specific name: "Разминка 1" must not also resolve a
+        // shorter library item named simply "Разминка".
+        var matchedTemplates: [LibraryWorkoutTemplate] = []
+        for candidate in candidates {
+            let candidateKey = normalizedLibraryText(candidate.title)
+            guard matchedTemplates.contains(where: {
+                normalizedLibraryText($0.title).contains(candidateKey)
+            }) == false else { continue }
+            matchedTemplates.append(candidate)
+        }
+
+        var resolved: [AIWorkoutLibraryTemplateSnapshot] = []
+        for template in matchedTemplates {
+            let reference = firestore.collection("workout_template_library").document(template.id)
+            async let blocksSnapshot = reference.collection("blocks").getDocuments()
+            async let exercisesSnapshot = reference.collection("exercises").getDocuments()
+            let (blockDocs, exerciseDocs) = try await (blocksSnapshot, exercisesSnapshot)
+            resolved.append(AIWorkoutLibraryTemplateSnapshot(
+                template: template,
+                blocks: blockDocs.documents.compactMap {
+                    WorkoutTemplateBlockItem(id: $0.documentID, templateId: template.id, data: $0.data())
+                }.sorted { $0.orderIndex < $1.orderIndex },
+                exercises: exerciseDocs.documents.compactMap {
+                    WorkoutTemplateExerciseItem(id: $0.documentID, templateId: template.id, data: $0.data())
+                }.sorted { $0.orderIndex < $1.orderIndex }
+            ))
+        }
+
+        var remainingCommand = command
+        for template in matchedTemplates {
+            while let range = remainingCommand.range(
+                of: template.title,
+                options: [.caseInsensitive, .diacriticInsensitive]
+            ) {
+                remainingCommand.removeSubrange(range)
+            }
+        }
+        remainingCommand = remainingCommand
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+
+        return AIWorkoutLibraryResolution(templates: resolved, remainingCommand: remainingCommand)
+    }
+}
+
+private func normalizedLibraryText(_ value: String) -> String {
+    let folded = value.lowercased().folding(options: .diacriticInsensitive, locale: .current)
+    return String(folded.unicodeScalars.map {
+        CharacterSet.alphanumerics.contains($0) ? Character(String($0)) : " "
+    })
+    .split(whereSeparator: { $0.isWhitespace })
+    .joined(separator: " ")
+}
 
 struct AIWorkoutDraft: Decodable, Identifiable {
     let summary: String
