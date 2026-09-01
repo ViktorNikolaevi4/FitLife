@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import Combine
 
 private let workoutCardBackground = Color(.secondarySystemBackground)
 private let workoutCardInsetBackground = Color(.tertiarySystemBackground)
@@ -380,6 +381,7 @@ struct WorkoutExerciseDetailScreen: View {
     let onContinueWorkout: (() -> Void)?
 
     @State private var editingSet: WorkoutSet?
+    @State private var activeTimedSet: WorkoutSet?
     @State private var editingSetGroup: WorkoutSetGroupDescriptor?
     @State private var activeSetGroup: WorkoutSetGroupDescriptor?
     @State private var pendingRestartSetGroup: WorkoutSetGroupDescriptor?
@@ -622,6 +624,11 @@ struct WorkoutExerciseDetailScreen: View {
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
         }
+        .fullScreenCover(item: $activeTimedSet) { set in
+            TimedWorkoutSetRunnerScreen(set: set) { actualDurationSeconds in
+                completeTimedSet(set, actualDurationSeconds: actualDurationSeconds)
+            }
+        }
         .sheet(item: $editingSetGroup) { group in
             WorkoutSetGroupEditorSheet(
                 group: group,
@@ -823,7 +830,13 @@ struct WorkoutExerciseDetailScreen: View {
                                 number: index + 1,
                                 set: set,
                                 onEdit: { editingSet = set },
-                                onToggleCompletion: { toggleSetCompletion(set) }
+                                onToggleCompletion: {
+                                    if set.metricType == .duration, set.isCompleted == false {
+                                        activeTimedSet = set
+                                    } else {
+                                        toggleSetCompletion(set)
+                                    }
+                                }
                             )
                         } else {
                             WorkoutCompositeSetCard(
@@ -919,8 +932,20 @@ struct WorkoutExerciseDetailScreen: View {
                     .background(RoundedRectangle(cornerRadius: 20).fill(HomeColors.primaryActionGradient))
             }
             .buttonStyle(.plain)
+        } else if let nextTimedSet {
+            Button {
+                activeTimedSet = nextTimedSet
+            } label: {
+                Label("Запустить таймер подхода", systemImage: "timer")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 18)
+                    .background(RoundedRectangle(cornerRadius: 20).fill(HomeColors.primaryActionGradient))
+            }
+            .buttonStyle(.plain)
         } else {
-                    Button(action: completeExercise) {
+            Button(action: completeExercise) {
                 Label("Завершить упражнение", systemImage: "checkmark.circle.fill")
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(.white)
@@ -932,6 +957,15 @@ struct WorkoutExerciseDetailScreen: View {
             .disabled(sortedSets.isEmpty)
             .opacity(sortedSets.isEmpty ? 0.55 : 1)
         }
+    }
+
+    private var nextTimedSet: WorkoutSet? {
+        guard let firstIncompleteSet = sortedSets.first(where: { $0.isCompleted == false }),
+              firstIncompleteSet.method == .normal,
+              firstIncompleteSet.metricType == .duration else {
+            return nil
+        }
+        return firstIncompleteSet
     }
 
     private func completeExercise() {
@@ -1143,6 +1177,15 @@ struct WorkoutExerciseDetailScreen: View {
         try? modelContext.save()
     }
 
+    private func completeTimedSet(_ set: WorkoutSet, actualDurationSeconds: Int) {
+        set.isCompleted = true
+        set.completedAt = Date()
+        set.actualWeight = set.actualWeight ?? set.weight
+        set.actualReps = set.actualReps ?? set.reps
+        set.actualDurationSeconds = max(actualDurationSeconds, 0)
+        try? modelContext.save()
+    }
+
     private func restartSetGroup(_ group: WorkoutSetGroupDescriptor) {
         exercise.isFinished = false
         for set in group.steps {
@@ -1203,14 +1246,14 @@ private struct WorkoutSetHorizontalCard: View {
             .buttonStyle(.plain)
 
             Button(action: onToggleCompletion) {
-                Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
+                Image(systemName: statusIcon)
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(set.isCompleted ? Color.green : Color.secondary)
+                    .foregroundStyle(statusColor)
                     .frame(width: 28, height: 28)
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(set.isCompleted ? "Отметить подход невыполненным" : "Отметить подход выполненным")
+            .accessibilityLabel(statusAccessibilityLabel)
         }
         .padding(9)
         .frame(width: 116, height: 72, alignment: .leading)
@@ -1219,6 +1262,24 @@ private struct WorkoutSetHorizontalCard: View {
             RoundedRectangle(cornerRadius: 18)
                 .strokeBorder(set.isCompleted ? Color.green.opacity(0.55) : workoutCardBorder)
         )
+    }
+
+    private var statusIcon: String {
+        if set.isCompleted { return "checkmark.circle.fill" }
+        if set.metricType == .duration { return "play.circle.fill" }
+        return "circle"
+    }
+
+    private var statusColor: Color {
+        if set.isCompleted { return .green }
+        if set.metricType == .duration { return .blue }
+        return .secondary
+    }
+
+    private var statusAccessibilityLabel: String {
+        if set.isCompleted { return "Отметить подход невыполненным" }
+        if set.metricType == .duration { return "Запустить таймер подхода" }
+        return "Отметить подход выполненным"
     }
 
     private var setDetails: some View {
@@ -1239,6 +1300,294 @@ private struct WorkoutSetHorizontalCard: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
             }
+    }
+}
+
+struct TimedWorkoutSetRunnerScreen: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let set: WorkoutSet
+    let onComplete: (Int) -> Void
+
+    @State private var remainingSeconds: Int
+    @State private var preparationRemainingSeconds = 3
+    @State private var endDate: Date?
+    @State private var isRunning = false
+    @State private var isPreparing = false
+    @State private var hasCompleted = false
+    @State private var lastCuedSecond: Int?
+    @State private var showEarlyCompletionConfirmation = false
+
+    private let totalSeconds: Int
+    private let timer = Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()
+
+    init(set: WorkoutSet, onComplete: @escaping (Int) -> Void) {
+        self.set = set
+        self.onComplete = onComplete
+        let duration = max(set.durationSeconds, 1)
+        totalSeconds = duration
+        _remainingSeconds = State(initialValue: duration)
+    }
+
+    private var progress: Double {
+        min(max(Double(totalSeconds - remainingSeconds) / Double(totalSeconds), 0), 1)
+    }
+
+    private var elapsedSeconds: Int {
+        min(max(totalSeconds - remainingSeconds, 0), totalSeconds)
+    }
+
+    private var displayedSeconds: Int {
+        isPreparing ? preparationRemainingSeconds : remainingSeconds
+    }
+
+    private var hasWorkStarted: Bool {
+        preparationRemainingSeconds == 0
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                Spacer(minLength: 16)
+
+                VStack(spacing: 8) {
+                    workoutIconImage(
+                        named: set.exercise?.systemImage ?? "timer",
+                        accentName: set.exercise?.accentName ?? "blue",
+                        size: 54,
+                        customAssetScale: 2.2
+                    )
+                    .frame(width: 104, height: 104)
+                    .background(Color.blue.opacity(0.12), in: Circle())
+
+                    Text(set.exercise?.name ?? "Упражнение")
+                        .font(.title2.weight(.bold))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+
+                    Text("Подход \(set.orderIndex + 1) · \(formattedWorkoutMetricValue(reps: 0, durationSeconds: totalSeconds, metricType: .duration))")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                VStack(spacing: 18) {
+                    Text(phaseTitle)
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(phaseColor)
+
+                    Text(formatClock(displayedSeconds))
+                        .font(.system(size: 72, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .contentTransition(.numericText(countsDown: true))
+
+                    ProgressView(value: progress)
+                        .tint(phaseColor)
+                        .scaleEffect(x: 1, y: 1.6)
+
+                    Text(timerHint)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(24)
+                .frame(maxWidth: .infinity)
+                .background(workoutCardBackground, in: RoundedRectangle(cornerRadius: 24))
+                .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(workoutCardBorder))
+
+                Spacer()
+
+                VStack(spacing: 12) {
+                    Button(action: primaryAction) {
+                        Label(primaryTitle, systemImage: primaryIcon)
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 18)
+                            .background(
+                                RoundedRectangle(cornerRadius: 20)
+                                    .fill(hasCompleted ? Color.green : Color.blue)
+                            )
+                    }
+                    .buttonStyle(.plain)
+
+                    if hasCompleted == false {
+                        Button {
+                            showEarlyCompletionConfirmation = true
+                        } label: {
+                            Label(
+                                hasWorkStarted ? "Завершить подход сейчас" : "Выполнено без таймера",
+                                systemImage: "checkmark.circle"
+                            )
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(.blue)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 15)
+                            .background(
+                                RoundedRectangle(cornerRadius: 18)
+                                    .fill(Color.blue.opacity(0.10))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 18)
+                                    .strokeBorder(Color.blue.opacity(0.8), lineWidth: 1.25)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 24)
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .navigationTitle("Таймер подхода")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Закрыть") { dismiss() }
+                }
+            }
+            .onReceive(timer) { now in
+                updateTimer(now: now)
+            }
+            .onDisappear {
+                UIApplication.shared.isIdleTimerDisabled = false
+            }
+            .confirmationDialog(
+                hasWorkStarted ? "Завершить подход раньше?" : "Отметить подход выполненным?",
+                isPresented: $showEarlyCompletionConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Да, завершить") {
+                    complete(actualDurationSeconds: hasWorkStarted ? elapsedSeconds : totalSeconds)
+                }
+                Button("Отмена", role: .cancel) {}
+            } message: {
+                if hasWorkStarted {
+                    Text("В отчёте сохранится фактическое время: \(formatClock(elapsedSeconds)).")
+                } else {
+                    Text("В отчёте сохранится запланированное время подхода.")
+                }
+            }
+        }
+    }
+
+    private var primaryTitle: String {
+        if hasCompleted { return "Готово" }
+        if isRunning { return "Пауза" }
+        if isPreparing || hasWorkStarted { return "Продолжить" }
+        return "Начать"
+    }
+
+    private var primaryIcon: String {
+        if hasCompleted { return "checkmark.circle.fill" }
+        return isRunning ? "pause.fill" : "play.fill"
+    }
+
+    private var timerHint: String {
+        if hasCompleted { return "Подход отмечен выполненным" }
+        if isPreparing, isRunning { return "Приготовьтесь — подход начнётся автоматически" }
+        if isPreparing { return "Подготовительный отсчёт приостановлен" }
+        if isRunning { return "Сохраняйте положение до сигнала" }
+        if hasWorkStarted { return "Таймер приостановлен" }
+        return "Нажмите «Начать», когда будете готовы"
+    }
+
+    private var phaseTitle: String {
+        if hasCompleted { return "ВЫПОЛНЕНО" }
+        if isPreparing { return "ПРИГОТОВЬТЕСЬ" }
+        return isRunning ? "РАБОТА" : "ГОТОВЫ?"
+    }
+
+    private var phaseColor: Color {
+        if hasCompleted { return .green }
+        if isPreparing { return .orange }
+        return .blue
+    }
+
+    private func primaryAction() {
+        if hasCompleted {
+            dismiss()
+        } else if isRunning {
+            pause()
+        } else {
+            start()
+        }
+    }
+
+    private func start() {
+        guard remainingSeconds > 0 else { return }
+
+        if hasWorkStarted == false {
+            isPreparing = true
+            preparationRemainingSeconds = max(preparationRemainingSeconds, 1)
+            endDate = Date().addingTimeInterval(TimeInterval(preparationRemainingSeconds))
+        } else {
+            endDate = Date().addingTimeInterval(TimeInterval(remainingSeconds))
+        }
+        lastCuedSecond = nil
+        isRunning = true
+        UIApplication.shared.isIdleTimerDisabled = true
+    }
+
+    private func pause() {
+        if let endDate {
+            let pausedRemaining = max(Int(ceil(endDate.timeIntervalSinceNow)), 0)
+            if isPreparing {
+                preparationRemainingSeconds = pausedRemaining
+            } else {
+                remainingSeconds = pausedRemaining
+            }
+        }
+        self.endDate = nil
+        isRunning = false
+        UIApplication.shared.isIdleTimerDisabled = false
+    }
+
+    private func updateTimer(now: Date) {
+        guard isRunning, let endDate, hasCompleted == false else { return }
+        let nextRemaining = max(Int(ceil(endDate.timeIntervalSince(now))), 0)
+
+        if isPreparing {
+            preparationRemainingSeconds = nextRemaining
+        } else {
+            remainingSeconds = nextRemaining
+        }
+
+        if (1...3).contains(nextRemaining), lastCuedSecond != nextRemaining {
+            lastCuedSecond = nextRemaining
+            WorkoutTimerCuePlayer.shared.countdownTick()
+        }
+
+        if nextRemaining == 0 {
+            if isPreparing {
+                beginWork(now: now)
+            } else {
+                complete(actualDurationSeconds: totalSeconds)
+            }
+        }
+    }
+
+    private func beginWork(now: Date) {
+        preparationRemainingSeconds = 0
+        isPreparing = false
+        remainingSeconds = totalSeconds
+        endDate = now.addingTimeInterval(TimeInterval(totalSeconds))
+        lastCuedSecond = nil
+        WorkoutTimerCuePlayer.shared.phaseCompleted()
+    }
+
+    private func complete(actualDurationSeconds: Int) {
+        guard hasCompleted == false else { return }
+        isRunning = false
+        isPreparing = false
+        endDate = nil
+        remainingSeconds = 0
+        hasCompleted = true
+        UIApplication.shared.isIdleTimerDisabled = false
+        onComplete(actualDurationSeconds)
+        WorkoutTimerCuePlayer.shared.phaseCompleted()
+    }
+
+    private func formatClock(_ seconds: Int) -> String {
+        String(format: "%02d:%02d", max(seconds, 0) / 60, max(seconds, 0) % 60)
     }
 }
 

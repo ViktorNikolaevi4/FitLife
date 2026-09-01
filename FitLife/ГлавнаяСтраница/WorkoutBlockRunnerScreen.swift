@@ -14,6 +14,7 @@ struct WorkoutBlockRunnerScreen: View {
     @State private var showSkipConfirmation = false
     @State private var showCompleteBlockConfirmation = false
     @State private var showRestartConfirmation = false
+    @State private var activeTimedSet: WorkoutSet?
     @State private var lastCuedPhaseEnd: Date?
     @State private var lastCuedSecond: Int?
 
@@ -43,6 +44,15 @@ struct WorkoutBlockRunnerScreen: View {
     private var currentExercise: WorkoutExercise? {
         guard exercises.isEmpty == false else { return nil }
         return exercises[min(max(block.currentExerciseIndex, 0), exercises.count - 1)]
+    }
+
+    private var currentRoundSet: WorkoutSet? {
+        guard let currentExercise else { return nil }
+        return setForCurrentRound(in: currentExercise)
+    }
+
+    private var currentExerciseUsesTimer: Bool {
+        isTimedBlock == false && currentRoundSet?.metricType == .duration
     }
 
     private var totalRounds: Int {
@@ -204,6 +214,11 @@ struct WorkoutBlockRunnerScreen: View {
             Button("Отмена", role: .cancel) {}
         } message: {
             Text("Отметки подходов и интервалов этого блока будут сброшены.")
+        }
+        .fullScreenCover(item: $activeTimedSet) { set in
+            TimedWorkoutSetRunnerScreen(set: set) { actualDurationSeconds in
+                completeTimedExercise(set, actualDurationSeconds: actualDurationSeconds)
+            }
         }
     }
 
@@ -700,6 +715,7 @@ struct WorkoutBlockRunnerScreen: View {
         case .rest: return "Пропустить отдых"
         case .work:
             if isTimedBlock { return "Пауза" }
+            if currentExerciseUsesTimer { return "Запустить таймер \(currentExerciseLabel)" }
             return "Завершить \(currentExerciseLabel)"
         }
     }
@@ -709,7 +725,9 @@ struct WorkoutBlockRunnerScreen: View {
         case .ready, .paused: return "play.fill"
         case .completed: return "checkmark.circle.fill"
         case .rest: return "forward.end.fill"
-        case .work: return isTimedBlock ? "pause.fill" : "checkmark.circle.fill"
+        case .work:
+            if isTimedBlock { return "pause.fill" }
+            return currentExerciseUsesTimer ? "timer" : "checkmark.circle.fill"
         }
     }
 
@@ -739,7 +757,13 @@ struct WorkoutBlockRunnerScreen: View {
         case .rest:
             finishRest()
         case .work:
-            if isTimedBlock { pauseTimer() } else { completeCurrentExercise() }
+            if isTimedBlock {
+                pauseTimer()
+            } else if currentExerciseUsesTimer, let currentRoundSet {
+                activeTimedSet = currentRoundSet
+            } else {
+                completeCurrentExercise()
+            }
         }
     }
 
@@ -815,6 +839,15 @@ struct WorkoutBlockRunnerScreen: View {
         } else {
             advanceToNextRound()
         }
+    }
+
+    private func completeTimedExercise(_ set: WorkoutSet, actualDurationSeconds: Int) {
+        set.actualWeight = set.actualWeight ?? set.weight
+        set.actualReps = set.actualReps ?? set.reps
+        set.actualDurationSeconds = max(actualDurationSeconds, 0)
+        set.completedAt = Date()
+        set.isCompleted = true
+        completeCurrentExercise()
     }
 
     private func advanceToNextRound() {
