@@ -581,6 +581,8 @@ final class WorkoutTemplateContentStore: ObservableObject {
             var newBlocks: [WorkoutTemplateBlockItem] = []
             var updatedBlocksByID: [String: WorkoutTemplateBlockItem] = [:]
             var newExercises: [WorkoutTemplateExerciseItem] = []
+            var updatedExercisesByID: [String: WorkoutTemplateExerciseItem] = [:]
+            var deletedExerciseIDs: Set<String> = []
             var nextBlockIndex = blocks.count
             var nextExerciseIndex = exercises.count
             var orderedBlockIDs = blocks
@@ -663,12 +665,17 @@ final class WorkoutTemplateContentStore: ObservableObject {
             }
 
             for generatedBlock in resolvedDraft.blocks {
-                let existingBlock = generatedBlock.targetBlockId.flatMap { targetID in
+                let referencedExercise = generatedBlock.exercises
+                    .compactMap(\.targetExerciseId)
+                    .compactMap { targetID in exercises.first { $0.id == targetID } }
+                    .first
+                let effectiveTargetBlockID = generatedBlock.targetBlockId ?? referencedExercise?.blockId
+                let existingBlock = effectiveTargetBlockID.flatMap { targetID in
                     blocks.first { $0.id == targetID }
                 }
 
                 let destinationBlock: WorkoutTemplateBlockItem
-                if let existingBlock {
+                if let existingBlock, generatedBlock.updatesBlockSettings {
                     let updatedBlock = WorkoutTemplateBlockItem(
                         id: existingBlock.id,
                         templateId: existingBlock.templateId,
@@ -690,6 +697,8 @@ final class WorkoutTemplateContentStore: ObservableObject {
                     )
                     updatedBlocksByID[existingBlock.id] = updatedBlock
                     destinationBlock = updatedBlock
+                } else if let existingBlock {
+                    destinationBlock = existingBlock
                 } else {
                     let blockRef = templateRef.collection("blocks").document()
                     let block = WorkoutTemplateBlockItem(
@@ -719,27 +728,69 @@ final class WorkoutTemplateContentStore: ObservableObject {
                 }
 
                 for generatedExercise in generatedBlock.exercises {
-                    let exerciseRef = templateRef.collection("exercises").document()
-                    let exercise = WorkoutTemplateExerciseItem(
-                        id: exerciseRef.documentID,
-                        templateId: template.id,
-                        blockId: destinationBlock.id,
-                        name: generatedExercise.name,
-                        systemImage: generatedExercise.systemImage,
-                        accentName: generatedExercise.accentName,
-                        activityType: generatedExercise.workoutActivityType,
-                        metValue: generatedExercise.metValue,
-                        orderIndex: nextExerciseIndex,
-                        sets: generatedExercise.sets.map(\.workoutSet),
-                        note: generatedExercise.note
-                    )
-                    batch.setData(exercise.firestoreData, forDocument: exerciseRef)
-                    newExercises.append(exercise)
-                    nextExerciseIndex += 1
+                    switch generatedExercise.operation {
+                    case .add:
+                        let exerciseRef = templateRef.collection("exercises").document()
+                        let exercise = WorkoutTemplateExerciseItem(
+                            id: exerciseRef.documentID,
+                            templateId: template.id,
+                            blockId: destinationBlock.id,
+                            name: generatedExercise.name,
+                            systemImage: generatedExercise.systemImage,
+                            accentName: generatedExercise.accentName,
+                            activityType: generatedExercise.workoutActivityType,
+                            metValue: generatedExercise.metValue,
+                            orderIndex: nextExerciseIndex,
+                            sets: generatedExercise.sets.map(\.workoutSet),
+                            note: generatedExercise.note
+                        )
+                        batch.setData(exercise.firestoreData, forDocument: exerciseRef)
+                        newExercises.append(exercise)
+                        nextExerciseIndex += 1
+
+                    case .update:
+                        guard let targetID = generatedExercise.targetExerciseId,
+                              let existingExercise = exercises.first(where: { $0.id == targetID }) else {
+                            throw NSError(
+                                domain: "AIWorkoutDraft",
+                                code: 1,
+                                userInfo: [NSLocalizedDescriptionKey: "ИИ не указал изменяемое упражнение. Сформируйте черновик заново."]
+                            )
+                        }
+                        let updatedExercise = WorkoutTemplateExerciseItem(
+                            id: existingExercise.id,
+                            templateId: existingExercise.templateId,
+                            blockId: destinationBlock.id,
+                            groupId: existingExercise.groupId,
+                            name: generatedExercise.name,
+                            systemImage: generatedExercise.systemImage,
+                            accentName: generatedExercise.accentName,
+                            activityType: generatedExercise.workoutActivityType,
+                            metValue: generatedExercise.metValue,
+                            orderIndex: existingExercise.orderIndex,
+                            sets: generatedExercise.sets.map(\.workoutSet),
+                            note: generatedExercise.note
+                        )
+                        batch.setData(
+                            updatedExercise.firestoreData,
+                            forDocument: templateRef.collection("exercises").document(existingExercise.id)
+                        )
+                        updatedExercisesByID[existingExercise.id] = updatedExercise
+
+                    case .delete:
+                        guard let targetID = generatedExercise.targetExerciseId,
+                              exercises.contains(where: { $0.id == targetID }) else {
+                            throw NSError(
+                                domain: "AIWorkoutDraft",
+                                code: 2,
+                                userInfo: [NSLocalizedDescriptionKey: "ИИ не указал удаляемое упражнение. Сформируйте черновик заново."]
+                            )
+                        }
+                        batch.deleteDocument(templateRef.collection("exercises").document(targetID))
+                        deletedExerciseIDs.insert(targetID)
+                    }
                 }
             }
-
-            guard newExercises.isEmpty == false else { return }
 
             // Persist a single, collision-free order after all insertions. This
             // lets a newly generated block sit immediately after its requested
@@ -763,6 +814,9 @@ final class WorkoutTemplateContentStore: ObservableObject {
 
             try await batch.commit()
             blocks = normalizedBlocks
+            exercises = exercises
+                .filter { deletedExerciseIDs.contains($0.id) == false }
+                .map { updatedExercisesByID[$0.id] ?? $0 }
             exercises.append(contentsOf: newExercises)
         } catch {
             errorMessage = error.localizedDescription

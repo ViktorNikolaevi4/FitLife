@@ -14,6 +14,18 @@ struct AIWorkoutGenerationResult {
     let libraryTemplates: [AIWorkoutLibraryTemplateSnapshot]
 }
 
+struct AIWorkoutClarification: Identifiable, Equatable {
+    let question: String
+    let options: [String]
+
+    var id: String { question }
+}
+
+enum AIWorkoutGenerationDecision {
+    case draft(AIWorkoutDraft)
+    case clarification(AIWorkoutClarification)
+}
+
 struct AIWorkoutLibraryResolution {
     let templates: [AIWorkoutLibraryTemplateSnapshot]
     let remainingCommand: String
@@ -123,6 +135,9 @@ struct AIWorkoutDraftBlock: Decodable, Identifiable {
     /// Used only for a newly created block. Unlike `targetBlockId`, this never
     /// means "merge"; it controls where the new block is inserted.
     let insertAfterBlockId: String?
+    /// Existing block settings are preserved unless the trainer explicitly
+    /// asked to change rounds, timing, rest, or the block format.
+    let updatesBlockSettings: Bool
     /// Explicit block semantics. Optional so drafts created by older app versions
     /// can still be decoded and migrated through the legacy type/mode fields.
     let preset: String?
@@ -173,10 +188,37 @@ struct AIWorkoutExistingBlock: Encodable {
     let id: String
     let title: String
     let type: String
+    let preset: String
+    let mode: String
     let orderIndex: Int
+    let rounds: Int
+    let durationMinutes: Int
+    let workSeconds: Int
+    let restSeconds: Int
+    let restBetweenRoundsSeconds: Int
+    let exercises: [AIWorkoutExistingExercise]
+}
+
+struct AIWorkoutExistingExercise: Encodable {
+    let id: String
+    let name: String
+    let sets: [AIWorkoutExistingSet]
+}
+
+struct AIWorkoutExistingSet: Encodable {
+    let weight: Double
+    let reps: Int
+    let durationSeconds: Int
+    let metricType: String
+}
+
+enum AIWorkoutExerciseOperation: String, Decodable {
+    case add, update, delete
 }
 
 struct AIWorkoutDraftExercise: Decodable, Identifiable {
+    let operation: AIWorkoutExerciseOperation
+    let targetExerciseId: String?
     let name: String
     let systemImage: String
     let accentName: String
@@ -185,7 +227,7 @@ struct AIWorkoutDraftExercise: Decodable, Identifiable {
     let note: String
     let sets: [AIWorkoutDraftSet]
 
-    var id: String { name }
+    var id: String { "\(operation.rawValue)-\(targetExerciseId ?? name)" }
 
     var workoutActivityType: WorkoutActivityType {
         WorkoutActivityType(rawValue: activityType) ?? .strength
@@ -220,6 +262,7 @@ extension AIWorkoutDraft {
                     title: block.title,
                     targetBlockId: block.targetBlockId,
                     insertAfterBlockId: block.insertAfterBlockId,
+                    updatesBlockSettings: block.updatesBlockSettings,
                     preset: block.workoutPreset.rawValue,
                     type: block.type,
                     mode: block.mode,
@@ -232,6 +275,8 @@ extension AIWorkoutDraft {
                         var resolvedExercise = exercise
                         if let template = catalog.bestMatch(for: exercise.name) {
                             resolvedExercise = AIWorkoutDraftExercise(
+                                operation: exercise.operation,
+                                targetExerciseId: exercise.targetExerciseId,
                                 name: template.name,
                                 systemImage: template.systemImage,
                                 accentName: template.accentName,
@@ -248,6 +293,8 @@ extension AIWorkoutDraft {
                             return resolvedExercise
                         }
                         return AIWorkoutDraftExercise(
+                            operation: resolvedExercise.operation,
+                            targetExerciseId: resolvedExercise.targetExerciseId,
                             name: resolvedExercise.name,
                             systemImage: resolvedExercise.systemImage,
                             accentName: resolvedExercise.accentName,
@@ -288,6 +335,7 @@ extension AIWorkoutDraft {
                     title: block.title,
                     targetBlockId: nil,
                     insertAfterBlockId: block.insertAfterBlockId ?? block.targetBlockId,
+                    updatesBlockSettings: block.updatesBlockSettings,
                     preset: block.preset,
                     type: block.type,
                     mode: block.mode,
@@ -353,6 +401,33 @@ private struct AIWorkoutDraftErrorResponse: Decodable {
     let error: APIError
 }
 
+private struct AIWorkoutModelResponse: Decodable {
+    let kind: String
+    let summary: String
+    let question: String
+    let options: [String]
+    let blocks: [AIWorkoutDraftBlock]
+
+    var decision: AIWorkoutGenerationDecision? {
+        switch kind {
+        case "clarification":
+            let trimmedQuestion = question.trimmingCharacters(in: .whitespacesAndNewlines)
+            let usableOptions = Array(options
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { $0.isEmpty == false }
+                .prefix(4))
+            guard trimmedQuestion.isEmpty == false, usableOptions.count >= 2 else { return nil }
+            return .clarification(AIWorkoutClarification(question: trimmedQuestion, options: usableOptions))
+        case "draft":
+            guard blocks.isEmpty == false,
+                  blocks.allSatisfy({ $0.exercises.isEmpty == false }) else { return nil }
+            return .draft(AIWorkoutDraft(summary: summary, blocks: blocks))
+        default:
+            return nil
+        }
+    }
+}
+
 enum AIWorkoutDraftGeneratorError: LocalizedError {
     case missingAPIKey
     case invalidResponse
@@ -389,7 +464,7 @@ actor AIWorkoutDraftGenerator {
         command: String,
         language: AppLanguage,
         existingBlocks: [AIWorkoutExistingBlock]
-    ) async throws -> AIWorkoutDraft {
+    ) async throws -> AIWorkoutGenerationDecision {
         guard let apiKey = AIWorkoutOpenAIConfiguration.apiKey else {
             throw AIWorkoutDraftGeneratorError.missingAPIKey
         }
@@ -406,8 +481,8 @@ actor AIWorkoutDraftGenerator {
             userPrompt: userPrompt
         )
 
-        if let draft = Self.decodeDraft(from: outputText) {
-            return draft.applyingPlacementIntent(from: command)
+        if let decision = Self.decodeDecision(from: outputText) {
+            return decision.applyingPlacementIntent(from: command)
         }
 
         let repairedOutputText = try await requestOutput(
@@ -415,10 +490,10 @@ actor AIWorkoutDraftGenerator {
             systemPrompt: repairSystemPrompt(language: languageName),
             userPrompt: "Original trainer instruction:\n\(command)\n\nCurrent template blocks:\n\(existingBlocksJSON)\n\nInvalid draft to repair:\n\(outputText)"
         )
-        guard let repairedDraft = Self.decodeDraft(from: repairedOutputText) else {
+        guard let repairedDecision = Self.decodeDecision(from: repairedOutputText) else {
             throw AIWorkoutDraftGeneratorError.invalidResponse
         }
-        return repairedDraft.applyingPlacementIntent(from: command)
+        return repairedDecision.applyingPlacementIntent(from: command)
     }
 
     private func requestOutput(
@@ -489,8 +564,10 @@ actor AIWorkoutDraftGenerator {
         let exerciseSchema: [String: Any] = [
             "type": "object",
             "additionalProperties": false,
-            "required": ["name", "systemImage", "accentName", "activityType", "metValue", "note", "sets"],
+            "required": ["operation", "targetExerciseId", "name", "systemImage", "accentName", "activityType", "metValue", "note", "sets"],
             "properties": [
+                "operation": ["type": "string", "enum": ["add", "update", "delete"]],
+                "targetExerciseId": ["type": ["string", "null"]],
                 "name": ["type": "string"],
                 "systemImage": ["type": "string"],
                 "accentName": ["type": "string", "enum": ["blue", "green", "orange", "purple", "teal", "red"]],
@@ -505,13 +582,14 @@ actor AIWorkoutDraftGenerator {
             "type": "object",
             "additionalProperties": false,
             "required": [
-                "title", "targetBlockId", "insertAfterBlockId", "preset", "type", "mode", "rounds", "durationMinutes",
+                "title", "targetBlockId", "insertAfterBlockId", "updatesBlockSettings", "preset", "type", "mode", "rounds", "durationMinutes",
                 "workSeconds", "restSeconds", "restBetweenRoundsSeconds", "exercises"
             ],
             "properties": [
                 "title": ["type": "string"],
                 "targetBlockId": ["type": ["string", "null"]],
                 "insertAfterBlockId": ["type": ["string", "null"]],
+                "updatesBlockSettings": ["type": "boolean"],
                 "preset": [
                     "type": "string",
                     "enum": WorkoutBlockPreset.allCases.map(\.rawValue)
@@ -534,10 +612,17 @@ actor AIWorkoutDraftGenerator {
             "schema": [
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["summary", "blocks"],
+                "required": ["kind", "summary", "question", "options", "blocks"],
                 "properties": [
+                    "kind": ["type": "string", "enum": ["draft", "clarification"]],
                     "summary": ["type": "string"],
-                    "blocks": ["type": "array", "minItems": 1, "maxItems": 5, "items": blockSchema]
+                    "question": ["type": "string"],
+                    "options": [
+                        "type": "array",
+                        "maxItems": 4,
+                        "items": ["type": "string"]
+                    ],
+                    "blocks": ["type": "array", "maxItems": 5, "items": blockSchema]
                 ]
             ]
         ]
@@ -545,27 +630,26 @@ actor AIWorkoutDraftGenerator {
 
     private func systemPrompt(language: String) -> String {
         """
-        You are a fitness-programming assistant for certified trainers. Convert the trainer's instruction into a conservative workout TEMPLATE DRAFT. Return JSON only and respond in \(language).
-        Return an object with a short string field summary and a blocks array. Each block has title, targetBlockId (a current template block id or null), insertAfterBlockId (a current template block id or null), preset (warmup|strength|superset|circuit|hiit|tabata|amrap|emom|e2mom|e3mom|forTime|rft|pyramid|dropSet|clusterSet|ladder|mobility|stretching|cooldown), type (warmup|strength|main|superset|circuit|stretching|cooldown), mode (rounds|amrap|tabata|emom), rounds, durationMinutes, workSeconds, restSeconds, restBetweenRoundsSeconds, and exercises. preset is the source of truth; type and mode must match that preset. Each exercise has name, systemImage, accentName (blue|green|orange|purple|teal|red), activityType (strength|cardio|hiit|core|mobility), metValue, note, and sets. Each set has weight, reps, durationSeconds, metricType (reps|duration).
-        Rules: current template blocks are provided in their current order in the user message. If the trainer asks to EDIT or ADD EXERCISES TO an existing block by name, set targetBlockId to that exact id and set insertAfterBlockId to null. If the trainer says NEW, ANOTHER, or SEPARATE block, targetBlockId MUST be null even when its title/type matches an existing block. When that new block must appear after an existing block, set insertAfterBlockId to the existing block's exact id. A new block named "Суперсет" must never be merged into an existing block merely because both titles are "Суперсет". If no section or workout format is explicitly requested, return EXACTLY ONE block: title "Силовой блок" in Russian or "Strength block" in English, type "strength", and put every requested exercise in it. Never make a block from an exercise name; "bench press" must be an exercise inside the strength block, not a block named "bench press". Create multiple blocks only when the instruction explicitly asks for warmup, cooldown, a circuit/AMRAP/Tabata, or named separate sections. Create only what the trainer asked; do not provide medical advice; never guess a working weight — use 0 when it is not supplied.
+        You are a fitness-programming assistant for certified trainers. Convert the trainer's instruction into a conservative workout TEMPLATE DRAFT, or ask one concise clarification when making a safe, exact draft is genuinely impossible. Return JSON only and respond in \(language).
+        Always return kind, summary, question, options, and blocks. For a completed draft use kind "draft", question "", options [], and non-empty blocks. For a clarification use kind "clarification", summary "", one concise question, 2 to 4 short mutually exclusive options, and blocks []. Ask only one question at a time. Clarify when multiple existing exercises or blocks match an edit, when the target/location of a destructive action is ambiguous, or when safety-critical information such as the location of pain is missing. Do not clarify harmless defaults that can be reviewed in a draft. Do not repeat a question already answered in the trainer instruction. Never guess an existing target id; ask if no exact target can be identified.
+        Each draft block has title, targetBlockId (a current template block id or null), insertAfterBlockId (a current template block id or null), updatesBlockSettings, preset (warmup|strength|superset|circuit|hiit|tabata|amrap|emom|e2mom|e3mom|forTime|rft|pyramid|dropSet|clusterSet|ladder|mobility|stretching|cooldown), type (warmup|strength|main|superset|circuit|stretching|cooldown), mode (rounds|amrap|tabata|emom), rounds, durationMinutes, workSeconds, restSeconds, restBetweenRoundsSeconds, and exercises. preset is the source of truth; type and mode must match that preset. Each exercise has operation (add|update|delete), targetExerciseId (an existing exercise id or null), name, systemImage, accentName (blue|green|orange|purple|teal|red), activityType (strength|cardio|hiit|core|mobility), metValue, note, and sets. Each set has weight, reps, durationSeconds, metricType (reps|duration).
+        Rules: current template blocks and their exercises are provided in their current order in the user message. Use operation add with targetExerciseId null for a new exercise. To REPLACE an exercise, use operation update and its exact targetExerciseId; the output name and fields describe the replacement. To DELETE an exercise, use operation delete and its exact targetExerciseId. A delete operation is never an add. Preserve the existing sets for a replacement unless the trainer explicitly supplied a new prescription. Set updatesBlockSettings false for exercise-only additions, replacements, or deletions, so existing rounds/timers/rest remain unchanged; set it true only when the trainer explicitly changes block settings. If the trainer asks to EDIT or ADD EXERCISES TO an existing block by name, set targetBlockId to that exact id and set insertAfterBlockId to null. If the trainer says NEW, ANOTHER, or SEPARATE block, targetBlockId MUST be null even when its title/type matches an existing block. When that new block must appear after an existing block, set insertAfterBlockId to the existing block's exact id. A new block named "Суперсет" must never be merged into an existing block merely because both titles are "Суперсет". If no section or workout format is explicitly requested, return EXACTLY ONE block: title "Силовой блок" in Russian or "Strength block" in English, type "strength", and put every requested exercise in it. Never make a block from an exercise name; "bench press" must be an exercise inside the strength block, not a block named "bench press". Create multiple blocks only when the instruction explicitly asks for warmup, cooldown, a circuit/AMRAP/Tabata, or named separate sections. Create only what the trainer asked; do not provide medical advice; never guess a working weight — use 0 when it is not supplied.
         rounds means how many times the complete block sequence is performed. sets are the source of truth for exercise history and reports: output one sets array item for EVERY prescribed set. For superset, circuit, rft, pyramid, dropSet, clusterSet, and ladder, every exercise must have at least one set object per round/stage; repeat identical objects when prescriptions are identical. Thus a superset for 3 sets has rounds=3 and three set objects for each exercise. A circular warmup for 2 rounds is preset circuit, type circuit, mode rounds, rounds=2, and two set objects per exercise. A normal strength exercise for 3 sets remains preset strength, rounds=1, and has three set objects. Never put a prescription for sets, reps, weight, duration, or rest only into note. For example, "5 sets of 5 reps at 70 kg" must return five set objects, each {weight: 70, reps: 5, durationSeconds: 0, metricType: "reps"}; "2 sets of 15 at 20 kg, then 4 sets of 15 at 40 kg" must return six set objects in that exact order. "10x10" means 10 set objects of 10 reps. Use note only for coaching cues or explanations. Use duration only for timed exercises; use valid values; no more than 5 blocks, 20 exercises, or 12 sets per exercise; no markdown.
         """
     }
 
     private func repairSystemPrompt(language: String) -> String {
         """
-        You repair workout-template draft JSON for certified trainers. Return JSON only and respond in \(language). Rebuild the draft from the original trainer instruction, correcting the invalid draft if useful. Use exactly this schema: {summary:String, blocks:[{title:String,targetBlockId:String|null,insertAfterBlockId:String|null,preset:String,type:String,mode:String,rounds:Int,durationMinutes:Int,workSeconds:Int,restSeconds:Int,restBetweenRoundsSeconds:Int,exercises:[{name:String,systemImage:String,accentName:String,activityType:String,metValue:Double,note:String,sets:[{weight:Double,reps:Int,durationSeconds:Int,metricType:String}]}]}]}. Every block must contain at least one exercise. NEW/ANOTHER/SEPARATE blocks always have targetBlockId null; use insertAfterBlockId only to position a new block after an existing one. Use only preset warmup|strength|superset|circuit|hiit|tabata|amrap|emom|e2mom|e3mom|forTime|rft|pyramid|dropSet|clusterSet|ladder|mobility|stretching|cooldown, type warmup|strength|main|superset|circuit|stretching|cooldown, mode rounds|amrap|tabata|emom, accentName blue|green|orange|purple|teal|red, activityType strength|cardio|hiit|core|mobility, metricType reps|duration. Preserve every prescribed set as individual objects. For superset, circuit, rft, pyramid, dropSet, clusterSet, and ladder, every exercise needs at least one set object per round/stage. Never add markdown or explanation.
+        You repair workout-template assistant JSON for certified trainers. Return JSON only and respond in \(language). Rebuild the response from the original trainer instruction, correcting the invalid response if useful. Use exactly this schema: {kind:"draft"|"clarification",summary:String,question:String,options:[String],blocks:[{title:String,targetBlockId:String|null,insertAfterBlockId:String|null,updatesBlockSettings:Bool,preset:String,type:String,mode:String,rounds:Int,durationMinutes:Int,workSeconds:Int,restSeconds:Int,restBetweenRoundsSeconds:Int,exercises:[{operation:String,targetExerciseId:String|null,name:String,systemImage:String,accentName:String,activityType:String,metValue:Double,note:String,sets:[{weight:Double,reps:Int,durationSeconds:Int,metricType:String}]}]}]}. A draft uses question "", options [], and non-empty blocks. A clarification uses summary "", one concise question, 2 to 4 short mutually exclusive options, and blocks []. Ask only if an exact target is genuinely ambiguous or safety-critical information is missing; do not repeat an answered question. Every draft block must contain at least one exercise operation. Use add/null for new exercises, update/exact-id for replacements, and delete/exact-id for deletions. Exercise-only edits use updatesBlockSettings false. NEW/ANOTHER/SEPARATE blocks always have targetBlockId null; use insertAfterBlockId only to position a new block after an existing one. Use only preset warmup|strength|superset|circuit|hiit|tabata|amrap|emom|e2mom|e3mom|forTime|rft|pyramid|dropSet|clusterSet|ladder|mobility|stretching|cooldown, type warmup|strength|main|superset|circuit|stretching|cooldown, mode rounds|amrap|tabata|emom, operation add|update|delete, accentName blue|green|orange|purple|teal|red, activityType strength|cardio|hiit|core|mobility, metricType reps|duration. Preserve every prescribed set as individual objects. For superset, circuit, rft, pyramid, dropSet, clusterSet, and ladder, every non-delete exercise needs at least one set object per round/stage. Never add markdown or explanation.
         """
     }
 
-    private static func decodeDraft(from outputText: String) -> AIWorkoutDraft? {
+    private static func decodeDecision(from outputText: String) -> AIWorkoutGenerationDecision? {
         guard let outputData = outputText.data(using: .utf8),
-              let draft = try? JSONDecoder().decode(AIWorkoutDraft.self, from: outputData),
-              draft.blocks.isEmpty == false,
-              draft.blocks.allSatisfy({ $0.exercises.isEmpty == false }) else {
+              let response = try? JSONDecoder().decode(AIWorkoutModelResponse.self, from: outputData) else {
             return nil
         }
-        return draft
+        return response.decision
     }
 
     private static func outputText(from data: Data) -> String? {
@@ -591,6 +675,17 @@ actor AIWorkoutDraftGenerator {
             return nil
         }
         return decoded.error.code
+    }
+}
+
+private extension AIWorkoutGenerationDecision {
+    func applyingPlacementIntent(from command: String) -> AIWorkoutGenerationDecision {
+        switch self {
+        case .draft(let draft):
+            return .draft(draft.applyingPlacementIntent(from: command))
+        case .clarification:
+            return self
+        }
     }
 }
 

@@ -298,12 +298,36 @@ struct WorkoutTemplateEditorScreen: View {
                 language: appLanguage,
                 existingBlocks: store.blocks
                     .sorted { $0.orderIndex < $1.orderIndex }
-                    .map {
+                    .map { block in
                         AIWorkoutExistingBlock(
-                            id: $0.id,
-                            title: $0.title,
-                            type: $0.typeRawValue,
-                            orderIndex: $0.orderIndex
+                            id: block.id,
+                            title: block.title,
+                            type: block.typeRawValue,
+                            preset: block.presetRawValue,
+                            mode: block.modeRawValue,
+                            orderIndex: block.orderIndex,
+                            rounds: block.rounds,
+                            durationMinutes: block.durationMinutes,
+                            workSeconds: block.workSeconds,
+                            restSeconds: block.restSeconds,
+                            restBetweenRoundsSeconds: block.restBetweenRoundsSeconds,
+                            exercises: store.exercises
+                                .filter { $0.blockId == block.id }
+                                .sorted { $0.orderIndex < $1.orderIndex }
+                                .map { exercise in
+                                    AIWorkoutExistingExercise(
+                                        id: exercise.id,
+                                        name: exercise.name,
+                                        sets: exercise.sets.map {
+                                            AIWorkoutExistingSet(
+                                                weight: $0.weight,
+                                                reps: $0.reps,
+                                                durationSeconds: $0.durationSeconds,
+                                                metricType: $0.metricType.rawValue
+                                            )
+                                        }
+                                    )
+                                }
                         )
                     }
             ) { result in
@@ -716,6 +740,9 @@ struct AIWorkoutGeneratorScreen: View {
 
     @State private var command = ""
     @State private var result: AIWorkoutGenerationResult?
+    @State private var clarification: AIWorkoutClarification?
+    @State private var clarificationAnswer = ""
+    @State private var clarificationTranscript: [String] = []
     @State private var errorMessage: String?
     @State private var isGenerating = false
 
@@ -727,11 +754,13 @@ struct AIWorkoutGeneratorScreen: View {
             Group {
                 if let result {
                     draftPreview(result)
+                } else if let clarification {
+                    clarificationView(clarification)
                 } else {
                     commandForm
                 }
             }
-            .navigationTitle(result == nil ? "Тренировка с ИИ" : "Черновик тренировки")
+            .navigationTitle(result == nil ? (clarification == nil ? "Тренировка с ИИ" : "Уточнение") : "Черновик тренировки")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -739,12 +768,97 @@ struct AIWorkoutGeneratorScreen: View {
                 }
                 if let result {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button("Добавить") { onAdd(result) }
+                        Button(hasExerciseEdits(result) ? "Применить" : "Добавить") { onAdd(result) }
                             .fontWeight(.semibold)
                     }
                 }
             }
         }
+    }
+
+    private func clarificationView(_ clarification: AIWorkoutClarification) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                Label("Нужно уточнение", systemImage: "questionmark.bubble.fill")
+                    .font(.headline)
+                    .foregroundStyle(.blue)
+
+                Text(clarification.question)
+                    .font(.title3.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                VStack(spacing: 10) {
+                    ForEach(clarification.options, id: \.self) { option in
+                        Button {
+                            submitClarification(option)
+                        } label: {
+                            HStack {
+                                Text(option)
+                                    .multilineTextAlignment(.leading)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.bold))
+                            }
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .frame(maxWidth: .infinity)
+                            .padding(16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(Color(.secondarySystemBackground))
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isGenerating)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Или напишите свой ответ")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    TextField("Ваш ответ", text: $clarificationAnswer, axis: .vertical)
+                        .lineLimit(2...4)
+                        .padding(14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color(.secondarySystemBackground))
+                        )
+
+                    Button {
+                        submitClarification(clarificationAnswer)
+                    } label: {
+                        HStack(spacing: 8) {
+                            if isGenerating { ProgressView().tint(.white) }
+                            Text(isGenerating ? "Уточняем…" : "Продолжить")
+                        }
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 15)
+                        .background(RoundedRectangle(cornerRadius: 16).fill(Color.blue))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(
+                        clarificationAnswer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            || isGenerating
+                    )
+                }
+
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                }
+
+                Text("До подтверждения черновика тренировка не изменится.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(20)
+        }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
     }
 
     private var commandForm: some View {
@@ -827,7 +941,11 @@ struct AIWorkoutGeneratorScreen: View {
 
             let draft = result.draft
             if draft.summary.isEmpty == false {
-                Section(result.libraryTemplates.isEmpty ? "Что создаст ИИ" : "Дополнительно создаст ИИ") {
+                Section(
+                    hasExerciseEdits(result)
+                        ? "Что изменит ИИ"
+                        : (result.libraryTemplates.isEmpty ? "Что создаст ИИ" : "Дополнительно создаст ИИ")
+                ) {
                     Text(draft.summary)
                         .font(.subheadline)
                 }
@@ -841,11 +959,18 @@ struct AIWorkoutGeneratorScreen: View {
 
                     ForEach(block.exercises) { exercise in
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(exercise.name)
-                                .font(.body.weight(.semibold))
-                            Text(exerciseSummary(exercise))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            HStack(spacing: 7) {
+                                Text(operationTitle(exercise.operation))
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(operationColor(exercise.operation))
+                                Text(exercise.name)
+                                    .font(.body.weight(.semibold))
+                            }
+                            if exercise.operation != .delete {
+                                Text(exerciseSummary(exercise))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                             if exercise.note.isEmpty == false {
                                 Text(exercise.note)
                                     .font(.caption)
@@ -859,6 +984,9 @@ struct AIWorkoutGeneratorScreen: View {
             Section {
                 Button("Сформировать заново") {
                     self.result = nil
+                    clarification = nil
+                    clarificationAnswer = ""
+                    clarificationTranscript = []
                     errorMessage = nil
                 }
                 .foregroundStyle(.blue)
@@ -867,25 +995,74 @@ struct AIWorkoutGeneratorScreen: View {
         .listStyle(.insetGrouped)
     }
 
+    private func hasExerciseEdits(_ result: AIWorkoutGenerationResult) -> Bool {
+        result.draft.blocks
+            .flatMap(\.exercises)
+            .contains { $0.operation != .add }
+    }
+
+    private func operationTitle(_ operation: AIWorkoutExerciseOperation) -> String {
+        switch operation {
+        case .add: "Добавить"
+        case .update: "Заменить"
+        case .delete: "Удалить"
+        }
+    }
+
+    private func operationColor(_ operation: AIWorkoutExerciseOperation) -> Color {
+        switch operation {
+        case .add: .blue
+        case .update: .orange
+        case .delete: .red
+        }
+    }
+
     private func generate() {
         let trimmedCommand = command.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmedCommand.isEmpty == false else { return }
+        generate(command: composedCommand(from: trimmedCommand))
+    }
+
+    private func submitClarification(_ answer: String) {
+        let trimmedAnswer = answer.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let clarification, trimmedAnswer.isEmpty == false else { return }
+        clarificationTranscript.append("Вопрос ИИ: \(clarification.question)\nОтвет тренера: \(trimmedAnswer)")
+        clarificationAnswer = ""
+        generate(command: composedCommand(from: command.trimmingCharacters(in: .whitespacesAndNewlines)))
+    }
+
+    private func composedCommand(from originalCommand: String) -> String {
+        guard clarificationTranscript.isEmpty == false else { return originalCommand }
+        return (["Исходная команда тренера: \(originalCommand)"] + clarificationTranscript + [
+            "Все перечисленные уточнения уже отвечены. Используй ответы и не повторяй тот же вопрос."
+        ]).joined(separator: "\n\n")
+    }
+
+    private func generate(command effectiveCommand: String) {
         errorMessage = nil
         isGenerating = true
         Task {
             do {
-                let libraryResolution = try await libraryResolver.resolve(command: trimmedCommand)
+                let libraryResolution = try await libraryResolver.resolve(command: effectiveCommand)
                 let generatedDraft: AIWorkoutDraft
                 if libraryResolution.needsAI {
                     let includedTitles = libraryResolution.templates.map(\.template.title).joined(separator: ", ")
                     let aiCommand = includedTitles.isEmpty
-                        ? trimmedCommand
+                        ? effectiveCommand
                         : "\(libraryResolution.remainingCommand)\nШаблоны FitLife уже добавлены точно: \(includedTitles). Не создавай их повторно."
-                    generatedDraft = try await generator.generate(
+                    let decision = try await generator.generate(
                         command: aiCommand,
                         language: language,
                         existingBlocks: existingBlocks
                     )
+                    switch decision {
+                    case .draft(let draft):
+                        generatedDraft = draft
+                    case .clarification(let question):
+                        clarification = question
+                        isGenerating = false
+                        return
+                    }
                 } else if libraryResolution.templates.isEmpty == false {
                     generatedDraft = AIWorkoutDraft(
                         summary: "Добавлено из библиотеки FitLife: "
@@ -893,14 +1070,23 @@ struct AIWorkoutGeneratorScreen: View {
                         blocks: []
                     )
                 } else {
-                    generatedDraft = try await generator.generate(
-                        command: trimmedCommand,
+                    let decision = try await generator.generate(
+                        command: effectiveCommand,
                         language: language,
                         existingBlocks: existingBlocks
                     )
+                    switch decision {
+                    case .draft(let draft):
+                        generatedDraft = draft
+                    case .clarification(let question):
+                        clarification = question
+                        isGenerating = false
+                        return
+                    }
                 }
                 // Preview the same normalized prescriptions that will actually
                 // be persisted, so the trainer can verify round/set counts.
+                clarification = nil
                 result = AIWorkoutGenerationResult(
                     draft: generatedDraft.resolvingExercises(using: workoutTemplates()),
                     libraryTemplates: libraryResolution.templates
