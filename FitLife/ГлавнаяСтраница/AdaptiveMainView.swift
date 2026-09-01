@@ -49,6 +49,10 @@ private struct IPadMainShell: View {
             NavigationStack {
                 selectedContent
             }
+            // Each sidebar section owns its navigation context. Without this,
+            // a pushed screen (for example, the trainer chat) remains above the
+            // newly selected section in the shared iPad detail column.
+            .id(selectedTab)
         }
         .tint(colorScheme == .dark ? HomeDarkColors.blue : HomeColors.accent)
         .background(theme.bg.ignoresSafeArea())

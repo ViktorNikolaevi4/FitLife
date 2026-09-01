@@ -363,7 +363,7 @@ struct ActiveWorkoutScreen: View {
             subtitle: group.subtitle,
             iconName: blockIconName(for: group.block),
             onStart: runnerAction(for: group.block),
-            isCompleted: group.block?.isFinished == true,
+            status: workoutBlockStatus(for: group),
             onAddExercise: addExerciseAction(for: group.block),
             isExpanded: collapsedBlockIds.contains(group.id) == false,
             onToggleExpanded: { toggleBlock(group.id) },
@@ -1144,6 +1144,66 @@ struct ActiveWorkoutScreen: View {
         }
     }
 
+    private func workoutBlockStatus(for group: WorkoutBlockExerciseGroup) -> WorkoutBlockDisplayStatus {
+        guard let block = group.block else {
+            return exerciseProgressStatus(exercises: group.exercises, block: nil)
+        }
+
+        let usesCompletedIntervals = block.preset == .tabata ||
+            block.preset == .hiit ||
+            block.mode == .emom
+
+        if usesCompletedIntervals {
+            let completedIntervals = min(block.completedIntervalIndexes.count, max(block.rounds, 1))
+            if completedIntervals >= max(block.rounds, 1) {
+                return .completed
+            }
+            if block.isFinished {
+                return completedIntervals == 0 ? .skipped : .partial
+            }
+            if completedIntervals > 0 || block.runnerPhase != .ready || block.runnerStartedAt != nil {
+                return .inProgress
+            }
+            return .notStarted
+        }
+
+        return exerciseProgressStatus(exercises: group.exercises, block: block)
+    }
+
+    private func exerciseProgressStatus(
+        exercises: [WorkoutExercise],
+        block: WorkoutBlock?
+    ) -> WorkoutBlockDisplayStatus {
+        let progress = exercises.reduce(into: (completed: 0, total: 0)) { result, exercise in
+            let sets = exercise.setItems
+            if sets.isEmpty {
+                result.total += 1
+                if exercise.isFinished {
+                    result.completed += 1
+                }
+            } else {
+                result.total += sets.count
+                result.completed += sets.filter { $0.isCompleted || exercise.isFinished }.count
+            }
+        }
+
+        if progress.total > 0, progress.completed >= progress.total {
+            return .completed
+        }
+
+        if block?.isFinished == true {
+            return progress.completed == 0 ? .skipped : .partial
+        }
+
+        if progress.completed > 0 ||
+            block?.runnerStartedAt != nil ||
+            (block?.runnerPhase != nil && block?.runnerPhase != .ready) {
+            return .inProgress
+        }
+
+        return .notStarted
+    }
+
     private func reindexExercises() {
         for (index, exercise) in workout.exerciseItems
             .sorted(by: { $0.orderIndex < $1.orderIndex })
@@ -1188,6 +1248,44 @@ private struct WorkoutBlockExerciseGroup: Identifiable {
     let title: String
     let subtitle: String
     let exercises: [WorkoutExercise]
+}
+
+private enum WorkoutBlockDisplayStatus {
+    case notStarted
+    case inProgress
+    case completed
+    case partial
+    case skipped
+
+    var title: String {
+        switch self {
+        case .notStarted: "Не начат"
+        case .inProgress: "В процессе"
+        case .completed: "Выполнен"
+        case .partial: "Частично"
+        case .skipped: "Пропущен"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .notStarted: .secondary
+        case .inProgress: .blue
+        case .completed: .green
+        case .partial: .orange
+        case .skipped: .secondary
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .notStarted: "circle"
+        case .inProgress: "circle.dotted"
+        case .completed: "checkmark.circle.fill"
+        case .partial: "circle.lefthalf.filled"
+        case .skipped: "forward.end.circle"
+        }
+    }
 }
 
 private enum WorkoutEffortLevel: String, CaseIterable, Identifiable {
@@ -1350,7 +1448,7 @@ private struct WorkoutBlockSectionHeader: View {
     let subtitle: String
     let iconName: String
     var onStart: (() -> Void)?
-    let isCompleted: Bool
+    let status: WorkoutBlockDisplayStatus
     var onAddExercise: (() -> Void)?
     let isExpanded: Bool
     let onToggleExpanded: () -> Void
@@ -1363,14 +1461,14 @@ private struct WorkoutBlockSectionHeader: View {
                     blockIdentity
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(isCompleted ? "Посмотреть результаты блока \(title)" : "Начать блок \(title)")
+                .accessibilityLabel(status == .completed ? "Посмотреть результаты блока \(title)" : "Открыть блок \(title), \(status.title)")
             } else {
                 blockIdentity
             }
 
             Spacer()
 
-            if isCompleted, let onStart {
+            if status == .completed, let onStart {
                 Button(action: onStart) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.title3)
@@ -1381,14 +1479,14 @@ private struct WorkoutBlockSectionHeader: View {
                 .accessibilityLabel("Посмотреть результаты блока \(title)")
             } else if let onStart {
                 Button(action: onStart) {
-                    Image(systemName: "play.fill")
+                    Image(systemName: status == .inProgress ? "play.fill" : status.systemImage)
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(.white)
                         .frame(width: 44, height: 44)
-                        .background(Circle().fill(Color.blue))
+                        .background(Circle().fill(status == .notStarted ? Color.blue : status.color))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Начать блок \(title)")
+                .accessibilityLabel("Открыть блок \(title), \(status.title)")
             }
 
             Button(action: onToggleExpanded) {
@@ -1443,6 +1541,13 @@ private struct WorkoutBlockSectionHeader: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.leading)
+
+                if status != .notStarted {
+                    Label(status.title, systemImage: status.systemImage)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(status.color)
+                        .padding(.top, 2)
+                }
             }
         }
     }
