@@ -329,6 +329,12 @@
 "trainer.templates.delete.title" = "Удалить шаблон?";
 "trainer.templates.delete.message" = "Шаблон будет скрыт из списка тренера. Уже назначенные тренировки не изменятся.";
 "trainer.templates.exercises.section" = "Упражнения шаблона";
+"trainer.templates.blocks.order.action" = "Порядок";
+"trainer.templates.blocks.order.title" = "Порядок блоков";
+"trainer.templates.blocks.order.hint" = "Удерживайте маркер справа и перетащите блок. Упражнения внутри блока переместятся вместе с ним.";
+"trainer.templates.blocks.order.drag_handle" = "Перетащить блок";
+"trainer.templates.blocks.order.error.title" = "Не удалось сохранить порядок";
+"trainer.templates.blocks.order.error.message" = "Проверьте подключение и попробуйте ещё раз.";
 "trainer.templates.exercises.empty.title" = "Пока нет упражнений";
 "trainer.templates.exercises.empty.subtitle" = "Добавь первое упражнение в шаблон.";
 "trainer.templates.exercise.summary" = "%d подхода";
@@ -363,6 +369,7 @@
 "trainer.overview.clients.empty.subtitle" = "Подключённые клиенты и их назначения появятся здесь.";
 "trainer.overview.client.summary" = "Всего: %d · Активно: %d";
 "trainer.overview.client.latest" = "Последняя: %@";
+"trainer.overview.client.unavailable" = "Недоступный клиент";
 "trainer.overview.client.empty.title" = "Назначений пока нет";
 "trainer.overview.client.empty.subtitle" = "Назначенные этому клиенту тренировки появятся здесь.";
 "trainer.assignment.detail.info" = "Информация";

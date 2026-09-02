@@ -532,14 +532,14 @@ final class ClientAssignmentDetailStore: ObservableObject {
 
 @MainActor
 final class TrainerAssignmentsOverviewStore: ObservableObject {
-    @Published private(set) var assignments: [WorkoutAssignment] = []
-    @Published private(set) var clientsById: [String: AppUserProfile] = [:]
-    @Published private(set) var activeClientIds: Set<String> = []
+    @Published private(set) var clientSummaries: [TrainerAssignmentClientSummary] = []
     @Published private(set) var isLoading = false
+    @Published private(set) var isRefreshing = false
     @Published var errorMessage: String?
 
     private let trainerId: String
     private let firestore: Firestore
+    private var latestLoadId: UUID?
 
     init(trainerId: String, firestore: Firestore = .firestore()) {
         self.trainerId = trainerId
@@ -547,8 +547,22 @@ final class TrainerAssignmentsOverviewStore: ObservableObject {
     }
 
     func load() async {
-        isLoading = true
+        let loadId = UUID()
+        latestLoadId = loadId
+
+        if clientSummaries.isEmpty {
+            isLoading = true
+        } else {
+            isRefreshing = true
+        }
         errorMessage = nil
+
+        defer {
+            if latestLoadId == loadId {
+                isLoading = false
+                isRefreshing = false
+            }
+        }
 
         do {
             async let assignmentsSnapshot = firestore
@@ -568,41 +582,77 @@ final class TrainerAssignmentsOverviewStore: ObservableObject {
             let loadedAssignments = assignmentDocs.documents.compactMap { document in
                 WorkoutAssignment(id: document.documentID, data: document.data())
             }
-            assignments = loadedAssignments
 
-            let linkedClientIds = Set(linkDocs.documents.compactMap { document in
-                TrainerClientLink(id: document.documentID, data: document.data())?.clientId
-            })
-            activeClientIds = linkedClientIds
+            let links = linkDocs.documents.compactMap { document in
+                TrainerClientLink(id: document.documentID, data: document.data())
+            }
+            let linkedClientIds = Set(links.map(\.clientId))
 
             let allClientIds = linkedClientIds.union(loadedAssignments.map(\.clientId))
-            var loadedClients: [String: AppUserProfile] = [:]
-            for clientId in allClientIds {
-                let snapshot = try await firestore.collection("users").document(clientId).getDocument()
-                guard let data = snapshot.data(),
-                      let profile = AppUserProfile(id: snapshot.documentID, data: data) else {
-                    continue
+            let profileSnapshots = links.reduce(into: [String: AppUserProfile]()) { result, link in
+                if let profile = link.clientProfileSnapshot {
+                    result[link.clientId] = profile
                 }
-                loadedClients[clientId] = profile
             }
 
-            clientsById = loadedClients
-            isLoading = false
+            let loadedProfiles = await loadProfiles(clientIds: allClientIds)
+            let profilesById = profileSnapshots.merging(loadedProfiles) { _, loaded in loaded }
+            let summaries = makeSummaries(
+                assignments: loadedAssignments,
+                activeClientIds: linkedClientIds,
+                profilesById: profilesById
+            )
+
+            try Task.checkCancellation()
+            guard latestLoadId == loadId else { return }
+            clientSummaries = summaries
         } catch {
+            guard latestLoadId == loadId, !(error is CancellationError) else { return }
             errorMessage = error.localizedDescription
-            isLoading = false
         }
     }
 
-    func clientName(for clientId: String) -> String? {
-        clientsById[clientId]?.displayName
+    private func loadProfiles(clientIds: Set<String>) async -> [String: AppUserProfile] {
+        let firestore = firestore
+
+        return await withTaskGroup(of: (String, AppUserProfile?).self) { group in
+            for clientId in clientIds {
+                group.addTask {
+                    do {
+                        let snapshot = try await firestore
+                            .collection("users")
+                            .document(clientId)
+                            .getDocument()
+                        guard let data = snapshot.data() else {
+                            return (clientId, nil)
+                        }
+                        return (
+                            clientId,
+                            AppUserProfile(id: snapshot.documentID, data: data)
+                        )
+                    } catch {
+                        // A missing or temporarily unavailable user document must not
+                        // prevent the rest of the assignment overview from loading.
+                        return (clientId, nil)
+                    }
+                }
+            }
+
+            var profiles: [String: AppUserProfile] = [:]
+            for await (clientId, profile) in group {
+                if let profile {
+                    profiles[clientId] = profile
+                }
+            }
+            return profiles
+        }
     }
 
-    func assignments(for status: WorkoutAssignmentStatus) -> [WorkoutAssignment] {
-        assignments.filter { $0.status == status }
-    }
-
-    var clientSummaries: [TrainerAssignmentClientSummary] {
+    private func makeSummaries(
+        assignments: [WorkoutAssignment],
+        activeClientIds: Set<String>,
+        profilesById: [String: AppUserProfile]
+    ) -> [TrainerAssignmentClientSummary] {
         let assignmentsByClient = Dictionary(grouping: assignments, by: \.clientId)
         let clientIds = activeClientIds.union(assignmentsByClient.keys)
 
@@ -610,10 +660,10 @@ final class TrainerAssignmentsOverviewStore: ObservableObject {
             .map { clientId in
                 let clientAssignments = (assignmentsByClient[clientId] ?? [])
                     .sorted { $0.assignedAt > $1.assignedAt }
-                let profile = clientsById[clientId]
+                let profile = profilesById[clientId]
                 return TrainerAssignmentClientSummary(
                     id: clientId,
-                    displayName: profile?.displayName ?? profile?.email ?? clientId,
+                    displayName: visibleClientName(profile: profile),
                     email: profile?.email ?? "",
                     isActiveClient: activeClientIds.contains(clientId),
                     assignments: clientAssignments
@@ -625,6 +675,20 @@ final class TrainerAssignmentsOverviewStore: ObservableObject {
                 }
                 return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
             }
+    }
+
+    private func visibleClientName(profile: AppUserProfile?) -> String {
+        let displayName = profile?.displayName.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if displayName.isEmpty == false {
+            return displayName
+        }
+
+        let email = profile?.email.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if email.isEmpty == false {
+            return email
+        }
+
+        return AppLocalizer.string("trainer.overview.client.unavailable")
     }
 }
 

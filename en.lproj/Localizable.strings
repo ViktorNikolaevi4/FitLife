@@ -329,6 +329,12 @@
 "trainer.templates.delete.title" = "Delete template?";
 "trainer.templates.delete.message" = "The template will be hidden from the coach list. Already assigned workouts will not change.";
 "trainer.templates.exercises.section" = "Template Exercises";
+"trainer.templates.blocks.order.action" = "Reorder";
+"trainer.templates.blocks.order.title" = "Block Order";
+"trainer.templates.blocks.order.hint" = "Hold the handle on the right and drag a block. Exercises inside it move together with the block.";
+"trainer.templates.blocks.order.drag_handle" = "Drag block";
+"trainer.templates.blocks.order.error.title" = "Couldn’t Save Order";
+"trainer.templates.blocks.order.error.message" = "Check your connection and try again.";
 "trainer.templates.exercises.empty.title" = "No exercises yet";
 "trainer.templates.exercises.empty.subtitle" = "Add the first exercise to this template.";
 "trainer.templates.exercise.summary" = "%d sets";
@@ -363,6 +369,7 @@
 "trainer.overview.clients.empty.subtitle" = "Connected clients and their assignments will appear here.";
 "trainer.overview.client.summary" = "Total: %d · Active: %d";
 "trainer.overview.client.latest" = "Latest: %@";
+"trainer.overview.client.unavailable" = "Unavailable client";
 "trainer.overview.client.empty.title" = "No assignments yet";
 "trainer.overview.client.empty.subtitle" = "Workouts assigned to this client will appear here.";
 "trainer.assignment.detail.info" = "Information";

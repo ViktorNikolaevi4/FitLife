@@ -11,6 +11,7 @@ struct WorkoutTemplateEditorScreen: View {
     @StateObject private var store: WorkoutTemplateContentStore
     @State private var showAddExercise = false
     @State private var showAddBlock = false
+    @State private var isReorderingBlocks = false
     @State private var showAIGenerator = false
     @State private var targetBlockId: String?
     @State private var targetGroupId: String?
@@ -136,7 +137,7 @@ struct WorkoutTemplateEditorScreen: View {
                 }
             }
 
-            Section(appLanguage.localized("trainer.templates.exercises.section")) {
+            Section {
                 ForEach(templateBlockGroups) { group in
                     WorkoutTemplateBlockHeader(
                         title: group.title,
@@ -153,11 +154,20 @@ struct WorkoutTemplateEditorScreen: View {
                                 blockForNewGroup = block
                             }
                         },
+                        canMoveUp: group.block.map { canMoveBlock($0.id, offset: -1) } ?? false,
+                        canMoveDown: group.block.map { canMoveBlock($0.id, offset: 1) } ?? false,
+                        onMoveUp: group.block.map { block in
+                            { moveBlock(block.id, offset: -1) }
+                        },
+                        onMoveDown: group.block.map { block in
+                            { moveBlock(block.id, offset: 1) }
+                        },
+                        isReordering: isReorderingBlocks,
                         isExpanded: collapsedBlockIds.contains(group.id) == false,
                         onToggleExpanded: { toggleBlock(group.id) }
                     )
                     .contextMenu {
-                        if let block = group.block {
+                        if isReorderingBlocks == false, let block = group.block {
                             Button("Удалить блок", systemImage: "trash", role: .destructive) {
                                 pendingDeleteBlock = block
                             }
@@ -167,7 +177,8 @@ struct WorkoutTemplateEditorScreen: View {
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
 
-                    if collapsedBlockIds.contains(group.id) == false {
+                    if isReorderingBlocks == false,
+                       collapsedBlockIds.contains(group.id) == false {
                         ForEach(group.exercises) { exercise in
                             exerciseRow(exercise)
                         }
@@ -193,6 +204,36 @@ struct WorkoutTemplateEditorScreen: View {
                                 }
                             }
                         }
+                    }
+                }
+            } header: {
+                HStack {
+                    Text(appLanguage.localized("trainer.templates.exercises.section"))
+
+                    Spacer()
+
+                    if store.blocks.count > 1 {
+                        Button {
+                            withAnimation(.snappy(duration: 0.22)) {
+                                isReorderingBlocks.toggle()
+                            }
+                        } label: {
+                            Label(
+                                isReorderingBlocks
+                                    ? AppLocalizer.string("common.done")
+                                    : AppLocalizer.string("trainer.templates.blocks.order.action"),
+                                systemImage: isReorderingBlocks
+                                    ? "checkmark"
+                                    : "arrow.up.arrow.down"
+                            )
+                            .font(.caption.weight(.semibold))
+                            .textCase(nil)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Color.blue)
+                        .accessibilityHint(
+                            AppLocalizer.string("trainer.templates.blocks.order.hint")
+                        )
                     }
                 }
             }
@@ -496,6 +537,28 @@ struct WorkoutTemplateEditorScreen: View {
         }
     }
 
+    private func canMoveBlock(_ blockID: String, offset: Int) -> Bool {
+        let orderedIDs = store.blocks
+            .sorted { $0.orderIndex < $1.orderIndex }
+            .map(\.id)
+        guard let index = orderedIDs.firstIndex(of: blockID) else { return false }
+        return orderedIDs.indices.contains(index + offset)
+    }
+
+    private func moveBlock(_ blockID: String, offset: Int) {
+        var orderedIDs = store.blocks
+            .sorted { $0.orderIndex < $1.orderIndex }
+            .map(\.id)
+        guard let sourceIndex = orderedIDs.firstIndex(of: blockID) else { return }
+        let destinationIndex = sourceIndex + offset
+        guard orderedIDs.indices.contains(destinationIndex) else { return }
+        orderedIDs.swapAt(sourceIndex, destinationIndex)
+
+        Task {
+            _ = await store.reorderBlocks(orderedIDs)
+        }
+    }
+
     @ViewBuilder
     private func exerciseRow(_ exercise: WorkoutTemplateExerciseItem) -> some View {
         WorkoutTemplateExerciseCard(
@@ -626,6 +689,11 @@ private struct WorkoutTemplateBlockHeader: View {
     let subtitle: String
     var onAddExercise: (() -> Void)?
     var onAddGroup: (() -> Void)?
+    var canMoveUp = false
+    var canMoveDown = false
+    var onMoveUp: (() -> Void)?
+    var onMoveDown: (() -> Void)?
+    var isReordering = false
     let isExpanded: Bool
     let onToggleExpanded: () -> Void
 
@@ -653,37 +721,62 @@ private struct WorkoutTemplateBlockHeader: View {
 
             Spacer()
 
-            Button(action: onToggleExpanded) {
-                Image(systemName: "chevron.down")
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(isExpanded ? 0 : -90))
-                    .frame(width: 34, height: 34)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(isExpanded ? "Свернуть блок" : "Развернуть блок")
+            if isReordering {
+                HStack(spacing: 2) {
+                    Button(action: { onMoveUp?() }) {
+                        Image(systemName: "chevron.up")
+                            .frame(width: 38, height: 38)
+                    }
+                    .disabled(canMoveUp == false)
+                    .accessibilityLabel("Переместить блок выше")
 
-            if let onAddExercise {
-                Button(action: onAddExercise) {
-                    Image(systemName: "plus")
+                    Divider()
+                        .frame(height: 22)
+
+                    Button(action: { onMoveDown?() }) {
+                        Image(systemName: "chevron.down")
+                            .frame(width: 38, height: 38)
+                    }
+                    .disabled(canMoveDown == false)
+                    .accessibilityLabel("Переместить блок ниже")
+                }
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(Color.blue)
+                .background(Color.blue.opacity(0.11), in: Capsule())
+                .buttonStyle(.plain)
+            } else {
+                Button(action: onToggleExpanded) {
+                    Image(systemName: "chevron.down")
                         .font(.subheadline.weight(.bold))
-                        .foregroundStyle(Color.blue)
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 0 : -90))
                         .frame(width: 34, height: 34)
-                        .background(Circle().fill(Color.blue.opacity(0.12)))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(AppLocalizer.string("workout.add.exercise"))
-            }
-            if let onAddGroup {
-                Button(action: onAddGroup) {
-                    Image(systemName: "rectangle.3.group.fill")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(Color.blue)
-                        .frame(width: 34, height: 34)
-                        .background(Circle().fill(Color.blue.opacity(0.12)))
+                .accessibilityLabel(isExpanded ? "Свернуть блок" : "Развернуть блок")
+
+                if let onAddExercise {
+                    Button(action: onAddExercise) {
+                        Image(systemName: "plus")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(Color.blue)
+                            .frame(width: 34, height: 34)
+                            .background(Circle().fill(Color.blue.opacity(0.12)))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(AppLocalizer.string("workout.add.exercise"))
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Добавить подгруппу")
+                if let onAddGroup {
+                    Button(action: onAddGroup) {
+                        Image(systemName: "rectangle.3.group.fill")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(Color.blue)
+                            .frame(width: 34, height: 34)
+                            .background(Circle().fill(Color.blue.opacity(0.12)))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Добавить подгруппу")
+                }
             }
         }
         .padding(.horizontal, 4)

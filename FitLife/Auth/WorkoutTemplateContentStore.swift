@@ -568,6 +568,46 @@ final class WorkoutTemplateContentStore: ObservableObject {
         }
     }
 
+    /// Persists block order as one atomic operation. Exercises remain attached
+    /// to their block IDs, so the whole block moves without rewriting its content.
+    func reorderBlocks(_ orderedBlockIDs: [String]) async -> Bool {
+        errorMessage = nil
+
+        let previousBlocks = blocks
+        let blocksByID = Dictionary(uniqueKeysWithValues: previousBlocks.map { ($0.id, $0) })
+        guard orderedBlockIDs.count == previousBlocks.count,
+              Set(orderedBlockIDs) == Set(blocksByID.keys) else {
+            errorMessage = "The block list changed before the new order was saved."
+            return false
+        }
+
+        let reorderedBlocks = orderedBlockIDs.enumerated().compactMap { index, blockID in
+            blocksByID[blockID]?.replacingOrderIndex(index)
+        }
+        guard reorderedBlocks.count == previousBlocks.count else { return false }
+
+        // Optimistic UI update; roll back if Firestore rejects the batch.
+        blocks = reorderedBlocks
+
+        do {
+            let templateRef = firestore.collection("workout_templates").document(template.id)
+            let batch = firestore.batch()
+            for block in reorderedBlocks {
+                batch.setData(
+                    ["orderIndex": block.orderIndex],
+                    forDocument: templateRef.collection("blocks").document(block.id),
+                    merge: true
+                )
+            }
+            try await batch.commit()
+            return true
+        } catch {
+            blocks = previousBlocks
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
     func addGeneratedDraft(
         _ draft: AIWorkoutDraft,
         libraryTemplates: [AIWorkoutLibraryTemplateSnapshot] = []
