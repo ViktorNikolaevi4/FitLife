@@ -329,7 +329,7 @@ struct WorkoutTemplateEditorScreen: View {
                     showAddBlock = false
                     return nil
                 }
-                return store.errorMessage ?? "Не удалось сохранить блок. Проверьте подключение к интернету."
+                return store.errorMessage ?? AppLocalizer.string("trainer.template.block.save_failed")
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
@@ -479,7 +479,12 @@ struct WorkoutTemplateEditorScreen: View {
                 pendingEmptyBlockDeletion = nil
             }
         } message: {
-            Text("В блоке «\(pendingEmptyBlockDeletion?.displayTitle ?? "")» больше нет упражнений.")
+            Text(
+                AppLocalizer.format(
+                    "trainer.template.block.empty.message",
+                    pendingEmptyBlockDeletion?.displayTitle ?? ""
+                )
+            )
         }
         .confirmationDialog(
             "Удалить блок?",
@@ -503,7 +508,13 @@ struct WorkoutTemplateEditorScreen: View {
             let count = pendingDeleteBlock.map { block in
                 store.exercises.filter { $0.blockId == block.id }.count
             } ?? 0
-            Text("Будет удалён блок «\(pendingDeleteBlock?.displayTitle ?? "")» и упражнений: \(count).")
+            Text(
+                AppLocalizer.format(
+                    "trainer.template.block.delete.message",
+                    pendingDeleteBlock?.displayTitle ?? "",
+                    count
+                )
+            )
         }
     }
 
@@ -753,7 +764,7 @@ private struct WorkoutTemplateBlockHeader: View {
                         .frame(width: 34, height: 34)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(isExpanded ? "Свернуть блок" : "Развернуть блок")
+                .accessibilityLabel(isExpanded ? AppLocalizer.string("workout.block.collapse") : AppLocalizer.string("workout.block.expand"))
 
                 if let onAddExercise {
                     Button(action: onAddExercise) {
@@ -853,7 +864,7 @@ struct AIWorkoutGeneratorScreen: View {
                     commandForm
                 }
             }
-            .navigationTitle(result == nil ? (clarification == nil ? "Тренировка с ИИ" : "Уточнение") : "Черновик тренировки")
+            .navigationTitle(result == nil ? (clarification == nil ? AppLocalizer.string("trainer.ai.workout_title") : AppLocalizer.string("trainer.ai.clarification_title")) : AppLocalizer.string("trainer.ai.draft_title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -861,7 +872,7 @@ struct AIWorkoutGeneratorScreen: View {
                 }
                 if let result {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button(hasExerciseEdits(result) ? "Применить" : "Добавить") { onAdd(result) }
+                        Button(hasExerciseEdits(result) ? AppLocalizer.string("common.apply") : AppLocalizer.string("common.add")) { onAdd(result) }
                             .fontWeight(.semibold)
                     }
                 }
@@ -924,7 +935,7 @@ struct AIWorkoutGeneratorScreen: View {
                     } label: {
                         HStack(spacing: 8) {
                             if isGenerating { ProgressView().tint(.white) }
-                            Text(isGenerating ? "Уточняем…" : "Продолжить")
+                            Text(isGenerating ? AppLocalizer.string("trainer.ai.clarifying") : AppLocalizer.string("common.continue"))
                         }
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(.white)
@@ -993,7 +1004,7 @@ struct AIWorkoutGeneratorScreen: View {
                         } else {
                             Image(systemName: "sparkles")
                         }
-                        Text(isGenerating ? "Создаём черновик…" : "Создать черновик")
+                        Text(isGenerating ? AppLocalizer.string("trainer.ai.creating_draft") : AppLocalizer.string("trainer.ai.create_draft"))
                     }
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(.white)
@@ -1036,8 +1047,8 @@ struct AIWorkoutGeneratorScreen: View {
             if draft.summary.isEmpty == false {
                 Section(
                     hasExerciseEdits(result)
-                        ? "Что изменит ИИ"
-                        : (result.libraryTemplates.isEmpty ? "Что создаст ИИ" : "Дополнительно создаст ИИ")
+                        ? AppLocalizer.string("trainer.ai.preview.changes")
+                        : (result.libraryTemplates.isEmpty ? AppLocalizer.string("trainer.ai.preview.creates") : AppLocalizer.string("trainer.ai.preview.additional"))
                 ) {
                     Text(draft.summary)
                         .font(.subheadline)
@@ -1260,8 +1271,8 @@ private struct AddWorkoutTemplateGroupScreen: View {
                     }
                 }
                 Section("Настройки") {
-                    Stepper("Повторов группы: \(rounds)", value: $rounds, in: 1...20)
-                    Stepper("Отдых: \(restSeconds) сек", value: $restSeconds, in: 0...600, step: 5)
+                    Stepper(AppLocalizer.format("trainer.template.group.rounds", rounds), value: $rounds, in: 1...20)
+                    Stepper(AppLocalizer.format("trainer.template.group.rest_seconds", restSeconds), value: $restSeconds, in: 0...600, step: 5)
                     TextField("Заметка для клиента (необязательно)", text: $note, axis: .vertical)
                         .lineLimit(2...4)
                 }

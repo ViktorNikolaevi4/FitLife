@@ -436,21 +436,21 @@ enum AIWorkoutDraftGeneratorError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingAPIKey:
-            return "OpenAI API key не настроен в приложении."
+            return AppLocalizer.string("trainer.ai.error.missing_api_key")
         case .invalidResponse:
-            return "Не удалось прочитать черновик тренировки. Попробуйте ещё раз."
+            return AppLocalizer.string("trainer.ai.error.invalid_response")
         case .requestFailed(let code):
             switch code {
             case "trainer_role_required":
-                return "Создавать тренировку с ИИ может только активный тренер."
+                return AppLocalizer.string("trainer.ai.error.role_required")
             case "invalid_command":
-                return "Опишите тренировку немного подробнее."
+                return AppLocalizer.string("trainer.ai.error.invalid_command")
             case "empty_workout_draft":
-                return "ИИ не нашёл упражнений в запросе. Попробуйте сформулировать иначе."
+                return AppLocalizer.string("trainer.ai.error.empty_draft")
             case "missing_openai_key":
-                return "ИИ ещё не настроен на сервере."
+                return AppLocalizer.string("trainer.ai.error.server_not_configured")
             default:
-                return "Не удалось создать черновик. Попробуйте ещё раз."
+                return AppLocalizer.string("trainer.ai.error.generic")
             }
         }
     }

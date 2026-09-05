@@ -216,7 +216,12 @@ struct NutritionScreen: View {
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.secondary)
                     }
-                    Text("из \((userData?.calories ?? 0).formatted(.number.grouping(.automatic)))")
+                    Text(
+                        AppLocalizer.format(
+                            "nutrition.goal.out_of",
+                            (userData?.calories ?? 0).formatted(.number.grouping(.automatic))
+                        )
+                    )
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.secondary)
                 }

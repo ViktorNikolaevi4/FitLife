@@ -3650,7 +3650,7 @@ private struct CoachingCheckInDetailScreen: View {
                     }
                     .frame(maxWidth: .infinity)
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(day.date.formatted(.dateTime.weekday(.wide))), \(formattedSteps(day.steps)) шагов")
+                    .accessibilityLabel(AppLocalizer.format("coaching.checkin.steps.accessibility", day.date.formatted(.dateTime.weekday(.wide)), formattedSteps(day.steps)))
                 }
             }
 
@@ -4163,7 +4163,10 @@ private struct CoachingWorkoutReportHistoryScreen: View {
 
     private func sectionTitle(for date: Date) -> String {
         if Calendar.current.isDateInToday(date) {
-            return "Сегодня, \(date.formatted(.dateTime.day().month(.wide)))"
+            return AppLocalizer.format(
+                "coaching.reports.section.today",
+                date.formatted(.dateTime.day().month(.wide))
+            )
         }
         return date.formatted(date: .complete, time: .omitted)
     }
@@ -4614,10 +4617,10 @@ private struct CoachingWorkoutReportChatCard: View {
 
     private var workoutTitle: String {
         guard report.workouts.count == 1 else {
-            return "\(report.workouts.count) тренировки"
+            return AppLocalizer.format("coaching.report.workout_count", report.workouts.count)
         }
         let title = report.workouts[0].title.trimmingCharacters(in: .whitespacesAndNewlines)
-        return title.isEmpty ? "Завершённая тренировка" : title
+        return title.isEmpty ? AppLocalizer.string("coaching.report.completed_workout") : title
     }
 
     private var totalExercises: Int {
@@ -4648,13 +4651,13 @@ private struct CoachingWorkoutReportChatCard: View {
                             .foregroundStyle(.primary)
                             .lineLimit(2)
 
-                        Text("\(totalExercises) упражнений · \(completedSets) из \(totalSets) подходов")
+                        Text(AppLocalizer.format("coaching.report.workout_summary", totalExercises, completedSets, totalSets))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .lineLimit(2)
 
                         if totalCalories > 0 {
-                            Label("\(totalCalories) ккал", systemImage: "flame.fill")
+                            Label(AppLocalizer.format("workout.energy.kcal", totalCalories), systemImage: "flame.fill")
                                 .font(.caption.weight(.medium))
                                 .foregroundStyle(.orange)
                         }
@@ -4731,11 +4734,11 @@ private struct CoachingNutritionReportChatCard: View {
                             .foregroundStyle(.primary)
                             .lineLimit(2)
 
-                        Text("\(report.totalCalories) из \(report.calorieGoal) ккал")
+                        Text(AppLocalizer.format("coaching.report.calories_progress", report.totalCalories, report.calorieGoal))
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.primary)
 
-                        Text("Б \(rounded(report.protein)) г · Ж \(rounded(report.fat)) г · У \(rounded(report.carbs)) г")
+                        Text(AppLocalizer.format("coaching.report.macros_summary", rounded(report.protein), rounded(report.fat), rounded(report.carbs)))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)

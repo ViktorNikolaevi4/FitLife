@@ -110,9 +110,9 @@ private enum WorkoutExerciseDetailTab: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .workout: return "Тренировка"
-        case .records: return "Рекорды"
-        case .notes: return "Заметки"
+        case .workout: return AppLocalizer.string("workout.exercise.tab.workout")
+        case .records: return AppLocalizer.string("workout.exercise.tab.records")
+        case .notes: return AppLocalizer.string("workout.exercise.tab.notes")
         }
     }
 }
@@ -436,7 +436,7 @@ struct WorkoutExerciseDetailScreen: View {
     }
 
     private var currentMetricTitle: String {
-        currentSet?.metricType == .duration ? "Время" : "Повторений"
+        currentSet?.metricType == .duration ? AppLocalizer.string("workout.metric.time") : AppLocalizer.string("workout.metric.reps")
     }
 
     private var currentMetricValue: String {
@@ -510,7 +510,7 @@ struct WorkoutExerciseDetailScreen: View {
             persistPersonalNote()
         }
         .confirmationDialog(
-            "Остались невыполненные подходы",
+            AppLocalizer.string("Остались невыполненные подходы"),
             isPresented: $showIncompleteSetsConfirmation,
             titleVisibility: .visible
         ) {
@@ -522,7 +522,7 @@ struct WorkoutExerciseDetailScreen: View {
             Text("Невыполненные подходы останутся без отметки.")
         }
         .confirmationDialog(
-            "Не все подходы выполнены",
+            AppLocalizer.string("Не все подходы выполнены"),
             isPresented: $showNextExerciseIncompleteConfirmation,
             titleVisibility: .visible
         ) {
@@ -531,7 +531,7 @@ struct WorkoutExerciseDetailScreen: View {
             }
             Button("Остаться", role: .cancel) {}
         } message: {
-            Text("Не выполнено \(incompleteSetCount) из \(setGroups.count) подходов.")
+            Text(AppLocalizer.format("workout.exercise.incomplete_sets", incompleteSetCount, setGroups.count))
         }
         .onChange(of: isPersonalNoteFocused) { _, isFocused in
             if isFocused == false {
@@ -582,7 +582,7 @@ struct WorkoutExerciseDetailScreen: View {
             }
             Button("Отмена", role: .cancel) {}
         } message: {
-            Text("«\(exercise.name)» и все его подходы будут удалены из этой тренировки.")
+            Text(AppLocalizer.format("workout.exercise.delete_named.message", exercise.name))
         }
         .confirmationDialog(
             "Начать метод заново?",
@@ -603,7 +603,7 @@ struct WorkoutExerciseDetailScreen: View {
             }
         } message: {
             if let group = pendingRestartSetGroup {
-                Text("Сохранённые результаты «\(group.method.title)» будут сброшены.")
+                Text(AppLocalizer.format("workout.set.reset_named.message", group.method.title))
             }
         }
         .sheet(item: $editingSet) { set in
@@ -643,7 +643,7 @@ struct WorkoutExerciseDetailScreen: View {
             .presentationDragIndicator(.visible)
         }
         .confirmationDialog(
-            "Добавить подход",
+            AppLocalizer.string("Добавить подход"),
             isPresented: $showSetMethodPicker,
             titleVisibility: .visible
         ) {
@@ -688,10 +688,10 @@ struct WorkoutExerciseDetailScreen: View {
     private var personalBestsContent: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Личные рекорды")
+                Text(AppLocalizer.string("Личные рекорды"))
                     .font(.title3.weight(.bold))
                 Spacer()
-                Text("По выполненным подходам")
+                Text(AppLocalizer.string("По выполненным подходам"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -701,39 +701,39 @@ struct WorkoutExerciseDetailScreen: View {
                 spacing: 12
             ) {
                 WorkoutPersonalBestCard(
-                    title: "Расчётный 1ПМ",
-                    value: personalBests.estimatedOneRepMax.map { "\(formattedWorkoutWeight($0)) кг" } ?? "—",
+                    title: AppLocalizer.string("Расчётный 1ПМ"),
+                    value: personalBests.estimatedOneRepMax.map { AppLocalizer.format("workout.weight.kg", formattedWorkoutWeight($0)) } ?? "—",
                     icon: "chart.line.uptrend.xyaxis"
                 )
                 WorkoutPersonalBestCard(
-                    title: "Реализованный 1ПМ",
-                    value: personalBests.achievedOneRepMax.map { "\(formattedWorkoutWeight($0)) кг" } ?? "—",
+                    title: AppLocalizer.string("Реализованный 1ПМ"),
+                    value: personalBests.achievedOneRepMax.map { AppLocalizer.format("workout.weight.kg", formattedWorkoutWeight($0)) } ?? "—",
                     icon: "medal.fill"
                 )
                 WorkoutPersonalBestCard(
-                    title: "10ПМ",
-                    value: personalBests.tenRepMax.map { "\(formattedWorkoutWeight($0)) кг" } ?? "—",
+                    title: AppLocalizer.string("10ПМ"),
+                    value: personalBests.tenRepMax.map { AppLocalizer.format("workout.weight.kg", formattedWorkoutWeight($0)) } ?? "—",
                     icon: "10.circle.fill"
                 )
                 WorkoutPersonalBestCard(
-                    title: "Максимальный вес",
-                    value: personalBests.maxWeight.map { "\(formattedWorkoutWeight($0)) кг" } ?? "—",
+                    title: AppLocalizer.string("Максимальный вес"),
+                    value: personalBests.maxWeight.map { AppLocalizer.format("workout.weight.kg", formattedWorkoutWeight($0)) } ?? "—",
                     icon: "dumbbell.fill"
                 )
                 WorkoutPersonalBestCard(
-                    title: "Максимум повторений",
+                    title: AppLocalizer.string("Максимум повторений"),
                     value: personalBests.maxReps.map(String.init) ?? "—",
                     icon: "target"
                 )
                 WorkoutPersonalBestCard(
-                    title: "Максимальный объём",
-                    value: personalBests.maxVolume.map { "\(formattedWorkoutWeight($0)) кг" } ?? "—",
+                    title: AppLocalizer.string("Максимальный объём"),
+                    value: personalBests.maxVolume.map { AppLocalizer.format("workout.weight.kg", formattedWorkoutWeight($0)) } ?? "—",
                     icon: "square.stack.3d.up.fill"
                 )
             }
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("История")
+                Text(AppLocalizer.string("История"))
                     .font(.title3.weight(.bold))
 
                 if exerciseHistory.isEmpty {
@@ -791,8 +791,8 @@ struct WorkoutExerciseDetailScreen: View {
 
             VStack(spacing: 10) {
                 WorkoutExerciseMetricCard(
-                    title: "Подходы",
-                    value: "\(completedCount) из \(setGroups.count)",
+                    title: AppLocalizer.string("Подходы"),
+                    value: AppLocalizer.format("workout.progress.out_of", completedCount, setGroups.count),
                     icon: "square.stack.3d.up.fill"
                 )
                 WorkoutExerciseMetricCard(
@@ -801,8 +801,8 @@ struct WorkoutExerciseDetailScreen: View {
                     icon: "target"
                 )
                 WorkoutExerciseMetricCard(
-                    title: "Вес",
-                    value: currentSet.map { "\(formattedWorkoutWeight($0.weight)) кг" } ?? "—",
+                    title: AppLocalizer.string("Вес"),
+                    value: currentSet.map { AppLocalizer.format("workout.weight.kg", formattedWorkoutWeight($0.weight)) } ?? "—",
                     icon: "dumbbell.fill"
                 )
             }
@@ -867,7 +867,7 @@ struct WorkoutExerciseDetailScreen: View {
                 .font(.headline.weight(.semibold))
                 .foregroundStyle(.primary)
 
-            Text(coachComment.isEmpty ? "Тренер пока не добавил комментарий к этому упражнению." : coachComment)
+            Text(coachComment.isEmpty ? AppLocalizer.string("workout.exercise.no_trainer_comment") : coachComment)
                 .font(.subheadline)
                 .foregroundStyle(coachComment.isEmpty ? .secondary : .primary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -922,7 +922,7 @@ struct WorkoutExerciseDetailScreen: View {
         } else if exercise.isFinished {
             Button(action: continueAfterCurrentExercise) {
                 Label(
-                    onContinueWorkout == nil ? "Упражнение завершено" : "Продолжить тренировку",
+                    onContinueWorkout == nil ? AppLocalizer.string("workout.exercise.completed") : AppLocalizer.string("workout.action.continue"),
                     systemImage: onContinueWorkout == nil ? "checkmark.circle.fill" : "play.circle.fill"
                 )
                     .font(.headline.weight(.semibold))
@@ -1277,14 +1277,14 @@ private struct WorkoutSetHorizontalCard: View {
     }
 
     private var statusAccessibilityLabel: String {
-        if set.isCompleted { return "Отметить подход невыполненным" }
-        if set.metricType == .duration { return "Запустить таймер подхода" }
-        return "Отметить подход выполненным"
+        if set.isCompleted { return AppLocalizer.string("workout.set.action.mark_incomplete") }
+        if set.metricType == .duration { return AppLocalizer.string("workout.set.action.start_timer") }
+        return AppLocalizer.string("workout.set.action.mark_complete")
     }
 
     private var setDetails: some View {
             VStack(alignment: .leading, spacing: 5) {
-                Text("Подход \(number)")
+                Text(AppLocalizer.format("workout.set.numbered_title", number))
                     .font(.caption.weight(.semibold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
@@ -1360,12 +1360,18 @@ struct TimedWorkoutSetRunnerScreen: View {
                     .frame(width: 104, height: 104)
                     .background(Color.blue.opacity(0.12), in: Circle())
 
-                    Text(set.exercise?.name ?? "Упражнение")
+                    Text(set.exercise?.name ?? AppLocalizer.string("workout.runner.exercise"))
                         .font(.title2.weight(.bold))
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
 
-                    Text("Подход \(set.orderIndex + 1) · \(formattedWorkoutMetricValue(reps: 0, durationSeconds: totalSeconds, metricType: .duration))")
+                    Text(
+                        AppLocalizer.format(
+                            "workout.set.timer_summary",
+                            set.orderIndex + 1,
+                            formattedWorkoutMetricValue(reps: 0, durationSeconds: totalSeconds, metricType: .duration)
+                        )
+                    )
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -1414,7 +1420,7 @@ struct TimedWorkoutSetRunnerScreen: View {
                             showEarlyCompletionConfirmation = true
                         } label: {
                             Label(
-                                hasWorkStarted ? "Завершить подход сейчас" : "Выполнено без таймера",
+                                hasWorkStarted ? AppLocalizer.string("workout.timer.finish_now") : AppLocalizer.string("workout.timer.complete_without_timer"),
                                 systemImage: "checkmark.circle"
                             )
                             .font(.headline.weight(.semibold))
@@ -1451,7 +1457,7 @@ struct TimedWorkoutSetRunnerScreen: View {
                 UIApplication.shared.isIdleTimerDisabled = false
             }
             .confirmationDialog(
-                hasWorkStarted ? "Завершить подход раньше?" : "Отметить подход выполненным?",
+                hasWorkStarted ? AppLocalizer.string("workout.timer.finish_early.question") : AppLocalizer.string("workout.timer.mark_complete.question"),
                 isPresented: $showEarlyCompletionConfirmation,
                 titleVisibility: .visible
             ) {
@@ -1461,7 +1467,7 @@ struct TimedWorkoutSetRunnerScreen: View {
                 Button("Отмена", role: .cancel) {}
             } message: {
                 if hasWorkStarted {
-                    Text("В отчёте сохранится фактическое время: \(formatClock(elapsedSeconds)).")
+                    Text(AppLocalizer.format("workout.timer.finish.actual_time", formatClock(elapsedSeconds)))
                 } else {
                     Text("В отчёте сохранится запланированное время подхода.")
                 }
@@ -1470,10 +1476,10 @@ struct TimedWorkoutSetRunnerScreen: View {
     }
 
     private var primaryTitle: String {
-        if hasCompleted { return "Готово" }
-        if isRunning { return "Пауза" }
-        if isPreparing || hasWorkStarted { return "Продолжить" }
-        return "Начать"
+        if hasCompleted { return AppLocalizer.string("common.done") }
+        if isRunning { return AppLocalizer.string("workout.timer.action.pause") }
+        if isPreparing || hasWorkStarted { return AppLocalizer.string("common.continue") }
+        return AppLocalizer.string("workout.timer.action.start")
     }
 
     private var primaryIcon: String {
@@ -1482,18 +1488,20 @@ struct TimedWorkoutSetRunnerScreen: View {
     }
 
     private var timerHint: String {
-        if hasCompleted { return "Подход отмечен выполненным" }
-        if isPreparing, isRunning { return "Приготовьтесь — подход начнётся автоматически" }
-        if isPreparing { return "Подготовительный отсчёт приостановлен" }
-        if isRunning { return "Сохраняйте положение до сигнала" }
-        if hasWorkStarted { return "Таймер приостановлен" }
-        return "Нажмите «Начать», когда будете готовы"
+        if hasCompleted { return AppLocalizer.string("workout.timer.status.completed") }
+        if isPreparing, isRunning { return AppLocalizer.string("workout.timer.status.preparing") }
+        if isPreparing { return AppLocalizer.string("workout.timer.status.preparation_paused") }
+        if isRunning { return AppLocalizer.string("workout.timer.status.working") }
+        if hasWorkStarted { return AppLocalizer.string("workout.timer.status.paused") }
+        return AppLocalizer.string("workout.timer.status.ready")
     }
 
     private var phaseTitle: String {
-        if hasCompleted { return "ВЫПОЛНЕНО" }
-        if isPreparing { return "ПРИГОТОВЬТЕСЬ" }
-        return isRunning ? "РАБОТА" : "ГОТОВЫ?"
+        if hasCompleted { return AppLocalizer.string("workout.timer.phase.completed") }
+        if isPreparing { return AppLocalizer.string("workout.timer.phase.prepare") }
+        return isRunning
+            ? AppLocalizer.string("workout.timer.phase.work")
+            : AppLocalizer.string("workout.timer.phase.ready")
     }
 
     private var phaseColor: Color {
@@ -1660,13 +1668,23 @@ struct WorkoutPersonalBestCard: View {
 struct WorkoutExerciseHistoryRow: View {
     let entry: WorkoutExerciseHistoryEntry
 
+    private var localizedDate: String {
+        entry.date.formatted(
+            .dateTime
+                .locale(AppLocalizer.currentLanguage.locale)
+                .day()
+                .month(.abbreviated)
+                .year()
+        )
+    }
+
     private var summary: String {
-        var parts = ["\(entry.completedSetCount) подх."]
+        var parts = [AppLocalizer.format("workout.history.sets.short", entry.completedSetCount)]
         if let maxWeight = entry.maxWeight {
-            parts.append("макс. \(formattedWorkoutWeight(maxWeight)) кг")
+            parts.append(AppLocalizer.format("workout.history.max_weight", formattedWorkoutWeight(maxWeight)))
         }
         if let volume = entry.volume {
-            parts.append("объём \(formattedWorkoutWeight(volume)) кг")
+            parts.append(AppLocalizer.format("workout.history.volume", formattedWorkoutWeight(volume)))
         }
         return parts.joined(separator: " • ")
     }
@@ -1680,7 +1698,7 @@ struct WorkoutExerciseHistoryRow: View {
                 .background(Color.blue.opacity(0.12), in: Circle())
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(entry.date.formatted(date: .abbreviated, time: .omitted))
+                Text(localizedDate)
                     .font(.subheadline.weight(.semibold))
                 Text(summary)
                     .font(.caption)
@@ -1693,10 +1711,10 @@ struct WorkoutExerciseHistoryRow: View {
 
             if let oneRepMax = entry.estimatedOneRepMax {
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text("1ПМ")
+                    Text(AppLocalizer.string("1ПМ"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                    Text("\(formattedWorkoutWeight(oneRepMax)) кг")
+                    Text(AppLocalizer.format("workout.weight.kg", formattedWorkoutWeight(oneRepMax)))
                         .font(.subheadline.weight(.bold))
                 }
             }
@@ -1732,9 +1750,19 @@ struct WorkoutExerciseEmptyHistoryCard: View {
 private struct WorkoutExercisePreviousNoteCard: View {
     let entry: WorkoutExerciseHistoryEntry
 
+    private var localizedDate: String {
+        entry.date.formatted(
+            .dateTime
+                .locale(AppLocalizer.currentLanguage.locale)
+                .day()
+                .month(.abbreviated)
+                .year()
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(entry.date.formatted(date: .abbreviated, time: .omitted))
+            Text(localizedDate)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
@@ -1815,17 +1843,17 @@ private struct WorkoutExerciseSetEditorSheet: View {
                 .padding(.top, 9)
 
             HStack {
-                Button("Отмена") { dismiss() }
+                Button(AppLocalizer.string("Отмена")) { dismiss() }
                     .font(.body.weight(.medium))
 
                 Spacer()
 
-                Text("Редактировать подход")
+                Text(AppLocalizer.string("Редактировать подход"))
                     .font(.headline.weight(.bold))
 
                 Spacer()
 
-                Button("Сохранить", action: save)
+                Button(AppLocalizer.string("Сохранить"), action: save)
                     .font(.body.weight(.semibold))
             }
             .padding(.horizontal, 24)
@@ -1834,17 +1862,17 @@ private struct WorkoutExerciseSetEditorSheet: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 18) {
-                    Text("Подход \(set.orderIndex + 1)")
+                    Text(AppLocalizer.format("workout.set.numbered_title", set.orderIndex + 1))
                         .font(.title3.weight(.semibold))
 
                     VStack(spacing: 0) {
                         HStack {
-                            Text("Тип")
+                            Text(AppLocalizer.string("Тип"))
                                 .font(.body.weight(.semibold))
                             Spacer()
-                            Picker("Тип", selection: $metricType) {
-                                Text("Повторения").tag(WorkoutSetMetricType.reps)
-                                Text("Время").tag(WorkoutSetMetricType.duration)
+                            Picker(AppLocalizer.string("Тип"), selection: $metricType) {
+                                Text(AppLocalizer.string("Повторения")).tag(WorkoutSetMetricType.reps)
+                                Text(AppLocalizer.string("Время")).tag(WorkoutSetMetricType.duration)
                             }
                             .pickerStyle(.segmented)
                             .frame(width: 260)
@@ -1857,7 +1885,7 @@ private struct WorkoutExerciseSetEditorSheet: View {
                             Image(systemName: "dumbbell.fill")
                                 .foregroundStyle(.blue)
                                 .frame(width: 24)
-                            Text("Вес")
+                            Text(AppLocalizer.string("Вес"))
                                 .font(.body.weight(.medium))
                             Spacer()
                             TextField("0", value: $weight, format: .number)
@@ -1866,7 +1894,7 @@ private struct WorkoutExerciseSetEditorSheet: View {
                                 .font(.headline.weight(.semibold))
                                 .frame(width: 110)
                                 .focused($focusedField, equals: .weight)
-                            Text("кг")
+                            Text(AppLocalizer.string("кг"))
                                 .font(.body.weight(.semibold))
                         }
                         .padding(16)
@@ -1878,7 +1906,7 @@ private struct WorkoutExerciseSetEditorSheet: View {
                                 Image(systemName: "target")
                                     .foregroundStyle(.blue)
                                     .frame(width: 24)
-                                Text("Повторения")
+                                Text(AppLocalizer.string("Повторения"))
                                     .font(.body.weight(.medium))
                                 Spacer()
                                 TextField("0", value: $reps, format: .number)
@@ -1894,7 +1922,7 @@ private struct WorkoutExerciseSetEditorSheet: View {
                                 Image(systemName: "timer")
                                     .foregroundStyle(.blue)
                                     .frame(width: 24)
-                                Text("Время")
+                                Text(AppLocalizer.string("Время"))
                                     .font(.body.weight(.medium))
                                 Spacer()
                                 TextField("0", value: $durationSeconds, format: .number)
@@ -1903,7 +1931,7 @@ private struct WorkoutExerciseSetEditorSheet: View {
                                     .font(.headline.weight(.semibold))
                                     .frame(width: 100)
                                     .focused($focusedField, equals: .duration)
-                                Text("сек")
+                                Text(AppLocalizer.string("сек"))
                                     .font(.body.weight(.semibold))
                             }
                             .padding(16)
@@ -1911,7 +1939,7 @@ private struct WorkoutExerciseSetEditorSheet: View {
 
                         Divider().padding(.horizontal, 16)
 
-                        Toggle("Подход выполнен", isOn: $isCompleted)
+                        Toggle(AppLocalizer.string("Подход выполнен"), isOn: $isCompleted)
                             .font(.body.weight(.medium))
                             .padding(16)
                     }

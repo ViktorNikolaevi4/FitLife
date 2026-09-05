@@ -993,7 +993,10 @@ private struct ProfileHeroCard: View {
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(theme.tertiaryText)
                     }
-                    .padding(12)
+                    // Keep the icon and text on the same horizontal grid as the
+                    // exercise-records row below. Extra inset here used to shift
+                    // the achievements row 12 points to the right.
+                    .padding(.vertical, unseenUnlocks.isEmpty ? 2 : 12)
                     .background {
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .fill(unseenUnlocks.isEmpty ? Color.clear : theme.accent.opacity(theme.isDark ? 0.10 : 0.08))

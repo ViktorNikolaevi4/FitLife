@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "FitLife использует камеру для сканирования штрихкодов и анализа фотографий еды.";
+"NSMicrophoneUsageDescription" = "FitLife использует микрофон, чтобы вы могли описать приём пищи голосом.";
+"NSPhotoLibraryUsageDescription" = "FitLife использует медиатеку, чтобы выбрать фотографию еды для анализа пищевой ценности.";
+"NSSpeechRecognitionUsageDescription" = "FitLife преобразует голосовое описание еды в текст для анализа пищевой ценности.";

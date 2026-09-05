@@ -124,7 +124,7 @@ struct WorkoutBlockRunnerScreen: View {
                 if block.restBetweenRoundsSeconds > 0 && isIntervalBlock == false && isRestPhase == false {
                     infoCard(
                         icon: "timer",
-                        title: "Отдых после раунда",
+                        title: AppLocalizer.string("workout.runner.rest_after_round"),
                         value: formatClock(block.restBetweenRoundsSeconds)
                     )
                 }
@@ -225,36 +225,36 @@ struct WorkoutBlockRunnerScreen: View {
     private var progressSummary: some View {
         HStack(spacing: 12) {
             runnerMetric(icon: "arrow.triangle.2.circlepath", title: progressMetricTitle, value: progressMetricValue)
-            runnerMetric(icon: "figure.strengthtraining.traditional", title: "Упражнений", value: "\(exercises.count)")
+            runnerMetric(icon: "figure.strengthtraining.traditional", title: AppLocalizer.string("workout.runner.exercises"), value: "\(exercises.count)")
             runnerMetric(icon: "checkmark.circle", title: completionMetricTitle, value: completionMetricValue)
         }
     }
 
     private var completionMetricTitle: String {
-        isIntervalBlock ? "Интервалов" : "Выполнено"
+        isIntervalBlock ? AppLocalizer.string("workout.runner.intervals") : AppLocalizer.string("workout.runner.completed")
     }
 
     private var completionMetricValue: String {
         isIntervalBlock
-            ? "\(block.completedIntervalIndexes.count) из \(totalRounds)"
+            ? AppLocalizer.format("workout.progress.out_of", block.completedIntervalIndexes.count, totalRounds)
             : "\(completedExerciseCount)"
     }
 
     private var progressMetricTitle: String {
-        if block.mode == .amrap { return "Раундов" }
-        if block.mode == .emom { return "Интервал" }
-        if preset == .forTime { return "Режим" }
-        return isIntervalBlock ? "Интервал" : "Раунд"
+        if block.mode == .amrap { return AppLocalizer.string("workout.runner.rounds") }
+        if block.mode == .emom { return AppLocalizer.string("workout.runner.interval") }
+        if preset == .forTime { return AppLocalizer.string("workout.runner.mode") }
+        return isIntervalBlock ? AppLocalizer.string("workout.runner.interval") : AppLocalizer.string("workout.runner.round")
     }
 
     private var progressMetricValue: String {
         if block.mode == .amrap { return "\(block.currentRoundIndex)" }
         if block.mode == .emom {
             let intervalCount = max(block.durationMinutes * 60 / emomIntervalSeconds, 1)
-            return "\(min(block.currentRoundIndex + 1, intervalCount)) из \(intervalCount)"
+            return AppLocalizer.format("workout.runner.progress", min(block.currentRoundIndex + 1, intervalCount), intervalCount)
         }
-        if preset == .forTime { return "На время" }
-        return "\(currentRoundNumber) из \(totalRounds)"
+        if preset == .forTime { return AppLocalizer.string("workout.runner.for_time") }
+        return AppLocalizer.format("workout.runner.progress", currentRoundNumber, totalRounds)
     }
 
     private var completedExerciseCount: Int {
@@ -312,7 +312,14 @@ struct WorkoutBlockRunnerScreen: View {
             .frame(maxWidth: 310)
             .frame(height: 310)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(phaseTitle), осталось \(remainingSeconds) секунд, \(currentExercise?.name ?? block.title)")
+            .accessibilityLabel(
+                AppLocalizer.format(
+                    "workout.runner.accessibility.phase",
+                    phaseTitle,
+                    remainingSeconds,
+                    currentExercise?.name ?? block.title
+                )
+            )
 
             Text(timerDetail)
                 .font(.subheadline)
@@ -328,7 +335,7 @@ struct WorkoutBlockRunnerScreen: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(block.runnerPhase == .paused ? "ОТДЫХ НА ПАУЗЕ" : "ОТДЫХ")
+                    Text(block.runnerPhase == .paused ? AppLocalizer.string("workout.runner.rest_paused") : AppLocalizer.string("workout.runner.rest_uppercase"))
                         .font(.caption.weight(.bold))
                         .foregroundStyle(.blue)
                     Text(formatClock(remainingSeconds))
@@ -356,35 +363,37 @@ struct WorkoutBlockRunnerScreen: View {
         .background(RoundedRectangle(cornerRadius: 22).fill(Color(.secondarySystemBackground)))
         .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(Color(.separator).opacity(0.35)))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Отдых, осталось \(remainingSeconds) секунд. \(restNextStepTitle)")
+        .accessibilityLabel(
+            AppLocalizer.format("workout.runner.accessibility.rest", remainingSeconds, restNextStepTitle)
+        )
     }
 
     private var restNextStepTitle: String {
         let nextRound = min(block.currentRoundIndex + 2, totalRounds)
-        return "Далее: раунд \(nextRound) из \(totalRounds)"
+        return AppLocalizer.format("workout.runner.next_round", nextRound, totalRounds)
     }
 
     private var phaseTitle: String {
         switch block.runnerPhase {
-        case .ready: return "Готово к старту"
-        case .work: return "Работа"
-        case .rest: return "Отдых"
-        case .paused: return "Пауза"
-        case .completed: return "Завершено"
+        case .ready: return AppLocalizer.string("workout.runner.phase.ready")
+        case .work: return AppLocalizer.string("workout.runner.phase.work")
+        case .rest: return AppLocalizer.string("workout.runner.phase.rest")
+        case .paused: return AppLocalizer.string("workout.runner.phase.paused")
+        case .completed: return AppLocalizer.string("workout.runner.phase.completed")
         }
     }
 
     private var timerDetail: String {
         if isIntervalBlock {
-            return "Интервал \(currentRoundNumber) из \(totalRounds) • \(block.workSeconds) сек работа • \(block.restSeconds) сек отдых"
+            return AppLocalizer.format("workout.runner.interval_summary", currentRoundNumber, totalRounds, block.workSeconds, block.restSeconds)
         }
         if block.mode == .emom {
-            return "Интервал \(block.currentRoundIndex + 1) • каждые \(emomIntervalSeconds / 60) мин"
+            return AppLocalizer.format("workout.runner.emom_summary", block.currentRoundIndex + 1, emomIntervalSeconds / 60)
         }
         if block.mode == .amrap {
-            return "Выполнено раундов: \(block.currentRoundIndex)"
+            return AppLocalizer.format("workout.runner.rounds_completed", block.currentRoundIndex)
         }
-        return "Лимит времени: \(block.durationMinutes) мин"
+        return AppLocalizer.format("workout.runner.time_limit", block.durationMinutes)
     }
 
     private var exerciseSequenceCard: some View {
@@ -431,7 +440,13 @@ struct WorkoutBlockRunnerScreen: View {
                 Text("Интервалы")
                     .font(.headline)
                 Spacer()
-                Text("\(block.completedIntervalIndexes.count) из \(totalRounds) выполнено")
+                Text(
+                    AppLocalizer.format(
+                        "workout.runner.intervals_completed",
+                        block.completedIntervalIndexes.count,
+                        totalRounds
+                    )
+                )
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -475,15 +490,17 @@ struct WorkoutBlockRunnerScreen: View {
         }
         .accessibilityLabel(
             isCompleted
-                ? "Интервал \(index + 1), выполнен"
-                : (isCurrent ? "Интервал \(index + 1), текущий" : "Интервал \(index + 1), пропущен")
+                ? AppLocalizer.format("workout.runner.interval_accessibility.completed", index + 1)
+                : (isCurrent
+                    ? AppLocalizer.format("workout.runner.interval_accessibility.current", index + 1)
+                    : AppLocalizer.format("workout.runner.interval_accessibility.skipped", index + 1))
         )
     }
 
     private var sequenceSubtitle: String {
-        if block.type == .superset { return "\(exercises.count) упражнения • \(totalRounds) раунда" }
-        if isIntervalBlock { return "\(totalRounds) интервалов" }
-        return "\(exercises.count) упражнения • \(totalRounds) раунда"
+        if block.type == .superset { return AppLocalizer.format("workout.runner.structure", exercises.count, totalRounds) }
+        if isIntervalBlock { return AppLocalizer.format("workout.runner.interval_count", totalRounds) }
+        return AppLocalizer.format("workout.runner.structure", exercises.count, totalRounds)
     }
 
     private func exerciseRow(_ exercise: WorkoutExercise, index: Int) -> some View {
@@ -545,7 +562,7 @@ struct WorkoutBlockRunnerScreen: View {
 
     private func exerciseMetric(_ exercise: WorkoutExercise) -> String {
         guard let set = setForCurrentRound(in: exercise) ?? exercise.setItems.sorted(by: { $0.orderIndex < $1.orderIndex }).first else {
-            return "Параметры не заданы"
+            return AppLocalizer.string("workout.runner.parameters_missing")
         }
         return formattedWorkoutSetValue(
             weight: set.weight,
@@ -559,7 +576,7 @@ struct WorkoutBlockRunnerScreen: View {
         let notes = exercises.map(\.note).filter { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }
         return Group {
             if let note = notes.first {
-                infoCard(icon: "star", title: "Подсказка тренера", value: note)
+                infoCard(icon: "star", title: AppLocalizer.string("workout.runner.trainer_hint"), value: note)
             }
         }
     }
@@ -699,24 +716,24 @@ struct WorkoutBlockRunnerScreen: View {
 
     private var completeBlockActionTitle: String {
         switch preset {
-        case .superset: return "Весь суперсет"
-        case .circuit: return "Весь круг"
-        case .tabata: return "Вся табата"
-        case .clusterSet: return "Весь кластер"
-        default: return "Весь блок"
+        case .superset: return AppLocalizer.string("workout.runner.complete.superset")
+        case .circuit: return AppLocalizer.string("workout.runner.complete.circuit")
+        case .tabata: return AppLocalizer.string("workout.runner.complete.tabata")
+        case .clusterSet: return AppLocalizer.string("workout.runner.complete.cluster")
+        default: return AppLocalizer.string("workout.runner.complete.block")
         }
     }
 
     private var primaryActionTitle: String {
         switch block.runnerPhase {
-        case .ready: return "Начать блок"
-        case .paused: return "Продолжить"
-        case .completed: return "Вернуться к тренировке"
-        case .rest: return "Пропустить отдых"
+        case .ready: return AppLocalizer.string("workout.runner.action.start_block")
+        case .paused: return AppLocalizer.string("common.continue")
+        case .completed: return AppLocalizer.string("workout.runner.action.return")
+        case .rest: return AppLocalizer.string("workout.runner.action.skip_rest")
         case .work:
-            if isTimedBlock { return "Пауза" }
-            if currentExerciseUsesTimer { return "Запустить таймер \(currentExerciseLabel)" }
-            return "Завершить \(currentExerciseLabel)"
+            if isTimedBlock { return AppLocalizer.string("workout.runner.phase.paused") }
+            if currentExerciseUsesTimer { return AppLocalizer.format("workout.runner.action.start_timer", currentExerciseLabel) }
+            return AppLocalizer.format("workout.runner.action.complete_exercise", currentExerciseLabel)
         }
     }
 
@@ -732,17 +749,17 @@ struct WorkoutBlockRunnerScreen: View {
     }
 
     private var currentExerciseLabel: String {
-        guard let currentExercise else { return "упражнение" }
+        guard let currentExercise else { return AppLocalizer.string("workout.runner.exercise") }
         if block.type == .superset { return "A\(block.currentExerciseIndex + 1)" }
         return currentExercise.name
     }
 
     private var secondaryActionTitle: String {
-        if block.runnerPhase == .rest { return "Пропустить отдых" }
-        if isIntervalBlock && block.runnerPhase == .work { return "Пропустить интервал" }
-        if block.mode == .amrap && block.runnerPhase == .work { return "Раунд выполнен" }
-        if preset == .forTime && block.runnerPhase == .work { return "Завершить блок" }
-        return "Пропустить блок"
+        if block.runnerPhase == .rest { return AppLocalizer.string("workout.runner.action.skip_rest") }
+        if isIntervalBlock && block.runnerPhase == .work { return AppLocalizer.string("workout.runner.action.skip_interval") }
+        if block.mode == .amrap && block.runnerPhase == .work { return AppLocalizer.string("workout.runner.action.round_complete") }
+        if preset == .forTime && block.runnerPhase == .work { return AppLocalizer.string("workout.runner.action.complete_block") }
+        return AppLocalizer.string("workout.runner.action.skip_block")
     }
 
     private func primaryAction() {

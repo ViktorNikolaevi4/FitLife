@@ -35,7 +35,7 @@ private enum CoachingReportOutboxError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidPayload:
-            return "Не удалось подготовить отчёт к отправке."
+            return AppLocalizer.string("coaching.report.outbox.preparation_failed")
         case .deliveryFailed(let message):
             return message
         }

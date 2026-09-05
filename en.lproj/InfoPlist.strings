@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "FitLife uses the camera to scan product barcodes and analyze meal photos.";
+"NSMicrophoneUsageDescription" = "FitLife uses the microphone so you can describe a meal by voice.";
+"NSPhotoLibraryUsageDescription" = "FitLife uses your photo library to select a meal photo for nutrition analysis.";
+"NSSpeechRecognitionUsageDescription" = "FitLife converts your spoken meal description into text for nutrition analysis.";

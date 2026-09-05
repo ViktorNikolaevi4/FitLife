@@ -16,10 +16,10 @@ enum WorkoutSetMethod: String, Codable, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .normal: return "Обычный подход"
-        case .dropSet: return "Дроп-сет"
-        case .pyramid: return "Пирамида"
-        case .cluster: return "Кластер"
+        case .normal: return AppLocalizer.string("workout.set.method.normal")
+        case .dropSet: return AppLocalizer.string("workout.set.method.drop_set")
+        case .pyramid: return AppLocalizer.string("workout.set.method.pyramid")
+        case .cluster: return AppLocalizer.string("workout.set.method.cluster")
         }
     }
 
@@ -43,10 +43,10 @@ enum WorkoutPyramidPattern: String, Codable, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .ascending: return "Вверх"
-        case .descending: return "Вниз"
-        case .full: return "Полная"
-        case .custom: return "Своя"
+        case .ascending: return AppLocalizer.string("workout.pyramid.pattern.ascending")
+        case .descending: return AppLocalizer.string("workout.pyramid.pattern.descending")
+        case .full: return AppLocalizer.string("workout.pyramid.pattern.full")
+        case .custom: return AppLocalizer.string("workout.pyramid.pattern.custom")
         }
     }
 

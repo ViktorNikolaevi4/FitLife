@@ -119,10 +119,10 @@ enum WorkoutBlockGroupKind: String, CaseIterable, Codable {
 
     var title: String {
         switch self {
-        case .standard: return "Группа"
-        case .pyramid: return "Пирамида"
-        case .superset: return "Суперсет"
-        case .circuit: return "Круг"
+        case .standard: return AppLocalizer.string("trainer.template.group.standard")
+        case .pyramid: return AppLocalizer.string("trainer.template.group.pyramid")
+        case .superset: return AppLocalizer.string("trainer.template.group.superset")
+        case .circuit: return AppLocalizer.string("trainer.template.group.circuit")
         }
     }
 }

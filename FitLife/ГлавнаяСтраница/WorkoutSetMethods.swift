@@ -84,7 +84,7 @@ struct WorkoutCompositeSetCard: View {
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(group.isCompleted ? "Начать метод заново" : "Продолжить выполнение")
+                .accessibilityLabel(group.isCompleted ? AppLocalizer.string("workout.set.action.restart_method") : AppLocalizer.string("workout.set.action.continue_method"))
             }
 
             Button(action: onOpen) {
@@ -108,7 +108,17 @@ struct WorkoutCompositeSetCard: View {
             Button("Редактировать метод", systemImage: "slider.horizontal.3", action: onEdit)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(group.method.title), подход \(number), \(group.steps.count) этапа, \(group.isCompleted ? "выполнен" : "не выполнен")")
+        .accessibilityLabel(
+            AppLocalizer.format(
+                "workout.set.accessibility.summary",
+                group.method.title,
+                number,
+                group.steps.count,
+                group.isCompleted
+                    ? AppLocalizer.string("workout.state.completed")
+                    : AppLocalizer.string("workout.state.incomplete")
+            )
+        )
         .accessibilityAction(named: "Редактировать") {
             onEdit()
         }
@@ -122,10 +132,20 @@ struct WorkoutCompositeSetCard: View {
             return group.steps.prefix(3).map { "\(formattedWorkoutWeight($0.weight))×\($0.reps)" }.joined(separator: " → ")
         case .pyramid:
             guard let first = group.steps.first, let last = group.steps.last else { return "—" }
-            return "\(group.pyramidPattern.symbol) • \(formattedWorkoutWeight(first.weight))–\(formattedWorkoutWeight(last.weight)) кг"
+            return AppLocalizer.format(
+                "workout.set.summary.weight_range",
+                group.pyramidPattern.symbol,
+                formattedWorkoutWeight(first.weight),
+                formattedWorkoutWeight(last.weight)
+            )
         case .cluster:
             guard let first = group.steps.first else { return "—" }
-            return "\(formattedWorkoutWeight(first.weight)) кг • \(group.steps.count)×\(first.reps)"
+            return AppLocalizer.format(
+                "workout.set.summary.weight_steps_reps",
+                formattedWorkoutWeight(first.weight),
+                group.steps.count,
+                first.reps
+            )
         }
     }
 
@@ -215,7 +235,10 @@ struct WorkoutSetGroupEditorSheet: View {
                     Button(role: .destructive) {
                         showDeleteConfirmation = true
                     } label: {
-                        Label("Удалить \(group.method.title.lowercased())", systemImage: "trash")
+                        Label(
+                            AppLocalizer.format("workout.set.action.delete_method", group.method.title.lowercased()),
+                            systemImage: "trash"
+                        )
                             .font(.headline.weight(.semibold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 15)
@@ -297,19 +320,19 @@ struct WorkoutSetGroupEditorSheet: View {
 
     private var editorTitle: String {
         switch group.method {
-        case .normal: return "Обычный подход"
-        case .dropSet: return "Последовательно снижайте вес"
-        case .pyramid: return "Настройте каждую ступень"
-        case .cluster: return "Мини-сеты с коротким отдыхом"
+        case .normal: return AppLocalizer.string("workout.set.method.normal")
+        case .dropSet: return AppLocalizer.string("workout.set.editor.drop_set.title")
+        case .pyramid: return AppLocalizer.string("workout.set.editor.pyramid.title")
+        case .cluster: return AppLocalizer.string("workout.set.editor.cluster.title")
         }
     }
 
     private var editorDescription: String {
         switch group.method {
-        case .normal: return "Один рабочий подход."
-        case .dropSet: return "Этапы выполняются подряд без полного отдыха."
-        case .pyramid: return "Вес и повторения меняются от ступени к ступени."
-        case .cluster: return "После каждого мини-сета запускается короткий таймер отдыха."
+        case .normal: return AppLocalizer.string("workout.set.editor.normal.description")
+        case .dropSet: return AppLocalizer.string("workout.set.editor.drop_set.description")
+        case .pyramid: return AppLocalizer.string("workout.set.editor.pyramid.description")
+        case .cluster: return AppLocalizer.string("workout.set.editor.cluster.description")
         }
     }
 
@@ -394,10 +417,12 @@ struct WorkoutSetGroupEditorSheet: View {
 
     private func stepTitle(_ index: Int) -> String {
         switch group.method {
-        case .dropSet: return "Ступень \(index + 1)"
-        case .pyramid: return "Ступень \(index + 1)"
-        case .cluster: return "Мини-сет \(index + 1)"
-        case .normal: return "Подход"
+        case .dropSet, .pyramid:
+            return AppLocalizer.format("workout.set.stage", index + 1)
+        case .cluster:
+            return AppLocalizer.format("workout.set.mini_set", index + 1)
+        case .normal:
+            return AppLocalizer.string("workout.set.title")
         }
     }
 
@@ -553,7 +578,14 @@ struct WorkoutSetMethodRunnerScreen: View {
                 .background(Circle().fill(Color.blue.opacity(0.12)))
             VStack(alignment: .leading, spacing: 4) {
                 Text(exercise.name).font(.headline)
-                Text("\(stageName) \(min(currentStepIndex + 1, max(steps.count, 1))) из \(steps.count)")
+                Text(
+                    AppLocalizer.format(
+                        "workout.set.stage_progress",
+                        stageName,
+                        min(currentStepIndex + 1, max(steps.count, 1)),
+                        steps.count
+                    )
+                )
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -577,10 +609,16 @@ struct WorkoutSetMethodRunnerScreen: View {
                 Text(formatClock(remainingRest))
                     .font(.system(size: 58, weight: .bold, design: .rounded))
                     .monospacedDigit()
-                Text("Далее: \(stageName.lowercased()) \(min(currentStepIndex + 2, steps.count))")
+                Text(
+                    AppLocalizer.format(
+                        "workout.set.next_stage",
+                        stageName.lowercased(),
+                        min(currentStepIndex + 2, steps.count)
+                    )
+                )
                     .foregroundStyle(.secondary)
             } else if let step = currentStep {
-                Text(isCompleted ? "РЕЗУЛЬТАТ" : "ТЕКУЩИЙ \(stageName.uppercased())")
+                Text(isCompleted ? AppLocalizer.string("workout.set.result") : AppLocalizer.format("workout.set.current_stage", stageName.uppercased()))
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(isCompleted ? Color.green : Color.blue)
 
@@ -599,7 +637,7 @@ struct WorkoutSetMethodRunnerScreen: View {
                     )
                 }
 
-                Text("План: \(formattedWorkoutWeight(step.weight)) кг × \(step.reps)")
+                Text(AppLocalizer.format("workout.set.plan_summary", formattedWorkoutWeight(step.weight), step.reps))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else {
@@ -671,7 +709,7 @@ struct WorkoutSetMethodRunnerScreen: View {
                     }
                     Spacer()
                     if step.restAfterSeconds > 0 && index < steps.count - 1 {
-                        Text("\(step.restAfterSeconds) сек")
+                        Text(AppLocalizer.format("workout.duration.seconds", step.restAfterSeconds))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.blue)
                     }
@@ -695,9 +733,9 @@ struct WorkoutSetMethodRunnerScreen: View {
     }
 
     private var primaryTitle: String {
-        if isCompleted { return "Готово" }
-        if isResting { return "Пропустить отдых" }
-        return "\(stageName) выполнен"
+        if isCompleted { return AppLocalizer.string("common.done") }
+        if isResting { return AppLocalizer.string("workout.runner.action.skip_rest") }
+        return AppLocalizer.format("workout.set.stage_completed", stageName)
     }
 
     private var primaryIcon: String {
@@ -707,7 +745,7 @@ struct WorkoutSetMethodRunnerScreen: View {
     }
 
     private var stageName: String {
-        method == .cluster ? "Мини-сет" : "Ступень"
+        method == .cluster ? AppLocalizer.string("workout.set.mini_set_name") : AppLocalizer.string("workout.set.stage_name")
     }
 
     private func primaryAction() {
@@ -784,9 +822,13 @@ struct WorkoutSetMethodRunnerScreen: View {
 
     private func stageResult(_ step: WorkoutSet) -> String {
         if step.isCompleted {
-            return "Факт: \(formattedWorkoutWeight(step.actualWeight ?? step.weight)) кг × \(step.actualReps ?? step.reps)"
+            return AppLocalizer.format(
+                "workout.set.actual_summary",
+                formattedWorkoutWeight(step.actualWeight ?? step.weight),
+                step.actualReps ?? step.reps
+            )
         }
-        return "План: \(formattedWorkoutWeight(step.weight)) кг × \(step.reps)"
+        return AppLocalizer.format("workout.set.plan_summary", formattedWorkoutWeight(step.weight), step.reps)
     }
 
     private func formatClock(_ seconds: Int) -> String {

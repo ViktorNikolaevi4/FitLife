@@ -13,6 +13,7 @@
 		B60910FC2F755E3200A93E04 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = B60910FB2F755E3200A93E04 /* FirebaseMessaging */; };
 		B61FAE172D12FAD60034C54D /* SwiftCSV in Frameworks */ = {isa = PBXBuildFile; productRef = B61FAE162D12FAD60034C54D /* SwiftCSV */; };
 		B679E07E2F6EE7190033676D /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = B679E07C2F6EE7190033676D /* Localizable.strings */; };
+		B679E0832F6EE9000033676D /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = B679E0802F6EE9000033676D /* InfoPlist.strings */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXBuildRule section */
@@ -33,6 +34,8 @@
 		B64A3B572FAAAAAA00F0A1C1 /* FitLife/Config/AppConfig.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = FitLife/Config/AppConfig.xcconfig; sourceTree = "<group>"; };
 		B679E07D2F6EE7190033676D /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		B679E07F2F6EE8550033676D /* ru */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ru; path = ru.lproj/Localizable.strings; sourceTree = "<group>"; };
+		B679E0812F6EE9000033676D /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		B679E0822F6EE9000033676D /* ru */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ru; path = ru.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		B6B3C67F2D0480B900D0226C /* FitLife.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FitLife.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -85,6 +88,7 @@
 		B6B3C6762D0480B900D0226C = {
 			isa = PBXGroup;
 			children = (
+				B679E0802F6EE9000033676D /* InfoPlist.strings */,
 				B679E07C2F6EE7190033676D /* Localizable.strings */,
 				B6B3C6812D0480B900D0226C /* FitLife */,
 				B6B3C6802D0480B900D0226C /* Products */,
@@ -175,6 +179,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B679E0832F6EE9000033676D /* InfoPlist.strings in Resources */,
 				B679E07E2F6EE7190033676D /* Localizable.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -192,6 +197,15 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXVariantGroup section */
+		B679E0802F6EE9000033676D /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				B679E0812F6EE9000033676D /* en */,
+				B679E0822F6EE9000033676D /* ru */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
 		B679E07C2F6EE7190033676D /* Localizable.strings */ = {
 			isa = PBXVariantGroup;
 			children = (
@@ -344,10 +358,10 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = FitLife/Info.plist;
-				INFOPLIST_KEY_NSCameraUsageDescription = "Камера нужна для сканирования штрихкодов продуктов и поиска их в Open Food Facts.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Микрофон нужен, чтобы голосом продиктовать еду и быстро добавить её в рацион.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Галерея нужна, чтобы выбрать фото еды и отправить его ИИ для анализа калорий и БЖУ.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Распознавание речи нужно, чтобы преобразовать описание еды в текст для расчёта калорий и БЖУ.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "FitLife uses the camera to scan product barcodes and analyze meal photos.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "FitLife uses the microphone so you can describe a meal by voice.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "FitLife uses your photo library to select a meal photo for nutrition analysis.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "FitLife converts your spoken meal description into text for nutrition analysis.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -386,10 +400,10 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = FitLife/Info.plist;
-				INFOPLIST_KEY_NSCameraUsageDescription = "Камера нужна для сканирования штрихкодов продуктов и поиска их в Open Food Facts.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Микрофон нужен, чтобы голосом продиктовать еду и быстро добавить её в рацион.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Галерея нужна, чтобы выбрать фото еды и отправить его ИИ для анализа калорий и БЖУ.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Распознавание речи нужно, чтобы преобразовать описание еды в текст для расчёта калорий и БЖУ.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "FitLife uses the camera to scan product barcodes and analyze meal photos.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "FitLife uses the microphone so you can describe a meal by voice.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "FitLife uses your photo library to select a meal photo for nutrition analysis.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "FitLife converts your spoken meal description into text for nutrition analysis.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

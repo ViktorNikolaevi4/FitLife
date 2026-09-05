@@ -36,7 +36,7 @@ struct WorkoutCompletionSummaryScreen: View {
 
     private var trainerDisplayName: String {
         let trimmed = trainerName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "тренеру" : trimmed
+        return trimmed.isEmpty ? AppLocalizer.string("workout.completion.trainer_fallback") : trimmed
     }
 
     var body: some View {
@@ -67,7 +67,7 @@ struct WorkoutCompletionSummaryScreen: View {
         ) {
             Button("Понятно", role: .cancel) {}
         } message: {
-            Text(errorMessage ?? "Попробуйте ещё раз.")
+            Text(errorMessage ?? AppLocalizer.string("common.try_again"))
         }
     }
 
@@ -106,22 +106,22 @@ struct WorkoutCompletionSummaryScreen: View {
     private var metricsGrid: some View {
         VStack(spacing: 12) {
             WorkoutCompletionMetricCard(
-                title: "Калории",
-                value: "\(workout.estimatedCalories) ккал",
+                title: AppLocalizer.string("workout.completion.calories"),
+                value: AppLocalizer.format("workout.energy.kcal", workout.estimatedCalories),
                 icon: "flame.fill",
                 tint: .orange
             )
 
             HStack(spacing: 12) {
                 WorkoutCompletionMetricCard(
-                    title: "Упражнения",
-                    value: "\(completedExerciseCount) из \(exerciseCount)",
+                    title: AppLocalizer.string("workout.completion.exercises"),
+                    value: AppLocalizer.format("workout.progress.out_of", completedExerciseCount, exerciseCount),
                     icon: "figure.strengthtraining.traditional",
                     tint: .indigo
                 )
                 WorkoutCompletionMetricCard(
-                    title: "Подходы",
-                    value: "\(completedSetCount) из \(setGroups.count)",
+                    title: AppLocalizer.string("workout.completion.sets"),
+                    value: AppLocalizer.format("workout.progress.out_of", completedSetCount, setGroups.count),
                     icon: "square.stack.3d.up.fill",
                     tint: .green
                 )
@@ -149,9 +149,9 @@ struct WorkoutCompletionSummaryScreen: View {
                         .foregroundStyle(didSend ? Color.green : Color.blue)
 
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(didSend ? "Отчёт отправлен" : (isQueuedForDelivery ? "Отчёт ожидает отправки" : "Поделиться с тренером"))
+                        Text(didSend ? AppLocalizer.string("workout.completion.report_sent") : (isQueuedForDelivery ? AppLocalizer.string("workout.completion.report_queued") : AppLocalizer.string("workout.completion.share_with_trainer")))
                             .font(.headline)
-                        Text(didSend ? "\(trainerDisplayName) увидит результат тренировки." : (isQueuedForDelivery ? "Отправим автоматически после восстановления соединения." : "Связь одобрена · \(trainerDisplayName)"))
+                        Text(didSend ? AppLocalizer.format("workout.completion.trainer_will_see", trainerDisplayName) : (isQueuedForDelivery ? AppLocalizer.string("workout.completion.send_when_online") : AppLocalizer.format("workout.completion.connection_approved", trainerDisplayName)))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -213,7 +213,7 @@ struct WorkoutCompletionSummaryScreen: View {
                         } else {
                             Image(systemName: "paperplane.fill")
                         }
-                        Text(isSending ? "Отправляем…" : "Отправить тренеру")
+                        Text(isSending ? AppLocalizer.string("workout.completion.sending") : AppLocalizer.string("workout.completion.send_to_trainer"))
                     }
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(.white)
@@ -260,7 +260,7 @@ struct WorkoutCompletionSummaryScreen: View {
     private var displayWorkoutTitle: String {
         let trimmed = workout.title.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty || trimmed == "Активная тренировка" || trimmed == "Active Workout" {
-            return "Активная тренировка"
+            return AppLocalizer.string("workout.active.title")
         }
         return trimmed
     }

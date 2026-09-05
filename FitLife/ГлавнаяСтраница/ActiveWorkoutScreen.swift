@@ -230,7 +230,7 @@ struct ActiveWorkoutScreen: View {
             }
         } message: {
             if let block = pendingDeleteBlock {
-                Text("Будет удалён блок «\(displayTitle(for: block))» и все упражнения внутри него.")
+                Text(AppLocalizer.format("workout.block.delete_named.message", displayTitle(for: block)))
             }
         }
         .confirmationDialog(
@@ -249,7 +249,7 @@ struct ActiveWorkoutScreen: View {
             }
         } message: {
             if let exercise = pendingDeleteExercise {
-                Text("«\(exercise.name)» и все его подходы будут удалены из этой тренировки.")
+                Text(AppLocalizer.format("workout.exercise.delete_named.message", exercise.name))
             }
         }
     }
@@ -441,7 +441,7 @@ struct ActiveWorkoutScreen: View {
 
     private var bottomWorkoutActionTitle: String {
         if hasExercises == false { return AppLocalizer.string("workout.add.exercise") }
-        if hasPendingWorkoutItem { return "Продолжить тренировку" }
+        if hasPendingWorkoutItem { return AppLocalizer.string("workout.action.continue") }
         return AppLocalizer.string("workout.finish")
     }
 
@@ -605,7 +605,7 @@ struct ActiveWorkoutScreen: View {
                 isShowingBlockEditor = true
             }
             Divider().padding(.horizontal, 14)
-            addMenuAction("Создать с ИИ", icon: "sparkles") {
+            addMenuAction(AppLocalizer.string("workout.add.with_ai"), icon: "sparkles") {
                 isShowingAIGenerator = true
             }
         }
@@ -1469,7 +1469,10 @@ private struct WorkoutBlockSectionHeader: View {
                     blockIdentity
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(status == .completed ? "Посмотреть результаты блока \(title)" : "Открыть блок \(title), \(status.title)")
+                .accessibilityLabel(status == .completed
+                    ? AppLocalizer.format("workout.block.accessibility.view_results", title)
+                    : AppLocalizer.format("workout.block.accessibility.open", title, status.title)
+                )
             } else {
                 blockIdentity
             }
@@ -1484,7 +1487,7 @@ private struct WorkoutBlockSectionHeader: View {
                         .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Посмотреть результаты блока \(title)")
+                .accessibilityLabel(AppLocalizer.format("workout.block.accessibility.view_results", title))
             } else if let onStart {
                 Button(action: onStart) {
                     Image(systemName: status == .inProgress ? "play.fill" : status.systemImage)
@@ -1494,7 +1497,7 @@ private struct WorkoutBlockSectionHeader: View {
                         .background(Circle().fill(status == .notStarted ? Color.blue : status.color))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Открыть блок \(title), \(status.title)")
+                .accessibilityLabel(AppLocalizer.format("workout.block.accessibility.open", title, status.title))
             }
 
             Button(action: onToggleExpanded) {
@@ -1505,7 +1508,7 @@ private struct WorkoutBlockSectionHeader: View {
                     .frame(width: 34, height: 34)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(isExpanded ? "Свернуть блок" : "Развернуть блок")
+            .accessibilityLabel(isExpanded ? AppLocalizer.string("workout.block.collapse") : AppLocalizer.string("workout.block.expand"))
 
             if let onAddExercise {
                 Button(action: onAddExercise) {

@@ -1266,7 +1266,7 @@ struct WorkoutDraftSetEditorRow: View {
                 workoutValueEditor(
                     label: AppLocalizer.string("workout.setup.weight"),
                     field: .weight,
-                    displayValue: "\(weightText) кг",
+                    displayValue: AppLocalizer.format("workout.weight.kg", weightText),
                     text: $weightText,
                     keyboardType: .decimalPad,
                     stepButtons: [

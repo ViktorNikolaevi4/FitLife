@@ -87,7 +87,7 @@ struct NotificationSettingsView: View {
                         DatePicker(AppLocalizer.string("notifications.end"), selection: $selectedEndTime, displayedComponents: .hourAndMinute)
                         Picker(AppLocalizer.string("notifications.interval"), selection: $selectedIntervalSec) {
                             ForEach(intervalOptionsSec, id: \.self) { v in
-                                Text(intervalLabels[v] ?? "\(v/60) мин").tag(v)
+                                Text(intervalLabels[v] ?? AppLocalizer.format("common.minutes.short", v / 60)).tag(v)
                             }
                         }
                         .pickerStyle(.menu)
