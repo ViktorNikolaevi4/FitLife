@@ -165,6 +165,39 @@ final class HealthKitStepsStore: ObservableObject {
         }
     }
 
+    /// Returns the complete step history visible to FitLife, grouped by calendar day.
+    /// Authorization is never requested here; the achievements screen only reads data
+    /// after the user has enabled HealthKit in settings.
+    func completeHistory(startingAt lowerBound: Date, endingAt date: Date = .now) async -> [HealthKitDailySteps]? {
+        guard isAvailable, let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else {
+            return nil
+        }
+
+        do {
+            if try await needsAuthorizationRequest(for: stepType) {
+                return nil
+            }
+            guard let earliestDate = try await earliestSampleDate(for: stepType) else {
+                return []
+            }
+            let calendar = Calendar.current
+            let queryStart = max(earliestDate, lowerBound)
+            guard queryStart <= date else { return [] }
+            let startDay = calendar.startOfDay(for: queryStart)
+            let endDay = calendar.startOfDay(for: date)
+            let dayCount = max((calendar.dateComponents([.day], from: startDay, to: endDay).day ?? 0) + 1, 1)
+            return try await cumulativeStepsByDay(
+                type: stepType,
+                startDay: startDay,
+                dayCount: dayCount,
+                sampleStart: queryStart
+            )
+        } catch {
+            logger.warning("Complete HealthKit steps query failed: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
     private func needsAuthorizationRequest(for stepType: HKQuantityType) async throws -> Bool {
         try await withCheckedThrowingContinuation { continuation in
             healthStore.getRequestStatusForAuthorization(toShare: [], read: [stepType]) { status, error in
@@ -239,6 +272,28 @@ final class HealthKitStepsStore: ObservableObject {
         }
     }
 
+    private func earliestSampleDate(for type: HKQuantityType) async throws -> Date? {
+        try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: type,
+                predicate: nil,
+                limit: 1,
+                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
+            ) { _, samples, error in
+                if let error {
+                    if Self.isNoDataError(error) {
+                        continuation.resume(returning: nil)
+                    } else {
+                        continuation.resume(throwing: error)
+                    }
+                    return
+                }
+                continuation.resume(returning: samples?.first?.startDate)
+            }
+            healthStore.execute(query)
+        }
+    }
+
     private func cumulativeStepsByDay(
         type: HKQuantityType,
         containing date: Date
@@ -257,7 +312,8 @@ final class HealthKitStepsStore: ObservableObject {
     private func cumulativeStepsByDay(
         type: HKQuantityType,
         startDay: Date,
-        dayCount: Int
+        dayCount: Int,
+        sampleStart: Date? = nil
     ) async throws -> [HealthKitDailySteps] {
         let calendar = Calendar.current
         guard let rangeEnd = calendar.date(byAdding: .day, value: dayCount, to: startDay) else {
@@ -266,7 +322,7 @@ final class HealthKitStepsStore: ObservableObject {
 
         return try await withCheckedThrowingContinuation { continuation in
             let predicate = HKQuery.predicateForSamples(
-                withStart: startDay,
+                withStart: sampleStart ?? startDay,
                 end: rangeEnd,
                 options: [.strictStartDate, .strictEndDate]
             )

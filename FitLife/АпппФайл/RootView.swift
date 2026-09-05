@@ -9,6 +9,7 @@ struct RootView: View {
     @EnvironmentObject private var sessionStore: AppSessionStore
     @EnvironmentObject private var notificationsStore: AppNotificationsStore
     @EnvironmentObject private var pushNotificationsManager: AppPushNotificationsManager
+    @EnvironmentObject private var achievementCelebrationStore: AchievementCelebrationStore
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @Query private var users: [UserData]
@@ -44,6 +45,9 @@ struct RootView: View {
             } else {
                 if didOnboard, currentUserData.isEmpty == false {
                     AdaptiveMainView()
+                        .background {
+                            AchievementReconciliationMonitor()
+                        }
                 } else {
                     OnboardingView { payload in
                         let calories = MacrosCalculator.calculateCaloriesMifflin(
@@ -116,20 +120,44 @@ struct RootView: View {
                 retryPendingCoachingReports()
             }
         }
-        .overlay(alignment: .top) {
-            if let banner = pushNotificationsManager.inAppNotificationBanner {
-                InAppNotificationMessageBanner(
-                    banner: banner,
-                    onOpen: pushNotificationsManager.openInAppNotificationBanner,
-                    onDismiss: pushNotificationsManager.dismissInAppNotificationBanner
-                )
+        .overlay {
+            ZStack(alignment: .top) {
+                if let celebration = achievementCelebrationStore.activeCelebration,
+                   celebration.isMilestone {
+                    AchievementMilestoneCelebrationView(
+                        celebration: celebration,
+                        onDismiss: achievementCelebrationStore.dismiss
+                    )
+                    .transition(.opacity)
+                }
+
+                VStack(spacing: 8) {
+                    if let celebration = achievementCelebrationStore.activeCelebration,
+                       celebration.isMilestone == false {
+                        AchievementCelebrationBanner(
+                            celebration: celebration,
+                            onDismiss: achievementCelebrationStore.dismiss
+                        )
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+
+                    if let banner = pushNotificationsManager.inAppNotificationBanner,
+                       achievementCelebrationStore.activeCelebration?.isMilestone != true {
+                        InAppNotificationMessageBanner(
+                            banner: banner,
+                            onOpen: pushNotificationsManager.openInAppNotificationBanner,
+                            onDismiss: pushNotificationsManager.dismissInAppNotificationBanner
+                        )
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
-                .transition(.move(edge: .top).combined(with: .opacity))
-                .zIndex(10)
             }
+            .zIndex(10)
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.84), value: pushNotificationsManager.inAppNotificationBanner?.id)
+        .animation(.spring(response: 0.38, dampingFraction: 0.86), value: achievementCelebrationStore.activeCelebration?.id)
         .fullScreenCover(item: $openedPushNotification) { notification in
             NavigationStack {
                 AppNotificationDestinationScreen(notification: notification)

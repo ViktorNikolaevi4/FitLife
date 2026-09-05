@@ -11,6 +11,7 @@ struct FitLifeApp: App {
     @StateObject private var productCatalogStore: ProductCatalogStore
     @StateObject private var notificationsStore: AppNotificationsStore
     @StateObject private var pushNotificationsManager: AppPushNotificationsManager
+    @StateObject private var achievementCelebrationStore: AchievementCelebrationStore
 
     private let modelContainer: ModelContainer = {
         let schema = Schema([
@@ -24,7 +25,10 @@ struct FitLifeApp: App {
             WorkoutBlock.self,
             WorkoutExercise.self,
             WorkoutSet.self,
-            CustomWorkoutExerciseTemplate.self
+            CustomWorkoutExerciseTemplate.self,
+            UserAchievementProgress.self,
+            XPTransaction.self,
+            UnlockedAchievement.self
         ])
 
         #if DEBUG
@@ -76,6 +80,8 @@ struct FitLifeApp: App {
     }()
 
     init() {
+        FitLifeInstallationTracker.ensureFirstLaunchDate()
+
         if FirebaseApp.app() == nil {
             FirebaseApp.configure()
         }
@@ -90,6 +96,7 @@ struct FitLifeApp: App {
         _productCatalogStore = StateObject(wrappedValue: ProductCatalogStore())
         _notificationsStore = StateObject(wrappedValue: AppNotificationsStore())
         _pushNotificationsManager = StateObject(wrappedValue: AppPushNotificationsManager.shared)
+        _achievementCelebrationStore = StateObject(wrappedValue: AchievementCelebrationStore())
     }
 
     var body: some Scene {
@@ -101,6 +108,7 @@ struct FitLifeApp: App {
                 .environmentObject(productCatalogStore)
                 .environmentObject(notificationsStore)
                 .environmentObject(pushNotificationsManager)
+                .environmentObject(achievementCelebrationStore)
         }
             .modelContainer(modelContainer)
     }

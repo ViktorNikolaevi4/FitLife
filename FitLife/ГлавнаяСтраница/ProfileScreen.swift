@@ -779,8 +779,12 @@ private struct ProfileHeroCard: View {
     let ownerId: String?
     let gender: Gender
 
+    @Query private var achievementProgressRecords: [UserAchievementProgress]
+    @Query private var unlockedAchievements: [UnlockedAchievement]
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var sessionStore: AppSessionStore
+    @EnvironmentObject private var achievementCelebrationStore: AchievementCelebrationStore
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var previewImage: UIImage?
     @State private var isShowingPhotoActions = false
@@ -788,8 +792,49 @@ private struct ProfileHeroCard: View {
     @State private var isUploadingPhoto = false
     @State private var photoErrorMessage = ""
     @State private var isShowingPhotoError = false
+    @State private var isAchievementPreviewPresented = false
 
     private var theme: AppTheme { AppTheme(colorScheme) }
+
+    private var achievementProgress: AchievementLevelProgress {
+        guard let ownerId else { return AchievementLevelCalculator.progress(totalXP: 0) }
+        let scope = AchievementEngine.scopeID(ownerId: ownerId, gender: gender)
+        let totalXP = achievementProgressRecords.first { $0.scopeID == scope }?.totalXP ?? 0
+        return AchievementLevelCalculator.progress(totalXP: totalXP)
+    }
+
+    private var displayName: String? {
+        let candidates = [
+            sessionStore.profile?.displayName,
+            sessionStore.firebaseUser?.displayName,
+            sessionStore.firebaseUser?.email?.split(separator: "@").first.map(String.init)
+        ]
+        return candidates
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { $0.isEmpty == false }
+    }
+
+    private var scopedUnlocks: [UnlockedAchievement] {
+        guard let ownerId else { return [] }
+        let scope = AchievementEngine.scopeID(ownerId: ownerId, gender: gender)
+        return unlockedAchievements.filter { $0.scopeID == scope }
+    }
+
+    private var unseenUnlocks: [UnlockedAchievement] {
+        scopedUnlocks.filter(\.isUnseen).sorted { $0.unlockedAt > $1.unlockedAt }
+    }
+
+    private var newestUnseenUnlock: UnlockedAchievement? { unseenUnlocks.first }
+
+    private var newestUnseenDefinition: AchievementDefinition? {
+        newestUnseenUnlock
+            .flatMap { AchievementID(rawValue: $0.achievementID) }
+            .flatMap(AchievementCatalog.definition(for:))
+    }
+
+    private var achievementPreviewID: String {
+        newestUnseenUnlock?.compositeID ?? "seen"
+    }
 
     init() {
         progressUserData = nil
@@ -815,14 +860,42 @@ private struct ProfileHeroCard: View {
                 .accessibilityLabel(AppLocalizer.string("profile.photo.change"))
 
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(AppLocalizer.string("tab.profile"))
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundStyle(theme.primaryText)
+                    if progressUserData != nil {
+                        Text(displayName ?? AppLocalizer.format("profile.achievements.level", achievementProgress.level))
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundStyle(theme.primaryText)
+                            .lineLimit(1)
 
-                    Text(AppLocalizer.string("profile.subtitle"))
-                        .font(.subheadline)
-                        .foregroundStyle(theme.secondaryText)
-                        .fixedSize(horizontal: false, vertical: true)
+                        if displayName != nil {
+                            Text(AppLocalizer.format("profile.achievements.level", achievementProgress.level))
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(theme.accent)
+                        }
+
+                        ProgressView(value: achievementProgress.fraction)
+                            .tint(theme.accent)
+                            .frame(maxWidth: 220)
+
+                        Text(achievementProgress.isMaximumLevel
+                             ? AppLocalizer.string("profile.achievements.maximum_reached")
+                             : AppLocalizer.format(
+                                "profile.achievements.xp_remaining",
+                                achievementProgress.level + 1,
+                                achievementProgress.remainingXP
+                             ))
+                            .font(.caption)
+                            .foregroundStyle(theme.secondaryText)
+                            .lineLimit(2)
+                    } else {
+                        Text(AppLocalizer.string("tab.profile"))
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundStyle(theme.primaryText)
+
+                        Text(AppLocalizer.string("profile.subtitle"))
+                            .font(.subheadline)
+                            .foregroundStyle(theme.secondaryText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
 
@@ -840,14 +913,50 @@ private struct ProfileHeroCard: View {
                     )
                 } label: {
                     HStack(spacing: 12) {
-                        ProfileIconTile(systemImage: "chart.line.uptrend.xyaxis", tint: theme.accent, size: 40, cornerRadius: 12)
+                        if let definition = newestUnseenDefinition {
+                            ZStack {
+                                Image(systemName: "hexagon.fill")
+                                    .font(.system(size: 48, weight: .regular))
+                                    .foregroundStyle(theme.accent.opacity(theme.isDark ? 0.24 : 0.14))
+                                Image(systemName: "hexagon")
+                                    .font(.system(size: 48, weight: .semibold))
+                                    .foregroundStyle(theme.accent)
+                                Image(systemName: definition.icon)
+                                    .font(.system(size: 19, weight: .bold))
+                                    .foregroundStyle(theme.accent)
+                            }
+                            .frame(width: 52, height: 54)
+                            .scaleEffect(isAchievementPreviewPresented ? 1 : 0.82)
+                        } else {
+                            ProfileIconTile(
+                                systemImage: "chart.line.uptrend.xyaxis",
+                                tint: theme.accent,
+                                size: 40,
+                                cornerRadius: 12
+                            )
+                        }
 
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(AppLocalizer.string("profile.progress.title"))
+                            Text(unseenUnlocks.isEmpty
+                                 ? AppLocalizer.string("profile.achievements.title")
+                                 : unseenUnlocks.count == 1
+                                    ? AppLocalizer.string("profile.achievements.preview.new")
+                                    : AppLocalizer.format("profile.achievements.preview.new_count", unseenUnlocks.count))
                                 .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(theme.primaryText)
+                                .foregroundStyle(unseenUnlocks.isEmpty ? theme.primaryText : theme.accent)
 
-                            Text(AppLocalizer.string("profile.progress.subtitle"))
+                            Text(newestUnseenDefinition.map {
+                                AppLocalizer.format(
+                                    "profile.achievements.preview.reward",
+                                    AppLocalizer.string($0.titleKey),
+                                    newestUnseenUnlock?.rewardedXP ?? $0.xpReward
+                                )
+                            } ?? AppLocalizer.format(
+                                "profile.achievements.preview.summary",
+                                achievementProgress.level,
+                                achievementProgress.totalXP,
+                                scopedUnlocks.count
+                            ))
                                 .font(.caption)
                                 .foregroundStyle(theme.secondaryText)
                                 .lineLimit(2)
@@ -855,14 +964,41 @@ private struct ProfileHeroCard: View {
 
                         Spacer(minLength: 8)
 
+                        if unseenUnlocks.isEmpty == false {
+                            Text(AppLocalizer.string("profile.achievements.preview.open"))
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(theme.accent)
+                                .lineLimit(1)
+                        }
+
                         Image(systemName: "chevron.right")
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(theme.tertiaryText)
                     }
-                    .padding(.vertical, 2)
-                    .contentShape(Rectangle())
+                    .padding(12)
+                    .background {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(unseenUnlocks.isEmpty ? Color.clear : theme.accent.opacity(theme.isDark ? 0.10 : 0.08))
+                    }
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(
+                                unseenUnlocks.isEmpty ? Color.clear : theme.accent.opacity(0.38),
+                                lineWidth: 1
+                            )
+                    }
+                    .scaleEffect(reduceMotion || unseenUnlocks.isEmpty || isAchievementPreviewPresented ? 1 : 0.97)
+                    .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .task(id: achievementPreviewID) {
+                    isAchievementPreviewPresented = reduceMotion || unseenUnlocks.isEmpty
+                    guard reduceMotion == false, unseenUnlocks.isEmpty == false else { return }
+                    await Task.yield()
+                    withAnimation(.spring(response: 0.52, dampingFraction: 0.68)) {
+                        isAchievementPreviewPresented = true
+                    }
+                }
 
                 Rectangle()
                     .fill(theme.border.opacity(theme.isDark ? 0.70 : 0.55))
@@ -1329,7 +1465,12 @@ private struct ProfileProgressScreen: View {
     @Query private var foodEntries: [FoodEntry]
     @Query private var waterEntries: [WaterIntake]
     @Query(sort: \BodyMeasurements.date, order: .reverse) private var measurements: [BodyMeasurements]
+    @Query private var achievementProgressRecords: [UserAchievementProgress]
+    @Query private var xpTransactions: [XPTransaction]
+    @Query private var unlockedAchievements: [UnlockedAchievement]
+    @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
+    @EnvironmentObject private var achievementCelebrationStore: AchievementCelebrationStore
 
     private var calendar: Calendar { .current }
     private var weekStart: Date {
@@ -1343,113 +1484,54 @@ private struct ProfileProgressScreen: View {
         max((userData.weight.safeFinite * 35.0 / 1000.0).safeFinite, 0)
     }
 
+    private var achievementScopeID: String? {
+        guard let ownerId, ownerId.isEmpty == false else { return nil }
+        return AchievementEngine.scopeID(ownerId: ownerId, gender: gender)
+    }
+
     var body: some View {
         let snapshot = makeSnapshot()
         let theme = AppTheme(colorScheme)
+        let scope = achievementScopeID
+        let storedProgress = achievementProgressRecords.first { $0.scopeID == scope }
+        let scopedTransactions = xpTransactions.filter { $0.scopeID == scope }
+        let scopedUnlocks = unlockedAchievements.filter { $0.scopeID == scope }
+        let weeklyXP = scopedTransactions
+            .filter { $0.occurredAt >= weekStart }
+            .reduce(0) { $0 + max($1.amount, 0) }
 
         ScrollView(showsIndicators: false) {
-            LazyVStack(spacing: 16) {
-                WeekRhythmCard(
-                    snapshot: snapshot.weekRhythm,
-                    theme: theme,
-                    includesHorizontalPadding: false
-                )
-
-                ProgressSummaryGrid(
-                    workouts: snapshot.weekWorkoutsCount,
-                    averageCalories: snapshot.averageCaloriesThisWeek,
-                    waterGoalDays: snapshot.waterGoalDays,
-                    weight: Int(userData.weight.rounded())
-                )
-
-                progressSection(title: AppLocalizer.string("profile.progress.body")) {
-                    ProgressMetricRow(
-                        icon: "scalemass",
-                        title: AppLocalizer.string("profile.weight"),
-                        value: "\(Int(userData.weight.rounded())) \(AppLocalizer.string("unit.kg"))",
-                        subtitle: AppLocalizer.string("profile.progress.current_value")
-                    )
-
-                    if let latestMeasurement = snapshot.latestMeasurement {
-                        ProgressMetricRow(
-                            icon: "ruler",
-                            title: AppLocalizer.string("measurements.latest"),
-                            value: AppLocalizer.format("profile.progress.measurements.value", Int(latestMeasurement.waist.rounded()), Int(latestMeasurement.hips.rounded())),
-                            subtitle: formattedDate(latestMeasurement.date)
-                        )
-                    } else {
-                        ProgressMetricRow(
-                            icon: "ruler",
-                            title: AppLocalizer.string("measurements.title"),
-                            value: AppLocalizer.string("measurements.empty"),
-                            subtitle: AppLocalizer.string("measurements.empty.subtitle")
-                        )
-                    }
+            ProgressAchievementsDashboard(
+                snapshot: snapshot,
+                theme: theme,
+                achievementProgress: storedProgress,
+                weeklyXP: weeklyXP,
+                unlockedAchievements: scopedUnlocks,
+                onResetXP: {
+                    guard let scope else { return }
+                    try? AchievementEngine.resetProgress(scopeID: scope, modelContext: modelContext)
+                    achievementCelebrationStore.dismiss()
+                    achievementCelebrationStore.updateUnreadCount(0)
                 }
-
-                progressSection(title: AppLocalizer.string("tab.workouts")) {
-                    ProgressMetricRow(
-                        icon: "dumbbell.fill",
-                        title: AppLocalizer.string("profile.progress.workouts.week"),
-                        value: "\(snapshot.weekWorkoutsCount)",
-                        subtitle: AppLocalizer.format("profile.progress.workouts.month", snapshot.monthWorkoutsCount)
-                    )
-                    ProgressMetricRow(
-                        icon: "checkmark.circle",
-                        title: AppLocalizer.string("profile.progress.sets.week"),
-                        value: "\(snapshot.completedSetsThisWeek)",
-                        subtitle: AppLocalizer.format("profile.progress.volume.week", snapshot.trainingVolumeThisWeek)
-                    )
-                    ProgressMetricRow(
-                        icon: "timer",
-                        title: AppLocalizer.string("profile.progress.duration.month"),
-                        value: formattedMinutes(snapshot.totalWorkoutMinutesThisMonth),
-                        subtitle: AppLocalizer.string("profile.progress.completed_only")
-                    )
-                }
-
-                progressSection(title: AppLocalizer.string("tab.nutrition")) {
-                    ProgressMetricRow(
-                        icon: "flame",
-                        title: AppLocalizer.string("profile.progress.calories.average"),
-                        value: "\(snapshot.averageCaloriesThisWeek) \(AppLocalizer.string("unit.kcal"))",
-                        subtitle: AppLocalizer.format("profile.progress.target", userData.calories)
-                    )
-                    ProgressMetricRow(
-                        icon: "target",
-                        title: AppLocalizer.string("profile.progress.nutrition.target_days"),
-                        value: AppLocalizer.format("profile.progress.days.of_week", snapshot.nutritionDaysInTarget),
-                        subtitle: AppLocalizer.string("profile.progress.nutrition.target_hint")
-                    )
-                    ProgressMetricRow(
-                        icon: "fork.knife",
-                        title: AppLocalizer.string("profile.progress.protein.average"),
-                        value: "\(snapshot.proteinAverageThisWeek) \(AppLocalizer.string("unit.grams.short"))",
-                        subtitle: AppLocalizer.format("profile.progress.target.grams", userData.proteins)
-                    )
-                }
-
-                progressSection(title: AppLocalizer.string("tab.water")) {
-                    ProgressMetricRow(
-                        icon: "drop.fill",
-                        title: AppLocalizer.string("profile.progress.water.average"),
-                        value: formattedLiters(snapshot.averageWaterThisWeek),
-                        subtitle: AppLocalizer.format("profile.progress.water.goal", waterGoalLiters)
-                    )
-                    ProgressMetricRow(
-                        icon: "checkmark.circle",
-                        title: AppLocalizer.string("profile.progress.water.target_days"),
-                        value: AppLocalizer.format("profile.progress.days.of_week", snapshot.waterGoalDays),
-                        subtitle: AppLocalizer.string("profile.progress.water.goal_hint")
-                    )
-                }
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 16)
+            )
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 120)
         }
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
-        .navigationTitle(AppLocalizer.string("profile.progress.title"))
+        .navigationTitle(AppLocalizer.string("profile.achievements.title"))
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            var didChange = false
+            for unlock in scopedUnlocks where unlock.isUnseen {
+                unlock.isUnseen = false
+                didChange = true
+            }
+            if didChange {
+                try? modelContext.save()
+            }
+            achievementCelebrationStore.updateUnreadCount(0)
+        }
     }
 
     private func makeSnapshot() -> ProfileProgressSnapshot {
@@ -1564,6 +1646,646 @@ private struct ProfileProgressScreen: View {
         return WeekRhythmSnapshot(days: days)
     }
 
+    private struct ProgressAchievementsDashboard: View {
+        let snapshot: ProfileProgressSnapshot
+        let theme: AppTheme
+        let achievementProgress: UserAchievementProgress?
+        let weeklyXP: Int
+        let unlockedAchievements: [UnlockedAchievement]
+        let onResetXP: () -> Void
+
+        private var levelProgress: AchievementLevelProgress {
+            AchievementLevelCalculator.progress(totalXP: achievementProgress?.totalXP ?? 0)
+        }
+        private var unlockedIDs: Set<AchievementID> {
+            Set(unlockedAchievements.compactMap { AchievementID(rawValue: $0.achievementID) })
+        }
+        private var presentedDefinitions: [AchievementDefinition] {
+            AchievementCatalog.definitions.filter {
+                $0.visibility == .standard || unlockedIDs.contains($0.id)
+            }
+        }
+        private var planScore: Int {
+            min(max(Int((Double(snapshot.weekRhythm.totalSignals) / 21.0 * 100).rounded()), 0), 100)
+        }
+        private var unlockedBadges: [AchievementBadge] {
+            unlockedAchievements
+                .sorted { $0.unlockedAt > $1.unlockedAt }
+                .compactMap { unlock in
+                    guard let id = AchievementID(rawValue: unlock.achievementID),
+                          let definition = AchievementCatalog.definition(for: id) else { return nil }
+                    return AchievementBadge(definition: definition, unlock: unlock)
+                }
+        }
+        private var nextAchievements: [AchievementGoal] {
+            presentedDefinitions
+                .filter { unlockedIDs.contains($0.id) == false }
+                .map { AchievementGoal(definition: $0, current: currentValue(for: $0.id)) }
+                .sorted {
+                    let lhs = Double(min($0.current, $0.definition.target)) / Double(max($0.definition.target, 1))
+                    let rhs = Double(min($1.current, $1.definition.target)) / Double(max($1.definition.target, 1))
+                    return lhs == rhs ? $0.definition.target < $1.definition.target : lhs > rhs
+                }
+                .prefix(3)
+                .map { $0 }
+        }
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 14) {
+                NavigationLink {
+                    AchievementLevelsScreen(
+                        totalXP: levelProgress.totalXP,
+                        theme: theme,
+                        onResetXP: onResetXP
+                    )
+                } label: {
+                    levelCard
+                }
+                .buttonStyle(.plain)
+                weeklySummary
+
+                HStack {
+                    sectionTitle(AppLocalizer.string("profile.achievements.recent"))
+                    NavigationLink {
+                        AchievementListScreen(
+                            title: AppLocalizer.string("profile.achievements.all"),
+                            definitions: presentedDefinitions,
+                            theme: theme,
+                            progress: achievementProgress,
+                            unlocks: unlockedAchievements
+                        )
+                    } label: {
+                        Text(AppLocalizer.string("profile.achievements.view_all"))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(theme.accent)
+                    }
+                }
+
+                if unlockedBadges.isEmpty {
+                    Text(AppLocalizer.string("profile.achievements.none_unlocked"))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(14)
+                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(profileCardBackground))
+                        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(profileCardBorder))
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 10) {
+                            ForEach(unlockedBadges) { badge in
+                                NavigationLink {
+                                    achievementDetail(for: badge.definition)
+                                } label: {
+                                    badgeCard(badge)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 1)
+                }
+
+                sectionTitle(AppLocalizer.string("profile.achievements.next"))
+                VStack(spacing: 0) {
+                    if nextAchievements.isEmpty {
+                        Text(AppLocalizer.string("profile.achievements.all_unlocked"))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 14)
+                    } else {
+                        ForEach(Array(nextAchievements.enumerated()), id: \.element.id) { index, goal in
+                            NavigationLink {
+                                achievementDetail(for: goal.definition)
+                            } label: {
+                                goalRow(
+                                    icon: goal.definition.icon,
+                                    title: AppLocalizer.string(goal.definition.titleKey),
+                                    current: goal.current,
+                                    target: goal.definition.target
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            if index < nextAchievements.count - 1 {
+                                Divider().padding(.leading, 38)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(profileCardBackground))
+                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(profileCardBorder))
+
+                sectionTitle(AppLocalizer.string("profile.achievements.categories"))
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 2), spacing: 10) {
+                    ForEach(AchievementCategory.allCases, id: \.self) { category in
+                        categoryLink(icon: categoryIcon(category), title: categoryTitle(category), category: category)
+                    }
+                }
+            }
+        }
+
+        private var levelCard: some View {
+            HStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(AppLocalizer.format("profile.achievements.level", levelProgress.level))
+                        .font(.title3.weight(.bold))
+                    Text(levelProgress.isMaximumLevel
+                         ? "\(levelProgress.totalXP) XP"
+                         : "\(levelProgress.xpInsideLevel) / \(levelProgress.requiredXP) XP")
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(theme.accent)
+                    ProgressView(value: levelProgress.fraction)
+                        .tint(theme.accent)
+                    Text(levelProgress.isMaximumLevel
+                         ? AppLocalizer.string("profile.achievements.maximum_reached")
+                         : AppLocalizer.format("profile.achievements.xp_remaining", levelProgress.level + 1, levelProgress.remainingXP))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(AppLocalizer.string("profile.achievements.motto"))
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                ZStack {
+                    Hexagon()
+                        .stroke(theme.accent, lineWidth: 4)
+                        .frame(width: 78, height: 86)
+                        .shadow(color: theme.accent.opacity(0.55), radius: 12)
+                    Text("\(levelProgress.level)")
+                        .font(.system(size: 36, weight: .bold, design: .rounded))
+                }
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+            }
+            .foregroundStyle(.primary)
+            .padding(16)
+            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(profileCardBackground))
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(profileCardBorder))
+        }
+
+        private var weeklySummary: some View {
+            HStack(spacing: 0) {
+                summaryItem(icon: "flame.fill", value: "\(achievementProgress?.currentStreak ?? 0)", label: AppLocalizer.string("profile.achievements.summary.active_days"))
+                summaryDivider
+                summaryItem(icon: "hexagon.fill", value: "+\(weeklyXP) XP", label: AppLocalizer.string("profile.achievements.summary.week"))
+                summaryDivider
+                summaryItem(icon: "target", value: "\(planScore)%", label: AppLocalizer.string("profile.achievements.summary.plan_score"))
+            }
+            .padding(.vertical, 11)
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(profileCardBackground))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(profileCardBorder))
+        }
+
+        private func summaryItem(icon: String, value: String, label: String) -> some View {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(theme.accent)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(value).font(.caption.weight(.bold)).lineLimit(1)
+                    Text(label).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+
+        private var summaryDivider: some View {
+            Rectangle().fill(profileCardBorder).frame(width: 1, height: 30)
+        }
+
+        private func sectionTitle(_ title: String) -> some View {
+            Text(title)
+                .font(.headline.weight(.bold))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 4)
+        }
+
+        private func badgeCard(_ badge: AchievementBadge) -> some View {
+            VStack(spacing: 6) {
+                ZStack {
+                    Hexagon().fill(theme.accent.opacity(0.14))
+                    Hexagon().stroke(theme.accent, lineWidth: 2)
+                    Image(systemName: badge.definition.icon)
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(theme.accent)
+                }
+                .frame(width: 44, height: 48)
+                Text(AppLocalizer.string(badge.definition.titleKey))
+                    .font(.system(size: 11, weight: .semibold))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+            }
+            .frame(width: 86, height: 94)
+            .padding(8)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(profileCardBackground))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(profileCardBorder))
+            .foregroundStyle(.primary)
+        }
+
+        private func goalRow(icon: String, title: String, current: Int, target: Int) -> some View {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 9) {
+                    Image(systemName: icon).foregroundStyle(theme.accent).frame(width: 22)
+                    Text(title).font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Text("\(min(current, target)) / \(target)").font(.subheadline.weight(.bold))
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.secondary)
+                }
+                ProgressView(value: Double(min(current, target)), total: Double(target)).tint(theme.accent)
+            }
+            .padding(.vertical, 10)
+            .foregroundStyle(.primary)
+        }
+
+        private func currentValue(for id: AchievementID) -> Int {
+            Self.metricValue(for: id, progress: achievementProgress)
+        }
+
+        private static func metricValue(for id: AchievementID, progress: UserAchievementProgress?) -> Int {
+            progress?.metricValue(for: id) ?? 0
+        }
+
+        private func categoryTitle(_ category: AchievementCategory) -> String {
+            switch category {
+            case .firstSteps:
+                return AppLocalizer.string("profile.achievements.category.firstSteps")
+            case .workouts:
+                return AppLocalizer.string("tab.workouts")
+            case .water:
+                return AppLocalizer.string("tab.water")
+            case .nutrition:
+                return AppLocalizer.string("tab.nutrition")
+            case .steps:
+                return AppLocalizer.string("profile.achievements.category.steps")
+            case .coach:
+                return AppLocalizer.string("profile.achievements.category.coach")
+            case .measurements:
+                return AppLocalizer.string("profile.achievements.category.measurements")
+            }
+        }
+
+        private func categoryIcon(_ category: AchievementCategory) -> String {
+            switch category {
+            case .firstSteps: return "flag.fill"
+            case .workouts: return "dumbbell.fill"
+            case .water: return "drop.fill"
+            case .nutrition: return "fork.knife"
+            case .steps: return "figure.walk"
+            case .coach: return "person.2.fill"
+            case .measurements: return "ruler.fill"
+            }
+        }
+
+        private func achievementDetail(for definition: AchievementDefinition) -> some View {
+            AchievementDetailScreen(
+                definition: definition,
+                current: currentValue(for: definition.id),
+                unlock: unlockedAchievements.first { $0.achievementID == definition.id.rawValue },
+                theme: theme
+            )
+        }
+
+        private func categoryLink(icon: String, title: String, category: AchievementCategory) -> some View {
+            NavigationLink {
+                AchievementListScreen(
+                    title: title,
+                    definitions: presentedDefinitions.filter { $0.category == category },
+                    theme: theme,
+                    progress: achievementProgress,
+                    unlocks: unlockedAchievements
+                )
+            } label: {
+                categoryCard(icon: icon, title: title, category: category)
+            }
+            .buttonStyle(.plain)
+        }
+
+        private func categoryCard(icon: String, title: String, category: AchievementCategory) -> some View {
+            let definitions = presentedDefinitions.filter { $0.category == category }
+            let current = definitions.filter { unlockedIDs.contains($0.id) }.count
+            let target = definitions.count
+            return HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .foregroundStyle(theme.accent)
+                    .font(.headline)
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(theme.accent.opacity(0.14)))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title).font(.caption.weight(.semibold)).lineLimit(1)
+                    HStack(spacing: 6) {
+                        Text("\(current) / \(target)").font(.caption.weight(.bold)).foregroundStyle(theme.accent)
+                        ProgressView(value: Double(min(current, target)), total: Double(target)).tint(theme.accent)
+                    }
+                }
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
+            .padding(10)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(profileCardBackground))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(profileCardBorder))
+            .foregroundStyle(.primary)
+        }
+
+        private struct AchievementLevelsScreen: View {
+            let totalXP: Int
+            let theme: AppTheme
+            let onResetXP: () -> Void
+            @State private var isResetConfirmationPresented = false
+
+            private var progress: AchievementLevelProgress {
+                AchievementLevelCalculator.progress(totalXP: totalXP)
+            }
+
+            private var displayedLevels: ClosedRange<Int> {
+                1...AchievementLevelCalculator.maximumLevel
+            }
+
+            var body: some View {
+                List {
+                    Section {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(AppLocalizer.format("profile.achievements.level", progress.level))
+                                .font(.title2.weight(.bold))
+                            Text(AppLocalizer.format("profile.achievements.levels.total_xp_value", totalXP))
+                                .font(.headline)
+                                .foregroundStyle(theme.accent)
+                            ProgressView(value: progress.fraction)
+                                .tint(theme.accent)
+                            Text(progress.isMaximumLevel
+                                 ? AppLocalizer.string("profile.achievements.maximum_reached")
+                                 : AppLocalizer.format("profile.achievements.xp_remaining", progress.level + 1, progress.remainingXP))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 6)
+                    }
+
+                    Section(AppLocalizer.string("profile.achievements.levels.requirements")) {
+                        ForEach(displayedLevels, id: \.self) { level in
+                            levelRow(level)
+                        }
+                    }
+
+                    Section {
+                        Button(role: .destructive) {
+                            isResetConfirmationPresented = true
+                        } label: {
+                            Label(
+                                AppLocalizer.string("profile.achievements.reset_xp.action"),
+                                systemImage: "arrow.counterclockwise"
+                            )
+                        }
+                    } header: {
+                        Text(AppLocalizer.string("profile.achievements.reset_xp.section"))
+                    } footer: {
+                        Text(AppLocalizer.string("profile.achievements.reset_xp.footer"))
+                    }
+                }
+                .listStyle(.insetGrouped)
+                .navigationTitle(AppLocalizer.string("profile.achievements.levels.title"))
+                .navigationBarTitleDisplayMode(.inline)
+                .alert(
+                    AppLocalizer.string("profile.achievements.reset_xp.confirm_title"),
+                    isPresented: $isResetConfirmationPresented
+                ) {
+                    Button(AppLocalizer.string("common.cancel"), role: .cancel) {}
+                    Button(AppLocalizer.string("profile.achievements.reset_xp.confirm_action"), role: .destructive) {
+                        onResetXP()
+                    }
+                } message: {
+                    Text(AppLocalizer.string("profile.achievements.reset_xp.confirm_message"))
+                }
+            }
+
+            private func levelRow(_ level: Int) -> some View {
+                let requiredTotal = AchievementLevelCalculator.totalXPRequired(toReach: level)
+                let isCurrent = level == progress.level
+                let isReached = level < progress.level
+
+                return HStack(spacing: 12) {
+                    ZStack {
+                        Hexagon()
+                            .fill((isReached || isCurrent) ? theme.accent.opacity(0.16) : Color.secondary.opacity(0.10))
+                        Hexagon()
+                            .stroke((isReached || isCurrent) ? theme.accent : Color.secondary.opacity(0.35), lineWidth: 2)
+                        Text("\(level)")
+                            .font(.headline.weight(.bold))
+                    }
+                    .frame(width: 42, height: 46)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(AppLocalizer.format("profile.achievements.levels.level_number", level))
+                            .font(.body.weight(isCurrent ? .bold : .semibold))
+                        Text(AppLocalizer.format("profile.achievements.levels.required_xp", requiredTotal))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    if isCurrent {
+                        Text(AppLocalizer.string("profile.achievements.levels.current"))
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(theme.accent)
+                    } else if isReached {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(theme.accent)
+                    } else {
+                        Image(systemName: "lock.fill")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.vertical, 3)
+            }
+        }
+
+        private struct AchievementListScreen: View {
+            let title: String
+            let definitions: [AchievementDefinition]
+            let theme: AppTheme
+            let progress: UserAchievementProgress?
+            let unlocks: [UnlockedAchievement]
+
+            var body: some View {
+                List(definitions) { definition in
+                    let current = ProgressAchievementsDashboard.metricValue(for: definition.id, progress: progress)
+                    let unlock = unlocks.first { $0.achievementID == definition.id.rawValue }
+
+                    NavigationLink {
+                        AchievementDetailScreen(
+                            definition: definition,
+                            current: current,
+                            unlock: unlock,
+                            theme: theme
+                        )
+                    } label: {
+                        achievementRow(definition, current: current, isUnlocked: unlock != nil)
+                    }
+                }
+                .listStyle(.insetGrouped)
+                .navigationTitle(title)
+                .navigationBarTitleDisplayMode(.inline)
+            }
+
+            private func achievementRow(_ definition: AchievementDefinition, current: Int, isUnlocked: Bool) -> some View {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Hexagon().fill(theme.accent.opacity(isUnlocked ? 0.16 : 0.08))
+                        Hexagon().stroke(isUnlocked ? theme.accent : Color.secondary.opacity(0.35), lineWidth: 2)
+                        Image(systemName: definition.icon)
+                            .font(.headline.weight(.bold))
+                            .foregroundStyle(isUnlocked ? theme.accent : .secondary)
+                    }
+                    .frame(width: 46, height: 50)
+
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(AppLocalizer.string(definition.titleKey))
+                            .font(.body.weight(.semibold))
+                        Text(AppLocalizer.string(definition.descriptionKey))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                        HStack {
+                            ProgressView(value: Double(min(current, definition.target)), total: Double(definition.target))
+                                .tint(theme.accent)
+                            Text("\(min(current, definition.target)) / \(definition.target)")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Text("+\(definition.xpReward) XP")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(theme.accent)
+                }
+                .padding(.vertical, 4)
+            }
+        }
+
+        private struct AchievementDetailScreen: View {
+            let definition: AchievementDefinition
+            let current: Int
+            let unlock: UnlockedAchievement?
+            let theme: AppTheme
+
+            private var isUnlocked: Bool { unlock != nil }
+
+            var body: some View {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 20) {
+                        ZStack {
+                            Hexagon().fill(theme.accent.opacity(isUnlocked ? 0.18 : 0.08))
+                            Hexagon().stroke(isUnlocked ? theme.accent : Color.secondary.opacity(0.4), lineWidth: 4)
+                            Image(systemName: definition.icon)
+                                .font(.system(size: 38, weight: .bold))
+                                .foregroundStyle(isUnlocked ? theme.accent : .secondary)
+                        }
+                        .frame(width: 112, height: 122)
+
+                        VStack(spacing: 7) {
+                            Text(AppLocalizer.string(definition.titleKey))
+                                .font(.title2.weight(.bold))
+                                .multilineTextAlignment(.center)
+                            Label(
+                                AppLocalizer.string(isUnlocked ? "profile.achievements.detail.unlocked" : "profile.achievements.detail.locked"),
+                                systemImage: isUnlocked ? "checkmark.seal.fill" : "lock.fill"
+                            )
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(isUnlocked ? theme.accent : .secondary)
+                        }
+
+                        detailCard(
+                            title: AppLocalizer.string("profile.achievements.detail.condition"),
+                            icon: "scope"
+                        ) {
+                            Text(AppLocalizer.string(definition.descriptionKey))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+
+                        detailCard(
+                            title: AppLocalizer.string("profile.achievements.detail.progress"),
+                            icon: "chart.bar.fill"
+                        ) {
+                            VStack(spacing: 8) {
+                                HStack {
+                                    Text("\(min(current, definition.target)) / \(definition.target)")
+                                        .font(.headline.weight(.bold))
+                                    Spacer()
+                                    Text("+\(definition.xpReward) XP")
+                                        .font(.headline.weight(.bold))
+                                        .foregroundStyle(theme.accent)
+                                }
+                                ProgressView(value: Double(min(current, definition.target)), total: Double(definition.target))
+                                    .tint(theme.accent)
+                            }
+                        }
+
+                        if let unlock {
+                            detailCard(
+                                title: AppLocalizer.string("profile.achievements.detail.unlocked_at"),
+                                icon: "calendar"
+                            ) {
+                                Text(unlock.unlockedAt.formatted(date: .long, time: .omitted))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                    }
+                    .padding(20)
+                }
+                .background(Color(.systemGroupedBackground).ignoresSafeArea())
+                .navigationTitle(AppLocalizer.string("profile.achievements.detail.title"))
+                .navigationBarTitleDisplayMode(.inline)
+            }
+
+            private func detailCard<Content: View>(title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
+                VStack(alignment: .leading, spacing: 12) {
+                    Label(title, systemImage: icon)
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(theme.accent)
+                    content()
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(profileCardBackground))
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(profileCardBorder))
+            }
+        }
+
+        private struct AchievementBadge: Identifiable {
+            let definition: AchievementDefinition
+            let unlock: UnlockedAchievement
+            var id: AchievementID { definition.id }
+        }
+
+        private struct AchievementGoal: Identifiable {
+            let definition: AchievementDefinition
+            let current: Int
+            var id: AchievementID { definition.id }
+        }
+
+        private struct Hexagon: Shape {
+            func path(in rect: CGRect) -> Path {
+                let radius = min(rect.width, rect.height) / 2
+                let center = CGPoint(x: rect.midX, y: rect.midY)
+                var path = Path()
+                for index in 0..<6 {
+                    let angle = CGFloat(index) * .pi / 3 - .pi / 2
+                    let point = CGPoint(x: center.x + cos(angle) * radius, y: center.y + sin(angle) * radius)
+                    index == 0 ? path.move(to: point) : path.addLine(to: point)
+                }
+                path.closeSubpath()
+                return path
+            }
+        }
+    }
+
     private func average(values: [Int]) -> Int {
         guard values.isEmpty == false else { return 0 }
         return values.reduce(0, +) / values.count
@@ -1579,41 +2301,6 @@ private struct ProfileProgressScreen: View {
         let lower = Int(Double(userData.calories) * 0.90)
         let upper = Int(Double(userData.calories) * 1.10)
         return caloriesByDay.filter { $0 >= lower && $0 <= upper }.count
-    }
-
-    private func progressSection<Content: View>(
-        title: String,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(title)
-                .font(.title3.weight(.semibold))
-
-            VStack(spacing: 10) {
-                content()
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(RoundedRectangle(cornerRadius: 20).fill(profileCardBackground))
-        .overlay(RoundedRectangle(cornerRadius: 20).stroke(profileCardBorder))
-    }
-
-    private func formattedMinutes(_ minutes: Int) -> String {
-        if minutes >= 60 {
-            let hours = minutes / 60
-            let remainingMinutes = minutes % 60
-            return "\(hours) \(AppLocalizer.string("unit.hours.short")) \(remainingMinutes) \(AppLocalizer.string("unit.minutes.short"))"
-        }
-        return "\(minutes) \(AppLocalizer.string("unit.minutes.short"))"
-    }
-
-    private func formattedLiters(_ value: Double) -> String {
-        String(format: "%.1f %@", value, AppLocalizer.string("unit.liters.short"))
-    }
-
-    private func formattedDate(_ date: Date) -> String {
-        date.formatted(.dateTime.day().month().year())
     }
 
     private struct ProfileProgressSnapshot {

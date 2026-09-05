@@ -24,6 +24,7 @@ private struct IPadMainShell: View {
     @AppStorage(Gender.appStorageKey) private var activeGenderRaw: String = Gender.male.rawValue
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var notificationsStore: AppNotificationsStore
+    @EnvironmentObject private var achievementCelebrationStore: AchievementCelebrationStore
 
     @State private var selectedTab: MainTab = .home
     @State private var selectedDate = Date()
@@ -71,7 +72,12 @@ private struct IPadMainShell: View {
                 sidebarButton(.nutrition, title: AppLocalizer.string("tab.nutrition"), icon: "fork.knife")
                 sidebarButton(.workouts, title: appLanguage.localized("tab.workouts"), icon: "dumbbell.fill")
                 sidebarButton(.water, title: appLanguage.localized("tab.water"), icon: "drop.fill")
-                sidebarButton(.profile, title: appLanguage.localized("tab.profile"), icon: "person.fill", badge: notificationsStore.unreadCount)
+                sidebarButton(
+                    .profile,
+                    title: appLanguage.localized("tab.profile"),
+                    icon: "person.fill",
+                    badge: notificationsStore.unreadCount + achievementCelebrationStore.unreadCount
+                )
             }
             .padding(.horizontal, 14)
 

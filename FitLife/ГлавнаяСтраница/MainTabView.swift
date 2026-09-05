@@ -16,6 +16,7 @@ struct MainTabView: View {
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var productCatalogStore: ProductCatalogStore
     @EnvironmentObject private var notificationsStore: AppNotificationsStore
+    @EnvironmentObject private var achievementCelebrationStore: AchievementCelebrationStore
     @State private var selectedDate: Date = Date()
     @State private var sheet: RationSheet? = nil
     @State private var refreshID = UUID()
@@ -59,7 +60,7 @@ struct MainTabView: View {
                 ProfileScreen()
                     .tag(MainTab.profile)
                     .tabItem { Label(appLanguage.localized("tab.profile"), systemImage: "person.fill") }
-                    .badge(notificationsStore.unreadCount)
+                    .badge(notificationsStore.unreadCount + achievementCelebrationStore.unreadCount)
             }
             .tint(colorScheme == .dark ? HomeDarkColors.blue : HomeColors.accent)
             .toolbarBackground(colorScheme == .dark ? Color.black.opacity(0.62) : Color(.systemBackground), for: .tabBar)

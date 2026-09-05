@@ -123,7 +123,7 @@ service cloud.firestore {
     match /trainer_client_links/{linkId} {
       allow read: if isOwner()
         || (isTrainer() && resource.data.trainerId == request.auth.uid)
-        || (isClient() && resource.data.clientId == request.auth.uid);
+        || (isSignedIn() && resource.data.clientId == request.auth.uid);
 
       allow create, update: if isOwner();
 
@@ -164,7 +164,7 @@ service cloud.firestore {
     match /progress_checkins/{checkInId} {
       allow read: if isOwner()
         || (isTrainer() && resource.data.trainerId == request.auth.uid)
-        || (isClient() && resource.data.clientId == request.auth.uid);
+        || (isSignedIn() && resource.data.clientId == request.auth.uid);
 
       allow create: if isClient()
         && request.resource.data.clientId == request.auth.uid
