@@ -12,7 +12,7 @@ final class UserAchievementProgress {
     var currentStreak: Int = 0
     var longestStreak: Int = 0
     var lastActiveDate: Date?
-    var migrationVersion: Int = 2
+    var migrationVersion: Int = 3
     var updatedAt: Date = Date.now
     var totalActiveDays: Int = 0
     var totalWorkouts: Int = 0
@@ -100,13 +100,19 @@ struct AchievementReconciliationResult {
 
 enum AchievementID: String, CaseIterable, Codable {
     case firstAssignedWorkout, firstWorkout, firstWaterLog, firstFoodLog, baselineMeasurement, firstHealthConnection
-    case workouts5, workouts25, workouts50, workouts100, workouts250
-    case assignedWorkouts25, firstStrengthPR, strongFoundation, backToTraining
-    case firstWaterGoal, waterGoal7Total, waterStreak7, waterGoal30Total, waterGoal100Total
-    case firstNutritionTarget, nutritionWeek5, nutritionStreak14, nutritionGoal30Total, nutritionWeeks12
-    case firstStepGoal, stepGoal7Total, stepGoal30Total, stepGoal100Total, millionSteps
-    case firstCheckIn, checkIns4, checkIns10, coachMonth, coachThreeMonths, coachHalfYear
-    case measurements4, measurements12, measurements26, measurements52
+    case workouts5, workouts10, workouts25, workouts50, workouts75, workouts100, workouts150, workouts250
+    case assignedWorkouts5, assignedWorkouts10, assignedWorkouts25, assignedWorkouts50
+    case firstStrengthPR, strongFoundation, strengthExercises5, backToTraining
+    case firstWaterGoal, waterGoal7Total, waterGoal14Total, waterGoal30Total, waterGoal60Total, waterGoal100Total
+    case waterStreak7, waterStreak14, waterStreak30
+    case firstNutritionTarget, nutritionGoal7Total, nutritionGoal14Total, nutritionGoal30Total, nutritionGoal60Total
+    case nutritionWeek5, nutritionWeeks4, nutritionWeeks8, nutritionWeeks12
+    case nutritionStreak7, nutritionStreak14, nutritionStreak30
+    case firstStepGoal, stepGoal7Total, stepGoal14Total, stepGoal30Total, stepGoal60Total, stepGoal100Total
+    case steps250K, steps500K, millionSteps
+    case firstCheckIn, checkIns4, checkIns10, checkIns25
+    case coachMonth, coachTwoMonths, coachThreeMonths, coachFourMonths, coachHalfYear
+    case measurements4, measurements8, measurements12, measurements18, measurements26, measurements39, measurements52
 }
 
 enum AchievementCategory: String, CaseIterable, Codable {
@@ -150,45 +156,73 @@ enum AchievementCatalog {
         .init(id: .firstHealthConnection, icon: "heart.fill", category: .firstSteps, target: 1, xpReward: 25),
 
         .init(id: .workouts5, icon: "dumbbell.fill", category: .workouts, target: 5, xpReward: 100),
-        .init(id: .workouts25, icon: "dumbbell.fill", category: .workouts, target: 25, xpReward: 250),
-        .init(id: .workouts50, icon: "dumbbell.fill", category: .workouts, target: 50, xpReward: 400),
-        .init(id: .workouts100, icon: "medal.fill", category: .workouts, target: 100, xpReward: 750),
-        .init(id: .workouts250, icon: "trophy.fill", category: .workouts, target: 250, xpReward: 1_000),
-        .init(id: .assignedWorkouts25, icon: "list.clipboard.fill", category: .workouts, target: 25, xpReward: 300),
-        .init(id: .firstStrengthPR, icon: "arrow.up.right", category: .workouts, target: 1, xpReward: 250, visibility: .hiddenUntilUnlocked),
-        .init(id: .strongFoundation, icon: "chart.line.uptrend.xyaxis", category: .workouts, target: 3, xpReward: 500, visibility: .hiddenUntilUnlocked),
+        .init(id: .workouts10, icon: "dumbbell.fill", category: .workouts, target: 10, xpReward: 75),
+        .init(id: .workouts25, icon: "dumbbell.fill", category: .workouts, target: 25, xpReward: 200),
+        .init(id: .workouts50, icon: "dumbbell.fill", category: .workouts, target: 50, xpReward: 300),
+        .init(id: .workouts75, icon: "medal.fill", category: .workouts, target: 75, xpReward: 150),
+        .init(id: .workouts100, icon: "medal.fill", category: .workouts, target: 100, xpReward: 550),
+        .init(id: .workouts150, icon: "trophy.fill", category: .workouts, target: 150, xpReward: 250),
+        .init(id: .workouts250, icon: "trophy.fill", category: .workouts, target: 250, xpReward: 600),
+        .init(id: .assignedWorkouts5, icon: "list.clipboard.fill", category: .workouts, target: 5, xpReward: 75),
+        .init(id: .assignedWorkouts10, icon: "list.clipboard.fill", category: .workouts, target: 10, xpReward: 100),
+        .init(id: .assignedWorkouts25, icon: "list.clipboard.fill", category: .workouts, target: 25, xpReward: 225),
+        .init(id: .assignedWorkouts50, icon: "list.clipboard.fill", category: .workouts, target: 50, xpReward: 200),
+        .init(id: .firstStrengthPR, icon: "arrow.up.right", category: .workouts, target: 1, xpReward: 200, visibility: .hiddenUntilUnlocked),
+        .init(id: .strongFoundation, icon: "chart.line.uptrend.xyaxis", category: .workouts, target: 3, xpReward: 350, visibility: .hiddenUntilUnlocked),
+        .init(id: .strengthExercises5, icon: "bolt.fill", category: .workouts, target: 5, xpReward: 250, visibility: .hiddenUntilUnlocked),
 
         .init(id: .backToTraining, icon: "arrow.uturn.forward.circle.fill", category: .workouts, target: 1, xpReward: 150, visibility: .hiddenUntilUnlocked),
 
         .init(id: .firstWaterGoal, icon: "drop.fill", category: .water, target: 1, xpReward: 50),
         .init(id: .waterGoal7Total, icon: "drop.fill", category: .water, target: 7, xpReward: 100),
-        .init(id: .waterStreak7, icon: "drop.circle.fill", category: .water, target: 7, xpReward: 200),
-        .init(id: .waterGoal30Total, icon: "water.waves", category: .water, target: 30, xpReward: 400),
-        .init(id: .waterGoal100Total, icon: "water.waves", category: .water, target: 100, xpReward: 750),
+        .init(id: .waterGoal14Total, icon: "drop.fill", category: .water, target: 14, xpReward: 75),
+        .init(id: .waterGoal30Total, icon: "water.waves", category: .water, target: 30, xpReward: 300),
+        .init(id: .waterGoal60Total, icon: "water.waves", category: .water, target: 60, xpReward: 150),
+        .init(id: .waterGoal100Total, icon: "water.waves", category: .water, target: 100, xpReward: 500),
+        .init(id: .waterStreak7, icon: "drop.circle.fill", category: .water, target: 7, xpReward: 150),
+        .init(id: .waterStreak14, icon: "drop.circle.fill", category: .water, target: 14, xpReward: 100),
+        .init(id: .waterStreak30, icon: "drop.circle.fill", category: .water, target: 30, xpReward: 200),
 
         .init(id: .firstNutritionTarget, icon: "fork.knife", category: .nutrition, target: 1, xpReward: 50),
-        .init(id: .nutritionWeek5, icon: "calendar.badge.checkmark", category: .nutrition, target: 5, xpReward: 200),
-        .init(id: .nutritionStreak14, icon: "fork.knife.circle.fill", category: .nutrition, target: 14, xpReward: 250),
-        .init(id: .nutritionGoal30Total, icon: "chart.bar.fill", category: .nutrition, target: 30, xpReward: 400),
-        .init(id: .nutritionWeeks12, icon: "calendar", category: .nutrition, target: 12, xpReward: 750),
+        .init(id: .nutritionGoal7Total, icon: "fork.knife", category: .nutrition, target: 7, xpReward: 75),
+        .init(id: .nutritionGoal14Total, icon: "fork.knife", category: .nutrition, target: 14, xpReward: 75),
+        .init(id: .nutritionGoal30Total, icon: "chart.bar.fill", category: .nutrition, target: 30, xpReward: 300),
+        .init(id: .nutritionGoal60Total, icon: "chart.bar.fill", category: .nutrition, target: 60, xpReward: 150),
+        .init(id: .nutritionWeek5, icon: "calendar.badge.checkmark", category: .nutrition, target: 5, xpReward: 150),
+        .init(id: .nutritionWeeks4, icon: "calendar", category: .nutrition, target: 4, xpReward: 150),
+        .init(id: .nutritionWeeks8, icon: "calendar", category: .nutrition, target: 8, xpReward: 200),
+        .init(id: .nutritionWeeks12, icon: "calendar", category: .nutrition, target: 12, xpReward: 500),
+        .init(id: .nutritionStreak7, icon: "fork.knife.circle.fill", category: .nutrition, target: 7, xpReward: 75),
+        .init(id: .nutritionStreak14, icon: "fork.knife.circle.fill", category: .nutrition, target: 14, xpReward: 200),
+        .init(id: .nutritionStreak30, icon: "fork.knife.circle.fill", category: .nutrition, target: 30, xpReward: 200),
 
         .init(id: .firstStepGoal, icon: "figure.walk", category: .steps, target: 1, xpReward: 50),
         .init(id: .stepGoal7Total, icon: "figure.walk", category: .steps, target: 7, xpReward: 100),
-        .init(id: .stepGoal30Total, icon: "shoeprints.fill", category: .steps, target: 30, xpReward: 400),
-        .init(id: .stepGoal100Total, icon: "shoeprints.fill", category: .steps, target: 100, xpReward: 750),
-        .init(id: .millionSteps, icon: "map.fill", category: .steps, target: 1_000_000, xpReward: 1_500, visibility: .hiddenUntilUnlocked),
+        .init(id: .stepGoal14Total, icon: "figure.walk", category: .steps, target: 14, xpReward: 75),
+        .init(id: .stepGoal30Total, icon: "shoeprints.fill", category: .steps, target: 30, xpReward: 300),
+        .init(id: .stepGoal60Total, icon: "shoeprints.fill", category: .steps, target: 60, xpReward: 150),
+        .init(id: .stepGoal100Total, icon: "shoeprints.fill", category: .steps, target: 100, xpReward: 550),
+        .init(id: .steps250K, icon: "map.fill", category: .steps, target: 250_000, xpReward: 100),
+        .init(id: .steps500K, icon: "map.fill", category: .steps, target: 500_000, xpReward: 150),
+        .init(id: .millionSteps, icon: "map.fill", category: .steps, target: 1_000_000, xpReward: 900, visibility: .hiddenUntilUnlocked),
 
         .init(id: .firstCheckIn, icon: "checkmark.bubble.fill", category: .coach, target: 1, xpReward: 50),
-        .init(id: .checkIns4, icon: "checkmark.bubble.fill", category: .coach, target: 4, xpReward: 300),
-        .init(id: .checkIns10, icon: "person.2.fill", category: .coach, target: 10, xpReward: 500),
-        .init(id: .coachMonth, icon: "calendar.badge.checkmark", category: .coach, target: 30, xpReward: 250),
-        .init(id: .coachThreeMonths, icon: "person.2.fill", category: .coach, target: 90, xpReward: 750),
-        .init(id: .coachHalfYear, icon: "star.fill", category: .coach, target: 180, xpReward: 1_000),
+        .init(id: .checkIns4, icon: "checkmark.bubble.fill", category: .coach, target: 4, xpReward: 250),
+        .init(id: .checkIns10, icon: "person.2.fill", category: .coach, target: 10, xpReward: 400),
+        .init(id: .checkIns25, icon: "person.2.fill", category: .coach, target: 25, xpReward: 200),
+        .init(id: .coachMonth, icon: "calendar.badge.checkmark", category: .coach, target: 30, xpReward: 200),
+        .init(id: .coachTwoMonths, icon: "calendar.badge.checkmark", category: .coach, target: 60, xpReward: 150),
+        .init(id: .coachThreeMonths, icon: "person.2.fill", category: .coach, target: 90, xpReward: 550),
+        .init(id: .coachFourMonths, icon: "person.2.fill", category: .coach, target: 120, xpReward: 250),
+        .init(id: .coachHalfYear, icon: "star.fill", category: .coach, target: 180, xpReward: 700),
 
-        .init(id: .measurements4, icon: "ruler.fill", category: .measurements, target: 4, xpReward: 200),
-        .init(id: .measurements12, icon: "ruler.fill", category: .measurements, target: 12, xpReward: 400),
-        .init(id: .measurements26, icon: "chart.line.uptrend.xyaxis", category: .measurements, target: 26, xpReward: 750),
-        .init(id: .measurements52, icon: "calendar", category: .measurements, target: 52, xpReward: 1_000)
+        .init(id: .measurements4, icon: "ruler.fill", category: .measurements, target: 4, xpReward: 150),
+        .init(id: .measurements8, icon: "ruler.fill", category: .measurements, target: 8, xpReward: 100),
+        .init(id: .measurements12, icon: "ruler.fill", category: .measurements, target: 12, xpReward: 300),
+        .init(id: .measurements18, icon: "chart.line.uptrend.xyaxis", category: .measurements, target: 18, xpReward: 200),
+        .init(id: .measurements26, icon: "chart.line.uptrend.xyaxis", category: .measurements, target: 26, xpReward: 550),
+        .init(id: .measurements39, icon: "calendar", category: .measurements, target: 39, xpReward: 300),
+        .init(id: .measurements52, icon: "calendar", category: .measurements, target: 52, xpReward: 600)
     ]
 
     static func definition(for id: AchievementID) -> AchievementDefinition? {

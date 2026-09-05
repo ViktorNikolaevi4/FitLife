@@ -146,59 +146,108 @@ enum AchievementEngine {
             .firstFoodLog: matchingFood.count,
             .baselineMeasurement: matchingMeasurements.count,
             .workouts5: matchingWorkouts.count,
+            .workouts10: matchingWorkouts.count,
             .workouts25: matchingWorkouts.count,
             .workouts50: matchingWorkouts.count,
+            .workouts75: matchingWorkouts.count,
             .workouts100: matchingWorkouts.count,
+            .workouts150: matchingWorkouts.count,
             .workouts250: matchingWorkouts.count,
+            .assignedWorkouts5: assignedWorkoutCount,
+            .assignedWorkouts10: assignedWorkoutCount,
             .assignedWorkouts25: assignedWorkoutCount,
+            .assignedWorkouts50: assignedWorkoutCount,
             .firstStrengthPR: improvedStrengthExercises,
             .strongFoundation: improvedStrengthExercises,
+            .strengthExercises5: improvedStrengthExercises,
             .backToTraining: returnedAfterLongBreak,
             .firstWaterGoal: completedWaterDays.count,
             .waterGoal7Total: completedWaterDays.count,
-            .waterStreak7: waterStreak,
+            .waterGoal14Total: completedWaterDays.count,
             .waterGoal30Total: completedWaterDays.count,
+            .waterGoal60Total: completedWaterDays.count,
             .waterGoal100Total: completedWaterDays.count,
+            .waterStreak7: waterStreak,
+            .waterStreak14: waterStreak,
+            .waterStreak30: waterStreak,
             .firstNutritionTarget: nutritionTargetDays.count,
-            .nutritionWeek5: maximumNutritionDaysInWeek,
-            .nutritionStreak14: nutritionStreak,
+            .nutritionGoal7Total: nutritionTargetDays.count,
+            .nutritionGoal14Total: nutritionTargetDays.count,
             .nutritionGoal30Total: nutritionTargetDays.count,
+            .nutritionGoal60Total: nutritionTargetDays.count,
+            .nutritionWeek5: maximumNutritionDaysInWeek,
+            .nutritionWeeks4: successfulNutritionWeeks,
+            .nutritionWeeks8: successfulNutritionWeeks,
             .nutritionWeeks12: successfulNutritionWeeks,
+            .nutritionStreak7: nutritionStreak,
+            .nutritionStreak14: nutritionStreak,
+            .nutritionStreak30: nutritionStreak,
             .measurements4: regularMeasurements,
+            .measurements8: regularMeasurements,
             .measurements12: regularMeasurements,
+            .measurements18: regularMeasurements,
             .measurements26: regularMeasurements,
+            .measurements39: regularMeasurements,
             .measurements52: regularMeasurements
         ]
 
         let externalIDs: [AchievementID] = [
             .firstHealthConnection,
-            .firstStepGoal, .stepGoal7Total, .stepGoal30Total, .stepGoal100Total, .millionSteps,
-            .firstCheckIn, .checkIns4, .checkIns10, .coachMonth, .coachThreeMonths, .coachHalfYear
+            .firstStepGoal, .stepGoal7Total, .stepGoal14Total, .stepGoal30Total, .stepGoal60Total, .stepGoal100Total,
+            .steps250K, .steps500K, .millionSteps,
+            .firstCheckIn, .checkIns4, .checkIns10, .checkIns25,
+            .coachMonth, .coachTwoMonths, .coachThreeMonths, .coachFourMonths, .coachHalfYear
         ]
         for id in externalIDs {
             values[id] = progress.metricValue(for: id)
         }
+
+        // Preserve externally sourced progress when upgrading an existing local profile.
+        let storedStepGoalDays = progress.metricValue(for: .stepGoal100Total)
+        values[.stepGoal14Total] = max(values[.stepGoal14Total] ?? 0, storedStepGoalDays)
+        values[.stepGoal60Total] = max(values[.stepGoal60Total] ?? 0, storedStepGoalDays)
+        let storedTotalSteps = progress.metricValue(for: .millionSteps)
+        values[.steps250K] = max(values[.steps250K] ?? 0, storedTotalSteps)
+        values[.steps500K] = max(values[.steps500K] ?? 0, storedTotalSteps)
+        let storedCheckIns = progress.metricValue(for: .checkIns10)
+        values[.checkIns25] = max(values[.checkIns25] ?? 0, storedCheckIns)
+        let storedCoachDays = max(
+            progress.metricValue(for: .coachMonth),
+            max(
+                progress.metricValue(for: .coachThreeMonths),
+                progress.metricValue(for: .coachHalfYear)
+            )
+        )
+        values[.coachTwoMonths] = storedCheckIns >= 6 ? storedCoachDays : 0
+        values[.coachFourMonths] = storedCheckIns >= 11 ? storedCoachDays : 0
 
         if let externalSnapshot {
             values[.firstHealthConnection] = externalSnapshot.healthConnected ? 1 : 0
             if let stepGoalDays = externalSnapshot.stepGoalDays {
                 values[.firstStepGoal] = stepGoalDays
                 values[.stepGoal7Total] = stepGoalDays
+                values[.stepGoal14Total] = stepGoalDays
                 values[.stepGoal30Total] = stepGoalDays
+                values[.stepGoal60Total] = stepGoalDays
                 values[.stepGoal100Total] = stepGoalDays
             }
             if let totalSteps = externalSnapshot.totalSteps {
+                values[.steps250K] = totalSteps
+                values[.steps500K] = totalSteps
                 values[.millionSteps] = totalSteps
             }
             if let checkInCount = externalSnapshot.checkInCount {
                 values[.firstCheckIn] = checkInCount
                 values[.checkIns4] = checkInCount
                 values[.checkIns10] = checkInCount
+                values[.checkIns25] = checkInCount
             }
             if let coachDays = externalSnapshot.coachDays {
-                let checkIns = externalSnapshot.checkInCount ?? progress.metricValue(for: .checkIns10)
+                let checkIns = externalSnapshot.checkInCount ?? values[.checkIns25] ?? 0
                 values[.coachMonth] = checkIns >= 3 ? coachDays : 0
+                values[.coachTwoMonths] = checkIns >= 6 ? coachDays : 0
                 values[.coachThreeMonths] = checkIns >= 8 ? coachDays : 0
+                values[.coachFourMonths] = checkIns >= 11 ? coachDays : 0
                 values[.coachHalfYear] = checkIns >= 16 ? coachDays : 0
             }
         }
@@ -241,7 +290,7 @@ enum AchievementEngine {
         progress.maximumNutritionTargetDaysPerWeek = maximumNutritionDaysInWeek
         progress.activeDaysInLastMonth = activeDays.filter { $0 >= recentMonthStart }.count
         progress.setMetricValues(values)
-        progress.migrationVersion = 2
+        progress.migrationVersion = 3
         progress.updatedAt = now
         try modelContext.save()
 

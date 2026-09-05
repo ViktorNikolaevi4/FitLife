@@ -62,6 +62,7 @@ struct ActiveWorkoutScreen: View {
     @State private var isShowingEffortPicker = false
     @State private var shouldShowCompletionAfterEffortPicker = false
     @State private var isShowingCompletionSummary = false
+    @State private var shouldCompleteWorkoutFlowAfterSummary = false
     @State private var exerciseTemplates: [WorkoutExerciseTemplate] = []
     @State private var activeWorkoutRoute: ActiveWorkoutRoute?
     @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
@@ -314,17 +315,24 @@ struct ActiveWorkoutScreen: View {
 
     private var completionPresentations: some View {
         effortPresentations
-        .fullScreenCover(isPresented: $isShowingCompletionSummary) {
+        .fullScreenCover(
+            isPresented: $isShowingCompletionSummary,
+            onDismiss: completeWorkoutFlowIfNeeded
+        ) {
             WorkoutCompletionSummaryScreen(workout: workout) {
+                shouldCompleteWorkoutFlowAfterSummary = true
                 isShowingCompletionSummary = false
-                DispatchQueue.main.async {
-                    if let onWorkoutFlowCompleted {
-                        onWorkoutFlowCompleted()
-                    } else {
-                        dismiss()
-                    }
-                }
             }
+        }
+    }
+
+    private func completeWorkoutFlowIfNeeded() {
+        guard shouldCompleteWorkoutFlowAfterSummary else { return }
+        shouldCompleteWorkoutFlowAfterSummary = false
+        if let onWorkoutFlowCompleted {
+            onWorkoutFlowCompleted()
+        } else {
+            dismiss()
         }
     }
 

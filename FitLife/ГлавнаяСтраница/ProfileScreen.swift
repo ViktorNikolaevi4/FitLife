@@ -439,47 +439,32 @@ struct PremiumSegmentedPicker<Selection: Hashable>: View {
     @Binding var selection: Selection
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var theme: AppTheme { AppTheme(colorScheme) }
 
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                Button {
-                    selection = item.value
-                } label: {
-                    Text(item.title)
-                        .font(.subheadline.weight(.semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.76)
-                        .foregroundStyle(selection == item.value ? Color.white : theme.primaryText.opacity(theme.isDark ? 0.86 : 0.70))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 9)
-                        .background {
-                            if selection == item.value {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [
-                                                theme.accent.opacity(theme.isDark ? 0.92 : 0.86),
-                                                theme.accent
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .shadow(color: theme.accent.opacity(theme.isDark ? 0.28 : 0.18), radius: 10, x: 0, y: 5)
-                            }
-                        }
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(spacing: 4) {
+                    ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                        segmentButton(for: item)
+                    }
                 }
-                .buttonStyle(.plain)
+            } else {
+                HStack(spacing: 0) {
+                    ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                        segmentButton(for: item)
 
-                if index < items.count - 1 {
-                    Rectangle()
-                        .fill(theme.border)
-                        .frame(width: 1)
-                        .frame(height: 22)
-                        .opacity(selection == item.value || selection == items[index + 1].value ? 0 : 1)
+                        if index < items.count - 1 {
+                            Rectangle()
+                                .fill(theme.border)
+                                .frame(width: 1)
+                                .frame(height: 22)
+                                .opacity(selection == item.value || selection == items[index + 1].value ? 0 : 1)
+                                .accessibilityHidden(true)
+                        }
+                    }
                 }
             }
         }
@@ -492,6 +477,39 @@ struct PremiumSegmentedPicker<Selection: Hashable>: View {
             RoundedRectangle(cornerRadius: 13, style: .continuous)
                 .stroke(theme.border, lineWidth: 1)
         }
+    }
+
+    private func segmentButton(for item: (value: Selection, title: String)) -> some View {
+        Button {
+            selection = item.value
+        } label: {
+            Text(item.title)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                .minimumScaleFactor(dynamicTypeSize.isAccessibilitySize ? 1 : 0.76)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(selection == item.value ? Color.white : theme.primaryText.opacity(theme.isDark ? 0.86 : 0.70))
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
+                .background {
+                    if selection == item.value {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        theme.accent.opacity(theme.isDark ? 0.92 : 0.86),
+                                        theme.accent
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .shadow(color: theme.accent.opacity(theme.isDark ? 0.28 : 0.18), radius: 10, x: 0, y: 5)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selection == item.value ? .isSelected : [])
     }
 }
 

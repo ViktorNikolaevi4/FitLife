@@ -115,7 +115,12 @@ struct WorkoutsScreen: View {
                 WorkoutDetailScreen(workout: selection.workout)
             }
             .navigationDestination(item: $onlineAssignments) { selection in
-                ClientAssignedWorkoutsScreen(clientId: selection.clientId)
+                ClientAssignedWorkoutsScreen(
+                    clientId: selection.clientId,
+                    onWorkoutFlowCompleted: {
+                        onlineAssignments = nil
+                    }
+                )
             }
             .navigationDestination(item: $coachingEntrySelection) { selection in
                 ClientCoachingEntryScreen(clientId: selection.clientId)

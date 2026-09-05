@@ -848,6 +848,18 @@ struct AIMealRecognitionFlowView: View {
                 .padding(.horizontal, 4)
 
             Button {
+                isShowingTextFlow = true
+            } label: {
+                photoSourceCard(
+                    title: AppLocalizer.string("ai.quick.text.title"),
+                    subtitle: AppLocalizer.string("ai.quick.text.subtitle"),
+                    systemImage: "text.bubble.fill",
+                    tint: .green
+                )
+            }
+            .buttonStyle(.plain)
+
+            Button {
                 reopenCamera()
             } label: {
                 photoSourceCard(
@@ -870,18 +882,6 @@ struct AIMealRecognitionFlowView: View {
             }
             .buttonStyle(.plain)
             .disabled(isLoadingGalleryImage)
-
-            Button {
-                isShowingTextFlow = true
-            } label: {
-                photoSourceCard(
-                    title: AppLocalizer.string("ai.quick.text.title"),
-                    subtitle: AppLocalizer.string("ai.quick.text.subtitle"),
-                    systemImage: "text.bubble.fill",
-                    tint: .green
-                )
-            }
-            .buttonStyle(.plain)
 
             Button {
                 isShowingVoiceFlow = true
@@ -1408,21 +1408,21 @@ struct AIQuickMealEntryChooserView: View {
         NavigationStack {
             VStack(spacing: 16) {
                 chooserCard(
-                    title: AppLocalizer.string("ai.quick.photo.title"),
-                    subtitle: AppLocalizer.string("ai.quick.photo.subtitle"),
-                    systemImage: "camera.fill",
-                    tint: .blue
-                ) {
-                    isShowingPhotoFlow = true
-                }
-
-                chooserCard(
                     title: AppLocalizer.string("ai.quick.text.title"),
                     subtitle: AppLocalizer.string("ai.quick.text.subtitle"),
                     systemImage: "text.bubble.fill",
                     tint: .green
                 ) {
                     isShowingTextFlow = true
+                }
+
+                chooserCard(
+                    title: AppLocalizer.string("ai.quick.photo.title"),
+                    subtitle: AppLocalizer.string("ai.quick.photo.subtitle"),
+                    systemImage: "camera.fill",
+                    tint: .blue
+                ) {
+                    isShowingPhotoFlow = true
                 }
 
                 chooserCard(
@@ -1539,6 +1539,7 @@ struct AITextMealRecognitionFlowView: View {
     @State private var lastAppliedSpeechText = ""
     @State private var didManuallyEditDuringSpeech = false
     @State private var isApplyingSpeechText = false
+    @State private var isShowingDisclaimerDetails = false
     @FocusState private var isInputFocused: Bool
     @StateObject private var speechRecognizer = MealSpeechRecognizer()
 
@@ -1607,28 +1608,38 @@ struct AITextMealRecognitionFlowView: View {
         .onDisappear {
             speechRecognizer.stop()
         }
+        .sheet(isPresented: $isShowingDisclaimerDetails) {
+            AIDisclaimerDetailsSheet()
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        }
     }
 
     @ViewBuilder
     private var content: some View {
         switch step {
         case .input:
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 16) {
+            ScrollViewReader { proxy in
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 16) {
                     Text(AppLocalizer.string("ai.text.subtitle"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
                     if preselectedMeal == nil {
-                        Picker(AppLocalizer.string("ai.meal.meal_picker"), selection: $selectedMeal) {
-                            ForEach(MealType.allCases) { meal in
-                                Text(meal.displayName).tag(meal)
-                            }
-                        }
-                        .pickerStyle(.segmented)
+                        PremiumSegmentedPicker(
+                            items: MealType.allCases.map { ($0, $0.displayName) },
+                            selection: $selectedMeal
+                        )
+                        .accessibilityElement(children: .contain)
+                        .accessibilityLabel(AppLocalizer.string("ai.meal.meal_picker"))
                     }
 
-                    AIDisclaimerCard()
+                    AITextDisclaimerCard(
+                        onShowDetails: {
+                            isShowingDisclaimerDetails = true
+                        }
+                    )
 
                     ZStack(alignment: .topLeading) {
                         RoundedRectangle(cornerRadius: 18)
@@ -1653,11 +1664,23 @@ struct AITextMealRecognitionFlowView: View {
                                 lastAppliedSpeechText = newValue
                             }
                     }
+                    .id("ai-text-input")
                     .frame(minHeight: 180)
                     .overlay(
                         RoundedRectangle(cornerRadius: 18)
                             .stroke(Color(.separator).opacity(0.22))
                     )
+
+                    Button {
+                        analyzeTextMeal()
+                    } label: {
+                        Text(AppLocalizer.string("ai.text.analyze"))
+                            .font(.headline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
                     Button {
                         Task {
@@ -1675,24 +1698,23 @@ struct AITextMealRecognitionFlowView: View {
                         .padding(.vertical, 14)
                     }
                     .buttonStyle(.bordered)
-
-                    Button {
-                        analyzeTextMeal()
-                    } label: {
-                        Text(AppLocalizer.string("ai.text.analyze"))
-                            .font(.headline.weight(.semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 28)
+                    .padding(.bottom, 24)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 28)
-                .padding(.bottom, 24)
+                .scrollDismissesKeyboard(.interactively)
+                .background(Color(.systemGroupedBackground).ignoresSafeArea())
+                .onChange(of: isInputFocused) { _, focused in
+                    guard focused else { return }
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(120))
+                        withAnimation(.easeOut(duration: 0.22)) {
+                            proxy.scrollTo("ai-text-input", anchor: .center)
+                        }
+                    }
+                }
             }
-            .scrollDismissesKeyboard(.interactively)
-            .background(Color(.systemGroupedBackground).ignoresSafeArea())
 
         case .analyzing:
             VStack(spacing: 18) {
@@ -2159,13 +2181,7 @@ private struct AIDisclaimerCard: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.orange)
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text(AppLocalizer.string("ai.meal.disclaimer"))
-
-                if AppLocalizer.currentLanguage == .russian {
-                    Text(AppLocalizer.string("ai.meal.availability_notice"))
-                }
-            }
+            Text(AppLocalizer.string("ai.meal.disclaimer"))
             .font(.footnote)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
@@ -2178,6 +2194,96 @@ private struct AIDisclaimerCard: View {
                 .stroke(Color.orange.opacity(0.18))
         )
         .accessibilityElement(children: .combine)
+    }
+}
+
+private struct AITextDisclaimerCard: View {
+    let onShowDetails: () -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 4) {
+                    disclaimerMessage
+                    detailsButton
+                }
+            } else {
+                HStack(spacing: 9) {
+                    disclaimerMessage
+                    detailsButton
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+        .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.orange.opacity(0.18))
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private var disclaimerMessage: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "info.circle.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.orange)
+                .accessibilityHidden(true)
+
+            Text(AppLocalizer.string("ai.meal.disclaimer.condensed"))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var detailsButton: some View {
+        Button(AppLocalizer.string("ai.meal.disclaimer.more"), action: onShowDetails)
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.orange)
+            .lineLimit(1)
+            .frame(minHeight: 44)
+    }
+}
+
+private struct AIDisclaimerDetailsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    Image(systemName: "info.circle.fill")
+                        .font(.system(size: 34, weight: .semibold))
+                        .foregroundStyle(.orange)
+
+                    Text(AppLocalizer.string("ai.meal.disclaimer"))
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(AppLocalizer.string("ai.meal.disclaimer.details.hint"))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(20)
+            }
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle(AppLocalizer.string("ai.meal.disclaimer.details.title"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(AppLocalizer.string("common.close")) {
+                        dismiss()
+                    }
+                }
+            }
+        }
     }
 }
 

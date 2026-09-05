@@ -91,12 +91,14 @@ struct AssignWorkoutTemplateScreen: View {
 
 struct ClientAssignedWorkoutsScreen: View {
     let clientId: String
+    let onWorkoutFlowCompleted: (() -> Void)?
 
     @StateObject private var store: ClientAssignedWorkoutsStore
     @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
 
-    init(clientId: String) {
+    init(clientId: String, onWorkoutFlowCompleted: (() -> Void)? = nil) {
         self.clientId = clientId
+        self.onWorkoutFlowCompleted = onWorkoutFlowCompleted
         _store = StateObject(wrappedValue: ClientAssignedWorkoutsStore(clientId: clientId))
     }
 
@@ -119,7 +121,8 @@ struct ClientAssignedWorkoutsScreen: View {
                     NavigationLink {
                         ClientAssignmentDetailScreen(
                             assignment: assignment,
-                            trainerName: store.trainerName(for: assignment.trainerId)
+                            trainerName: store.trainerName(for: assignment.trainerId),
+                            onWorkoutFlowCompleted: onWorkoutFlowCompleted
                         )
                     } label: {
                         VStack(alignment: .leading, spacing: 8) {
@@ -192,6 +195,7 @@ struct ClientAssignmentDetailScreen: View {
 
     let assignment: WorkoutAssignment
     let trainerName: String?
+    let onWorkoutFlowCompleted: (() -> Void)?
 
     @Query private var workouts: [WorkoutSession]
     @StateObject private var store: ClientAssignmentDetailStore
@@ -201,10 +205,12 @@ struct ClientAssignmentDetailScreen: View {
 
     init(
         assignment: WorkoutAssignment,
-        trainerName: String?
+        trainerName: String?,
+        onWorkoutFlowCompleted: (() -> Void)? = nil
     ) {
         self.assignment = assignment
         self.trainerName = trainerName
+        self.onWorkoutFlowCompleted = onWorkoutFlowCompleted
         _store = StateObject(wrappedValue: ClientAssignmentDetailStore(assignment: assignment))
     }
 
@@ -328,9 +334,13 @@ struct ClientAssignmentDetailScreen: View {
             ActiveWorkoutScreen(
                 workout: workout,
                 onWorkoutFlowCompleted: {
-                    selectedWorkout = nil
-                    DispatchQueue.main.async {
-                        dismiss()
+                    if let onWorkoutFlowCompleted {
+                        onWorkoutFlowCompleted()
+                    } else {
+                        selectedWorkout = nil
+                        DispatchQueue.main.async {
+                            dismiss()
+                        }
                     }
                 }
             )
