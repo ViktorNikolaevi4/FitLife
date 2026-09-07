@@ -103,6 +103,7 @@ enum WorkoutExerciseIcon {
     static let assistedPullUpMachine = "Подтягивания в гравитроне"
     static let snatch = "Рывок"
     static let squats = "Приседания"
+    static let bodyweightSquat = "Приседания со своим весом"
     static let barbellSquat = "Приседания со штангой"
     static let frontSquat = "Фронтальные приседания"
     static let gobletSquat = "Гоблет-приседания"
@@ -225,7 +226,7 @@ private enum WorkoutTemplateLibraryCache {
             return cached
         }
 
-        let templates = makeWorkoutTemplates()
+        let templates = makeWorkoutTemplates(language: language)
         cachedTemplatesByLanguage[language.rawValue] = templates
         return templates
     }
@@ -235,13 +236,69 @@ func workoutTemplates() -> [WorkoutExerciseTemplate] {
     WorkoutTemplateLibraryCache.templates()
 }
 
+func workoutTemplates(for language: AppLanguage) -> [WorkoutExerciseTemplate] {
+    WorkoutTemplateLibraryCache.templates(for: language)
+}
+
+func workoutExerciseLocalizationKey(
+    name: String,
+    systemImage: String
+) -> String? {
+    let normalizedName = normalizedWorkoutLibraryName(name)
+    let catalogs = AppLanguage.allCases.map(workoutTemplates(for:))
+
+    if let exactMatch = catalogs
+        .flatMap({ $0 })
+        .first(where: {
+            $0.systemImage == systemImage
+                && normalizedWorkoutLibraryName($0.name) == normalizedName
+        }) {
+        return exactMatch.localizationKey
+    }
+    if let nameMatch = catalogs
+        .flatMap({ $0 })
+        .first(where: { normalizedWorkoutLibraryName($0.name) == normalizedName }) {
+        return nameMatch.localizationKey
+    }
+
+    let iconMatches = catalogs
+        .flatMap({ $0 })
+        .filter { $0.systemImage == systemImage }
+    let uniqueKeys = Set(iconMatches.compactMap(\.localizationKey))
+    return uniqueKeys.count == 1 ? uniqueKeys.first : nil
+}
+
+func localizedWorkoutExerciseName(
+    key: String?,
+    fallbackName: String,
+    language: AppLanguage = AppLocalizer.currentLanguage
+) -> String {
+    guard let key,
+          let template = workoutTemplates(for: language).first(where: { $0.localizationKey == key }) else {
+        return fallbackName
+    }
+    return template.name
+}
+
+private func normalizedWorkoutLibraryName(_ value: String) -> String {
+    String(value
+        .lowercased()
+        .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+        .unicodeScalars
+        .map { CharacterSet.alphanumerics.contains($0) ? Character(String($0)) : " " })
+        .split(whereSeparator: \.isWhitespace)
+        .joined(separator: " ")
+}
+
 private func mobilityTemplate(
+    language: AppLanguage,
     nameKey: String,
     systemImage: String,
     durationSeconds: Int
 ) -> WorkoutExerciseTemplate {
     WorkoutExerciseTemplate(
-        name: AppLocalizer.string(nameKey),
+        localizationKey: nameKey,
+        name: language.localized(nameKey),
         systemImage: systemImage,
         accentName: "teal",
         activityType: .mobility,
@@ -257,10 +314,11 @@ private func mobilityTemplate(
     )
 }
 
-private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
+private func makeWorkoutTemplates(language: AppLanguage) -> [WorkoutExerciseTemplate] {
     [
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.run"),
+            localizationKey: "workout.exercise.run",
+            name: language.localized("workout.exercise.run"),
             systemImage: WorkoutExerciseIcon.run,
             accentName: "blue",
             activityType: .cardio,
@@ -270,7 +328,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.walking"),
+            localizationKey: "workout.exercise.walking",
+            name: language.localized("workout.exercise.walking"),
             systemImage: WorkoutExerciseIcon.walking,
             accentName: "blue",
             activityType: .cardio,
@@ -280,7 +339,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.assault_bike"),
+            localizationKey: "workout.exercise.assault_bike",
+            name: language.localized("workout.exercise.assault_bike"),
             systemImage: WorkoutExerciseIcon.assaultBike,
             accentName: "blue",
             activityType: .cardio,
@@ -290,7 +350,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.ski_erg"),
+            localizationKey: "workout.exercise.ski_erg",
+            name: language.localized("workout.exercise.ski_erg"),
             systemImage: WorkoutExerciseIcon.skiErg,
             accentName: "blue",
             activityType: .cardio,
@@ -300,7 +361,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.stair_master"),
+            localizationKey: "workout.exercise.stair_master",
+            name: language.localized("workout.exercise.stair_master"),
             systemImage: WorkoutExerciseIcon.stairMaster,
             accentName: "blue",
             activityType: .cardio,
@@ -310,7 +372,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.bench"),
+            localizationKey: "workout.exercise.bench",
+            name: language.localized("workout.exercise.bench"),
             systemImage: WorkoutExerciseIcon.bench,
             accentName: "blue",
             activityType: .strength,
@@ -320,7 +383,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.dumbbell_bench"),
+            localizationKey: "workout.exercise.dumbbell_bench",
+            name: language.localized("workout.exercise.dumbbell_bench"),
             systemImage: WorkoutExerciseIcon.dumbbellBench,
             accentName: "blue",
             activityType: .strength,
@@ -330,7 +394,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.incline_bench"),
+            localizationKey: "workout.exercise.incline_bench",
+            name: language.localized("workout.exercise.incline_bench"),
             systemImage: WorkoutExerciseIcon.inclineBench,
             accentName: "blue",
             activityType: .strength,
@@ -340,7 +405,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.incline_dumbbell_bench"),
+            localizationKey: "workout.exercise.incline_dumbbell_bench",
+            name: language.localized("workout.exercise.incline_dumbbell_bench"),
             systemImage: WorkoutExerciseIcon.inclineDumbbellBench,
             accentName: "blue",
             activityType: .strength,
@@ -350,7 +416,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.decline_bench"),
+            localizationKey: "workout.exercise.decline_bench",
+            name: language.localized("workout.exercise.decline_bench"),
             systemImage: WorkoutExerciseIcon.declineBench,
             accentName: "blue",
             activityType: .strength,
@@ -360,7 +427,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.decline_dumbbell_bench"),
+            localizationKey: "workout.exercise.decline_dumbbell_bench",
+            name: language.localized("workout.exercise.decline_dumbbell_bench"),
             systemImage: WorkoutExerciseIcon.declineDumbbellBench,
             accentName: "blue",
             activityType: .strength,
@@ -370,7 +438,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.dumbbell_fly"),
+            localizationKey: "workout.exercise.dumbbell_fly",
+            name: language.localized("workout.exercise.dumbbell_fly"),
             systemImage: WorkoutExerciseIcon.dumbbellFly,
             accentName: "blue",
             activityType: .strength,
@@ -380,7 +449,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.pec_deck"),
+            localizationKey: "workout.exercise.pec_deck",
+            name: language.localized("workout.exercise.pec_deck"),
             systemImage: WorkoutExerciseIcon.pecDeck,
             accentName: "blue",
             activityType: .strength,
@@ -390,7 +460,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.high_to_low_cable_crossover"),
+            localizationKey: "workout.exercise.high_to_low_cable_crossover",
+            name: language.localized("workout.exercise.high_to_low_cable_crossover"),
             systemImage: WorkoutExerciseIcon.highToLowCableCrossover,
             accentName: "blue",
             activityType: .strength,
@@ -400,7 +471,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.low_to_high_cable_crossover"),
+            localizationKey: "workout.exercise.low_to_high_cable_crossover",
+            name: language.localized("workout.exercise.low_to_high_cable_crossover"),
             systemImage: WorkoutExerciseIcon.lowToHighCableCrossover,
             accentName: "blue",
             activityType: .strength,
@@ -410,7 +482,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.push_ups"),
+            localizationKey: "workout.exercise.push_ups",
+            name: language.localized("workout.exercise.push_ups"),
             systemImage: WorkoutExerciseIcon.pushUps,
             accentName: "blue",
             activityType: .strength,
@@ -420,7 +493,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.knee_push_ups"),
+            localizationKey: "workout.exercise.knee_push_ups",
+            name: language.localized("workout.exercise.knee_push_ups"),
             systemImage: WorkoutExerciseIcon.kneePushUps,
             accentName: "blue",
             activityType: .strength,
@@ -430,7 +504,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.wide_grip_push_ups"),
+            localizationKey: "workout.exercise.wide_grip_push_ups",
+            name: language.localized("workout.exercise.wide_grip_push_ups"),
             systemImage: WorkoutExerciseIcon.wideGripPushUps,
             accentName: "blue",
             activityType: .strength,
@@ -440,7 +515,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.chest_focused_dips"),
+            localizationKey: "workout.exercise.chest_focused_dips",
+            name: language.localized("workout.exercise.chest_focused_dips"),
             systemImage: WorkoutExerciseIcon.chestFocusedDips,
             accentName: "blue",
             activityType: .strength,
@@ -450,7 +526,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.dumbbell_pullover"),
+            localizationKey: "workout.exercise.dumbbell_pullover",
+            name: language.localized("workout.exercise.dumbbell_pullover"),
             systemImage: WorkoutExerciseIcon.dumbbellPullover,
             accentName: "blue",
             activityType: .strength,
@@ -460,7 +537,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.clean_and_jerk"),
+            localizationKey: "workout.exercise.clean_and_jerk",
+            name: language.localized("workout.exercise.clean_and_jerk"),
             systemImage: WorkoutExerciseIcon.cleanAndJerk,
             accentName: "blue",
             activityType: .hiit,
@@ -470,7 +548,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.barbell_bent_over_row"),
+            localizationKey: "workout.exercise.barbell_bent_over_row",
+            name: language.localized("workout.exercise.barbell_bent_over_row"),
             systemImage: WorkoutExerciseIcon.barbellBentOverRow,
             accentName: "blue",
             activityType: .strength,
@@ -480,7 +559,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.one_arm_dumbbell_row"),
+            localizationKey: "workout.exercise.one_arm_dumbbell_row",
+            name: language.localized("workout.exercise.one_arm_dumbbell_row"),
             systemImage: WorkoutExerciseIcon.oneArmDumbbellRow,
             accentName: "blue",
             activityType: .strength,
@@ -490,7 +570,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.t_bar_row"),
+            localizationKey: "workout.exercise.t_bar_row",
+            name: language.localized("workout.exercise.t_bar_row"),
             systemImage: WorkoutExerciseIcon.tBarRow,
             accentName: "blue",
             activityType: .strength,
@@ -500,7 +581,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.chest_supported_machine_row"),
+            localizationKey: "workout.exercise.chest_supported_machine_row",
+            name: language.localized("workout.exercise.chest_supported_machine_row"),
             systemImage: WorkoutExerciseIcon.chestSupportedMachineRow,
             accentName: "blue",
             activityType: .strength,
@@ -510,7 +592,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.pendlay_row"),
+            localizationKey: "workout.exercise.pendlay_row",
+            name: language.localized("workout.exercise.pendlay_row"),
             systemImage: WorkoutExerciseIcon.pendlayRow,
             accentName: "blue",
             activityType: .strength,
@@ -520,7 +603,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.press"),
+            localizationKey: "workout.exercise.press",
+            name: language.localized("workout.exercise.press"),
             systemImage: WorkoutExerciseIcon.shoulderPress,
             accentName: "blue",
             activityType: .strength,
@@ -530,7 +614,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.standing_barbell_press"),
+            localizationKey: "workout.exercise.standing_barbell_press",
+            name: language.localized("workout.exercise.standing_barbell_press"),
             systemImage: WorkoutExerciseIcon.standingBarbellPress,
             accentName: "blue",
             activityType: .strength,
@@ -540,7 +625,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.barbell_push_press"),
+            localizationKey: "workout.exercise.barbell_push_press",
+            name: language.localized("workout.exercise.barbell_push_press"),
             systemImage: WorkoutExerciseIcon.barbellPushPress,
             accentName: "blue",
             activityType: .strength,
@@ -550,7 +636,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.dumbbell_push_press"),
+            localizationKey: "workout.exercise.dumbbell_push_press",
+            name: language.localized("workout.exercise.dumbbell_push_press"),
             systemImage: WorkoutExerciseIcon.dumbbellPushPress,
             accentName: "blue",
             activityType: .strength,
@@ -560,7 +647,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.seated_dumbbell_press"),
+            localizationKey: "workout.exercise.seated_dumbbell_press",
+            name: language.localized("workout.exercise.seated_dumbbell_press"),
             systemImage: WorkoutExerciseIcon.seatedDumbbellPress,
             accentName: "blue",
             activityType: .strength,
@@ -570,7 +658,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.arnold_press"),
+            localizationKey: "workout.exercise.arnold_press",
+            name: language.localized("workout.exercise.arnold_press"),
             systemImage: WorkoutExerciseIcon.arnoldPress,
             accentName: "blue",
             activityType: .strength,
@@ -580,7 +669,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.machine_shoulder_press"),
+            localizationKey: "workout.exercise.machine_shoulder_press",
+            name: language.localized("workout.exercise.machine_shoulder_press"),
             systemImage: WorkoutExerciseIcon.machineShoulderPress,
             accentName: "blue",
             activityType: .strength,
@@ -590,7 +680,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.dumbbell_lateral_raise"),
+            localizationKey: "workout.exercise.dumbbell_lateral_raise",
+            name: language.localized("workout.exercise.dumbbell_lateral_raise"),
             systemImage: WorkoutExerciseIcon.dumbbellLateralRaise,
             accentName: "blue",
             activityType: .strength,
@@ -600,7 +691,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.dumbbell_front_raise"),
+            localizationKey: "workout.exercise.dumbbell_front_raise",
+            name: language.localized("workout.exercise.dumbbell_front_raise"),
             systemImage: WorkoutExerciseIcon.dumbbellFrontRaise,
             accentName: "blue",
             activityType: .strength,
@@ -610,7 +702,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.bent_over_dumbbell_reverse_fly"),
+            localizationKey: "workout.exercise.bent_over_dumbbell_reverse_fly",
+            name: language.localized("workout.exercise.bent_over_dumbbell_reverse_fly"),
             systemImage: WorkoutExerciseIcon.bentOverDumbbellReverseFly,
             accentName: "blue",
             activityType: .strength,
@@ -620,7 +713,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.barbell_upright_row"),
+            localizationKey: "workout.exercise.barbell_upright_row",
+            name: language.localized("workout.exercise.barbell_upright_row"),
             systemImage: WorkoutExerciseIcon.barbellUprightRow,
             accentName: "blue",
             activityType: .strength,
@@ -630,7 +724,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.y_raises"),
+            localizationKey: "workout.exercise.y_raises",
+            name: language.localized("workout.exercise.y_raises"),
             systemImage: WorkoutExerciseIcon.yRaises,
             accentName: "blue",
             activityType: .strength,
@@ -640,7 +735,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.single_arm_cable_lateral_raise"),
+            localizationKey: "workout.exercise.single_arm_cable_lateral_raise",
+            name: language.localized("workout.exercise.single_arm_cable_lateral_raise"),
             systemImage: WorkoutExerciseIcon.singleArmCableLateralRaise,
             accentName: "blue",
             activityType: .strength,
@@ -650,7 +746,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.band_shoulder_external_rotation"),
+            localizationKey: "workout.exercise.band_shoulder_external_rotation",
+            name: language.localized("workout.exercise.band_shoulder_external_rotation"),
             systemImage: WorkoutExerciseIcon.bandShoulderExternalRotation,
             accentName: "blue",
             activityType: .strength,
@@ -660,7 +757,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.band_shoulder_internal_rotation"),
+            localizationKey: "workout.exercise.band_shoulder_internal_rotation",
+            name: language.localized("workout.exercise.band_shoulder_internal_rotation"),
             systemImage: WorkoutExerciseIcon.bandShoulderInternalRotation,
             accentName: "blue",
             activityType: .strength,
@@ -670,7 +768,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.barbell_shrugs"),
+            localizationKey: "workout.exercise.barbell_shrugs",
+            name: language.localized("workout.exercise.barbell_shrugs"),
             systemImage: WorkoutExerciseIcon.barbellShrugs,
             accentName: "blue",
             activityType: .strength,
@@ -680,7 +779,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.dumbbell_shrugs"),
+            localizationKey: "workout.exercise.dumbbell_shrugs",
+            name: language.localized("workout.exercise.dumbbell_shrugs"),
             systemImage: WorkoutExerciseIcon.dumbbellShrugs,
             accentName: "blue",
             activityType: .strength,
@@ -690,7 +790,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.lat"),
+            localizationKey: "workout.exercise.lat",
+            name: language.localized("workout.exercise.lat"),
             systemImage: "figure.mixed.cardio",
             accentName: "blue",
             activityType: .strength,
@@ -700,7 +801,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.lat_pulldown_to_chest"),
+            localizationKey: "workout.exercise.lat_pulldown_to_chest",
+            name: language.localized("workout.exercise.lat_pulldown_to_chest"),
             systemImage: WorkoutExerciseIcon.latPulldownToChest,
             accentName: "blue",
             activityType: .strength,
@@ -710,7 +812,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.close_grip_lat_pulldown"),
+            localizationKey: "workout.exercise.close_grip_lat_pulldown",
+            name: language.localized("workout.exercise.close_grip_lat_pulldown"),
             systemImage: WorkoutExerciseIcon.closeGripLatPulldown,
             accentName: "blue",
             activityType: .strength,
@@ -720,7 +823,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.cable_pullover"),
+            localizationKey: "workout.exercise.cable_pullover",
+            name: language.localized("workout.exercise.cable_pullover"),
             systemImage: WorkoutExerciseIcon.cablePullover,
             accentName: "blue",
             activityType: .strength,
@@ -730,7 +834,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.rope_face_pull"),
+            localizationKey: "workout.exercise.rope_face_pull",
+            name: language.localized("workout.exercise.rope_face_pull"),
             systemImage: WorkoutExerciseIcon.ropeFacePull,
             accentName: "blue",
             activityType: .strength,
@@ -740,7 +845,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.seated_cable_row"),
+            localizationKey: "workout.exercise.seated_cable_row",
+            name: language.localized("workout.exercise.seated_cable_row"),
             systemImage: WorkoutExerciseIcon.seatedCableRow,
             accentName: "blue",
             activityType: .strength,
@@ -750,7 +856,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.legs"),
+            localizationKey: "workout.exercise.legs",
+            name: language.localized("workout.exercise.legs"),
             systemImage: WorkoutExerciseIcon.legPress,
             accentName: "blue",
             activityType: .strength,
@@ -760,7 +867,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.leg_extension"),
+            localizationKey: "workout.exercise.leg_extension",
+            name: language.localized("workout.exercise.leg_extension"),
             systemImage: WorkoutExerciseIcon.legExtension,
             accentName: "blue",
             activityType: .strength,
@@ -770,7 +878,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.machine_hip_abduction"),
+            localizationKey: "workout.exercise.machine_hip_abduction",
+            name: language.localized("workout.exercise.machine_hip_abduction"),
             systemImage: WorkoutExerciseIcon.machineHipAbduction,
             accentName: "blue",
             activityType: .strength,
@@ -780,7 +889,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.banded_seated_hip_abduction"),
+            localizationKey: "workout.exercise.banded_seated_hip_abduction",
+            name: language.localized("workout.exercise.banded_seated_hip_abduction"),
             systemImage: WorkoutExerciseIcon.bandedSeatedHipAbduction,
             accentName: "blue",
             activityType: .strength,
@@ -790,7 +900,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.step_up_knee_drive"),
+            localizationKey: "workout.exercise.step_up_knee_drive",
+            name: language.localized("workout.exercise.step_up_knee_drive"),
             systemImage: WorkoutExerciseIcon.stepUpKneeDrive,
             accentName: "blue",
             activityType: .strength,
@@ -800,7 +911,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.box_step_up"),
+            localizationKey: "workout.exercise.box_step_up",
+            name: language.localized("workout.exercise.box_step_up"),
             systemImage: WorkoutExerciseIcon.boxStepUp,
             accentName: "blue",
             activityType: .strength,
@@ -810,7 +922,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.core"),
+            localizationKey: "workout.exercise.core",
+            name: language.localized("workout.exercise.core"),
             systemImage: "figure.core.training",
             accentName: "blue",
             activityType: .core,
@@ -820,7 +933,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.lower_abs"),
+            localizationKey: "workout.exercise.lower_abs",
+            name: language.localized("workout.exercise.lower_abs"),
             systemImage: WorkoutExerciseIcon.lowerAbs,
             accentName: "blue",
             activityType: .core,
@@ -830,7 +944,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.biceps"),
+            localizationKey: "workout.exercise.biceps",
+            name: language.localized("workout.exercise.biceps"),
             systemImage: WorkoutExerciseIcon.biceps,
             accentName: "blue",
             activityType: .strength,
@@ -840,7 +955,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.barbell_biceps_curl"),
+            localizationKey: "workout.exercise.barbell_biceps_curl",
+            name: language.localized("workout.exercise.barbell_biceps_curl"),
             systemImage: WorkoutExerciseIcon.barbellBicepsCurl,
             accentName: "blue",
             activityType: .strength,
@@ -850,7 +966,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.ez_bar_biceps_curl"),
+            localizationKey: "workout.exercise.ez_bar_biceps_curl",
+            name: language.localized("workout.exercise.ez_bar_biceps_curl"),
             systemImage: WorkoutExerciseIcon.ezBarBicepsCurl,
             accentName: "blue",
             activityType: .strength,
@@ -860,7 +977,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.standing_dumbbell_curl"),
+            localizationKey: "workout.exercise.standing_dumbbell_curl",
+            name: language.localized("workout.exercise.standing_dumbbell_curl"),
             systemImage: WorkoutExerciseIcon.standingDumbbellCurl,
             accentName: "blue",
             activityType: .strength,
@@ -870,7 +988,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.hammer_curls"),
+            localizationKey: "workout.exercise.hammer_curls",
+            name: language.localized("workout.exercise.hammer_curls"),
             systemImage: WorkoutExerciseIcon.hammerCurls,
             accentName: "blue",
             activityType: .strength,
@@ -880,7 +999,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.preacher_curl"),
+            localizationKey: "workout.exercise.preacher_curl",
+            name: language.localized("workout.exercise.preacher_curl"),
             systemImage: WorkoutExerciseIcon.preacherCurl,
             accentName: "blue",
             activityType: .strength,
@@ -890,7 +1010,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.concentration_curl"),
+            localizationKey: "workout.exercise.concentration_curl",
+            name: language.localized("workout.exercise.concentration_curl"),
             systemImage: WorkoutExerciseIcon.concentrationCurl,
             accentName: "blue",
             activityType: .strength,
@@ -900,7 +1021,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.incline_dumbbell_curl"),
+            localizationKey: "workout.exercise.incline_dumbbell_curl",
+            name: language.localized("workout.exercise.incline_dumbbell_curl"),
             systemImage: WorkoutExerciseIcon.inclineDumbbellCurl,
             accentName: "blue",
             activityType: .strength,
@@ -910,7 +1032,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.low_cable_biceps_curl"),
+            localizationKey: "workout.exercise.low_cable_biceps_curl",
+            name: language.localized("workout.exercise.low_cable_biceps_curl"),
             systemImage: WorkoutExerciseIcon.lowCableBicepsCurl,
             accentName: "blue",
             activityType: .strength,
@@ -920,7 +1043,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.lying_french_press"),
+            localizationKey: "workout.exercise.lying_french_press",
+            name: language.localized("workout.exercise.lying_french_press"),
             systemImage: WorkoutExerciseIcon.lyingFrenchPress,
             accentName: "blue",
             activityType: .strength,
@@ -930,7 +1054,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.seated_french_press"),
+            localizationKey: "workout.exercise.seated_french_press",
+            name: language.localized("workout.exercise.seated_french_press"),
             systemImage: WorkoutExerciseIcon.seatedFrenchPress,
             accentName: "blue",
             activityType: .strength,
@@ -940,7 +1065,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.cable_triceps_pushdown"),
+            localizationKey: "workout.exercise.cable_triceps_pushdown",
+            name: language.localized("workout.exercise.cable_triceps_pushdown"),
             systemImage: WorkoutExerciseIcon.cableTricepsPushdown,
             accentName: "blue",
             activityType: .strength,
@@ -950,7 +1076,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.rope_triceps_pushdown"),
+            localizationKey: "workout.exercise.rope_triceps_pushdown",
+            name: language.localized("workout.exercise.rope_triceps_pushdown"),
             systemImage: WorkoutExerciseIcon.ropeTricepsPushdown,
             accentName: "blue",
             activityType: .strength,
@@ -960,7 +1087,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.single_arm_triceps_extension"),
+            localizationKey: "workout.exercise.single_arm_triceps_extension",
+            name: language.localized("workout.exercise.single_arm_triceps_extension"),
             systemImage: WorkoutExerciseIcon.singleArmTricepsExtension,
             accentName: "blue",
             activityType: .strength,
@@ -970,7 +1098,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.close_grip_bench_press"),
+            localizationKey: "workout.exercise.close_grip_bench_press",
+            name: language.localized("workout.exercise.close_grip_bench_press"),
             systemImage: WorkoutExerciseIcon.closeGripBenchPress,
             accentName: "blue",
             activityType: .strength,
@@ -980,7 +1109,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.triceps_focused_dips"),
+            localizationKey: "workout.exercise.triceps_focused_dips",
+            name: language.localized("workout.exercise.triceps_focused_dips"),
             systemImage: WorkoutExerciseIcon.tricepsFocusedDips,
             accentName: "blue",
             activityType: .strength,
@@ -990,7 +1120,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.bench_dips"),
+            localizationKey: "workout.exercise.bench_dips",
+            name: language.localized("workout.exercise.bench_dips"),
             systemImage: WorkoutExerciseIcon.benchDips,
             accentName: "blue",
             activityType: .strength,
@@ -1000,7 +1131,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.overhead_dumbbell_triceps_extension"),
+            localizationKey: "workout.exercise.overhead_dumbbell_triceps_extension",
+            name: language.localized("workout.exercise.overhead_dumbbell_triceps_extension"),
             systemImage: WorkoutExerciseIcon.overheadDumbbellTricepsExtension,
             accentName: "blue",
             activityType: .strength,
@@ -1010,7 +1142,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.dumbbell_kickback"),
+            localizationKey: "workout.exercise.dumbbell_kickback",
+            name: language.localized("workout.exercise.dumbbell_kickback"),
             systemImage: WorkoutExerciseIcon.dumbbellKickback,
             accentName: "blue",
             activityType: .strength,
@@ -1020,7 +1153,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.pullups"),
+            localizationKey: "workout.exercise.pullups",
+            name: language.localized("workout.exercise.pullups"),
             systemImage: WorkoutExerciseIcon.pullUps,
             accentName: "blue",
             activityType: .strength,
@@ -1030,7 +1164,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.chin_ups"),
+            localizationKey: "workout.exercise.chin_ups",
+            name: language.localized("workout.exercise.chin_ups"),
             systemImage: WorkoutExerciseIcon.chinUps,
             accentName: "blue",
             activityType: .strength,
@@ -1040,7 +1175,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.band_assisted_pullups"),
+            localizationKey: "workout.exercise.band_assisted_pullups",
+            name: language.localized("workout.exercise.band_assisted_pullups"),
             systemImage: WorkoutExerciseIcon.bandAssistedPullUps,
             accentName: "blue",
             activityType: .strength,
@@ -1050,7 +1186,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.assisted_pullup_machine"),
+            localizationKey: "workout.exercise.assisted_pullup_machine",
+            name: language.localized("workout.exercise.assisted_pullup_machine"),
             systemImage: WorkoutExerciseIcon.assistedPullUpMachine,
             accentName: "blue",
             activityType: .strength,
@@ -1060,7 +1197,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.rowing"),
+            localizationKey: "workout.exercise.rowing",
+            name: language.localized("workout.exercise.rowing"),
             systemImage: WorkoutExerciseIcon.rowing,
             accentName: "blue",
             activityType: .cardio,
@@ -1070,7 +1208,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.rowing_machine"),
+            localizationKey: "workout.exercise.rowing_machine",
+            name: language.localized("workout.exercise.rowing_machine"),
             systemImage: WorkoutExerciseIcon.rowingMachine,
             accentName: "blue",
             activityType: .cardio,
@@ -1080,7 +1219,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.jumping_jack"),
+            localizationKey: "workout.exercise.jumping_jack",
+            name: language.localized("workout.exercise.jumping_jack"),
             systemImage: WorkoutExerciseIcon.jumpingJack,
             accentName: "blue",
             activityType: .hiit,
@@ -1090,7 +1230,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.run_in_plank"),
+            localizationKey: "workout.exercise.run_in_plank",
+            name: language.localized("workout.exercise.run_in_plank"),
             systemImage: WorkoutExerciseIcon.runInPlank,
             accentName: "blue",
             activityType: .hiit,
@@ -1100,7 +1241,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.burpee"),
+            localizationKey: "workout.exercise.burpee",
+            name: language.localized("workout.exercise.burpee"),
             systemImage: WorkoutExerciseIcon.burpee,
             accentName: "blue",
             activityType: .hiit,
@@ -1110,7 +1252,19 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.barbell_squat"),
+            localizationKey: "workout.exercise.bodyweight_squat",
+            name: language.localized("workout.exercise.bodyweight_squat"),
+            systemImage: WorkoutExerciseIcon.bodyweightSquat,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 5.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, reps: 15)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            localizationKey: "workout.exercise.barbell_squat",
+            name: language.localized("workout.exercise.barbell_squat"),
             systemImage: WorkoutExerciseIcon.barbellSquat,
             accentName: "blue",
             activityType: .strength,
@@ -1120,7 +1274,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.front_squat"),
+            localizationKey: "workout.exercise.front_squat",
+            name: language.localized("workout.exercise.front_squat"),
             systemImage: WorkoutExerciseIcon.frontSquat,
             accentName: "blue",
             activityType: .strength,
@@ -1130,7 +1285,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.goblet_squat"),
+            localizationKey: "workout.exercise.goblet_squat",
+            name: language.localized("workout.exercise.goblet_squat"),
             systemImage: WorkoutExerciseIcon.gobletSquat,
             accentName: "blue",
             activityType: .strength,
@@ -1140,7 +1296,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.kettlebell_squat"),
+            localizationKey: "workout.exercise.kettlebell_squat",
+            name: language.localized("workout.exercise.kettlebell_squat"),
             systemImage: WorkoutExerciseIcon.kettlebellSquat,
             accentName: "blue",
             activityType: .strength,
@@ -1150,7 +1307,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.sumo_squat"),
+            localizationKey: "workout.exercise.sumo_squat",
+            name: language.localized("workout.exercise.sumo_squat"),
             systemImage: WorkoutExerciseIcon.sumoSquat,
             accentName: "blue",
             activityType: .strength,
@@ -1160,7 +1318,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.zercher_squat"),
+            localizationKey: "workout.exercise.zercher_squat",
+            name: language.localized("workout.exercise.zercher_squat"),
             systemImage: WorkoutExerciseIcon.zercherSquat,
             accentName: "blue",
             activityType: .strength,
@@ -1170,7 +1329,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.hack_squat"),
+            localizationKey: "workout.exercise.hack_squat",
+            name: language.localized("workout.exercise.hack_squat"),
             systemImage: WorkoutExerciseIcon.hackSquat,
             accentName: "blue",
             activityType: .strength,
@@ -1180,7 +1340,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.pistol_squat"),
+            localizationKey: "workout.exercise.pistol_squat",
+            name: language.localized("workout.exercise.pistol_squat"),
             systemImage: WorkoutExerciseIcon.pistolSquat,
             accentName: "blue",
             activityType: .strength,
@@ -1190,7 +1351,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.lunges"),
+            localizationKey: "workout.exercise.lunges",
+            name: language.localized("workout.exercise.lunges"),
             systemImage: WorkoutExerciseIcon.lunges,
             accentName: "blue",
             activityType: .strength,
@@ -1200,7 +1362,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.reverse_lunges"),
+            localizationKey: "workout.exercise.reverse_lunges",
+            name: language.localized("workout.exercise.reverse_lunges"),
             systemImage: WorkoutExerciseIcon.reverseLunges,
             accentName: "blue",
             activityType: .strength,
@@ -1210,7 +1373,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.bulgarian_split_squat"),
+            localizationKey: "workout.exercise.bulgarian_split_squat",
+            name: language.localized("workout.exercise.bulgarian_split_squat"),
             systemImage: WorkoutExerciseIcon.bulgarianSplitSquat,
             accentName: "blue",
             activityType: .strength,
@@ -1220,7 +1384,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.split_squat"),
+            localizationKey: "workout.exercise.split_squat",
+            name: language.localized("workout.exercise.split_squat"),
             systemImage: WorkoutExerciseIcon.splitSquat,
             accentName: "blue",
             activityType: .strength,
@@ -1230,7 +1395,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.wall_sit"),
+            localizationKey: "workout.exercise.wall_sit",
+            name: language.localized("workout.exercise.wall_sit"),
             systemImage: WorkoutExerciseIcon.wallSit,
             accentName: "blue",
             activityType: .strength,
@@ -1240,7 +1406,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.jump_squats"),
+            localizationKey: "workout.exercise.jump_squats",
+            name: language.localized("workout.exercise.jump_squats"),
             systemImage: WorkoutExerciseIcon.jumpSquats,
             accentName: "blue",
             activityType: .hiit,
@@ -1250,7 +1417,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.jumping_lunges"),
+            localizationKey: "workout.exercise.jumping_lunges",
+            name: language.localized("workout.exercise.jumping_lunges"),
             systemImage: WorkoutExerciseIcon.jumpingLunges,
             accentName: "blue",
             activityType: .hiit,
@@ -1260,7 +1428,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.box_jumps"),
+            localizationKey: "workout.exercise.box_jumps",
+            name: language.localized("workout.exercise.box_jumps"),
             systemImage: WorkoutExerciseIcon.boxJumps,
             accentName: "blue",
             activityType: .hiit,
@@ -1270,7 +1439,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.elbow_plank"),
+            localizationKey: "workout.exercise.elbow_plank",
+            name: language.localized("workout.exercise.elbow_plank"),
             systemImage: WorkoutExerciseIcon.elbowPlank,
             accentName: "blue",
             activityType: .core,
@@ -1280,7 +1450,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.side_plank"),
+            localizationKey: "workout.exercise.side_plank",
+            name: language.localized("workout.exercise.side_plank"),
             systemImage: WorkoutExerciseIcon.sidePlank,
             accentName: "blue",
             activityType: .core,
@@ -1290,7 +1461,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.dead_bug"),
+            localizationKey: "workout.exercise.dead_bug",
+            name: language.localized("workout.exercise.dead_bug"),
             systemImage: WorkoutExerciseIcon.deadBug,
             accentName: "blue",
             activityType: .core,
@@ -1300,7 +1472,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.bird_dog"),
+            localizationKey: "workout.exercise.bird_dog",
+            name: language.localized("workout.exercise.bird_dog"),
             systemImage: WorkoutExerciseIcon.birdDog,
             accentName: "blue",
             activityType: .core,
@@ -1310,7 +1483,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.crunches"),
+            localizationKey: "workout.exercise.crunches",
+            name: language.localized("workout.exercise.crunches"),
             systemImage: WorkoutExerciseIcon.crunches,
             accentName: "blue",
             activityType: .core,
@@ -1320,7 +1494,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.ab_wheel_rollout"),
+            localizationKey: "workout.exercise.ab_wheel_rollout",
+            name: language.localized("workout.exercise.ab_wheel_rollout"),
             systemImage: WorkoutExerciseIcon.abWheelRollout,
             accentName: "blue",
             activityType: .core,
@@ -1330,7 +1505,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.classic_deadlift"),
+            localizationKey: "workout.exercise.classic_deadlift",
+            name: language.localized("workout.exercise.classic_deadlift"),
             systemImage: WorkoutExerciseIcon.classicDeadlift,
             accentName: "blue",
             activityType: .strength,
@@ -1340,7 +1516,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.sumo_deadlift"),
+            localizationKey: "workout.exercise.sumo_deadlift",
+            name: language.localized("workout.exercise.sumo_deadlift"),
             systemImage: WorkoutExerciseIcon.sumoDeadlift,
             accentName: "blue",
             activityType: .strength,
@@ -1350,7 +1527,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.romanian_deadlift"),
+            localizationKey: "workout.exercise.romanian_deadlift",
+            name: language.localized("workout.exercise.romanian_deadlift"),
             systemImage: WorkoutExerciseIcon.romanianDeadlift,
             accentName: "blue",
             activityType: .strength,
@@ -1360,7 +1538,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.stiff_leg_deadlift"),
+            localizationKey: "workout.exercise.stiff_leg_deadlift",
+            name: language.localized("workout.exercise.stiff_leg_deadlift"),
             systemImage: WorkoutExerciseIcon.stiffLegDeadlift,
             accentName: "blue",
             activityType: .strength,
@@ -1370,7 +1549,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.good_morning"),
+            localizationKey: "workout.exercise.good_morning",
+            name: language.localized("workout.exercise.good_morning"),
             systemImage: WorkoutExerciseIcon.goodMorning,
             accentName: "blue",
             activityType: .strength,
@@ -1380,7 +1560,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.barbell_hip_thrust"),
+            localizationKey: "workout.exercise.barbell_hip_thrust",
+            name: language.localized("workout.exercise.barbell_hip_thrust"),
             systemImage: WorkoutExerciseIcon.barbellHipThrust,
             accentName: "blue",
             activityType: .strength,
@@ -1390,7 +1571,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.single_leg_glute_bridge"),
+            localizationKey: "workout.exercise.single_leg_glute_bridge",
+            name: language.localized("workout.exercise.single_leg_glute_bridge"),
             systemImage: WorkoutExerciseIcon.singleLegGluteBridge,
             accentName: "blue",
             activityType: .strength,
@@ -1400,7 +1582,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.back_extension"),
+            localizationKey: "workout.exercise.back_extension",
+            name: language.localized("workout.exercise.back_extension"),
             systemImage: WorkoutExerciseIcon.backExtension,
             accentName: "blue",
             activityType: .strength,
@@ -1410,7 +1593,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.reverse_back_extension"),
+            localizationKey: "workout.exercise.reverse_back_extension",
+            name: language.localized("workout.exercise.reverse_back_extension"),
             systemImage: WorkoutExerciseIcon.reverseBackExtension,
             accentName: "blue",
             activityType: .strength,
@@ -1420,7 +1604,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.battle_ropes"),
+            localizationKey: "workout.exercise.battle_ropes",
+            name: language.localized("workout.exercise.battle_ropes"),
             systemImage: WorkoutExerciseIcon.battleRopes,
             accentName: "blue",
             activityType: .hiit,
@@ -1430,7 +1615,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.sled_push"),
+            localizationKey: "workout.exercise.sled_push",
+            name: language.localized("workout.exercise.sled_push"),
             systemImage: WorkoutExerciseIcon.sledPush,
             accentName: "blue",
             activityType: .hiit,
@@ -1440,7 +1626,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.jump_rope"),
+            localizationKey: "workout.exercise.jump_rope",
+            name: language.localized("workout.exercise.jump_rope"),
             systemImage: WorkoutExerciseIcon.jumpRope,
             accentName: "blue",
             activityType: .hiit,
@@ -1450,7 +1637,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.barbell_clean"),
+            localizationKey: "workout.exercise.barbell_clean",
+            name: language.localized("workout.exercise.barbell_clean"),
             systemImage: WorkoutExerciseIcon.barbellClean,
             accentName: "blue",
             activityType: .strength,
@@ -1460,7 +1648,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.horizontal_pullups"),
+            localizationKey: "workout.exercise.horizontal_pullups",
+            name: language.localized("workout.exercise.horizontal_pullups"),
             systemImage: WorkoutExerciseIcon.horizontalPullUps,
             accentName: "blue",
             activityType: .strength,
@@ -1470,7 +1659,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.hanging_leg_raise"),
+            localizationKey: "workout.exercise.hanging_leg_raise",
+            name: language.localized("workout.exercise.hanging_leg_raise"),
             systemImage: WorkoutExerciseIcon.hangingLegRaise,
             accentName: "blue",
             activityType: .core,
@@ -1480,7 +1670,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.lying_leg_raise"),
+            localizationKey: "workout.exercise.lying_leg_raise",
+            name: language.localized("workout.exercise.lying_leg_raise"),
             systemImage: WorkoutExerciseIcon.lyingLegRaise,
             accentName: "blue",
             activityType: .core,
@@ -1490,7 +1681,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.snatch_pull"),
+            localizationKey: "workout.exercise.snatch_pull",
+            name: language.localized("workout.exercise.snatch_pull"),
             systemImage: WorkoutExerciseIcon.snatchPull,
             accentName: "blue",
             activityType: .strength,
@@ -1500,7 +1692,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.barbell_snatch"),
+            localizationKey: "workout.exercise.barbell_snatch",
+            name: language.localized("workout.exercise.barbell_snatch"),
             systemImage: WorkoutExerciseIcon.barbellSnatch,
             accentName: "blue",
             activityType: .hiit,
@@ -1510,7 +1703,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.power_clean"),
+            localizationKey: "workout.exercise.power_clean",
+            name: language.localized("workout.exercise.power_clean"),
             systemImage: WorkoutExerciseIcon.powerClean,
             accentName: "blue",
             activityType: .strength,
@@ -1518,7 +1712,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             defaultSets: [WorkoutDraftSet(weight: 40, reps: 5)]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.hang_clean"),
+            localizationKey: "workout.exercise.hang_clean",
+            name: language.localized("workout.exercise.hang_clean"),
             systemImage: WorkoutExerciseIcon.hangClean,
             accentName: "blue",
             activityType: .strength,
@@ -1526,7 +1721,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             defaultSets: [WorkoutDraftSet(weight: 40, reps: 5)]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.block_clean"),
+            localizationKey: "workout.exercise.block_clean",
+            name: language.localized("workout.exercise.block_clean"),
             systemImage: WorkoutExerciseIcon.blockClean,
             accentName: "blue",
             activityType: .strength,
@@ -1534,7 +1730,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             defaultSets: [WorkoutDraftSet(weight: 40, reps: 5)]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.power_snatch"),
+            localizationKey: "workout.exercise.power_snatch",
+            name: language.localized("workout.exercise.power_snatch"),
             systemImage: WorkoutExerciseIcon.powerSnatch,
             accentName: "blue",
             activityType: .strength,
@@ -1542,7 +1739,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             defaultSets: [WorkoutDraftSet(weight: 30, reps: 5)]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.clean_pull"),
+            localizationKey: "workout.exercise.clean_pull",
+            name: language.localized("workout.exercise.clean_pull"),
             systemImage: WorkoutExerciseIcon.cleanPull,
             accentName: "blue",
             activityType: .strength,
@@ -1550,7 +1748,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             defaultSets: [WorkoutDraftSet(weight: 50, reps: 5)]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.hang_snatch"),
+            localizationKey: "workout.exercise.hang_snatch",
+            name: language.localized("workout.exercise.hang_snatch"),
             systemImage: WorkoutExerciseIcon.hangSnatch,
             accentName: "blue",
             activityType: .strength,
@@ -1558,7 +1757,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             defaultSets: [WorkoutDraftSet(weight: 30, reps: 5)]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.block_snatch"),
+            localizationKey: "workout.exercise.block_snatch",
+            name: language.localized("workout.exercise.block_snatch"),
             systemImage: WorkoutExerciseIcon.blockSnatch,
             accentName: "blue",
             activityType: .strength,
@@ -1566,7 +1766,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             defaultSets: [WorkoutDraftSet(weight: 30, reps: 5)]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.overhead_squat"),
+            localizationKey: "workout.exercise.overhead_squat",
+            name: language.localized("workout.exercise.overhead_squat"),
             systemImage: WorkoutExerciseIcon.overheadSquat,
             accentName: "blue",
             activityType: .strength,
@@ -1574,7 +1775,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             defaultSets: [WorkoutDraftSet(weight: 30, reps: 8)]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.split_jerk"),
+            localizationKey: "workout.exercise.split_jerk",
+            name: language.localized("workout.exercise.split_jerk"),
             systemImage: WorkoutExerciseIcon.splitJerk,
             accentName: "blue",
             activityType: .strength,
@@ -1582,7 +1784,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             defaultSets: [WorkoutDraftSet(weight: 40, reps: 5)]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.kettlebell_swing"),
+            localizationKey: "workout.exercise.kettlebell_swing",
+            name: language.localized("workout.exercise.kettlebell_swing"),
             systemImage: WorkoutExerciseIcon.kettlebellSwing,
             accentName: "blue",
             activityType: .hiit,
@@ -1590,7 +1793,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             defaultSets: [WorkoutDraftSet(weight: 16, reps: 15)]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.single_arm_dumbbell_snatch"),
+            localizationKey: "workout.exercise.single_arm_dumbbell_snatch",
+            name: language.localized("workout.exercise.single_arm_dumbbell_snatch"),
             systemImage: WorkoutExerciseIcon.singleArmDumbbellSnatch,
             accentName: "blue",
             activityType: .hiit,
@@ -1598,7 +1802,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             defaultSets: [WorkoutDraftSet(weight: 16, reps: 8)]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.dumbbell_clean"),
+            localizationKey: "workout.exercise.dumbbell_clean",
+            name: language.localized("workout.exercise.dumbbell_clean"),
             systemImage: WorkoutExerciseIcon.dumbbellClean,
             accentName: "blue",
             activityType: .hiit,
@@ -1606,7 +1811,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             defaultSets: [WorkoutDraftSet(weight: 12, reps: 8)]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.double_unders"),
+            localizationKey: "workout.exercise.double_unders",
+            name: language.localized("workout.exercise.double_unders"),
             systemImage: WorkoutExerciseIcon.doubleUnders,
             accentName: "blue",
             activityType: .hiit,
@@ -1614,7 +1820,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             defaultSets: [WorkoutDraftSet(weight: 0, reps: 50)]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.toes_to_bar"),
+            localizationKey: "workout.exercise.toes_to_bar",
+            name: language.localized("workout.exercise.toes_to_bar"),
             systemImage: WorkoutExerciseIcon.toesToBar,
             accentName: "blue",
             activityType: .core,
@@ -1622,7 +1829,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             defaultSets: [WorkoutDraftSet(weight: 0, reps: 10)]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.handstand_push_up"),
+            localizationKey: "workout.exercise.handstand_push_up",
+            name: language.localized("workout.exercise.handstand_push_up"),
             systemImage: WorkoutExerciseIcon.handstandPushUp,
             accentName: "blue",
             activityType: .strength,
@@ -1630,7 +1838,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             defaultSets: [WorkoutDraftSet(weight: 0, reps: 8)]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.rope_climb"),
+            localizationKey: "workout.exercise.rope_climb",
+            name: language.localized("workout.exercise.rope_climb"),
             systemImage: WorkoutExerciseIcon.ropeClimb,
             accentName: "blue",
             activityType: .strength,
@@ -1638,7 +1847,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             defaultSets: [WorkoutDraftSet(weight: 0, reps: 3)]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.devil_press"),
+            localizationKey: "workout.exercise.devil_press",
+            name: language.localized("workout.exercise.devil_press"),
             systemImage: WorkoutExerciseIcon.devilPress,
             accentName: "blue",
             activityType: .hiit,
@@ -1646,7 +1856,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             defaultSets: [WorkoutDraftSet(weight: 10, reps: 10)]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.bar_muscle_up"),
+            localizationKey: "workout.exercise.bar_muscle_up",
+            name: language.localized("workout.exercise.bar_muscle_up"),
             systemImage: WorkoutExerciseIcon.barMuscleUp,
             accentName: "blue",
             activityType: .strength,
@@ -1654,7 +1865,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             defaultSets: [WorkoutDraftSet(weight: 0, reps: 5)]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.ring_muscle_up"),
+            localizationKey: "workout.exercise.ring_muscle_up",
+            name: language.localized("workout.exercise.ring_muscle_up"),
             systemImage: WorkoutExerciseIcon.ringMuscleUp,
             accentName: "blue",
             activityType: .strength,
@@ -1662,7 +1874,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             defaultSets: [WorkoutDraftSet(weight: 0, reps: 5)]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.handstand_walk"),
+            localizationKey: "workout.exercise.handstand_walk",
+            name: language.localized("workout.exercise.handstand_walk"),
             systemImage: WorkoutExerciseIcon.handstandWalk,
             accentName: "blue",
             activityType: .core,
@@ -1672,7 +1885,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.sandbag_carry"),
+            localizationKey: "workout.exercise.sandbag_carry",
+            name: language.localized("workout.exercise.sandbag_carry"),
             systemImage: WorkoutExerciseIcon.sandbagCarry,
             accentName: "blue",
             activityType: .strength,
@@ -1682,7 +1896,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.bear_crawl"),
+            localizationKey: "workout.exercise.bear_crawl",
+            name: language.localized("workout.exercise.bear_crawl"),
             systemImage: WorkoutExerciseIcon.bearCrawl,
             accentName: "blue",
             activityType: .hiit,
@@ -1692,7 +1907,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.box_jump_over"),
+            localizationKey: "workout.exercise.box_jump_over",
+            name: language.localized("workout.exercise.box_jump_over"),
             systemImage: WorkoutExerciseIcon.boxJumpOver,
             accentName: "blue",
             activityType: .hiit,
@@ -1700,7 +1916,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             defaultSets: [WorkoutDraftSet(weight: 0, reps: 12)]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.turkish_getup"),
+            localizationKey: "workout.exercise.turkish_getup",
+            name: language.localized("workout.exercise.turkish_getup"),
             systemImage: WorkoutExerciseIcon.turkishGetUp,
             accentName: "blue",
             activityType: .strength,
@@ -1710,7 +1927,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.med_ball_throw"),
+            localizationKey: "workout.exercise.med_ball_throw",
+            name: language.localized("workout.exercise.med_ball_throw"),
             systemImage: WorkoutExerciseIcon.medBallThrow,
             accentName: "blue",
             activityType: .hiit,
@@ -1720,7 +1938,8 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         WorkoutExerciseTemplate(
-            name: AppLocalizer.string("workout.exercise.med_ball_slam"),
+            localizationKey: "workout.exercise.med_ball_slam",
+            name: language.localized("workout.exercise.med_ball_slam"),
             systemImage: WorkoutExerciseIcon.medBallSlam,
             accentName: "blue",
             activityType: .hiit,
@@ -1730,86 +1949,103 @@ private func makeWorkoutTemplates() -> [WorkoutExerciseTemplate] {
             ]
         ),
         mobilityTemplate(
+            language: language,
             nameKey: "workout.exercise.wall_chest_stretch",
             systemImage: WorkoutExerciseIcon.wallChestStretch,
             durationSeconds: 30
         ),
         mobilityTemplate(
+            language: language,
             nameKey: "workout.exercise.overhead_triceps_stretch",
             systemImage: WorkoutExerciseIcon.overheadTricepsStretch,
             durationSeconds: 30
         ),
         mobilityTemplate(
+            language: language,
             nameKey: "workout.exercise.cross_body_shoulder_stretch",
             systemImage: WorkoutExerciseIcon.crossBodyShoulderStretch,
             durationSeconds: 30
         ),
         mobilityTemplate(
+            language: language,
             nameKey: "workout.exercise.cat_cow",
             systemImage: WorkoutExerciseIcon.catCow,
             durationSeconds: 60
         ),
         mobilityTemplate(
+            language: language,
             nameKey: "workout.exercise.child_pose",
             systemImage: WorkoutExerciseIcon.childPose,
             durationSeconds: 60
         ),
         mobilityTemplate(
+            language: language,
             nameKey: "workout.exercise.cobra_pose",
             systemImage: WorkoutExerciseIcon.cobraPose,
             durationSeconds: 30
         ),
         mobilityTemplate(
+            language: language,
             nameKey: "workout.exercise.lying_thoracic_rotation",
             systemImage: WorkoutExerciseIcon.lyingThoracicRotation,
             durationSeconds: 45
         ),
         mobilityTemplate(
+            language: language,
             nameKey: "workout.exercise.supine_spinal_twist",
             systemImage: WorkoutExerciseIcon.supineSpinalTwist,
             durationSeconds: 45
         ),
         mobilityTemplate(
+            language: language,
             nameKey: "workout.exercise.thoracic_extension_foam_roller",
             systemImage: WorkoutExerciseIcon.thoracicExtensionFoamRoller,
             durationSeconds: 60
         ),
         mobilityTemplate(
+            language: language,
             nameKey: "workout.exercise.hip_flexor_stretch",
             systemImage: WorkoutExerciseIcon.hipFlexorStretch,
             durationSeconds: 45
         ),
         mobilityTemplate(
+            language: language,
             nameKey: "workout.exercise.standing_quadriceps_stretch",
             systemImage: WorkoutExerciseIcon.standingQuadricepsStretch,
             durationSeconds: 30
         ),
         mobilityTemplate(
+            language: language,
             nameKey: "workout.exercise.hamstring_stretch",
             systemImage: WorkoutExerciseIcon.hamstringStretch,
             durationSeconds: 45
         ),
         mobilityTemplate(
+            language: language,
             nameKey: "workout.exercise.figure_four_glute_stretch",
             systemImage: WorkoutExerciseIcon.figureFourGluteStretch,
             durationSeconds: 45
         ),
         mobilityTemplate(
+            language: language,
             nameKey: "workout.exercise.pigeon_pose",
             systemImage: WorkoutExerciseIcon.pigeonPose,
             durationSeconds: 60
         ),
         mobilityTemplate(
+            language: language,
             nameKey: "workout.exercise.butterfly_stretch",
             systemImage: WorkoutExerciseIcon.butterflyStretch,
             durationSeconds: 60
         ),
         mobilityTemplate(
+            language: language,
             nameKey: "workout.exercise.side_lunge_adductor_stretch",
             systemImage: WorkoutExerciseIcon.sideLungeAdductorStretch,
             durationSeconds: 45
         ),
         mobilityTemplate(
+            language: language,
             nameKey: "workout.exercise.dynamic_leg_swings",
             systemImage: WorkoutExerciseIcon.dynamicLegSwings,
             durationSeconds: 60

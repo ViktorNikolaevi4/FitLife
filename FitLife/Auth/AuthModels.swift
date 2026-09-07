@@ -23,6 +23,9 @@ struct AppUserProfile: Identifiable, Hashable {
     var createdAt: Date
     var isActive: Bool
     var photoURL: String?
+    var achievementLevel: Int?
+    var achievementTotalXP: Int?
+    var achievementUpdatedAt: Date?
 
     init(
         id: String,
@@ -31,7 +34,10 @@ struct AppUserProfile: Identifiable, Hashable {
         role: AppUserRole,
         createdAt: Date = .now,
         isActive: Bool = true,
-        photoURL: String? = nil
+        photoURL: String? = nil,
+        achievementLevel: Int? = nil,
+        achievementTotalXP: Int? = nil,
+        achievementUpdatedAt: Date? = nil
     ) {
         self.id = id
         self.email = email
@@ -40,6 +46,9 @@ struct AppUserProfile: Identifiable, Hashable {
         self.createdAt = createdAt
         self.isActive = isActive
         self.photoURL = photoURL
+        self.achievementLevel = achievementLevel
+        self.achievementTotalXP = achievementTotalXP
+        self.achievementUpdatedAt = achievementUpdatedAt
     }
 
     init?(id: String, data: [String: Any]) {
@@ -63,6 +72,13 @@ struct AppUserProfile: Identifiable, Hashable {
         }
         self.isActive = (data["isActive"] as? Bool) ?? true
         self.photoURL = data["photoURL"] as? String
+        self.achievementLevel = (data["achievementLevel"] as? NSNumber)?.intValue
+        self.achievementTotalXP = (data["achievementTotalXP"] as? NSNumber)?.intValue
+        if let timestamp = data["achievementUpdatedAt"] as? Timestamp {
+            self.achievementUpdatedAt = timestamp.dateValue()
+        } else {
+            self.achievementUpdatedAt = data["achievementUpdatedAt"] as? Date
+        }
     }
 
     var firestoreData: [String: Any] {
@@ -76,6 +92,15 @@ struct AppUserProfile: Identifiable, Hashable {
         ]
         if let photoURL, photoURL.isEmpty == false {
             data["photoURL"] = photoURL
+        }
+        if let achievementLevel {
+            data["achievementLevel"] = achievementLevel
+        }
+        if let achievementTotalXP {
+            data["achievementTotalXP"] = achievementTotalXP
+        }
+        if let achievementUpdatedAt {
+            data["achievementUpdatedAt"] = achievementUpdatedAt
         }
         return data
     }

@@ -22,11 +22,16 @@ struct WorkoutAssignment: Identifiable, Hashable {
     let trainerId: String
     let clientId: String
     let templateId: String
-    let titleSnapshot: String
+    let titleKey: String?
+    let fallbackTitleSnapshot: String
     let notesSnapshot: String
     let exerciseCount: Int
     let assignedAt: Date
     let status: WorkoutAssignmentStatus
+
+    var titleSnapshot: String {
+        localizedLibraryTemplateTitle(key: titleKey, fallbackTitle: fallbackTitleSnapshot)
+    }
 
     init(
         id: String,
@@ -34,6 +39,7 @@ struct WorkoutAssignment: Identifiable, Hashable {
         clientId: String,
         templateId: String,
         titleSnapshot: String,
+        titleKey: String? = nil,
         notesSnapshot: String,
         exerciseCount: Int,
         assignedAt: Date = .now,
@@ -43,7 +49,8 @@ struct WorkoutAssignment: Identifiable, Hashable {
         self.trainerId = trainerId
         self.clientId = clientId
         self.templateId = templateId
-        self.titleSnapshot = titleSnapshot
+        self.titleKey = titleKey
+        self.fallbackTitleSnapshot = titleSnapshot
         self.notesSnapshot = notesSnapshot
         self.exerciseCount = exerciseCount
         self.assignedAt = assignedAt
@@ -66,7 +73,9 @@ struct WorkoutAssignment: Identifiable, Hashable {
         self.trainerId = trainerId
         self.clientId = clientId
         self.templateId = templateId
-        self.titleSnapshot = titleSnapshot
+        self.titleKey = (data["titleKey"] as? String)
+            ?? inferredLibraryTemplateTitleKey(fallbackTitle: titleSnapshot)
+        self.fallbackTitleSnapshot = titleSnapshot
         self.notesSnapshot = (data["notesSnapshot"] as? String) ?? ""
         self.exerciseCount = (data["exerciseCount"] as? Int) ?? 0
         self.status = status
@@ -79,15 +88,19 @@ struct WorkoutAssignment: Identifiable, Hashable {
     }
 
     var firestoreData: [String: Any] {
-        [
+        var data: [String: Any] = [
             "trainerId": trainerId,
             "clientId": clientId,
             "templateId": templateId,
-            "titleSnapshot": titleSnapshot,
+            "titleSnapshot": fallbackTitleSnapshot,
             "notesSnapshot": notesSnapshot,
             "exerciseCount": exerciseCount,
             "assignedAt": assignedAt,
             "status": status.rawValue
         ]
+        if let titleKey {
+            data["titleKey"] = titleKey
+        }
+        return data
     }
 }

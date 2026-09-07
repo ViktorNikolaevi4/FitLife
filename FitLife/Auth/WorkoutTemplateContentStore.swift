@@ -6,7 +6,8 @@ struct WorkoutTemplateExerciseItem: Identifiable, Hashable {
     let templateId: String
     let blockId: String?
     let groupId: String?
-    let name: String
+    let exerciseKey: String?
+    let fallbackName: String
     let systemImage: String
     let accentName: String
     let activityTypeRaw: String
@@ -15,11 +16,16 @@ struct WorkoutTemplateExerciseItem: Identifiable, Hashable {
     let sets: [WorkoutDraftSet]
     let note: String
 
+    var name: String {
+        localizedWorkoutExerciseName(key: exerciseKey, fallbackName: fallbackName)
+    }
+
     init(
         id: String,
         templateId: String,
         blockId: String? = nil,
         groupId: String? = nil,
+        exerciseKey: String? = nil,
         name: String,
         systemImage: String,
         accentName: String,
@@ -33,7 +39,8 @@ struct WorkoutTemplateExerciseItem: Identifiable, Hashable {
         self.templateId = templateId
         self.blockId = blockId
         self.groupId = groupId
-        self.name = name
+        self.exerciseKey = exerciseKey ?? workoutExerciseLocalizationKey(name: name, systemImage: systemImage)
+        self.fallbackName = name
         self.systemImage = systemImage
         self.accentName = accentName
         self.activityTypeRaw = activityType.rawValue
@@ -58,7 +65,9 @@ struct WorkoutTemplateExerciseItem: Identifiable, Hashable {
         self.templateId = templateId
         self.blockId = data["blockId"] as? String
         self.groupId = data["groupId"] as? String
-        self.name = name
+        self.exerciseKey = (data["exerciseKey"] as? String)
+            ?? workoutExerciseLocalizationKey(name: name, systemImage: systemImage)
+        self.fallbackName = name
         self.systemImage = systemImage
         self.accentName = accentName
         self.activityTypeRaw = (data["activityTypeRaw"] as? String) ?? WorkoutActivityType.strength.rawValue
@@ -77,7 +86,7 @@ struct WorkoutTemplateExerciseItem: Identifiable, Hashable {
 
     var firestoreData: [String: Any] {
         var data: [String: Any] = [
-            "name": name,
+            "name": fallbackName,
             "systemImage": systemImage,
             "accentName": accentName,
             "activityTypeRaw": activityTypeRaw,
@@ -98,6 +107,9 @@ struct WorkoutTemplateExerciseItem: Identifiable, Hashable {
         }
         if let groupId {
             data["groupId"] = groupId
+        }
+        if let exerciseKey {
+            data["exerciseKey"] = exerciseKey
         }
         return data
     }
@@ -264,7 +276,35 @@ struct WorkoutTemplateBlockItem: Identifiable, Hashable {
         if trimmedTitle.isEmpty {
             return type.title
         }
+        if let key = standardBlockTitleLocalizationKey(for: trimmedTitle) {
+            return AppLocalizer.string(key)
+        }
         return trimmedTitle
+    }
+
+    private func standardBlockTitleLocalizationKey(for rawTitle: String) -> String? {
+        let presetKey = "workout.block.preset.\(preset.rawValue).title"
+        let typeKey: String
+        switch type {
+        case .warmup: typeKey = "workout.block.warmup.title"
+        case .strength: typeKey = "workout.block.strength.title"
+        case .main: typeKey = "workout.block.main.title"
+        case .superset: typeKey = "workout.block.superset.title"
+        case .circuit: typeKey = "workout.block.circuit.title"
+        case .stretching: typeKey = "workout.block.stretching.title"
+        case .cooldown: typeKey = "workout.block.cooldown.title"
+        }
+
+        let normalizedTitle = normalizedWorkoutBlockTitle(rawTitle)
+        for key in [presetKey, typeKey] {
+            let knownTitles = AppLanguage.allCases.map { language in
+                normalizedWorkoutBlockTitle(language.localized(key))
+            }
+            if knownTitles.contains(normalizedTitle) {
+                return key
+            }
+        }
+        return nil
     }
 
     func subtitle(exerciseCount: Int) -> String {
@@ -288,6 +328,13 @@ struct WorkoutTemplateBlockItem: Identifiable, Hashable {
             groups: groups
         )
     }
+}
+
+private func normalizedWorkoutBlockTitle(_ value: String) -> String {
+    value
+        .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+        .lowercased()
+        .trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
 @MainActor
@@ -460,6 +507,7 @@ final class WorkoutTemplateContentStore: ObservableObject {
                 templateId: exercise.templateId,
                 blockId: exercise.blockId,
                 groupId: exercise.groupId,
+                exerciseKey: exercise.exerciseKey,
                 name: exercise.name,
                 systemImage: exercise.systemImage,
                 accentName: exercise.accentName,
@@ -689,6 +737,7 @@ final class WorkoutTemplateContentStore: ObservableObject {
                         templateId: template.id,
                         blockId: copiedBlockID,
                         groupId: copiedGroupID,
+                        exerciseKey: sourceExercise.exerciseKey,
                         name: sourceExercise.name,
                         systemImage: sourceExercise.systemImage,
                         accentName: sourceExercise.accentName,
@@ -939,6 +988,7 @@ final class WorkoutTemplateContentStore: ObservableObject {
             templateId: exercise.templateId,
             blockId: exercise.blockId,
             groupId: exercise.groupId,
+            exerciseKey: exercise.exerciseKey,
             name: exercise.name,
             systemImage: exercise.systemImage,
             accentName: exercise.accentName,
@@ -985,6 +1035,7 @@ final class WorkoutTemplateContentStore: ObservableObject {
             templateId: exercise.templateId,
             blockId: block.id,
             groupId: nil,
+            exerciseKey: exercise.exerciseKey,
             name: exercise.name,
             systemImage: exercise.systemImage,
             accentName: exercise.accentName,
@@ -1044,6 +1095,7 @@ final class WorkoutTemplateContentStore: ObservableObject {
                 templateId: item.templateId,
                 blockId: item.blockId,
                 groupId: item.groupId,
+                exerciseKey: item.exerciseKey,
                 name: item.name,
                 systemImage: item.systemImage,
                 accentName: item.accentName,

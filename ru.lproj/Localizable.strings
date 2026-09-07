@@ -251,6 +251,8 @@
 "trainer.clients.section" = "Назначенные клиенты";
 "trainer.clients.empty.title" = "Клиенты не назначены";
 "trainer.clients.empty.subtitle" = "Когда owner привяжет к тебе клиентов, они появятся здесь.";
+"trainer.clients.level" = "Уровень %d";
+"trainer.clients.new_level" = "Новый уровень";
 "trainer.attention.title" = "Очередь";
 "trainer.attention.messages.title" = "Новые сообщения";
 "trainer.attention.messages.reply" = "Ответить";
@@ -281,6 +283,7 @@
 "trainer.templates.library.empty.subtitle" = "Подготовленные FitLife шаблоны появятся здесь после публикации в базе данных.";
 "trainer.templates.library.add" = "В мои";
 "trainer.templates.library.added" = "Добавлено";
+"trainer.templates.library.preview" = "Просмотреть шаблон";
 "trainer.templates.library.duration" = "%d мин";
 "trainer.templates.library.category.warmup" = "Разминка";
 "trainer.templates.library.category.strength" = "Силовая";
@@ -289,6 +292,8 @@
 "trainer.templates.library.category.crossTraining" = "Кросс-тренинг";
 "trainer.templates.library.category.cooldown" = "Заминка";
 "trainer.templates.library.category.other" = "Готовая тренировка";
+"trainer.templates.library.template.warmup_1.title" = "Разминка 1";
+"trainer.templates.library.template.warmup_2.title" = "Разминка 2";
 "trainer.templates.library.author" = "Автор: %@";
 "trainer.templates.submission.section" = "Библиотека FitLife";
 "trainer.templates.submission.send" = "Предложить в библиотеку";
@@ -831,6 +836,7 @@
 "workout.exercise.rowing" = "Гребля";
 "workout.exercise.rowing_machine" = "Гребной тренажёр";
 "workout.exercise.squats" = "Приседания";
+"workout.exercise.bodyweight_squat" = "Приседания со своим весом";
 "workout.exercise.barbell_squat" = "Приседания со штангой";
 "workout.exercise.front_squat" = "Фронтальные приседания";
 "workout.exercise.goblet_squat" = "Гоблет-приседания";
@@ -1431,7 +1437,7 @@
 "health.steps.error.restricted" = "Доступ к Apple Health ограничен настройками устройства.";
 "health.steps.error.generic" = "Не удалось прочитать шаги из Apple Health. Попробуйте обновить данные ещё раз.";
 "health.steps.warning.week_unavailable" = "Шаги за сегодня обновлены, но график недели временно недоступен.";
-"health.steps.privacy" = "FitLife запрашивает доступ только к количеству шагов. Данные остаются на iPhone и не отправляются тренеру.";
+"health.steps.privacy" = "FitLife запрашивает доступ только к количеству шагов. Данные остаются на iPhone и передаются тренеру только если вы сами прикрепите их к check-in.";
 "dashboard.coach.personal_title" = "Персональный тренер";
 "dashboard.coach.personal_subtitle" = "Получайте индивидуальные программы, комментарии и обратную связь по результатам.";
 "dashboard.coach.benefit.programs" = "Индивидуальные программы";
@@ -1522,6 +1528,7 @@
 "coaching.checkin.steps.connect" = "Подключить Apple Health";
 "coaching.checkin.steps.loading" = "Загружаем активность за 7 дней…";
 "coaching.checkin.steps.attach" = "Приложить шаги к check-in";
+"coaching.checkin.steps.attach.privacy" = "Если включить, тренер увидит количество шагов за последние 7 дней. Без включения эти данные останутся на iPhone.";
 "coaching.checkin.steps.average" = "Среднее в день";
 "coaching.checkin.steps.total" = "Всего";
 "coaching.checkin.steps.goal_days" = "Дней с целью";
@@ -1992,6 +1999,8 @@
 "trainer.ai.clarifying" = "Уточняем…";
 "trainer.ai.creating_draft" = "Создаём черновик…";
 "trainer.ai.create_draft" = "Создать черновик";
+"trainer.ai.command.placeholder" = "Например: добавь основной блок — приседания со штангой 10×10, жим лёжа 4×8, отдых 90 секунд.";
+"trainer.ai.library_hint" = "Укажите точное название шаблона, чтобы добавить его без изменений, или опишите правки — например: «Добавь Разминку 2, но сделай 3 круга и отдых 90 секунд».";
 "workout.block.collapse" = "Свернуть блок";
 "workout.block.expand" = "Развернуть блок";
 "coaching.checkin.steps.accessibility" = "%@, %@ шагов";
@@ -2038,3 +2047,4 @@
 "Максимум повторений" = "Максимум повторений";
 "Максимальный объём" = "Максимальный объём";
 "Подход выполнен" = "Подход выполнен";
+"trainer.ai.exercise_ambiguity.question" = "Какое упражнение вы имели в виду под «%@»?";

@@ -9,6 +9,34 @@ struct AIWorkoutLibraryTemplateSnapshot: Identifiable {
     var id: String { template.id }
 }
 
+private struct AIWorkoutLibraryPromptTemplate: Encodable {
+    let title: String
+    let blocks: [AIWorkoutLibraryPromptBlock]
+}
+
+private struct AIWorkoutLibraryPromptBlock: Encodable {
+    let title: String
+    let type: String
+    let preset: String
+    let mode: String
+    let rounds: Int
+    let durationMinutes: Int
+    let workSeconds: Int
+    let restSeconds: Int
+    let restBetweenRoundsSeconds: Int
+    let exercises: [AIWorkoutLibraryPromptExercise]
+}
+
+private struct AIWorkoutLibraryPromptExercise: Encodable {
+    let name: String
+    let systemImage: String
+    let accentName: String
+    let activityType: String
+    let metValue: Double
+    let note: String
+    let sets: [AIWorkoutExistingSet]
+}
+
 struct AIWorkoutGenerationResult {
     let draft: AIWorkoutDraft
     let libraryTemplates: [AIWorkoutLibraryTemplateSnapshot]
@@ -17,6 +45,13 @@ struct AIWorkoutGenerationResult {
 struct AIWorkoutClarification: Identifiable, Equatable {
     let question: String
     let options: [String]
+    let exerciseName: String?
+
+    init(question: String, options: [String], exerciseName: String? = nil) {
+        self.question = question
+        self.options = options
+        self.exerciseName = exerciseName
+    }
 
     var id: String { question }
 }
@@ -62,19 +97,27 @@ actor AIWorkoutLibraryResolver {
         let candidates = snapshot.documents
             .compactMap { LibraryWorkoutTemplate(id: $0.documentID, data: $0.data()) }
             .filter {
-                let titleKey = normalizedLibraryText($0.title)
-                return titleKey.isEmpty == false
-                    && " \(commandKey) ".contains(" \(titleKey) ")
+                librarySearchTitles(for: $0).contains { title in
+                    let titleKey = normalizedLibraryText(title)
+                    return titleKey.isEmpty == false
+                        && " \(commandKey) ".contains(" \(titleKey) ")
+                }
             }
-            .sorted { normalizedLibraryText($0.title).count > normalizedLibraryText($1.title).count }
+            .sorted {
+                (librarySearchTitles(for: $0).map { normalizedLibraryText($0).count }.max() ?? 0)
+                    > (librarySearchTitles(for: $1).map { normalizedLibraryText($0).count }.max() ?? 0)
+            }
 
         // Prefer the most specific name: "Разминка 1" must not also resolve a
         // shorter library item named simply "Разминка".
         var matchedTemplates: [LibraryWorkoutTemplate] = []
         for candidate in candidates {
-            let candidateKey = normalizedLibraryText(candidate.title)
+            let candidateKeys = librarySearchTitles(for: candidate).map(normalizedLibraryText)
             guard matchedTemplates.contains(where: {
-                normalizedLibraryText($0.title).contains(candidateKey)
+                let matchedKeys = librarySearchTitles(for: $0).map(normalizedLibraryText)
+                return candidateKeys.contains { candidateKey in
+                    matchedKeys.contains { $0.contains(candidateKey) }
+                }
             }) == false else { continue }
             matchedTemplates.append(candidate)
         }
@@ -98,11 +141,13 @@ actor AIWorkoutLibraryResolver {
 
         var remainingCommand = command
         for template in matchedTemplates {
-            while let range = remainingCommand.range(
-                of: template.title,
-                options: [.caseInsensitive, .diacriticInsensitive]
-            ) {
-                remainingCommand.removeSubrange(range)
+            for title in librarySearchTitles(for: template).sorted(by: { $0.count > $1.count }) {
+                while let range = remainingCommand.range(
+                    of: title,
+                    options: [.caseInsensitive, .diacriticInsensitive]
+                ) {
+                    remainingCommand.removeSubrange(range)
+                }
             }
         }
         remainingCommand = remainingCommand
@@ -111,6 +156,14 @@ actor AIWorkoutLibraryResolver {
 
         return AIWorkoutLibraryResolution(templates: resolved, remainingCommand: remainingCommand)
     }
+}
+
+private func librarySearchTitles(for template: LibraryWorkoutTemplate) -> [String] {
+    var titles = [template.fallbackTitle, template.title]
+    if let titleKey = template.titleKey {
+        titles.append(contentsOf: AppLanguage.allCases.map { $0.localized(titleKey) })
+    }
+    return Array(Set(titles.filter { $0.isEmpty == false }))
 }
 
 private func normalizedLibraryText(_ value: String) -> String {
@@ -251,7 +304,64 @@ struct AIWorkoutDraftSet: Decodable {
 }
 
 extension AIWorkoutDraft {
-    func resolvingExercises(using catalog: [WorkoutExerciseTemplate]) -> AIWorkoutDraft {
+    func exerciseResolutionClarification(
+        using catalog: [WorkoutExerciseTemplate],
+        alternateLanguageCatalogs: [[WorkoutExerciseTemplate]],
+        sourceCommand: String,
+        exerciseSelections: [String: String] = [:],
+        language: AppLanguage
+    ) -> AIWorkoutClarification? {
+        for exercise in blocks.flatMap(\.exercises) {
+            guard exerciseSelections[exercise.name] == nil else { continue }
+            let nameMatches = catalog.bestScoringMatches(
+                for: exercise.name,
+                alternateLanguageCatalogs: alternateLanguageCatalogs
+            )
+            let commandMatches = nameMatches.count == 1
+                ? catalog.bestScoringMatches(
+                    for: sourceCommand,
+                    alternateLanguageCatalogs: alternateLanguageCatalogs,
+                    relatedTo: nameMatches
+                )
+                : []
+            // The original command is authoritative. A model may turn a generic
+            // exercise name into a more specific variation without being asked
+            // (for example, "glute bridge" into "single-leg glute bridge").
+            let ambiguousMatches: [WorkoutExerciseTemplate]
+            if commandMatches.count > 1 {
+                ambiguousMatches = commandMatches
+            } else if nameMatches.count > 1 {
+                ambiguousMatches = nameMatches
+            } else if let commandMatch = commandMatches.first,
+                      let nameMatch = nameMatches.first,
+                      commandMatch.id != nameMatch.id {
+                // The model selected a variation that the user's own wording
+                // does not support. Let the trainer choose instead of silently
+                // accepting the model's extra specificity.
+                ambiguousMatches = [commandMatch, nameMatch]
+            } else {
+                ambiguousMatches = []
+            }
+            guard ambiguousMatches.count > 1 else { continue }
+
+            return AIWorkoutClarification(
+                question: String(
+                    format: language.localized("trainer.ai.exercise_ambiguity.question"),
+                    locale: language.locale,
+                    arguments: [exercise.name]
+                ),
+                options: Array(ambiguousMatches.prefix(4).map(\.name)),
+                exerciseName: exercise.name
+            )
+        }
+        return nil
+    }
+
+    func resolvingExercises(
+        using catalog: [WorkoutExerciseTemplate],
+        alternateLanguageCatalogs: [[WorkoutExerciseTemplate]] = [],
+        exerciseSelections: [String: String] = [:]
+    ) -> AIWorkoutDraft {
         AIWorkoutDraft(
             summary: summary,
             blocks: blocks.map { block in
@@ -273,7 +383,11 @@ extension AIWorkoutDraft {
                     restBetweenRoundsSeconds: block.restBetweenRoundsSeconds,
                     exercises: block.exercises.map { exercise in
                         var resolvedExercise = exercise
-                        if let template = catalog.bestMatch(for: exercise.name) {
+                        let requestedName = exerciseSelections[exercise.name] ?? exercise.name
+                        if let template = catalog.bestMatch(
+                            for: requestedName,
+                            alternateLanguageCatalogs: alternateLanguageCatalogs
+                        ) {
                             resolvedExercise = AIWorkoutDraftExercise(
                                 operation: exercise.operation,
                                 targetExerciseId: exercise.targetExerciseId,
@@ -352,27 +466,94 @@ extension AIWorkoutDraft {
 }
 
 private extension Array where Element == WorkoutExerciseTemplate {
-    func bestMatch(for exerciseName: String) -> WorkoutExerciseTemplate? {
+    func bestMatch(
+        for exerciseName: String,
+        alternateLanguageCatalogs: [[WorkoutExerciseTemplate]]
+    ) -> WorkoutExerciseTemplate? {
+        let matches = bestScoringMatches(
+            for: exerciseName,
+            alternateLanguageCatalogs: alternateLanguageCatalogs
+        )
+        return matches.count == 1 ? matches[0] : nil
+    }
+
+    func bestScoringMatches(
+        for exerciseName: String,
+        alternateLanguageCatalogs: [[WorkoutExerciseTemplate]],
+        relatedTo referenceTemplates: [WorkoutExerciseTemplate] = []
+    ) -> [WorkoutExerciseTemplate] {
         let requested = normalizedExerciseName(exerciseName)
-        guard requested.isEmpty == false else { return nil }
+        guard requested.isEmpty == false else { return [] }
         let requestedTokens = Set(requested.split(separator: " ").map(String.init))
 
-        let matches = compactMap { template -> (template: WorkoutExerciseTemplate, score: Int)? in
-            let candidate = normalizedExerciseName(template.name)
-            if candidate == requested {
-                return (template, 10_000)
+        let matches = indices.compactMap { index -> (template: WorkoutExerciseTemplate, score: Int)? in
+            if referenceTemplates.isEmpty == false,
+               isRelatedExercise(
+                at: index,
+                to: referenceTemplates,
+                alternateLanguageCatalogs: alternateLanguageCatalogs
+               ) == false {
+                return nil
             }
-
-            let candidateTokens = Set(candidate.split(separator: " ").map(String.init))
-            let commonTokens = requestedTokens.intersection(candidateTokens)
-                .filter { $0.count > 2 }
-            let score = commonTokens.count * 100
-                + (candidate.contains(requested) || requested.contains(candidate) ? 40 : 0)
-            return score >= 100 ? (template, score) : nil
+            let localizedNames = [self[index].name] + alternateLanguageCatalogs.compactMap { catalog in
+                catalog.indices.contains(index) ? catalog[index].name : nil
+            }
+            let score = localizedNames
+                .map { exerciseMatchScore($0, requested: requested, requestedTokens: requestedTokens) }
+                .max() ?? 0
+            return score >= 100 ? (self[index], score) : nil
         }
 
-        return matches.max { $0.score < $1.score }?.template
+        guard let bestScore = matches.map(\.score).max() else { return [] }
+        return matches
+            .filter { $0.score == bestScore }
+            .map(\.template)
     }
+
+    func isRelatedExercise(
+        at index: Index,
+        to referenceTemplates: [WorkoutExerciseTemplate],
+        alternateLanguageCatalogs: [[WorkoutExerciseTemplate]]
+    ) -> Bool {
+        let candidateNames = ([self[index].name] + alternateLanguageCatalogs.compactMap { catalog in
+            catalog.indices.contains(index) ? catalog[index].name : nil
+        }).map(normalizedExerciseName)
+
+        return referenceTemplates.contains { reference in
+            guard let referenceIndex = firstIndex(where: { $0.id == reference.id }) else { return false }
+            let referenceNames = ([self[referenceIndex].name] + alternateLanguageCatalogs.compactMap { catalog in
+                catalog.indices.contains(referenceIndex) ? catalog[referenceIndex].name : nil
+            }).map(normalizedExerciseName)
+
+            return candidateNames.contains { candidateName in
+                referenceNames.contains { referenceName in
+                    let shorterTokenCount = Swift.min(
+                        candidateName.split(separator: " ").count,
+                        referenceName.split(separator: " ").count
+                    )
+                    return shorterTokenCount >= 2
+                        && (candidateName.contains(referenceName) || referenceName.contains(candidateName))
+                }
+            }
+        }
+    }
+}
+
+private func exerciseMatchScore(
+    _ candidateName: String,
+    requested: String,
+    requestedTokens: Set<String>
+) -> Int {
+    let candidate = normalizedExerciseName(candidateName)
+    if candidate == requested {
+        return 10_000
+    }
+
+    let candidateTokens = Set(candidate.split(separator: " ").map(String.init))
+    let commonTokens = requestedTokens.intersection(candidateTokens)
+        .filter { $0.count > 2 }
+    return commonTokens.count * 100
+        + (candidate.contains(requested) || requested.contains(candidate) ? 40 : 0)
 }
 
 private func normalizedExerciseName(_ value: String) -> String {
@@ -494,6 +675,75 @@ actor AIWorkoutDraftGenerator {
             throw AIWorkoutDraftGeneratorError.invalidResponse
         }
         return repairedDecision.applyingPlacementIntent(from: command)
+    }
+
+    func generateModifiedLibraryCopy(
+        command: String,
+        language: AppLanguage,
+        templates: [AIWorkoutLibraryTemplateSnapshot]
+    ) async throws -> AIWorkoutGenerationDecision {
+        let promptTemplates = templates.map { snapshot in
+            AIWorkoutLibraryPromptTemplate(
+                title: snapshot.template.title,
+                blocks: snapshot.blocks.sorted(by: { $0.orderIndex < $1.orderIndex }).map { block in
+                    AIWorkoutLibraryPromptBlock(
+                        title: block.displayTitle,
+                        type: block.typeRawValue,
+                        preset: block.presetRawValue,
+                        mode: block.modeRawValue,
+                        rounds: block.rounds,
+                        durationMinutes: block.durationMinutes,
+                        workSeconds: block.workSeconds,
+                        restSeconds: block.restSeconds,
+                        restBetweenRoundsSeconds: block.restBetweenRoundsSeconds,
+                        exercises: snapshot.exercises
+                            .filter { $0.blockId == block.id }
+                            .sorted(by: { $0.orderIndex < $1.orderIndex })
+                            .map { exercise in
+                                AIWorkoutLibraryPromptExercise(
+                                    name: exercise.name,
+                                    systemImage: exercise.systemImage,
+                                    accentName: exercise.accentName,
+                                    activityType: exercise.activityTypeRaw,
+                                    metValue: exercise.metValue,
+                                    note: exercise.note,
+                                    sets: exercise.sets.map {
+                                        AIWorkoutExistingSet(
+                                            weight: $0.weight,
+                                            reps: $0.reps,
+                                            durationSeconds: $0.durationSeconds,
+                                            metricType: $0.metricType.rawValue
+                                        )
+                                    }
+                                )
+                            }
+                    )
+                }
+            )
+        }
+        let templatesJSON = String(
+            data: try JSONEncoder().encode(promptTemplates),
+            encoding: .utf8
+        ) ?? "[]"
+        let modification = command.trimmingCharacters(in: .whitespacesAndNewlines)
+        let copyCommand = """
+        Create a NEW editable copy of the FitLife library template JSON below and apply only the requested changes.
+        Return the COMPLETE resulting copy, including every unchanged block, exercise and set.
+        Every returned block is new: targetBlockId and insertAfterBlockId must be null.
+        Every returned exercise uses operation "add" and targetExerciseId null.
+        Preserve values that the trainer did not ask to change.
+        If the trainer asks only to make the template X percent harder, increase repetitions and timed durations by X percent, rounded to the nearest whole number; keep weights, rounds and rest unchanged.
+        For a superset or round-based circuit, an unqualified rest value means restBetweenRoundsSeconds.
+        When rounds are increased for a superset or circuit, output one set object per round for every exercise.
+
+        Requested changes: \(modification)
+        FitLife base templates: \(templatesJSON)
+        """
+        return try await generate(
+            command: copyCommand,
+            language: language,
+            existingBlocks: []
+        )
     }
 
     private func requestOutput(
@@ -630,17 +880,19 @@ actor AIWorkoutDraftGenerator {
 
     private func systemPrompt(language: String) -> String {
         """
-        You are a fitness-programming assistant for certified trainers. Convert the trainer's instruction into a conservative workout TEMPLATE DRAFT, or ask one concise clarification when making a safe, exact draft is genuinely impossible. Return JSON only and respond in \(language).
+        You are a fitness-programming assistant for certified trainers. Convert the trainer's instruction into a conservative workout TEMPLATE DRAFT, or ask one concise clarification when making a safe, exact draft is genuinely impossible. Return JSON only and respond in \(language). The trainer may write in any language. Regardless of the input language, translate every human-readable output field into \(language), including summary, question, options, block titles, exercise names, and notes. Never copy an exercise name from the input in another language when a \(language) name exists.
         Always return kind, summary, question, options, and blocks. For a completed draft use kind "draft", question "", options [], and non-empty blocks. For a clarification use kind "clarification", summary "", one concise question, 2 to 4 short mutually exclusive options, and blocks []. Ask only one question at a time. Clarify when multiple existing exercises or blocks match an edit, when the target/location of a destructive action is ambiguous, or when safety-critical information such as the location of pain is missing. Do not clarify harmless defaults that can be reviewed in a draft. Do not repeat a question already answered in the trainer instruction. Never guess an existing target id; ask if no exact target can be identified.
         Each draft block has title, targetBlockId (a current template block id or null), insertAfterBlockId (a current template block id or null), updatesBlockSettings, preset (warmup|strength|superset|circuit|hiit|tabata|amrap|emom|e2mom|e3mom|forTime|rft|pyramid|dropSet|clusterSet|ladder|mobility|stretching|cooldown), type (warmup|strength|main|superset|circuit|stretching|cooldown), mode (rounds|amrap|tabata|emom), rounds, durationMinutes, workSeconds, restSeconds, restBetweenRoundsSeconds, and exercises. preset is the source of truth; type and mode must match that preset. Each exercise has operation (add|update|delete), targetExerciseId (an existing exercise id or null), name, systemImage, accentName (blue|green|orange|purple|teal|red), activityType (strength|cardio|hiit|core|mobility), metValue, note, and sets. Each set has weight, reps, durationSeconds, metricType (reps|duration).
         Rules: current template blocks and their exercises are provided in their current order in the user message. Use operation add with targetExerciseId null for a new exercise. To REPLACE an exercise, use operation update and its exact targetExerciseId; the output name and fields describe the replacement. To DELETE an exercise, use operation delete and its exact targetExerciseId. A delete operation is never an add. Preserve the existing sets for a replacement unless the trainer explicitly supplied a new prescription. Set updatesBlockSettings false for exercise-only additions, replacements, or deletions, so existing rounds/timers/rest remain unchanged; set it true only when the trainer explicitly changes block settings. If the trainer asks to EDIT or ADD EXERCISES TO an existing block by name, set targetBlockId to that exact id and set insertAfterBlockId to null. If the trainer says NEW, ANOTHER, or SEPARATE block, targetBlockId MUST be null even when its title/type matches an existing block. When that new block must appear after an existing block, set insertAfterBlockId to the existing block's exact id. A new block named "Суперсет" must never be merged into an existing block merely because both titles are "Суперсет". If no section or workout format is explicitly requested, return EXACTLY ONE block: title "Силовой блок" in Russian or "Strength block" in English, type "strength", and put every requested exercise in it. Never make a block from an exercise name; "bench press" must be an exercise inside the strength block, not a block named "bench press". Create multiple blocks only when the instruction explicitly asks for warmup, cooldown, a circuit/AMRAP/Tabata, or named separate sections. Create only what the trainer asked; do not provide medical advice; never guess a working weight — use 0 when it is not supplied.
+        For a relative request such as "make it 20% harder" with no metric specified, increase repetitions and timed durations by that percentage, rounded to the nearest whole number. Keep weights, rounds and rest unchanged unless the trainer explicitly changes them. The preview is the source of truth and must show every resulting value.
+        For a superset or round-based circuit, an unqualified rest value means restBetweenRoundsSeconds; restSeconds is only the short rest between work intervals when explicitly requested.
         rounds means how many times the complete block sequence is performed. sets are the source of truth for exercise history and reports: output one sets array item for EVERY prescribed set. For superset, circuit, rft, pyramid, dropSet, clusterSet, and ladder, every exercise must have at least one set object per round/stage; repeat identical objects when prescriptions are identical. Thus a superset for 3 sets has rounds=3 and three set objects for each exercise. A circular warmup for 2 rounds is preset circuit, type circuit, mode rounds, rounds=2, and two set objects per exercise. A normal strength exercise for 3 sets remains preset strength, rounds=1, and has three set objects. Never put a prescription for sets, reps, weight, duration, or rest only into note. For example, "5 sets of 5 reps at 70 kg" must return five set objects, each {weight: 70, reps: 5, durationSeconds: 0, metricType: "reps"}; "2 sets of 15 at 20 kg, then 4 sets of 15 at 40 kg" must return six set objects in that exact order. "10x10" means 10 set objects of 10 reps. Use note only for coaching cues or explanations. Use duration only for timed exercises; use valid values; no more than 5 blocks, 20 exercises, or 12 sets per exercise; no markdown.
         """
     }
 
     private func repairSystemPrompt(language: String) -> String {
         """
-        You repair workout-template assistant JSON for certified trainers. Return JSON only and respond in \(language). Rebuild the response from the original trainer instruction, correcting the invalid response if useful. Use exactly this schema: {kind:"draft"|"clarification",summary:String,question:String,options:[String],blocks:[{title:String,targetBlockId:String|null,insertAfterBlockId:String|null,updatesBlockSettings:Bool,preset:String,type:String,mode:String,rounds:Int,durationMinutes:Int,workSeconds:Int,restSeconds:Int,restBetweenRoundsSeconds:Int,exercises:[{operation:String,targetExerciseId:String|null,name:String,systemImage:String,accentName:String,activityType:String,metValue:Double,note:String,sets:[{weight:Double,reps:Int,durationSeconds:Int,metricType:String}]}]}]}. A draft uses question "", options [], and non-empty blocks. A clarification uses summary "", one concise question, 2 to 4 short mutually exclusive options, and blocks []. Ask only if an exact target is genuinely ambiguous or safety-critical information is missing; do not repeat an answered question. Every draft block must contain at least one exercise operation. Use add/null for new exercises, update/exact-id for replacements, and delete/exact-id for deletions. Exercise-only edits use updatesBlockSettings false. NEW/ANOTHER/SEPARATE blocks always have targetBlockId null; use insertAfterBlockId only to position a new block after an existing one. Use only preset warmup|strength|superset|circuit|hiit|tabata|amrap|emom|e2mom|e3mom|forTime|rft|pyramid|dropSet|clusterSet|ladder|mobility|stretching|cooldown, type warmup|strength|main|superset|circuit|stretching|cooldown, mode rounds|amrap|tabata|emom, operation add|update|delete, accentName blue|green|orange|purple|teal|red, activityType strength|cardio|hiit|core|mobility, metricType reps|duration. Preserve every prescribed set as individual objects. For superset, circuit, rft, pyramid, dropSet, clusterSet, and ladder, every non-delete exercise needs at least one set object per round/stage. Never add markdown or explanation.
+        You repair workout-template assistant JSON for certified trainers. Return JSON only and respond in \(language). The original instruction may use any language. Translate every human-readable output field into \(language), including summary, question, options, block titles, exercise names, and notes. Never copy an exercise name from the input in another language when a \(language) name exists. Rebuild the response from the original trainer instruction, correcting the invalid response if useful. A relative request such as "make it 20% harder" increases repetitions and timed durations by that percentage, rounded to the nearest whole number, while weights, rounds and rest stay unchanged unless explicitly changed. Use exactly this schema: {kind:"draft"|"clarification",summary:String,question:String,options:[String],blocks:[{title:String,targetBlockId:String|null,insertAfterBlockId:String|null,updatesBlockSettings:Bool,preset:String,type:String,mode:String,rounds:Int,durationMinutes:Int,workSeconds:Int,restSeconds:Int,restBetweenRoundsSeconds:Int,exercises:[{operation:String,targetExerciseId:String|null,name:String,systemImage:String,accentName:String,activityType:String,metValue:Double,note:String,sets:[{weight:Double,reps:Int,durationSeconds:Int,metricType:String}]}]}]}. A draft uses question "", options [], and non-empty blocks. A clarification uses summary "", one concise question, 2 to 4 short mutually exclusive options, and blocks []. Ask only if an exact target is genuinely ambiguous or safety-critical information is missing; do not repeat an answered question. Every draft block must contain at least one exercise operation. Use add/null for new exercises, update/exact-id for replacements, and delete/exact-id for deletions. Exercise-only edits use updatesBlockSettings false. NEW/ANOTHER/SEPARATE blocks always have targetBlockId null; use insertAfterBlockId only to position a new block after an existing one. Use only preset warmup|strength|superset|circuit|hiit|tabata|amrap|emom|e2mom|e3mom|forTime|rft|pyramid|dropSet|clusterSet|ladder|mobility|stretching|cooldown, type warmup|strength|main|superset|circuit|stretching|cooldown, mode rounds|amrap|tabata|emom, operation add|update|delete, accentName blue|green|orange|purple|teal|red, activityType strength|cardio|hiit|core|mobility, metricType reps|duration. Preserve every prescribed set as individual objects. For superset, circuit, rft, pyramid, dropSet, clusterSet, and ladder, every non-delete exercise needs at least one set object per round/stage. Never add markdown or explanation.
         """
     }
 

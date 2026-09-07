@@ -877,8 +877,15 @@ private struct ProfileHeroCard: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(AppLocalizer.string("profile.photo.change"))
 
-                VStack(alignment: .leading, spacing: 5) {
-                    if progressUserData != nil {
+                if let progressUserData {
+                    NavigationLink {
+                        ProfileProgressScreen(
+                            userData: progressUserData,
+                            ownerId: ownerId,
+                            gender: gender
+                        )
+                    } label: {
+                        VStack(alignment: .leading, spacing: 5) {
                         Text(displayName ?? AppLocalizer.format("profile.achievements.level", achievementProgress.level))
                             .font(.system(size: 28, weight: .bold))
                             .foregroundStyle(theme.primaryText)
@@ -904,7 +911,15 @@ private struct ProfileHeroCard: View {
                             .font(.caption)
                             .foregroundStyle(theme.secondaryText)
                             .lineLimit(2)
-                    } else {
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(AppLocalizer.format("profile.achievements.preview.summary", achievementProgress.level, achievementProgress.totalXP, scopedUnlocks.count))
+                    .accessibilityHint(AppLocalizer.string("profile.achievements.preview.open"))
+                } else {
+                    VStack(alignment: .leading, spacing: 5) {
                         Text(AppLocalizer.string("tab.profile"))
                             .font(.system(size: 28, weight: .bold))
                             .foregroundStyle(theme.primaryText)

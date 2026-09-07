@@ -93,12 +93,24 @@ service cloud.firestore {
             "unreadCounterInitialized",
             "unreadCounterUpdatedAt",
             "photoURL",
-            "photoUpdatedAt"
+            "photoUpdatedAt",
+            "achievementLevel",
+            "achievementTotalXP",
+            "achievementUpdatedAt"
           ])
           && (!request.resource.data.keys().hasAny(["photoURL"])
             || request.resource.data.photoURL is string)
           && (!request.resource.data.keys().hasAny(["photoUpdatedAt"])
-            || request.resource.data.photoUpdatedAt is timestamp);
+            || request.resource.data.photoUpdatedAt is timestamp)
+          && (!request.resource.data.keys().hasAny(["achievementLevel"])
+            || (request.resource.data.achievementLevel is int
+              && request.resource.data.achievementLevel >= 1
+              && request.resource.data.achievementLevel <= 50))
+          && (!request.resource.data.keys().hasAny(["achievementTotalXP"])
+            || (request.resource.data.achievementTotalXP is int
+              && request.resource.data.achievementTotalXP >= 0))
+          && (!request.resource.data.keys().hasAny(["achievementUpdatedAt"])
+            || request.resource.data.achievementUpdatedAt is timestamp);
       }
 
       allow read: if isOwner()

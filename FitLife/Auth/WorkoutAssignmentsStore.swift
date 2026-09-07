@@ -91,7 +91,8 @@ final class WorkoutTemplateAssignmentStore: ObservableObject {
                 trainerId: template.trainerId,
                 clientId: client.id,
                 templateId: template.id,
-                titleSnapshot: template.title,
+                titleSnapshot: template.fallbackTitle,
+                titleKey: template.titleKey,
                 notesSnapshot: template.notes,
                 exerciseCount: exerciseCount
             )
@@ -374,7 +375,8 @@ final class ClientAssignedWorkoutsStore: ObservableObject {
                     trainerId: assignment.trainerId,
                     clientId: assignment.clientId,
                     templateId: assignment.templateId,
-                    titleSnapshot: assignment.titleSnapshot,
+                    titleSnapshot: assignment.fallbackTitleSnapshot,
+                    titleKey: assignment.titleKey,
                     notesSnapshot: assignment.notesSnapshot,
                     exerciseCount: assignment.exerciseCount,
                     assignedAt: assignment.assignedAt,

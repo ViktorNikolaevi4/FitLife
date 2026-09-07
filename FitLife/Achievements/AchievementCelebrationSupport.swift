@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import UIKit
+import FirebaseFirestore
 
 struct AchievementCelebration: Identifiable {
     let id: UUID
@@ -468,6 +469,7 @@ struct AchievementReconciliationMonitor: View {
                         externalSnapshot: externalDataStore.snapshot,
                         modelContext: modelContext
                     )
+                    await publishAchievementProgress(ownerID: ownerID, result: result)
                     celebrationStore.present(result)
                     refreshUnreadCount()
                 } catch {
@@ -491,5 +493,31 @@ struct AchievementReconciliationMonitor: View {
         celebrationStore.updateUnreadCount(
             unlockedAchievements.filter { $0.scopeID == scopeID && $0.isUnseen }.count
         )
+    }
+
+    private func publishAchievementProgress(
+        ownerID: String,
+        result: AchievementReconciliationResult
+    ) async {
+        let publicationKey = "fitlife.achievements.publishedXP.\(ownerID)"
+        if let publishedXP = UserDefaults.standard.object(forKey: publicationKey) as? Int,
+           publishedXP == result.totalXP {
+            return
+        }
+
+        do {
+            try await Firestore.firestore()
+                .collection("users")
+                .document(ownerID)
+                .setData([
+                    "achievementLevel": result.currentLevel,
+                    "achievementTotalXP": result.totalXP,
+                    "achievementUpdatedAt": FieldValue.serverTimestamp()
+                ], merge: true)
+            UserDefaults.standard.set(result.totalXP, forKey: publicationKey)
+        } catch {
+            // Local achievements must continue to work offline. A later
+            // reconciliation/app launch will retry the compact public summary.
+        }
     }
 }

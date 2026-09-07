@@ -8,6 +8,7 @@ private let workoutPickerCardBorder = Color(.separator).opacity(0.40)
 
 struct WorkoutExerciseTemplate: Identifiable {
     let id: String
+    let localizationKey: String?
     let name: String
     let systemImage: String
     let accentName: String
@@ -16,6 +17,7 @@ struct WorkoutExerciseTemplate: Identifiable {
     let defaultSets: [WorkoutDraftSet]
 
     init(
+        localizationKey: String? = nil,
         name: String,
         systemImage: String,
         accentName: String,
@@ -23,7 +25,8 @@ struct WorkoutExerciseTemplate: Identifiable {
         metValue: Double = 5.0,
         defaultSets: [WorkoutDraftSet]
     ) {
-        self.id = "\(systemImage)|\(activityType.rawValue)|\(String(format: "%.2f", metValue))|\(name)"
+        self.id = localizationKey ?? "\(systemImage)|\(activityType.rawValue)|\(String(format: "%.2f", metValue))|\(name)"
+        self.localizationKey = localizationKey
         self.name = name
         self.systemImage = systemImage
         self.accentName = accentName
@@ -176,8 +179,11 @@ struct AddWorkoutExerciseScreen: View {
                 .padding(.top, 20)
                 .padding(.bottom, 32)
             }
+            .scrollDismissesKeyboard(.interactively)
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
             .searchable(text: $searchText, prompt: AppLocalizer.string("workout.select.exercise.search"))
+            .toolbarBackground(Color(.systemGroupedBackground), for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(AppLocalizer.string("common.cancel")) {

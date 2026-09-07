@@ -90,7 +90,13 @@ struct WorkoutTemplatesScreen: View {
                         WorkoutLibraryTemplateRow(
                             template: template,
                             isImported: store.isImported(template),
-                            isImporting: store.isImporting(template)
+                            isImporting: store.isImporting(template),
+                            preview: {
+                                WorkoutLibraryTemplateDetailScreen(
+                                    template: template,
+                                    templatesStore: store
+                                )
+                            }
                         ) {
                             Task {
                                 _ = await store.importLibraryTemplate(template)
@@ -170,6 +176,7 @@ private struct WorkoutLibraryTemplateRow: View {
     let template: LibraryWorkoutTemplate
     let isImported: Bool
     let isImporting: Bool
+    let preview: () -> WorkoutLibraryTemplateDetailScreen
     let onImport: () -> Void
 
     var body: some View {
@@ -186,19 +193,29 @@ private struct WorkoutLibraryTemplateRow: View {
 
                 Spacer()
 
-                Button(action: onImport) {
-                    if isImporting {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else if isImported {
-                        Label(AppLocalizer.string("trainer.templates.library.added"), systemImage: "checkmark")
-                    } else {
-                        Label(AppLocalizer.string("trainer.templates.library.add"), systemImage: "plus")
+                HStack(spacing: 6) {
+                    NavigationLink(destination: preview()) {
+                        Image(systemName: "eye")
+                            .frame(minWidth: 20)
                     }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .accessibilityLabel(AppLocalizer.string("trainer.templates.library.preview"))
+
+                    Button(action: onImport) {
+                        if isImporting {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else if isImported {
+                            Label(AppLocalizer.string("trainer.templates.library.added"), systemImage: "checkmark")
+                        } else {
+                            Label(AppLocalizer.string("trainer.templates.library.add"), systemImage: "plus")
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(isImported || isImporting)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(isImported || isImporting)
             }
 
             if template.notes.isEmpty == false {
@@ -238,6 +255,163 @@ private struct WorkoutLibraryTemplateRow: View {
             .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 6)
+    }
+}
+
+private struct WorkoutLibraryTemplateDetailScreen: View {
+    let template: LibraryWorkoutTemplate
+    @ObservedObject var templatesStore: WorkoutTemplatesStore
+    @StateObject private var detailStore: WorkoutLibraryTemplateDetailStore
+
+    init(template: LibraryWorkoutTemplate, templatesStore: WorkoutTemplatesStore) {
+        self.template = template
+        self.templatesStore = templatesStore
+        _detailStore = StateObject(
+            wrappedValue: WorkoutLibraryTemplateDetailStore(templateId: template.id)
+        )
+    }
+
+    var body: some View {
+        List {
+            if let errorMessage = detailStore.errorMessage, errorMessage.isEmpty == false {
+                Section {
+                    Text(errorMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                }
+            }
+
+            Section {
+                if template.notes.isEmpty == false {
+                    Text(template.notes)
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack(spacing: 14) {
+                    if template.durationMinutes > 0 {
+                        Label(
+                            AppLocalizer.format(
+                                "trainer.templates.library.duration",
+                                template.durationMinutes
+                            ),
+                            systemImage: "clock"
+                        )
+                    }
+                    if template.exerciseCount > 0 {
+                        Label(
+                            AppLocalizer.format(
+                                "trainer.overview.exercise_count",
+                                template.exerciseCount
+                            ),
+                            systemImage: "figure.strengthtraining.traditional"
+                        )
+                    }
+                }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            }
+
+            ForEach(detailStore.blocks) { block in
+                Section {
+                    ForEach(detailStore.exercises.filter { $0.blockId == block.id }) { exercise in
+                        libraryExerciseRow(exercise)
+                    }
+                } header: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(block.displayTitle)
+                        Text(block.subtitle(
+                            exerciseCount: detailStore.exercises.filter { $0.blockId == block.id }.count
+                        ))
+                        .font(.caption)
+                        .textCase(nil)
+                    }
+                }
+            }
+
+            let ungroupedExercises = detailStore.exercises.filter { $0.blockId == nil }
+            if ungroupedExercises.isEmpty == false {
+                Section(AppLocalizer.string("trainer.templates.exercises.section")) {
+                    ForEach(ungroupedExercises) { exercise in
+                        libraryExerciseRow(exercise)
+                    }
+                }
+            }
+
+            Section {
+                Button {
+                    Task { _ = await templatesStore.importLibraryTemplate(template) }
+                } label: {
+                    if templatesStore.isImporting(template) {
+                        HStack {
+                            Spacer()
+                            ProgressView()
+                            Spacer()
+                        }
+                    } else {
+                        Label(
+                            AppLocalizer.string(
+                                templatesStore.isImported(template)
+                                    ? "trainer.templates.library.added"
+                                    : "trainer.templates.library.add"
+                            ),
+                            systemImage: templatesStore.isImported(template) ? "checkmark" : "plus"
+                        )
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+                .disabled(
+                    templatesStore.isImported(template)
+                        || templatesStore.isImporting(template)
+                        || detailStore.isLoading
+                )
+            }
+        }
+        .navigationTitle(template.title)
+        .hidesHomeFloatingAddButton()
+        .overlay {
+            if detailStore.isLoading {
+                ProgressView()
+            }
+        }
+        .task { await detailStore.load() }
+        .refreshable { await detailStore.load() }
+    }
+
+    private func libraryExerciseRow(_ exercise: WorkoutTemplateExerciseItem) -> some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(workoutAccentColor(exercise.accentName).opacity(0.16))
+                .frame(width: 42, height: 42)
+                .overlay {
+                    workoutIconImage(
+                        named: exercise.systemImage,
+                        accentName: exercise.accentName,
+                        size: 20
+                    )
+                }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(exercise.name)
+                    .font(.headline)
+                Text(exerciseSummary(exercise))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 3)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func exerciseSummary(_ exercise: WorkoutTemplateExerciseItem) -> String {
+        exercise.sets.map { set in
+            formattedWorkoutSetValue(
+                weight: set.weight,
+                reps: set.reps,
+                durationSeconds: set.durationSeconds,
+                metricType: set.metricType
+            )
+        }
+        .joined(separator: " · ")
     }
 }
 

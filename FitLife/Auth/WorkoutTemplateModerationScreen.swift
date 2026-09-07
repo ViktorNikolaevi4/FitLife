@@ -116,21 +116,25 @@ final class WorkoutTemplateSubmissionDetailStore: ObservableObject {
 
         do {
             let batch = firestore.batch()
+            var libraryData: [String: Any] = [
+                "title": submission.title,
+                "notes": submission.notes,
+                "category": libraryCategory.rawValue,
+                "difficulty": "",
+                "durationMinutes": estimatedDurationMinutes,
+                "exerciseCount": exercises.count,
+                "sortOrder": Int(now.timeIntervalSince1970),
+                "isActive": true,
+                "authorName": submission.trainerName,
+                "contributorTrainerId": submission.trainerId,
+                "sourceSubmissionId": submission.id,
+                "updatedAt": now
+            ]
+            if let titleKey = inferredLibraryTemplateTitleKey(fallbackTitle: submission.title) {
+                libraryData["titleKey"] = titleKey
+            }
             batch.setData(
-                [
-                    "title": submission.title,
-                    "notes": submission.notes,
-                    "category": libraryCategory.rawValue,
-                    "difficulty": "",
-                    "durationMinutes": estimatedDurationMinutes,
-                    "exerciseCount": exercises.count,
-                    "sortOrder": Int(now.timeIntervalSince1970),
-                    "isActive": true,
-                    "authorName": submission.trainerName,
-                    "contributorTrainerId": submission.trainerId,
-                    "sourceSubmissionId": submission.id,
-                    "updatedAt": now
-                ],
+                libraryData,
                 forDocument: libraryRef
             )
             for block in blocks {

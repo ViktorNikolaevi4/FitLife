@@ -311,6 +311,7 @@ struct WorkoutTemplateEditorScreen: View {
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
+            .presentationContentInteraction(.scrolls)
         }
         .sheet(isPresented: $showAddBlock) {
             WorkoutBlockComposerScreen { _, draft in
@@ -337,6 +338,7 @@ struct WorkoutTemplateEditorScreen: View {
         .sheet(isPresented: $showAIGenerator) {
             AIWorkoutGeneratorScreen(
                 language: appLanguage,
+                currentLibraryTemplateId: template.sourceLibraryTemplateId,
                 existingBlocks: store.blocks
                     .sorted { $0.orderIndex < $1.orderIndex }
                     .map { block in
@@ -839,6 +841,7 @@ struct AIWorkoutGeneratorScreen: View {
     @Environment(\.dismiss) private var dismiss
 
     let language: AppLanguage
+    let currentLibraryTemplateId: String?
     let existingBlocks: [AIWorkoutExistingBlock]
     let onAdd: (AIWorkoutGenerationResult) -> Void
 
@@ -847,6 +850,10 @@ struct AIWorkoutGeneratorScreen: View {
     @State private var clarification: AIWorkoutClarification?
     @State private var clarificationAnswer = ""
     @State private var clarificationTranscript: [String] = []
+    @State private var exerciseSelections: [String: String] = [:]
+    @State private var pendingDraft: AIWorkoutDraft?
+    @State private var pendingLibraryTemplates: [AIWorkoutLibraryTemplateSnapshot] = []
+    @State private var pendingSourceCommand = ""
     @State private var errorMessage: String?
     @State private var isGenerating = false
 
@@ -977,13 +984,13 @@ struct AIWorkoutGeneratorScreen: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
-                    Text("Можно использовать точное название: «Добавь шаблон Разминка 1». Готовый шаблон загрузится из библиотеки FitLife без изменений.")
+                    Text(AppLocalizer.string("trainer.ai.library_hint"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
                 TextField(
-                    "Например: Добавь основную часть — приседания со штангой 10×10, жим лёжа 4×8, отдых 90 секунд.",
+                    AppLocalizer.string("trainer.ai.command.placeholder"),
                     text: $command,
                     axis: .vertical
                 )
@@ -1091,6 +1098,10 @@ struct AIWorkoutGeneratorScreen: View {
                     clarification = nil
                     clarificationAnswer = ""
                     clarificationTranscript = []
+                    exerciseSelections = [:]
+                    pendingDraft = nil
+                    pendingLibraryTemplates = []
+                    pendingSourceCommand = ""
                     errorMessage = nil
                 }
                 .foregroundStyle(.blue)
@@ -1130,6 +1141,20 @@ struct AIWorkoutGeneratorScreen: View {
     private func submitClarification(_ answer: String) {
         let trimmedAnswer = answer.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let clarification, trimmedAnswer.isEmpty == false else { return }
+        if let exerciseName = clarification.exerciseName,
+           let selectedOption = clarification.options.first(where: {
+               $0.compare(trimmedAnswer, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+           }),
+           let pendingDraft {
+            exerciseSelections[exerciseName] = selectedOption
+            clarificationAnswer = ""
+            presentDraft(
+                pendingDraft,
+                libraryTemplates: pendingLibraryTemplates,
+                sourceCommand: pendingSourceCommand
+            )
+            return
+        }
         clarificationTranscript.append("Вопрос ИИ: \(clarification.question)\nОтвет тренера: \(trimmedAnswer)")
         clarificationAnswer = ""
         generate(command: composedCommand(from: command.trimmingCharacters(in: .whitespacesAndNewlines)))
@@ -1148,8 +1173,44 @@ struct AIWorkoutGeneratorScreen: View {
         Task {
             do {
                 let libraryResolution = try await libraryResolver.resolve(command: effectiveCommand)
+                let referencesCurrentTemplate = currentLibraryTemplateId.map { currentId in
+                    libraryResolution.templates.contains { $0.id == currentId }
+                } ?? false
+                let libraryTemplatesToAdd = libraryResolution.templates.filter {
+                    $0.id != currentLibraryTemplateId
+                }
                 let generatedDraft: AIWorkoutDraft
-                if libraryResolution.needsAI {
+                if libraryResolution.needsAI,
+                   referencesCurrentTemplate,
+                   libraryTemplatesToAdd.isEmpty {
+                    let decision = try await generator.generate(
+                        command: libraryResolution.remainingCommand,
+                        language: language,
+                        existingBlocks: existingBlocks
+                    )
+                    switch decision {
+                    case .draft(let draft):
+                        generatedDraft = draft
+                    case .clarification(let question):
+                        clarification = question
+                        isGenerating = false
+                        return
+                    }
+                } else if libraryResolution.needsAI, libraryTemplatesToAdd.isEmpty == false {
+                    let decision = try await generator.generateModifiedLibraryCopy(
+                        command: libraryResolution.remainingCommand,
+                        language: language,
+                        templates: libraryTemplatesToAdd
+                    )
+                    switch decision {
+                    case .draft(let draft):
+                        generatedDraft = draft
+                    case .clarification(let question):
+                        clarification = question
+                        isGenerating = false
+                        return
+                    }
+                } else if libraryResolution.needsAI {
                     let includedTitles = libraryResolution.templates.map(\.template.title).joined(separator: ", ")
                     let aiCommand = includedTitles.isEmpty
                         ? effectiveCommand
@@ -1188,18 +1249,57 @@ struct AIWorkoutGeneratorScreen: View {
                         return
                     }
                 }
-                // Preview the same normalized prescriptions that will actually
-                // be persisted, so the trainer can verify round/set counts.
-                clarification = nil
-                result = AIWorkoutGenerationResult(
-                    draft: generatedDraft.resolvingExercises(using: workoutTemplates()),
-                    libraryTemplates: libraryResolution.templates
+                presentDraft(
+                    generatedDraft,
+                    libraryTemplates: libraryResolution.needsAI ? [] : libraryTemplatesToAdd,
+                    sourceCommand: effectiveCommand
                 )
             } catch {
                 errorMessage = error.localizedDescription
             }
             isGenerating = false
         }
+    }
+
+    private func presentDraft(
+        _ generatedDraft: AIWorkoutDraft,
+        libraryTemplates: [AIWorkoutLibraryTemplateSnapshot],
+        sourceCommand: String
+    ) {
+        // Preview the same normalized prescriptions that will actually be
+        // persisted, so the trainer can verify round/set counts.
+        let currentCatalog = workoutTemplates(for: language)
+        let alternateCatalogs = AppLanguage.allCases
+            .filter { $0 != language }
+            .map(workoutTemplates(for:))
+        pendingDraft = generatedDraft
+        pendingLibraryTemplates = libraryTemplates
+        pendingSourceCommand = sourceCommand
+
+        if let exerciseClarification = generatedDraft.exerciseResolutionClarification(
+            using: currentCatalog,
+            alternateLanguageCatalogs: alternateCatalogs,
+            sourceCommand: sourceCommand,
+            exerciseSelections: exerciseSelections,
+            language: language
+        ) {
+            clarification = exerciseClarification
+            isGenerating = false
+            return
+        }
+
+        clarification = nil
+        pendingDraft = nil
+        pendingLibraryTemplates = []
+        pendingSourceCommand = ""
+        result = AIWorkoutGenerationResult(
+            draft: generatedDraft.resolvingExercises(
+                using: currentCatalog,
+                alternateLanguageCatalogs: alternateCatalogs,
+                exerciseSelections: exerciseSelections
+            ),
+            libraryTemplates: libraryTemplates
+        )
     }
 
     private func blockSubtitle(_ block: AIWorkoutDraftBlock) -> String {

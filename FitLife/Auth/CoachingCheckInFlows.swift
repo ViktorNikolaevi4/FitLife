@@ -199,7 +199,9 @@ private struct ClientWeeklyCheckInScreen: View {
     @AppStorage(HealthKitStepsPreference.enabledKey) private var stepsEnabled = false
     @AppStorage(HealthKitStepsPreference.goalKey) private var stepGoal = HealthKitStepsPreference.defaultGoal
     @State private var recentSteps: [HealthKitDailySteps] = []
-    @State private var attachSteps = true
+    // Health data must never be shared with a trainer without an explicit choice
+    // for this particular check-in.
+    @State private var attachSteps = false
 
     private var step: WeeklyCheckInStep { WeeklyCheckInStep.allCases[stepIndex] }
 
@@ -383,6 +385,12 @@ private struct ClientWeeklyCheckInScreen: View {
             } else if recentSteps.count == 7 {
                 Toggle(AppLocalizer.string("coaching.checkin.steps.attach"), isOn: $attachSteps)
                     .font(.headline)
+                    .accessibilityHint(AppLocalizer.string("coaching.checkin.steps.attach.privacy"))
+
+                Text(AppLocalizer.string("coaching.checkin.steps.attach.privacy"))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Divider()
 
@@ -540,7 +548,6 @@ private struct ClientWeeklyCheckInScreen: View {
         }
 
         recentSteps = values ?? []
-        attachSteps = recentSteps.count == 7
     }
 
     private func stepsSummary(_ title: String, value: String) -> some View {

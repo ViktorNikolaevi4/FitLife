@@ -138,7 +138,8 @@ final class WorkoutTemplatesStore: ObservableObject {
             let personalTemplate = WorkoutTemplate(
                 id: personalRef.documentID,
                 trainerId: trainerId,
-                title: libraryTemplate.title,
+                title: libraryTemplate.fallbackTitle,
+                titleKey: libraryTemplate.titleKey,
                 notes: libraryTemplate.notes,
                 createdAt: now,
                 updatedAt: now,
@@ -174,6 +175,58 @@ final class WorkoutTemplatesStore: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
             return false
+        }
+    }
+}
+
+@MainActor
+final class WorkoutLibraryTemplateDetailStore: ObservableObject {
+    @Published private(set) var blocks: [WorkoutTemplateBlockItem] = []
+    @Published private(set) var exercises: [WorkoutTemplateExerciseItem] = []
+    @Published private(set) var isLoading = false
+    @Published var errorMessage: String?
+
+    private let templateId: String
+    private let firestore: Firestore
+
+    init(templateId: String, firestore: Firestore = .firestore()) {
+        self.templateId = templateId
+        self.firestore = firestore
+    }
+
+    func load() async {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+
+        do {
+            let templateRef = firestore
+                .collection("workout_template_library")
+                .document(templateId)
+            async let blocksSnapshot = templateRef.collection("blocks").getDocuments()
+            async let exercisesSnapshot = templateRef.collection("exercises").getDocuments()
+            let (blockDocs, exerciseDocs) = try await (blocksSnapshot, exercisesSnapshot)
+
+            blocks = blockDocs.documents
+                .compactMap {
+                    WorkoutTemplateBlockItem(
+                        id: $0.documentID,
+                        templateId: templateId,
+                        data: $0.data()
+                    )
+                }
+                .sorted { $0.orderIndex < $1.orderIndex }
+            exercises = exerciseDocs.documents
+                .compactMap {
+                    WorkoutTemplateExerciseItem(
+                        id: $0.documentID,
+                        templateId: templateId,
+                        data: $0.data()
+                    )
+                }
+                .sorted { $0.orderIndex < $1.orderIndex }
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 }

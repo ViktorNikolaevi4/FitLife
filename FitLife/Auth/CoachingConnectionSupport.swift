@@ -4308,6 +4308,8 @@ private enum CoachingChatTimelineItem: Identifiable {
 }
 
 private struct CoachingChatContent: View {
+    private static let bottomAnchorID = "coaching-chat-bottom"
+
     let notes: [CoachingNote]
     let checkIns: [ProgressCheckIn]
     let workoutReports: [CoachingWorkoutReport]
@@ -4330,6 +4332,10 @@ private struct CoachingChatContent: View {
         let workoutItems = workoutReports.map(CoachingChatTimelineItem.workoutReport)
         let nutritionItems = nutritionReports.map(CoachingChatTimelineItem.nutritionReport)
         return (noteItems + checkInItems + workoutItems + nutritionItems).sorted { $0.createdAt < $1.createdAt }
+    }
+
+    private var timelineScrollSignature: String {
+        "\(timelineItems.count)-\(timelineItems.last?.id ?? "empty")"
     }
 
     private var trimmedMessage: String {
@@ -4361,8 +4367,14 @@ private struct CoachingChatContent: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
                 .padding(.bottom, 12)
+
+                // Always-present target. Scrolling directly to the last row of a
+                // LazyVStack is unreliable while Firestore is filling the
+                // timeline: that row may not have been materialized yet.
+                Color.clear
+                    .frame(height: 1)
+                    .id(Self.bottomAnchorID)
             }
-            .defaultScrollAnchor(.bottom)
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
             .safeAreaInset(edge: .bottom) {
                 chatComposer
@@ -4371,8 +4383,7 @@ private struct CoachingChatContent: View {
             .onAppear {
                 scrollToLatest(proxy, animated: false)
             }
-            .onChange(of: timelineItems.last?.id) { _, latestItemID in
-                guard latestItemID != nil else { return }
+            .onChange(of: timelineScrollSignature) { _, _ in
                 scrollToLatest(proxy, animated: hasPositionedInitially)
             }
             .sheet(item: $selectedWorkoutReport) { report in
@@ -4466,17 +4477,17 @@ private struct CoachingChatContent: View {
     }
 
     private func scrollToLatest(_ proxy: ScrollViewProxy, animated: Bool) {
-        guard let lastId = timelineItems.last?.id else { return }
+        guard timelineItems.isEmpty == false else { return }
         DispatchQueue.main.async {
             if animated {
                 withAnimation(.easeOut(duration: 0.22)) {
-                    proxy.scrollTo(lastId, anchor: .bottom)
+                    proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
                 }
             } else {
                 var transaction = Transaction()
                 transaction.disablesAnimations = true
                 withTransaction(transaction) {
-                    proxy.scrollTo(lastId, anchor: .bottom)
+                    proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
                 }
             }
             hasPositionedInitially = true

@@ -506,6 +506,7 @@ private struct CachedWorkoutAssignment: Codable {
     let trainerId: String
     let clientId: String
     let templateId: String
+    let titleKey: String?
     let titleSnapshot: String
     let notesSnapshot: String
     let exerciseCount: Int
@@ -517,7 +518,8 @@ private struct CachedWorkoutAssignment: Codable {
         trainerId = assignment.trainerId
         clientId = assignment.clientId
         templateId = assignment.templateId
-        titleSnapshot = assignment.titleSnapshot
+        titleKey = assignment.titleKey
+        titleSnapshot = assignment.fallbackTitleSnapshot
         notesSnapshot = assignment.notesSnapshot
         exerciseCount = assignment.exerciseCount
         assignedAt = assignment.assignedAt
@@ -531,6 +533,7 @@ private struct CachedWorkoutAssignment: Codable {
             clientId: clientId,
             templateId: templateId,
             titleSnapshot: titleSnapshot,
+            titleKey: titleKey,
             notesSnapshot: notesSnapshot,
             exerciseCount: exerciseCount,
             assignedAt: assignedAt,

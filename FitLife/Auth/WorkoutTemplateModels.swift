@@ -4,17 +4,23 @@ import FirebaseFirestore
 struct WorkoutTemplate: Identifiable, Hashable {
     let id: String
     let trainerId: String
-    let title: String
+    let titleKey: String?
+    let fallbackTitle: String
     let notes: String
     let createdAt: Date
     let updatedAt: Date
     let isActive: Bool
     let sourceLibraryTemplateId: String?
 
+    var title: String {
+        localizedLibraryTemplateTitle(key: titleKey, fallbackTitle: fallbackTitle)
+    }
+
     init(
         id: String,
         trainerId: String,
         title: String,
+        titleKey: String? = nil,
         notes: String = "",
         createdAt: Date = .now,
         updatedAt: Date = .now,
@@ -23,7 +29,8 @@ struct WorkoutTemplate: Identifiable, Hashable {
     ) {
         self.id = id
         self.trainerId = trainerId
-        self.title = title
+        self.titleKey = titleKey
+        self.fallbackTitle = title
         self.notes = notes
         self.createdAt = createdAt
         self.updatedAt = updatedAt
@@ -41,7 +48,11 @@ struct WorkoutTemplate: Identifiable, Hashable {
 
         self.id = id
         self.trainerId = trainerId
-        self.title = title
+        self.titleKey = (data["titleKey"] as? String)
+            ?? (data["sourceLibraryTemplateId"] == nil
+                ? nil
+                : inferredLibraryTemplateTitleKey(fallbackTitle: title))
+        self.fallbackTitle = title
         self.notes = (data["notes"] as? String) ?? ""
         self.isActive = (data["isActive"] as? Bool) ?? true
         self.sourceLibraryTemplateId = data["sourceLibraryTemplateId"] as? String
@@ -62,7 +73,7 @@ struct WorkoutTemplate: Identifiable, Hashable {
     var firestoreData: [String: Any] {
         var data: [String: Any] = [
             "trainerId": trainerId,
-            "title": title,
+            "title": fallbackTitle,
             "notes": notes,
             "createdAt": createdAt,
             "updatedAt": updatedAt,
@@ -70,6 +81,9 @@ struct WorkoutTemplate: Identifiable, Hashable {
         ]
         if let sourceLibraryTemplateId {
             data["sourceLibraryTemplateId"] = sourceLibraryTemplateId
+        }
+        if let titleKey {
+            data["titleKey"] = titleKey
         }
         return data
     }
@@ -91,7 +105,8 @@ enum WorkoutLibraryCategory: String, CaseIterable {
 
 struct LibraryWorkoutTemplate: Identifiable, Hashable {
     let id: String
-    let title: String
+    let titleKey: String?
+    let fallbackTitle: String
     let notes: String
     let category: WorkoutLibraryCategory
     let difficulty: String
@@ -102,11 +117,17 @@ struct LibraryWorkoutTemplate: Identifiable, Hashable {
     let isActive: Bool
     let authorName: String
 
+    var title: String {
+        localizedLibraryTemplateTitle(key: titleKey, fallbackTitle: fallbackTitle)
+    }
+
     init?(id: String, data: [String: Any]) {
         guard let title = data["title"] as? String else { return nil }
 
         self.id = id
-        self.title = title
+        self.titleKey = (data["titleKey"] as? String)
+            ?? inferredLibraryTemplateTitleKey(fallbackTitle: title)
+        self.fallbackTitle = title
         self.notes = data["notes"] as? String ?? ""
         self.category = WorkoutLibraryCategory(rawValue: data["category"] as? String ?? "") ?? .other
         self.difficulty = data["difficulty"] as? String ?? ""
@@ -122,6 +143,36 @@ struct LibraryWorkoutTemplate: Identifiable, Hashable {
             self.updatedAt = data["updatedAt"] as? Date ?? .now
         }
     }
+}
+
+func inferredLibraryTemplateTitleKey(fallbackTitle: String) -> String? {
+    switch normalizedLibraryTemplateTitle(fallbackTitle) {
+    case "разминка 1", "warm up 1", "warmup 1":
+        return "trainer.templates.library.template.warmup_1.title"
+    case "разминка 2", "warm up 2", "warmup 2":
+        return "trainer.templates.library.template.warmup_2.title"
+    default:
+        return nil
+    }
+}
+
+func localizedLibraryTemplateTitle(
+    key: String?,
+    fallbackTitle: String,
+    language: AppLanguage = AppLocalizer.currentLanguage
+) -> String {
+    guard let key, key.isEmpty == false else { return fallbackTitle }
+    let localizedTitle = language.localized(key)
+    return localizedTitle == key ? fallbackTitle : localizedTitle
+}
+
+private func normalizedLibraryTemplateTitle(_ value: String) -> String {
+    value
+        .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+        .lowercased()
+        .replacingOccurrences(of: "-", with: " ")
+        .split(whereSeparator: { $0.isWhitespace })
+        .joined(separator: " ")
 }
 
 enum WorkoutTemplateSubmissionStatus: String, CaseIterable {

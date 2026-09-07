@@ -29,6 +29,9 @@ struct TrainerAssignedClientsScreen: View {
                 ForEach(store.clients) { client in
                     NavigationLink {
                         TrainerClientSupportScreen(trainerId: trainerId, client: client)
+                            .onAppear {
+                                store.markLevelSeen(for: client)
+                            }
                     } label: {
                         HStack(spacing: 12) {
                             Circle()
@@ -45,6 +48,26 @@ struct TrainerAssignedClientsScreen: View {
                                 Text(client.email)
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
+
+                                HStack(spacing: 8) {
+                                    Label(
+                                        AppLocalizer.format(
+                                            "trainer.clients.level",
+                                            max(client.achievementLevel ?? 1, 1)
+                                        ),
+                                        systemImage: "hexagon.fill"
+                                    )
+                                    .foregroundStyle(HomeColors.accent)
+
+                                    if store.clientsWithNewLevel.contains(client.id) {
+                                        Label(
+                                            appLanguage.localized("trainer.clients.new_level"),
+                                            systemImage: "arrow.up.circle.fill"
+                                        )
+                                        .foregroundStyle(.green)
+                                    }
+                                }
+                                .font(.caption.weight(.semibold))
                             }
                         }
                         .padding(.vertical, 4)

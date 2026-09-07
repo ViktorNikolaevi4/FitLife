@@ -183,7 +183,7 @@ struct ActiveWorkoutScreen: View {
             )
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
-            .interactiveDismissDisabled()
+            .presentationContentInteraction(.scrolls)
         }
         .sheet(isPresented: $isShowingBlockEditor) {
             WorkoutBlockComposerScreen { submissionID, draft in
@@ -202,6 +202,7 @@ struct ActiveWorkoutScreen: View {
         .sheet(isPresented: $isShowingAIGenerator) {
             AIWorkoutGeneratorScreen(
                 language: appLanguage,
+                currentLibraryTemplateId: nil,
                 existingBlocks: []
             ) { result in
                 addGeneratedResult(result)

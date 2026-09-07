@@ -251,6 +251,8 @@
 "trainer.clients.section" = "Assigned Clients";
 "trainer.clients.empty.title" = "No clients assigned";
 "trainer.clients.empty.subtitle" = "Clients will appear here after the owner links them to you.";
+"trainer.clients.level" = "Level %d";
+"trainer.clients.new_level" = "New level";
 "trainer.attention.title" = "Queue";
 "trainer.attention.messages.title" = "New Messages";
 "trainer.attention.messages.reply" = "Reply";
@@ -281,6 +283,7 @@
 "trainer.templates.library.empty.subtitle" = "Templates curated by FitLife will appear here after they are published to the database.";
 "trainer.templates.library.add" = "Add";
 "trainer.templates.library.added" = "Added";
+"trainer.templates.library.preview" = "View template";
 "trainer.templates.library.duration" = "%d min";
 "trainer.templates.library.category.warmup" = "Warm-up";
 "trainer.templates.library.category.strength" = "Strength";
@@ -289,6 +292,8 @@
 "trainer.templates.library.category.crossTraining" = "Cross-training";
 "trainer.templates.library.category.cooldown" = "Cooldown";
 "trainer.templates.library.category.other" = "Ready-made workout";
+"trainer.templates.library.template.warmup_1.title" = "Warm-up 1";
+"trainer.templates.library.template.warmup_2.title" = "Warm-up 2";
 "trainer.templates.library.author" = "Author: %@";
 "trainer.templates.submission.section" = "FitLife Library";
 "trainer.templates.submission.send" = "Submit to library";
@@ -831,6 +836,7 @@
 "workout.exercise.rowing" = "Rowing";
 "workout.exercise.rowing_machine" = "Rowing Machine";
 "workout.exercise.squats" = "Squats";
+"workout.exercise.bodyweight_squat" = "Bodyweight Squat";
 "workout.exercise.barbell_squat" = "Barbell Squat";
 "workout.exercise.front_squat" = "Front Squat";
 "workout.exercise.goblet_squat" = "Goblet Squat";
@@ -1431,7 +1437,7 @@
 "health.steps.error.restricted" = "Access to Apple Health is restricted by this device's settings.";
 "health.steps.error.generic" = "FitLife couldn't read your steps from Apple Health. Try refreshing the data again.";
 "health.steps.warning.week_unavailable" = "Today's steps are up to date, but the weekly chart is temporarily unavailable.";
-"health.steps.privacy" = "FitLife requests access only to your step count. The data stays on your iPhone and isn't sent to your trainer.";
+"health.steps.privacy" = "FitLife requests access only to your step count. The data stays on your iPhone and is shared with your trainer only when you choose to attach it to a check-in.";
 "dashboard.coach.personal_title" = "Personal trainer";
 "dashboard.coach.personal_subtitle" = "Get personalized programs, comments, and feedback on your results.";
 "dashboard.coach.benefit.programs" = "Personalized programs";
@@ -1522,6 +1528,7 @@
 "coaching.checkin.steps.connect" = "Connect Apple Health";
 "coaching.checkin.steps.loading" = "Loading activity from the last 7 days…";
 "coaching.checkin.steps.attach" = "Attach steps to check-in";
+"coaching.checkin.steps.attach.privacy" = "When enabled, your trainer can see your step count for the last 7 days. If you leave it off, this data stays on your iPhone.";
 "coaching.checkin.steps.average" = "Daily average";
 "coaching.checkin.steps.total" = "Total";
 "coaching.checkin.steps.goal_days" = "Goal days";
@@ -1992,6 +1999,8 @@
 "trainer.ai.clarifying" = "Clarifying…";
 "trainer.ai.creating_draft" = "Creating draft…";
 "trainer.ai.create_draft" = "Create draft";
+"trainer.ai.command.placeholder" = "For example: add a main block — barbell squats 10×10, bench press 4×8, 90 seconds of rest.";
+"trainer.ai.library_hint" = "Use an exact template name to add it unchanged, or describe changes—for example: “Add Warm-up 2, but make it 3 rounds with 90 seconds of rest.”";
 "workout.block.collapse" = "Collapse block";
 "workout.block.expand" = "Expand block";
 "coaching.checkin.steps.accessibility" = "%@, %@ steps";
@@ -2038,3 +2047,4 @@
 "Максимум повторений" = "Maximum reps";
 "Максимальный объём" = "Maximum volume";
 "Подход выполнен" = "Set complete";
+"trainer.ai.exercise_ambiguity.question" = "Which exercise did you mean by ‘%@’?";
