@@ -263,6 +263,42 @@ struct AIWorkoutExistingSet: Encodable {
     let reps: Int
     let durationSeconds: Int
     let metricType: String
+    let method: String
+    let methodGroup: Int
+    let stepIndex: Int
+    let restAfterSeconds: Int
+    let pyramidPattern: String
+}
+
+extension Array where Element == WorkoutDraftSet {
+    var aiExistingSets: [AIWorkoutExistingSet] {
+        var groupNumbers: [UUID: Int] = [:]
+        return map { set in
+            let methodGroup: Int
+            if let groupID = set.groupID, set.method != .normal {
+                if let existing = groupNumbers[groupID] {
+                    methodGroup = existing
+                } else {
+                    let next = groupNumbers.count + 1
+                    groupNumbers[groupID] = next
+                    methodGroup = next
+                }
+            } else {
+                methodGroup = 0
+            }
+            return AIWorkoutExistingSet(
+                weight: set.weight,
+                reps: set.reps,
+                durationSeconds: set.durationSeconds,
+                metricType: set.metricType.rawValue,
+                method: set.method.rawValue,
+                methodGroup: methodGroup,
+                stepIndex: set.stepIndex,
+                restAfterSeconds: set.restAfterSeconds,
+                pyramidPattern: set.pyramidPattern.rawValue
+            )
+        }
+    }
 }
 
 enum AIWorkoutExerciseOperation: String, Decodable {
@@ -285,6 +321,26 @@ struct AIWorkoutDraftExercise: Decodable, Identifiable {
     var workoutActivityType: WorkoutActivityType {
         WorkoutActivityType(rawValue: activityType) ?? .strength
     }
+
+    var workoutSets: [WorkoutDraftSet] {
+        var groupIDs: [Int: UUID] = [:]
+        return sets.map { set in
+            let method = WorkoutSetMethod(rawValue: set.method ?? "") ?? .normal
+            let groupID: UUID?
+            if method != .normal, let methodGroup = set.methodGroup, methodGroup > 0 {
+                if let existing = groupIDs[methodGroup] {
+                    groupID = existing
+                } else {
+                    let created = UUID()
+                    groupIDs[methodGroup] = created
+                    groupID = created
+                }
+            } else {
+                groupID = nil
+            }
+            return set.workoutSet(method: method, groupID: groupID)
+        }
+    }
 }
 
 struct AIWorkoutDraftSet: Decodable {
@@ -292,13 +348,40 @@ struct AIWorkoutDraftSet: Decodable {
     let reps: Int
     let durationSeconds: Int
     let metricType: String
+    let method: String?
+    let methodGroup: Int?
+    let stepIndex: Int?
+    let restAfterSeconds: Int?
+    let pyramidPattern: String?
 
-    var workoutSet: WorkoutDraftSet {
-        WorkoutDraftSet(
+    func workoutSet(method resolvedMethod: WorkoutSetMethod? = nil, groupID: UUID? = nil) -> WorkoutDraftSet {
+        let workoutMethod = resolvedMethod ?? WorkoutSetMethod(rawValue: method ?? "") ?? .normal
+        return WorkoutDraftSet(
             weight: weight,
             reps: reps,
             durationSeconds: durationSeconds,
-            metricType: WorkoutSetMetricType(rawValue: metricType) ?? .reps
+            metricType: WorkoutSetMetricType(rawValue: metricType) ?? .reps,
+            method: workoutMethod,
+            pyramidPattern: WorkoutPyramidPattern(rawValue: pyramidPattern ?? "") ?? .ascending,
+            groupID: groupID,
+            stepIndex: stepIndex ?? 0,
+            restAfterSeconds: restAfterSeconds ?? 0
+        )
+    }
+
+    func applying(method workoutMethod: WorkoutSetMethod, methodGroup: Int, stepIndex: Int) -> AIWorkoutDraftSet {
+        AIWorkoutDraftSet(
+            weight: weight,
+            reps: reps,
+            durationSeconds: durationSeconds,
+            metricType: metricType,
+            method: workoutMethod.rawValue,
+            methodGroup: methodGroup,
+            stepIndex: stepIndex,
+            restAfterSeconds: restAfterSeconds,
+            pyramidPattern: workoutMethod == .pyramid
+                ? (pyramidPattern ?? WorkoutPyramidPattern.custom.rawValue)
+                : WorkoutPyramidPattern.ascending.rawValue
         )
     }
 }
@@ -463,6 +546,107 @@ extension AIWorkoutDraft {
             }
         )
     }
+
+    /// A trainer can describe the initial prescription and then append a
+    /// pyramid or extra sets for the same exercise. Models occasionally emit
+    /// that as two `add` operations. Keep the trainer's explicit append intent
+    /// authoritative and show one exercise with one ordered set list.
+    func applyingSetAppendIntent(from command: String) -> AIWorkoutDraft {
+        let normalizedCommand = command
+            .lowercased()
+            .folding(options: .diacriticInsensitive, locale: .current)
+        let appendPhrases = [
+            "добавь подход", "добавить подход", "добавь еще подход", "добавь ещё подход",
+            "добавь пирамид", "добавить пирамид", "дополни подход", "пирамида подход",
+            "добавь дроп", "добавить дроп", "добавь кластер", "добавить кластер",
+            "append set", "add set", "add another set", "add a pyramid", "append a pyramid",
+            "add a drop set", "append a drop set", "add a cluster", "append a cluster"
+        ]
+        let separateExercisePhrases = [
+            "отдельное упражнение", "отдельным упражнением", "еще одно упражнение",
+            "ещё одно упражнение", "второе упражнение", "separate exercise",
+            "another exercise", "second exercise"
+        ]
+        guard appendPhrases.contains(where: normalizedCommand.contains),
+              separateExercisePhrases.contains(where: normalizedCommand.contains) == false else {
+            return self
+        }
+
+        let requestedMethod: WorkoutSetMethod? = {
+            if normalizedCommand.contains("дроп") || normalizedCommand.contains("drop set") {
+                return .dropSet
+            }
+            if normalizedCommand.contains("пирамид") || normalizedCommand.contains("pyramid") {
+                return .pyramid
+            }
+            if normalizedCommand.contains("кластер") || normalizedCommand.contains("cluster") {
+                return .cluster
+            }
+            return nil
+        }()
+
+        return AIWorkoutDraft(
+            summary: summary,
+            blocks: blocks.map { block in
+                var mergedExercises: [AIWorkoutDraftExercise] = []
+                var addedExerciseIndexByName: [String: Int] = [:]
+
+                for exercise in block.exercises {
+                    let normalizedName = normalizedExerciseName(exercise.name)
+                    if exercise.operation == .add,
+                       exercise.targetExerciseId == nil,
+                       normalizedName.isEmpty == false,
+                       let existingIndex = addedExerciseIndexByName[normalizedName] {
+                        let existing = mergedExercises[existingIndex]
+                        let appendedSets: [AIWorkoutDraftSet]
+                        if let requestedMethod,
+                           exercise.sets.contains(where: { ($0.method ?? WorkoutSetMethod.normal.rawValue) != WorkoutSetMethod.normal.rawValue }) == false {
+                            let nextGroup = (existing.sets.compactMap(\.methodGroup).max() ?? 0) + 1
+                            appendedSets = exercise.sets.enumerated().map { index, set in
+                                set.applying(method: requestedMethod, methodGroup: nextGroup, stepIndex: index)
+                            }
+                        } else {
+                            appendedSets = exercise.sets
+                        }
+                        mergedExercises[existingIndex] = AIWorkoutDraftExercise(
+                            operation: .add,
+                            targetExerciseId: nil,
+                            name: existing.name,
+                            systemImage: existing.systemImage,
+                            accentName: existing.accentName,
+                            activityType: existing.activityType,
+                            metValue: existing.metValue,
+                            note: existing.note.isEmpty ? exercise.note : existing.note,
+                            sets: existing.sets + appendedSets
+                        )
+                    } else {
+                        if exercise.operation == .add,
+                           exercise.targetExerciseId == nil,
+                           normalizedName.isEmpty == false {
+                            addedExerciseIndexByName[normalizedName] = mergedExercises.count
+                        }
+                        mergedExercises.append(exercise)
+                    }
+                }
+
+                return AIWorkoutDraftBlock(
+                    title: block.title,
+                    targetBlockId: block.targetBlockId,
+                    insertAfterBlockId: block.insertAfterBlockId,
+                    updatesBlockSettings: block.updatesBlockSettings,
+                    preset: block.preset,
+                    type: block.type,
+                    mode: block.mode,
+                    rounds: block.rounds,
+                    durationMinutes: block.durationMinutes,
+                    workSeconds: block.workSeconds,
+                    restSeconds: block.restSeconds,
+                    restBetweenRoundsSeconds: block.restBetweenRoundsSeconds,
+                    exercises: mergedExercises
+                )
+            }
+        )
+    }
 }
 
 private extension Array where Element == WorkoutExerciseTemplate {
@@ -550,6 +734,21 @@ private func exerciseMatchingAliases(for localizationKey: String?) -> [String] {
             "эйрбайк",
             "воздушный велосипед"
         ]
+    case "workout.exercise.banded_lateral_walk":
+        return [
+            "banded lateral walk",
+            "band lateral walk",
+            "lateral band walk",
+            "side band walk",
+            "side steps with band",
+            "monster walk",
+            "боковая ходьба с резинкой",
+            "боковая ходьба с резинкой",
+            "ходьба боком с резинкой",
+            "шаги в сторону с резинкой",
+            "боковые шаги с резинкой",
+            "монстр walk"
+        ]
     case "workout.exercise.bird_dog":
         return [
             "bird dog",
@@ -582,6 +781,22 @@ private func exerciseMatchingAliases(for localizationKey: String?) -> [String] {
             "мышечный рывок",
             "протяжка рывковым хватом",
             "рывковая протяжка"
+        ]
+    case "workout.exercise.single_leg_deadlift":
+        return [
+            "single leg deadlift",
+            "single-leg deadlift",
+            "one leg deadlift",
+            "one-leg deadlift",
+            "single leg rdl",
+            "single-leg rdl",
+            "single leg romanian deadlift",
+            "становая тяга одной ногой",
+            "становая тяга одной ногой",
+            "становая на одной ноге",
+            "тяга одной ногой",
+            "тяга на одной ноге",
+            "румынская тяга одной ногой"
         ]
     case "workout.exercise.ski_erg":
         return [
@@ -772,14 +987,7 @@ actor AIWorkoutDraftGenerator {
                                     activityType: exercise.activityTypeRaw,
                                     metValue: exercise.metValue,
                                     note: exercise.note,
-                                    sets: exercise.sets.map {
-                                        AIWorkoutExistingSet(
-                                            weight: $0.weight,
-                                            reps: $0.reps,
-                                            durationSeconds: $0.durationSeconds,
-                                            metricType: $0.metricType.rawValue
-                                        )
-                                    }
+                                    sets: exercise.sets.aiExistingSets
                                 )
                             }
                     )
@@ -867,12 +1075,20 @@ actor AIWorkoutDraftGenerator {
         let setSchema: [String: Any] = [
             "type": "object",
             "additionalProperties": false,
-            "required": ["weight", "reps", "durationSeconds", "metricType"],
+            "required": [
+                "weight", "reps", "durationSeconds", "metricType", "method",
+                "methodGroup", "stepIndex", "restAfterSeconds", "pyramidPattern"
+            ],
             "properties": [
                 "weight": ["type": "number"],
                 "reps": ["type": "integer", "minimum": 0, "maximum": 500],
                 "durationSeconds": ["type": "integer", "minimum": 0, "maximum": 7_200],
-                "metricType": ["type": "string", "enum": ["reps", "duration"]]
+                "metricType": ["type": "string", "enum": ["reps", "duration"]],
+                "method": ["type": "string", "enum": ["normal", "dropSet", "pyramid", "cluster"]],
+                "methodGroup": ["type": "integer", "minimum": 0, "maximum": 100],
+                "stepIndex": ["type": "integer", "minimum": 0, "maximum": 100],
+                "restAfterSeconds": ["type": "integer", "minimum": 0, "maximum": 7_200],
+                "pyramidPattern": ["type": "string", "enum": ["ascending", "descending", "full", "custom"]]
             ]
         ]
 
@@ -947,17 +1163,18 @@ actor AIWorkoutDraftGenerator {
         """
         You are a fitness-programming assistant for certified trainers. Convert the trainer's instruction into a conservative workout TEMPLATE DRAFT, or ask one concise clarification when making a safe, exact draft is genuinely impossible. Return JSON only and respond in \(language). The trainer may write in any language. Regardless of the input language, translate every human-readable output field into \(language), including summary, question, options, block titles, exercise names, and notes. Never copy an exercise name from the input in another language when a \(language) name exists.
         Always return kind, summary, question, options, and blocks. For a completed draft use kind "draft", question "", options [], and non-empty blocks. For a clarification use kind "clarification", summary "", one concise question, 2 to 4 short mutually exclusive options, and blocks []. Ask only one question at a time. Clarify when multiple existing exercises or blocks match an edit, when the target/location of a destructive action is ambiguous, or when safety-critical information such as the location of pain is missing. Do not clarify harmless defaults that can be reviewed in a draft. Do not repeat a question already answered in the trainer instruction. Never guess an existing target id; ask if no exact target can be identified.
-        Each draft block has title, targetBlockId (a current template block id or null), insertAfterBlockId (a current template block id or null), updatesBlockSettings, preset (warmup|strength|superset|circuit|hiit|tabata|amrap|emom|e2mom|e3mom|forTime|rft|pyramid|dropSet|clusterSet|ladder|mobility|stretching|cooldown), type (warmup|strength|main|superset|circuit|stretching|cooldown), mode (rounds|amrap|tabata|emom), rounds, durationMinutes, workSeconds, restSeconds, restBetweenRoundsSeconds, and exercises. preset is the source of truth; type and mode must match that preset. Each exercise has operation (add|update|delete), targetExerciseId (an existing exercise id or null), name, systemImage, accentName (blue|green|orange|purple|teal|red), activityType (strength|cardio|hiit|core|mobility), metValue, note, and sets. Each set has weight, reps, durationSeconds, metricType (reps|duration).
-        Rules: current template blocks and their exercises are provided in their current order in the user message. Use operation add with targetExerciseId null for a new exercise. To REPLACE an exercise, use operation update and its exact targetExerciseId; the output name and fields describe the replacement. To DELETE an exercise, use operation delete and its exact targetExerciseId. A delete operation is never an add. Preserve the existing sets for a replacement unless the trainer explicitly supplied a new prescription. Set updatesBlockSettings false for exercise-only additions, replacements, or deletions, so existing rounds/timers/rest remain unchanged; set it true only when the trainer explicitly changes block settings. If the trainer asks to EDIT or ADD EXERCISES TO an existing block by name, set targetBlockId to that exact id and set insertAfterBlockId to null. If the trainer says NEW, ANOTHER, or SEPARATE block, targetBlockId MUST be null even when its title/type matches an existing block. When that new block must appear after an existing block, set insertAfterBlockId to the existing block's exact id. A new block named "Суперсет" must never be merged into an existing block merely because both titles are "Суперсет". If no section or workout format is explicitly requested, return EXACTLY ONE block: title "Силовой блок" in Russian or "Strength block" in English, type "strength", and put every requested exercise in it. Never make a block from an exercise name; "bench press" must be an exercise inside the strength block, not a block named "bench press". Create multiple blocks only when the instruction explicitly asks for warmup, cooldown, a circuit/AMRAP/Tabata, or named separate sections. Create only what the trainer asked; do not provide medical advice; never guess a working weight — use 0 when it is not supplied.
+        Each draft block has title, targetBlockId (a current template block id or null), insertAfterBlockId (a current template block id or null), updatesBlockSettings, preset (warmup|strength|superset|circuit|hiit|tabata|amrap|emom|e2mom|e3mom|forTime|rft|pyramid|dropSet|clusterSet|ladder|mobility|stretching|cooldown), type (warmup|strength|main|superset|circuit|stretching|cooldown), mode (rounds|amrap|tabata|emom), rounds, durationMinutes, workSeconds, restSeconds, restBetweenRoundsSeconds, and exercises. preset is the source of truth; type and mode must match that preset. Each exercise has operation (add|update|delete), targetExerciseId (an existing exercise id or null), name, systemImage, accentName (blue|green|orange|purple|teal|red), activityType (strength|cardio|hiit|core|mobility), metValue, note, and sets. Each set has weight, reps, durationSeconds, metricType (reps|duration), method (normal|dropSet|pyramid|cluster), methodGroup, stepIndex, restAfterSeconds, and pyramidPattern (ascending|descending|full|custom).
+        Rules: current template blocks and their exercises are provided in their current order in the user message. Use operation add with targetExerciseId null for a new exercise. To REPLACE an exercise, use operation update and its exact targetExerciseId; the output name and fields describe the replacement. To DELETE an exercise, use operation delete and its exact targetExerciseId. A delete operation is never an add. When the trainer says to add or append sets, a pyramid, a drop set, or another set sequence to an exercise, NEVER create a second copy of that exercise. If it is a new exercise in this draft, return one add operation whose sets contain the initial and appended sets in the requested order. If it is an existing exercise, return one update operation with its exact targetExerciseId and the COMPLETE set list: preserved existing sets followed by the appended sets. Preserve the existing sets for a replacement unless the trainer explicitly supplied a new prescription. Set updatesBlockSettings false for exercise-only additions, replacements, or deletions, so existing rounds/timers/rest remain unchanged; set it true only when the trainer explicitly changes block settings. If the trainer asks to EDIT or ADD EXERCISES TO an existing block by name, set targetBlockId to that exact id and set insertAfterBlockId to null. If the trainer says NEW, ANOTHER, or SEPARATE block, targetBlockId MUST be null even when its title/type matches an existing block. When that new block must appear after an existing block, set insertAfterBlockId to the existing block's exact id. A new block named "Суперсет" must never be merged into an existing block merely because both titles are "Суперсет". If no section or workout format is explicitly requested, return EXACTLY ONE block: title "Силовой блок" in Russian or "Strength block" in English, type "strength", and put every requested exercise in it. Never make a block from an exercise name; "bench press" must be an exercise inside the strength block, not a block named "bench press". Create multiple blocks only when the instruction explicitly asks for warmup, cooldown, a circuit/AMRAP/Tabata, or named separate sections. Create only what the trainer asked; do not provide medical advice; never guess a working weight — use 0 when it is not supplied.
         For a relative request such as "make it 20% harder" with no metric specified, increase repetitions and timed durations by that percentage, rounded to the nearest whole number. Keep weights, rounds and rest unchanged unless the trainer explicitly changes them. The preview is the source of truth and must show every resulting value.
         For a superset or round-based circuit, an unqualified rest value means restBetweenRoundsSeconds; restSeconds is only the short rest between work intervals when explicitly requested.
+        Set-method rules: ordinary sets use method "normal", methodGroup 0, stepIndex 0, restAfterSeconds 0, and pyramidPattern "ascending". Consecutive steps explicitly identified as one drop set, pyramid, or cluster use method "dropSet", "pyramid", or "cluster" and share the same positive methodGroup; number their stepIndex from 0 in order. Use a different positive methodGroup for every separate special sequence. Mark only the sets the trainer identified as the special sequence: earlier warm-up or working sets remain normal. A descending-weight pyramid uses pyramidPattern "descending"; an ascending one uses "ascending"; an up-and-down one uses "full"; otherwise use "custom". A requested set method does not change the enclosing strength block preset.
         rounds means how many times the complete block sequence is performed. sets are the source of truth for exercise history and reports: output one sets array item for EVERY prescribed set. For superset, circuit, rft, pyramid, dropSet, clusterSet, and ladder, every exercise must have at least one set object per round/stage; repeat identical objects when prescriptions are identical. Thus a superset for 3 sets has rounds=3 and three set objects for each exercise. A circular warmup for 2 rounds is preset circuit, type circuit, mode rounds, rounds=2, and two set objects per exercise. A normal strength exercise for 3 sets remains preset strength, rounds=1, and has three set objects. Never put a prescription for sets, reps, weight, duration, or rest only into note. For example, "5 sets of 5 reps at 70 kg" must return five set objects, each {weight: 70, reps: 5, durationSeconds: 0, metricType: "reps"}; "2 sets of 15 at 20 kg, then 4 sets of 15 at 40 kg" must return six set objects in that exact order. "10x10" means 10 set objects of 10 reps. Use note only for coaching cues or explanations. Use duration only for timed exercises; use valid values; no more than 5 blocks, 20 exercises, or 12 sets per exercise; no markdown.
         """
     }
 
     private func repairSystemPrompt(language: String) -> String {
         """
-        You repair workout-template assistant JSON for certified trainers. Return JSON only and respond in \(language). The original instruction may use any language. Translate every human-readable output field into \(language), including summary, question, options, block titles, exercise names, and notes. Never copy an exercise name from the input in another language when a \(language) name exists. Rebuild the response from the original trainer instruction, correcting the invalid response if useful. A relative request such as "make it 20% harder" increases repetitions and timed durations by that percentage, rounded to the nearest whole number, while weights, rounds and rest stay unchanged unless explicitly changed. Use exactly this schema: {kind:"draft"|"clarification",summary:String,question:String,options:[String],blocks:[{title:String,targetBlockId:String|null,insertAfterBlockId:String|null,updatesBlockSettings:Bool,preset:String,type:String,mode:String,rounds:Int,durationMinutes:Int,workSeconds:Int,restSeconds:Int,restBetweenRoundsSeconds:Int,exercises:[{operation:String,targetExerciseId:String|null,name:String,systemImage:String,accentName:String,activityType:String,metValue:Double,note:String,sets:[{weight:Double,reps:Int,durationSeconds:Int,metricType:String}]}]}]}. A draft uses question "", options [], and non-empty blocks. A clarification uses summary "", one concise question, 2 to 4 short mutually exclusive options, and blocks []. Ask only if an exact target is genuinely ambiguous or safety-critical information is missing; do not repeat an answered question. Every draft block must contain at least one exercise operation. Use add/null for new exercises, update/exact-id for replacements, and delete/exact-id for deletions. Exercise-only edits use updatesBlockSettings false. NEW/ANOTHER/SEPARATE blocks always have targetBlockId null; use insertAfterBlockId only to position a new block after an existing one. Use only preset warmup|strength|superset|circuit|hiit|tabata|amrap|emom|e2mom|e3mom|forTime|rft|pyramid|dropSet|clusterSet|ladder|mobility|stretching|cooldown, type warmup|strength|main|superset|circuit|stretching|cooldown, mode rounds|amrap|tabata|emom, operation add|update|delete, accentName blue|green|orange|purple|teal|red, activityType strength|cardio|hiit|core|mobility, metricType reps|duration. Preserve every prescribed set as individual objects. For superset, circuit, rft, pyramid, dropSet, clusterSet, and ladder, every non-delete exercise needs at least one set object per round/stage. Never add markdown or explanation.
+        You repair workout-template assistant JSON for certified trainers. Return JSON only and respond in \(language). The original instruction may use any language. Translate every human-readable output field into \(language), including summary, question, options, block titles, exercise names, and notes. Never copy an exercise name from the input in another language when a \(language) name exists. Rebuild the response from the original trainer instruction, correcting the invalid response if useful. A relative request such as "make it 20% harder" increases repetitions and timed durations by that percentage, rounded to the nearest whole number, while weights, rounds and rest stay unchanged unless explicitly changed. Use exactly this schema: {kind:"draft"|"clarification",summary:String,question:String,options:[String],blocks:[{title:String,targetBlockId:String|null,insertAfterBlockId:String|null,updatesBlockSettings:Bool,preset:String,type:String,mode:String,rounds:Int,durationMinutes:Int,workSeconds:Int,restSeconds:Int,restBetweenRoundsSeconds:Int,exercises:[{operation:String,targetExerciseId:String|null,name:String,systemImage:String,accentName:String,activityType:String,metValue:Double,note:String,sets:[{weight:Double,reps:Int,durationSeconds:Int,metricType:String,method:String,methodGroup:Int,stepIndex:Int,restAfterSeconds:Int,pyramidPattern:String}]}]}]}. A draft uses question "", options [], and non-empty blocks. A clarification uses summary "", one concise question, 2 to 4 short mutually exclusive options, and blocks []. Ask only if an exact target is genuinely ambiguous or safety-critical information is missing; do not repeat an answered question. Every draft block must contain at least one exercise operation. Use add/null for new exercises, update/exact-id for replacements, and delete/exact-id for deletions. When adding sets, a pyramid, a drop set, or a cluster to the same exercise, return exactly one exercise operation with the complete ordered set list; never represent appended sets as a duplicate exercise. Exercise-only edits use updatesBlockSettings false. NEW/ANOTHER/SEPARATE blocks always have targetBlockId null; use insertAfterBlockId only to position a new block after an existing one. Use only preset warmup|strength|superset|circuit|hiit|tabata|amrap|emom|e2mom|e3mom|forTime|rft|pyramid|dropSet|clusterSet|ladder|mobility|stretching|cooldown, type warmup|strength|main|superset|circuit|stretching|cooldown, mode rounds|amrap|tabata|emom, operation add|update|delete, accentName blue|green|orange|purple|teal|red, activityType strength|cardio|hiit|core|mobility, metricType reps|duration, method normal|dropSet|pyramid|cluster, pyramidPattern ascending|descending|full|custom. Ordinary sets use method normal and methodGroup 0. Each explicitly requested special sequence shares a positive methodGroup and has stepIndex numbered from 0; only those sets receive the special method. Preserve every prescribed set as individual objects. For superset, circuit, rft, pyramid, dropSet, clusterSet, and ladder, every non-delete exercise needs at least one set object per round/stage. Never add markdown or explanation.
         """
     }
 
@@ -999,7 +1216,11 @@ private extension AIWorkoutGenerationDecision {
     func applyingPlacementIntent(from command: String) -> AIWorkoutGenerationDecision {
         switch self {
         case .draft(let draft):
-            return .draft(draft.applyingPlacementIntent(from: command))
+            return .draft(
+                draft
+                    .applyingPlacementIntent(from: command)
+                    .applyingSetAppendIntent(from: command)
+            )
         case .clarification:
             return self
         }

@@ -361,14 +361,7 @@ struct WorkoutTemplateEditorScreen: View {
                                     AIWorkoutExistingExercise(
                                         id: exercise.id,
                                         name: exercise.name,
-                                        sets: exercise.sets.map {
-                                            AIWorkoutExistingSet(
-                                                weight: $0.weight,
-                                                reps: $0.reps,
-                                                durationSeconds: $0.durationSeconds,
-                                                metricType: $0.metricType.rawValue
-                                            )
-                                        }
+                                        sets: exercise.sets.aiExistingSets
                                     )
                                 }
                         )
@@ -1318,26 +1311,71 @@ struct AIWorkoutGeneratorScreen: View {
     }
 
     private func exerciseSummary(_ exercise: AIWorkoutDraftExercise) -> String {
-        let values = exercise.sets.map { set in
-            formattedWorkoutSetValue(
-                weight: set.weight,
-                reps: set.reps,
-                durationSeconds: set.durationSeconds,
-                metricType: WorkoutSetMetricType(rawValue: set.metricType) ?? .reps
-            )
+        var parts: [String] = []
+        var index = 0
+        while index < exercise.sets.count {
+            let set = exercise.sets[index]
+            let method = WorkoutSetMethod(rawValue: set.method ?? "") ?? .normal
+            if method == .normal {
+                parts.append(aiSetValue(set))
+                index += 1
+                continue
+            }
+
+            let methodGroup = set.methodGroup ?? 0
+            var groupValues: [String] = []
+            while index < exercise.sets.count {
+                let candidate = exercise.sets[index]
+                guard (WorkoutSetMethod(rawValue: candidate.method ?? "") ?? .normal) == method,
+                      candidate.methodGroup == methodGroup else { break }
+                groupValues.append(aiSetValue(candidate))
+                index += 1
+            }
+            parts.append("\(method.title): \(groupValues.joined(separator: " → "))")
         }
-        return values.joined(separator: " · ")
+        return parts.joined(separator: " · ")
     }
 
     private func libraryExerciseSummary(_ exercise: WorkoutTemplateExerciseItem) -> String {
-        exercise.sets.map { set in
-            formattedWorkoutSetValue(
-                weight: set.weight,
-                reps: set.reps,
-                durationSeconds: set.durationSeconds,
-                metricType: set.metricType
-            )
-        }.joined(separator: " · ")
+        var parts: [String] = []
+        var index = 0
+        while index < exercise.sets.count {
+            let set = exercise.sets[index]
+            if set.method == .normal {
+                parts.append(templateSetValue(set))
+                index += 1
+                continue
+            }
+
+            let groupID = set.groupID
+            var groupValues: [String] = []
+            while index < exercise.sets.count {
+                let candidate = exercise.sets[index]
+                guard candidate.method == set.method, candidate.groupID == groupID else { break }
+                groupValues.append(templateSetValue(candidate))
+                index += 1
+            }
+            parts.append("\(set.method.title): \(groupValues.joined(separator: " → "))")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private func aiSetValue(_ set: AIWorkoutDraftSet) -> String {
+        formattedWorkoutSetValue(
+            weight: set.weight,
+            reps: set.reps,
+            durationSeconds: set.durationSeconds,
+            metricType: WorkoutSetMetricType(rawValue: set.metricType) ?? .reps
+        )
+    }
+
+    private func templateSetValue(_ set: WorkoutDraftSet) -> String {
+        formattedWorkoutSetValue(
+            weight: set.weight,
+            reps: set.reps,
+            durationSeconds: set.durationSeconds,
+            metricType: set.metricType
+        )
     }
 }
 
@@ -1599,6 +1637,15 @@ private struct WorkoutTemplateExerciseCard: View {
                     }
 
                     ForEach(Array(exercise.sets.enumerated()), id: \.offset) { index, set in
+                        if set.method != .normal,
+                           index == 0 || exercise.sets[index - 1].groupID != set.groupID {
+                            Label(set.method.title, systemImage: set.method.iconName)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.blue)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.top, 10)
+                        }
+
                         HStack {
                             Text("\(index + 1)")
                                 .font(.subheadline.weight(.semibold))

@@ -347,7 +347,12 @@ final class ClientAssignedWorkoutsStore: ObservableObject {
                         weight: remoteSet.weight,
                         reps: remoteSet.reps,
                         durationSeconds: remoteSet.durationSeconds,
-                        metricType: remoteSet.metricType
+                        metricType: remoteSet.metricType,
+                        method: remoteSet.method,
+                        pyramidPattern: remoteSet.pyramidPattern,
+                        groupID: remoteSet.groupID,
+                        stepIndex: remoteSet.stepIndex,
+                        restAfterSeconds: remoteSet.restAfterSeconds
                     )
                     set.exercise = exercise
                     exercise.setItems.append(set)

@@ -806,6 +806,7 @@
 "workout.exercise.leg_extension" = "Разгибание ног в тренажёре";
 "workout.exercise.machine_hip_abduction" = "Отведение ног в тренажёре";
 "workout.exercise.banded_seated_hip_abduction" = "Отведение ног с резинкой сидя";
+"workout.exercise.banded_lateral_walk" = "Боковая ходьба с резинкой";
 "workout.exercise.step_up_knee_drive" = "Подъём на платформу с подъёмом колена";
 "workout.exercise.box_step_up" = "Зашагивания на тумбу";
 "workout.exercise.core" = "Пресс";
@@ -860,6 +861,7 @@
 "workout.exercise.classic_deadlift" = "Классическая становая тяга";
 "workout.exercise.sumo_deadlift" = "Становая тяга сумо";
 "workout.exercise.romanian_deadlift" = "Румынская тяга";
+"workout.exercise.single_leg_deadlift" = "Становая тяга одной ногой";
 "workout.exercise.stiff_leg_deadlift" = "Тяга на прямых ногах";
 "workout.exercise.good_morning" = "Наклоны Good Morning";
 "workout.exercise.barbell_hip_thrust" = "Ягодичный мост";

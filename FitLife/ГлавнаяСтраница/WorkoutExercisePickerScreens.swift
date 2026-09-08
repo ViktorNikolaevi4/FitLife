@@ -93,10 +93,25 @@ struct WorkoutDraftSet: Identifiable, Hashable {
     var reps: Int
     var durationSeconds: Int
     var metricTypeRaw: String
+    var methodRawValue: String
+    var methodVariantRawValue: String
+    var groupID: UUID?
+    var stepIndex: Int
+    var restAfterSeconds: Int
 
     var metricType: WorkoutSetMetricType {
         get { WorkoutSetMetricType(rawValue: metricTypeRaw) ?? .reps }
         set { metricTypeRaw = newValue.rawValue }
+    }
+
+    var method: WorkoutSetMethod {
+        get { WorkoutSetMethod(rawValue: methodRawValue) ?? .normal }
+        set { methodRawValue = newValue.rawValue }
+    }
+
+    var pyramidPattern: WorkoutPyramidPattern {
+        get { WorkoutPyramidPattern(rawValue: methodVariantRawValue) ?? .ascending }
+        set { methodVariantRawValue = newValue.rawValue }
     }
 
     init(
@@ -104,13 +119,23 @@ struct WorkoutDraftSet: Identifiable, Hashable {
         weight: Double,
         reps: Int = 10,
         durationSeconds: Int = 30,
-        metricType: WorkoutSetMetricType = .reps
+        metricType: WorkoutSetMetricType = .reps,
+        method: WorkoutSetMethod = .normal,
+        pyramidPattern: WorkoutPyramidPattern = .ascending,
+        groupID: UUID? = nil,
+        stepIndex: Int = 0,
+        restAfterSeconds: Int = 0
     ) {
         self.id = id
         self.weight = weight
         self.reps = reps
         self.durationSeconds = durationSeconds
         self.metricTypeRaw = metricType.rawValue
+        self.methodRawValue = method.rawValue
+        self.methodVariantRawValue = method == .pyramid ? pyramidPattern.rawValue : ""
+        self.groupID = groupID
+        self.stepIndex = stepIndex
+        self.restAfterSeconds = restAfterSeconds
     }
 }
 

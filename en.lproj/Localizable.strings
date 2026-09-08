@@ -806,6 +806,7 @@
 "workout.exercise.leg_extension" = "Leg Extension";
 "workout.exercise.machine_hip_abduction" = "Seated Hip Abduction";
 "workout.exercise.banded_seated_hip_abduction" = "Seated Banded Hip Abduction";
+"workout.exercise.banded_lateral_walk" = "Banded Lateral Walk";
 "workout.exercise.step_up_knee_drive" = "Step-Up with Knee Drive";
 "workout.exercise.box_step_up" = "Box Step-Up";
 "workout.exercise.core" = "Core";
@@ -860,6 +861,7 @@
 "workout.exercise.classic_deadlift" = "Conventional Deadlift";
 "workout.exercise.sumo_deadlift" = "Sumo Deadlift";
 "workout.exercise.romanian_deadlift" = "Romanian Deadlift";
+"workout.exercise.single_leg_deadlift" = "Single-Leg Deadlift";
 "workout.exercise.stiff_leg_deadlift" = "Stiff-Leg Deadlift";
 "workout.exercise.good_morning" = "Good Morning";
 "workout.exercise.barbell_hip_thrust" = "Barbell Hip Thrust";

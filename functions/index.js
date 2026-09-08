@@ -1398,6 +1398,7 @@ Rules:
 - Create only what the trainer asked for. Do not invent medical advice, contraindications, diagnoses, or client-specific limits.
 - If a load is not specified, use weight 0. Never guess a client's working weight.
 - "10x10" means 10 sets with 10 reps each, not a weight of 10 kg.
+- When the trainer describes an exercise and then asks to add or append sets, a pyramid, or a drop set to that same exercise, return it exactly once with one ordered sets array containing both the initial and appended sets. Never create a duplicate exercise to represent appended sets.
 - Use metricType "duration" only for timed work; then durationSeconds must be 5 to 3600 and reps must be 0.
 - Use metricType "reps" for normal exercises; reps must be 1 to 100 and durationSeconds must be 0.
 - Keep the draft compact: at most 5 blocks, 20 exercises total, and 12 sets per exercise.
@@ -1417,7 +1418,7 @@ Rules:
     }
   ]);
 
-  return sanitizeWorkoutDraft(rawDraft);
+  return sanitizeWorkoutDraft(rawDraft, command);
 }
 
 async function callOpenAIForWorkoutDraft(input) {
@@ -1468,7 +1469,7 @@ async function callOpenAIForWorkoutDraft(input) {
   }
 }
 
-function sanitizeWorkoutDraft(rawDraft) {
+function sanitizeWorkoutDraft(rawDraft, command = "") {
   const allowedBlockTypes = new Set(["warmup", "strength", "main", "circuit", "stretching", "cooldown"]);
   const allowedModes = new Set(["rounds", "amrap", "tabata"]);
   const allowedActivityTypes = new Set(["strength", "cardio", "hiit", "core", "mobility"]);
@@ -1476,6 +1477,7 @@ function sanitizeWorkoutDraft(rawDraft) {
   const rawBlocks = Array.isArray(rawDraft && rawDraft.blocks) ? rawDraft.blocks.slice(0, 5) : [];
   const blocks = [];
   let exerciseCount = 0;
+  const mergeRepeatedExercises = workoutCommandHasSetAppendIntent(command);
 
   for (const rawBlock of rawBlocks) {
     const type = typeof rawBlock.type === "string" && allowedBlockTypes.has(rawBlock.type)
@@ -1484,6 +1486,7 @@ function sanitizeWorkoutDraft(rawDraft) {
     const isCircuit = type === "circuit";
     const rawExercises = Array.isArray(rawBlock.exercises) ? rawBlock.exercises : [];
     const exercises = [];
+    const exerciseIndexByName = new Map();
 
     for (const rawExercise of rawExercises) {
       if (exerciseCount >= 20 || !rawExercise || typeof rawExercise.name !== "string") {
@@ -1501,7 +1504,7 @@ function sanitizeWorkoutDraft(rawDraft) {
       if (sets.length === 0) {
         sets.push({ weight: 0, reps: 10, durationSeconds: 0, metricType: "reps" });
       }
-      exercises.push({
+      const sanitizedExercise = {
         name,
         systemImage: safeSFSymbol(rawExercise.systemImage),
         accentName: allowedAccents.has(rawExercise.accentName) ? rawExercise.accentName : "blue",
@@ -1509,7 +1512,23 @@ function sanitizeWorkoutDraft(rawDraft) {
         metValue: clampNumber(rawExercise.metValue, 1, 20, 5),
         note: typeof rawExercise.note === "string" ? rawExercise.note.trim().slice(0, 500) : "",
         sets
-      });
+      };
+      const normalizedName = normalizeWorkoutExerciseName(name);
+      const existingIndex = mergeRepeatedExercises
+        ? exerciseIndexByName.get(normalizedName)
+        : undefined;
+      if (existingIndex !== undefined) {
+        const existingExercise = exercises[existingIndex];
+        existingExercise.sets = existingExercise.sets.concat(sets).slice(0, 12);
+        if (!existingExercise.note && sanitizedExercise.note) {
+          existingExercise.note = sanitizedExercise.note;
+        }
+        continue;
+      }
+      exercises.push(sanitizedExercise);
+      if (normalizedName) {
+        exerciseIndexByName.set(normalizedName, exercises.length - 1);
+      }
       exerciseCount += 1;
     }
 
@@ -1541,6 +1560,33 @@ function sanitizeWorkoutDraft(rawDraft) {
     summary: typeof rawDraft.summary === "string" ? rawDraft.summary.trim().slice(0, 500) : "",
     blocks
   };
+}
+
+function workoutCommandHasSetAppendIntent(command) {
+  const normalized = typeof command === "string"
+    ? command.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    : "";
+  const appendPhrases = [
+    "добавь подход", "добавить подход", "добавь еще подход",
+    "добавь пирамид", "добавить пирамид", "дополни подход", "пирамида подход",
+    "append set", "add set", "add another set", "add a pyramid", "append a pyramid"
+  ];
+  const separateExercisePhrases = [
+    "отдельное упражнение", "отдельным упражнением", "еще одно упражнение",
+    "второе упражнение", "separate exercise", "another exercise", "second exercise"
+  ];
+  return appendPhrases.some((phrase) => normalized.includes(phrase))
+    && !separateExercisePhrases.some((phrase) => normalized.includes(phrase));
+}
+
+function normalizeWorkoutExerciseName(value) {
+  return typeof value === "string"
+    ? value.toLowerCase().normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .trim()
+      .replace(/\s+/g, " ")
+    : "";
 }
 
 function sanitizeWorkoutSet(rawSet) {

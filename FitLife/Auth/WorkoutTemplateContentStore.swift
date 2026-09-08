@@ -79,7 +79,12 @@ struct WorkoutTemplateExerciseItem: Identifiable, Hashable {
                 weight: raw["weight"] as? Double ?? 0,
                 reps: raw["reps"] as? Int ?? 0,
                 durationSeconds: raw["durationSeconds"] as? Int ?? 30,
-                metricType: WorkoutSetMetricType(rawValue: raw["metricType"] as? String ?? "") ?? .reps
+                metricType: WorkoutSetMetricType(rawValue: raw["metricType"] as? String ?? "") ?? .reps,
+                method: WorkoutSetMethod(rawValue: raw["method"] as? String ?? "") ?? .normal,
+                pyramidPattern: WorkoutPyramidPattern(rawValue: raw["pyramidPattern"] as? String ?? "") ?? .ascending,
+                groupID: (raw["groupID"] as? String).flatMap(UUID.init(uuidString:)),
+                stepIndex: raw["stepIndex"] as? Int ?? 0,
+                restAfterSeconds: raw["restAfterSeconds"] as? Int ?? 0
             )
         }
     }
@@ -98,7 +103,12 @@ struct WorkoutTemplateExerciseItem: Identifiable, Hashable {
                     "weight": $0.weight,
                     "reps": $0.reps,
                     "durationSeconds": $0.durationSeconds,
-                    "metricType": $0.metricType.rawValue
+                    "metricType": $0.metricType.rawValue,
+                    "method": $0.method.rawValue,
+                    "pyramidPattern": $0.pyramidPattern.rawValue,
+                    "groupID": $0.groupID?.uuidString ?? "",
+                    "stepIndex": $0.stepIndex,
+                    "restAfterSeconds": $0.restAfterSeconds
                 ]
             }
         ]
@@ -830,7 +840,7 @@ final class WorkoutTemplateContentStore: ObservableObject {
                             activityType: generatedExercise.workoutActivityType,
                             metValue: generatedExercise.metValue,
                             orderIndex: nextExerciseIndex,
-                            sets: generatedExercise.sets.map(\.workoutSet),
+                            sets: generatedExercise.workoutSets,
                             note: generatedExercise.note
                         )
                         batch.setData(exercise.firestoreData, forDocument: exerciseRef)
@@ -857,7 +867,7 @@ final class WorkoutTemplateContentStore: ObservableObject {
                             activityType: generatedExercise.workoutActivityType,
                             metValue: generatedExercise.metValue,
                             orderIndex: existingExercise.orderIndex,
-                            sets: generatedExercise.sets.map(\.workoutSet),
+                            sets: generatedExercise.workoutSets,
                             note: generatedExercise.note
                         )
                         batch.setData(

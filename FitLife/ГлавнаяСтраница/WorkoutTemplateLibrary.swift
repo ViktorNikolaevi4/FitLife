@@ -68,6 +68,7 @@ enum WorkoutExerciseIcon {
     static let legExtension = "Разгибание ног в тренажёре"
     static let machineHipAbduction = "Отведение ног в тренажёре "
     static let bandedSeatedHipAbduction = "Отведение ног с резинкой сидя"
+    static let bandedLateralWalk = "Боковая ходьба с резинкой"
     static let stepUpKneeDrive = "Подъём на платформу с подъёмом колена"
     static let boxStepUp = "Зашагивания на тумбу"
     static let biceps = "Бицепс"
@@ -122,6 +123,7 @@ enum WorkoutExerciseIcon {
     static let classicDeadlift = "Классическая становая тяга"
     static let sumoDeadlift = "Становая тяга сумо"
     static let romanianDeadlift = "Румынская тяга"
+    static let singleLegDeadlift = "Становая тяга одной ногой"
     static let stiffLegDeadlift = "Тяга на прямых ногах"
     static let goodMorning = "Наклоны Good Morning"
     static let bodyweightGluteBridge = "Ягодичный мост со своим весом"
@@ -902,6 +904,17 @@ private func makeWorkoutTemplates(language: AppLanguage) -> [WorkoutExerciseTemp
             ]
         ),
         WorkoutExerciseTemplate(
+            localizationKey: "workout.exercise.banded_lateral_walk",
+            name: language.localized("workout.exercise.banded_lateral_walk"),
+            systemImage: WorkoutExerciseIcon.bandedLateralWalk,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 3.5,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, reps: 20)
+            ]
+        ),
+        WorkoutExerciseTemplate(
             localizationKey: "workout.exercise.step_up_knee_drive",
             name: language.localized("workout.exercise.step_up_knee_drive"),
             systemImage: WorkoutExerciseIcon.stepUpKneeDrive,
@@ -1537,6 +1550,17 @@ private func makeWorkoutTemplates(language: AppLanguage) -> [WorkoutExerciseTemp
             metValue: 5.5,
             defaultSets: [
                 WorkoutDraftSet(weight: 50, reps: 10)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            localizationKey: "workout.exercise.single_leg_deadlift",
+            name: language.localized("workout.exercise.single_leg_deadlift"),
+            systemImage: WorkoutExerciseIcon.singleLegDeadlift,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 5.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, reps: 10)
             ]
         ),
         WorkoutExerciseTemplate(

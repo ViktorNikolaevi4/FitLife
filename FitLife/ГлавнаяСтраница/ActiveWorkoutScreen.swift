@@ -796,7 +796,12 @@ struct ActiveWorkoutScreen: View {
                 weight: setPreset.weight,
                 reps: setPreset.reps,
                 durationSeconds: setPreset.durationSeconds,
-                metricType: setPreset.metricType
+                metricType: setPreset.metricType,
+                method: setPreset.method,
+                pyramidPattern: setPreset.pyramidPattern,
+                groupID: setPreset.groupID,
+                stepIndex: setPreset.stepIndex,
+                restAfterSeconds: setPreset.restAfterSeconds
             )
             set.exercise = exercise
             exercise.setItems.append(set)
@@ -999,7 +1004,7 @@ struct ActiveWorkoutScreen: View {
                 exercise.session = workout
                 exercise.block = block
 
-                appendSets(generatedExercise.sets.map(\.workoutSet), to: exercise)
+                appendSets(generatedExercise.workoutSets, to: exercise)
 
                 workout.exerciseItems.append(exercise)
                 block.exerciseItems.append(exercise)
@@ -1015,7 +1020,12 @@ struct ActiveWorkoutScreen: View {
                 weight: sourceSet.weight,
                 reps: sourceSet.reps,
                 durationSeconds: sourceSet.durationSeconds,
-                metricType: sourceSet.metricType
+                metricType: sourceSet.metricType,
+                method: sourceSet.method,
+                pyramidPattern: sourceSet.pyramidPattern,
+                groupID: sourceSet.groupID,
+                stepIndex: sourceSet.stepIndex,
+                restAfterSeconds: sourceSet.restAfterSeconds
             )
             workoutSet.exercise = exercise
             exercise.setItems.append(workoutSet)
