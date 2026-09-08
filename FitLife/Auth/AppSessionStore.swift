@@ -221,8 +221,9 @@ final class AppSessionStore: ObservableObject {
     private func requestServerAccountDataDeletion(for user: User) async throws {
         guard
             let projectId = FirebaseApp.app()?.options.projectID,
-            let endpoint = URL(
-                string: "https://europe-west1-\(projectId).cloudfunctions.net/deleteCurrentAccountData"
+            let endpoint = FirebaseEmulatorConfiguration.functionsURL(
+                named: "deleteCurrentAccountData",
+                projectId: projectId
             )
         else {
             throw URLError(.badURL)

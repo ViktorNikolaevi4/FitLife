@@ -85,6 +85,7 @@ struct FitLifeApp: App {
         if FirebaseApp.app() == nil {
             FirebaseApp.configure()
         }
+        FirebaseEmulatorConfiguration.configureIfNeeded()
 
         UserDefaults.standard.register(defaults: [
             LocalReminderScheduler.mealRemindersEnabledKey: true,

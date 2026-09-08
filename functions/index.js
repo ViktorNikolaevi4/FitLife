@@ -1,12 +1,18 @@
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onDocumentCreated, onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { onRequest } = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
-const admin = require("firebase-admin");
+const { initializeApp } = require("firebase-admin/app");
+const { getAuth } = require("firebase-admin/auth");
+const { FieldValue, getFirestore, Timestamp } = require("firebase-admin/firestore");
+const { getMessaging } = require("firebase-admin/messaging");
+const { getStorage } = require("firebase-admin/storage");
 
-admin.initializeApp();
+initializeApp();
 
-const db = admin.firestore();
-const messaging = admin.messaging();
+const auth = getAuth();
+const db = getFirestore();
+const messaging = getMessaging();
+const storage = getStorage();
 const PUSH_LEASE_MS = 5 * 60 * 1000;
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const OPENAI_MODEL = "gpt-4.1-mini";
@@ -201,7 +207,7 @@ exports.reconcileUnreadNotifications = onRequest(
 
     try {
       const decodedToken = await verifyAuthorization(request);
-      const reconciledThrough = admin.firestore.Timestamp.now();
+      const reconciledThrough = Timestamp.now();
       const unreadCount = await reconcileUnreadNotificationCount(
         decodedToken.uid,
         reconciledThrough
@@ -383,6 +389,85 @@ const TYPE_CONFIG = {
 // Chat delivery and notification delivery are separate concerns. Creating the
 // notification on the server makes the latter reliable even if an older app
 // build or a transient client-side write failure skips its notification event.
+exports.createNotificationsForCoachingRequest = onDocumentWritten(
+  {
+    document: "coaching_requests/{requestId}",
+    region: "europe-west1",
+    retry: true
+  },
+  async (event) => {
+    const afterSnapshot = event.data && event.data.after;
+    if (!afterSnapshot || !afterSnapshot.exists) {
+      return;
+    }
+
+    const request = afterSnapshot.data() || {};
+    const clientId = stringifyData(request.clientId);
+    const requestId = event.params.requestId;
+    if (request.status !== "submitted" || !clientId || clientId !== requestId) {
+      return;
+    }
+
+    const submittedAt = request.submittedAt;
+    const submittedAtMillis = submittedAt && typeof submittedAt.toMillis === "function"
+      ? submittedAt.toMillis()
+      : 0;
+    if (!submittedAtMillis) {
+      logger.warn("Submitted coaching request has no valid submittedAt", { requestId });
+      return;
+    }
+
+    const beforeSnapshot = event.data.before;
+    const previousRequest = beforeSnapshot && beforeSnapshot.exists
+      ? beforeSnapshot.data() || {}
+      : {};
+    const previousSubmittedAt = previousRequest.submittedAt;
+    const previousSubmittedAtMillis = previousSubmittedAt
+      && typeof previousSubmittedAt.toMillis === "function"
+      ? previousSubmittedAt.toMillis()
+      : 0;
+    if (previousRequest.status === "submitted"
+      && previousSubmittedAtMillis === submittedAtMillis) {
+      return;
+    }
+
+    const [clientSnapshot, trainersSnapshot] = await Promise.all([
+      db.collection("users").doc(clientId).get(),
+      db.collection("users")
+        .where("role", "==", "trainer")
+        .where("isActive", "==", true)
+        .get()
+    ]);
+    const clientData = clientSnapshot.data() || {};
+    const senderName = typeof clientData.displayName === "string"
+      ? clientData.displayName.trim()
+      : "";
+
+    await Promise.all(trainersSnapshot.docs.map(async (trainerDocument) => {
+      const recipientId = trainerDocument.id;
+      const eventId = `coaching-request-${requestId}-${recipientId}-${submittedAtMillis}`;
+      const notificationRef = db.collection("notification_events").doc(eventId);
+      try {
+        await notificationRef.create({
+          type: "coaching_request_submitted",
+          recipientId,
+          senderId: clientId,
+          senderName,
+          targetType: "coaching_request",
+          targetId: requestId,
+          createdAt: FieldValue.serverTimestamp(),
+          isRead: false,
+          isArchived: false
+        });
+      } catch (error) {
+        if (error.code !== 6 && error.code !== "already-exists") {
+          throw error;
+        }
+      }
+    }));
+  }
+);
+
 exports.createNotificationForCoachingNote = onDocumentCreated(
   {
     document: "coaching_notes/{noteId}",
@@ -442,7 +527,7 @@ exports.createNotificationForCoachingNote = onDocumentCreated(
       senderName,
       targetType: "coaching_connection",
       targetId: noteId,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
       isRead: false,
       isArchived: false
     });
@@ -515,7 +600,7 @@ exports.createNotificationForWorkoutAssignment = onDocumentCreated(
       senderName,
       targetType: "workout_assignment",
       targetId: assignmentId,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
       isRead: false,
       isArchived: false
     });
@@ -609,7 +694,7 @@ async function createAndProcessClientReportNotification(snapshot, config) {
     senderName,
     targetType: config.targetType,
     targetId: reportId,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
     isRead: false,
     isArchived: false
   });
@@ -661,10 +746,10 @@ async function claimPushDelivery(eventId) {
 
     transaction.set(eventRef, {
       pushStatus: "sending",
-      pushStartedAt: admin.firestore.FieldValue.serverTimestamp(),
-      pushLeaseExpiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + PUSH_LEASE_MS),
-      pushAttemptCount: admin.firestore.FieldValue.increment(1),
-      pushFailureReason: admin.firestore.FieldValue.delete()
+      pushStartedAt: FieldValue.serverTimestamp(),
+      pushLeaseExpiresAt: Timestamp.fromMillis(Date.now() + PUSH_LEASE_MS),
+      pushAttemptCount: FieldValue.increment(1),
+      pushFailureReason: FieldValue.delete()
     }, { merge: true });
     return data;
   });
@@ -799,7 +884,7 @@ async function processPushForNotificationEvent(eventId) {
     if (invalidTokens.length > 0) {
       const cleanup = db.batch();
       cleanup.set(userRef, {
-        fcmTokens: admin.firestore.FieldValue.arrayRemove(...invalidTokens)
+        fcmTokens: FieldValue.arrayRemove(...invalidTokens)
       }, { merge: true });
       pushDevicesSnapshot.docs.forEach((document) => {
         const token = stringifyData((document.data() || {}).fcmToken);
@@ -836,10 +921,10 @@ async function processPushForNotificationEvent(eventId) {
       await db.collection("notification_events").doc(eventId).set(
         {
           pushStatus: "sent",
-          deliveredAt: admin.firestore.FieldValue.serverTimestamp(),
+          deliveredAt: FieldValue.serverTimestamp(),
           pushSuccessCount: response.successCount,
           pushFailureCount: response.failureCount,
-          pushPendingTokens: admin.firestore.FieldValue.delete()
+          pushPendingTokens: FieldValue.delete()
         },
         { merge: true }
       );
@@ -900,12 +985,12 @@ async function incrementUnreadNotificationCount(eventId, recipientId) {
     const unreadCount = currentCount + (shouldIncrement ? 1 : 0);
     transaction.set(eventRef, {
       unreadCountApplied: true,
-      unreadCountAppliedAt: admin.firestore.FieldValue.serverTimestamp()
+      unreadCountAppliedAt: FieldValue.serverTimestamp()
     }, { merge: true });
     transaction.set(userRef, {
       unreadNotificationCount: unreadCount,
       unreadCounterInitialized: true,
-      unreadCounterUpdatedAt: admin.firestore.FieldValue.serverTimestamp()
+      unreadCounterUpdatedAt: FieldValue.serverTimestamp()
     }, { merge: true });
     return unreadCount;
   });
@@ -938,7 +1023,7 @@ async function reconcileUnreadNotificationCount(recipientId, reconciledThrough) 
     transaction.set(userRef, {
       unreadNotificationCount: unreadCount,
       unreadCounterInitialized: true,
-      unreadCounterUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      unreadCounterUpdatedAt: FieldValue.serverTimestamp(),
       unreadCounterReconciledThrough: reconciledThrough
     }, { merge: true });
     return unreadCount;
@@ -1028,7 +1113,7 @@ async function markPushPermanentlyFailed(eventId, reason) {
     {
       pushStatus: "permanent_failed",
       pushFailureReason: reason,
-      pushLeaseExpiresAt: admin.firestore.FieldValue.delete()
+      pushLeaseExpiresAt: FieldValue.delete()
     },
     { merge: true }
   );
@@ -1079,7 +1164,7 @@ async function deleteAccountFirestoreData(uid) {
 }
 
 async function deleteAccountStorageData(uid) {
-  const [files] = await admin.storage().bucket().getFiles({
+  const [files] = await storage.bucket().getFiles({
     prefix: `profile_photos/${uid}/`
   });
   await Promise.all(files.map((file) => file.delete({ ignoreNotFound: true })));
@@ -1103,7 +1188,7 @@ async function verifyAuthorization(request) {
   }
 
   try {
-    return await admin.auth().verifyIdToken(match[1]);
+    return await auth.verifyIdToken(match[1]);
   } catch (verificationError) {
     const error = new Error("Invalid Firebase ID token");
     error.status = 401;

@@ -151,39 +151,6 @@ enum AppNotificationEventWriter {
             .setData(event.firestoreData)
     }
 
-    static func createForActiveTrainers(
-        type: AppNotificationEventType,
-        senderId: String,
-        senderName: String = "",
-        targetType: AppNotificationTargetType,
-        targetId: String,
-        firestore: Firestore = .firestore()
-    ) async throws {
-        let trainersSnapshot = try await firestore
-            .collection("users")
-            .whereField("role", isEqualTo: AppUserRole.trainer.rawValue)
-            .whereField("isActive", isEqualTo: true)
-            .getDocuments()
-
-        let batch = firestore.batch()
-        for trainerDocument in trainersSnapshot.documents {
-            let recipientId = trainerDocument.documentID
-            let event = AppNotificationEvent(
-                type: type,
-                recipientId: recipientId,
-                senderId: senderId,
-                senderName: senderName,
-                targetType: targetType,
-                targetId: targetId
-            )
-            batch.setData(
-                event.firestoreData,
-                forDocument: firestore.collection("notification_events").document(event.id)
-            )
-        }
-
-        try await batch.commit()
-    }
 }
 
 @MainActor
@@ -562,8 +529,9 @@ final class AppNotificationsStore: ObservableObject {
             let firebaseUser = Auth.auth().currentUser,
             firebaseUser.uid == userId,
             let projectId = FirebaseApp.app()?.options.projectID,
-            let url = URL(
-                string: "https://europe-west1-\(projectId).cloudfunctions.net/reconcileUnreadNotifications"
+            let url = FirebaseEmulatorConfiguration.functionsURL(
+                named: "reconcileUnreadNotifications",
+                projectId: projectId
             )
         else { return }
 

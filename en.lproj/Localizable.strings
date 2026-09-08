@@ -837,6 +837,7 @@
 "workout.exercise.rowing_machine" = "Rowing Machine";
 "workout.exercise.squats" = "Squats";
 "workout.exercise.bodyweight_squat" = "Bodyweight Squat";
+"workout.exercise.bodyweight_glute_bridge" = "Bodyweight Glute Bridge";
 "workout.exercise.barbell_squat" = "Barbell Squat";
 "workout.exercise.front_squat" = "Front Squat";
 "workout.exercise.goblet_squat" = "Goblet Squat";
@@ -871,6 +872,7 @@
 "workout.exercise.hanging_leg_raise" = "Hanging Leg Raise";
 "workout.exercise.lying_leg_raise" = "Lying Leg Raise";
 "workout.exercise.snatch_pull" = "Snatch Pull";
+"workout.exercise.muscle_snatch" = "Muscle Snatch";
 "workout.exercise.barbell_snatch" = "Barbell Snatch";
 "workout.exercise.turkish_getup" = "Turkish Get-Up";
 "workout.exercise.med_ball_throw" = "Medicine Ball Throw";

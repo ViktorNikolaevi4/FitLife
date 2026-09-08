@@ -197,15 +197,6 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXVariantGroup section */
-		B679E0802F6EE9000033676D /* InfoPlist.strings */ = {
-			isa = PBXVariantGroup;
-			children = (
-				B679E0812F6EE9000033676D /* en */,
-				B679E0822F6EE9000033676D /* ru */,
-			);
-			name = InfoPlist.strings;
-			sourceTree = "<group>";
-		};
 		B679E07C2F6EE7190033676D /* Localizable.strings */ = {
 			isa = PBXVariantGroup;
 			children = (
@@ -213,6 +204,15 @@
 				B679E07F2F6EE8550033676D /* ru */,
 			);
 			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+		B679E0802F6EE9000033676D /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				B679E0812F6EE9000033676D /* en */,
+				B679E0822F6EE9000033676D /* ru */,
+			);
+			name = InfoPlist.strings;
 			sourceTree = "<group>";
 		};
 /* End PBXVariantGroup section */

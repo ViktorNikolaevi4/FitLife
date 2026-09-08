@@ -497,7 +497,7 @@ private extension Array where Element == WorkoutExerciseTemplate {
             }
             let localizedNames = [self[index].name] + alternateLanguageCatalogs.compactMap { catalog in
                 catalog.indices.contains(index) ? catalog[index].name : nil
-            }
+            } + exerciseMatchingAliases(for: self[index].localizationKey)
             let score = localizedNames
                 .map { exerciseMatchScore($0, requested: requested, requestedTokens: requestedTokens) }
                 .max() ?? 0
@@ -517,13 +517,13 @@ private extension Array where Element == WorkoutExerciseTemplate {
     ) -> Bool {
         let candidateNames = ([self[index].name] + alternateLanguageCatalogs.compactMap { catalog in
             catalog.indices.contains(index) ? catalog[index].name : nil
-        }).map(normalizedExerciseName)
+        } + exerciseMatchingAliases(for: self[index].localizationKey)).map(normalizedExerciseName)
 
         return referenceTemplates.contains { reference in
             guard let referenceIndex = firstIndex(where: { $0.id == reference.id }) else { return false }
             let referenceNames = ([self[referenceIndex].name] + alternateLanguageCatalogs.compactMap { catalog in
                 catalog.indices.contains(referenceIndex) ? catalog[referenceIndex].name : nil
-            }).map(normalizedExerciseName)
+            } + exerciseMatchingAliases(for: self[referenceIndex].localizationKey)).map(normalizedExerciseName)
 
             return candidateNames.contains { candidateName in
                 referenceNames.contains { referenceName in
@@ -536,6 +536,71 @@ private extension Array where Element == WorkoutExerciseTemplate {
                 }
             }
         }
+    }
+}
+
+private func exerciseMatchingAliases(for localizationKey: String?) -> [String] {
+    switch localizationKey {
+    case "workout.exercise.assault_bike":
+        return [
+            "assault bike",
+            "assaultbike",
+            "air bike",
+            "аэробайк",
+            "эйрбайк",
+            "воздушный велосипед"
+        ]
+    case "workout.exercise.bird_dog":
+        return [
+            "bird dog",
+            "bird-dog",
+            "берд дог",
+            "птица собака"
+        ]
+    case "workout.exercise.devil_press":
+        return [
+            "devil press",
+            "devil's press",
+            "девил пресс",
+            "дьявольский жим",
+            "берпи с гантелями"
+        ]
+    case "workout.exercise.jumping_jack":
+        return [
+            "jumping jack",
+            "jumping jacks",
+            "прыжки джек",
+            "прыжок джек",
+            "джампинг джек",
+            "прыжки звездочка",
+            "звездочка"
+        ]
+    case "workout.exercise.muscle_snatch":
+        return [
+            "muscle snatch",
+            "масл снэч",
+            "мышечный рывок",
+            "протяжка рывковым хватом",
+            "рывковая протяжка"
+        ]
+    case "workout.exercise.ski_erg":
+        return [
+            "skierg",
+            "ski erg",
+            "ски эрг",
+            "лыжный тренажер",
+            "лыжный эргометр"
+        ]
+    case "workout.exercise.stair_master":
+        return [
+            "stairmaster",
+            "stair master",
+            "стейрмастер",
+            "лестничный тренажер",
+            "степпер"
+        ]
+    default:
+        return []
     }
 }
 

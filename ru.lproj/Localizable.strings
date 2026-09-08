@@ -837,6 +837,7 @@
 "workout.exercise.rowing_machine" = "Гребной тренажёр";
 "workout.exercise.squats" = "Приседания";
 "workout.exercise.bodyweight_squat" = "Приседания со своим весом";
+"workout.exercise.bodyweight_glute_bridge" = "Ягодичный мост со своим весом";
 "workout.exercise.barbell_squat" = "Приседания со штангой";
 "workout.exercise.front_squat" = "Фронтальные приседания";
 "workout.exercise.goblet_squat" = "Гоблет-приседания";
@@ -871,6 +872,7 @@
 "workout.exercise.hanging_leg_raise" = "Подъём ног в висе";
 "workout.exercise.lying_leg_raise" = "Подъём ног лёжа";
 "workout.exercise.snatch_pull" = "Рывковая тяга";
+"workout.exercise.muscle_snatch" = "Протяжка рывковым хватом";
 "workout.exercise.barbell_snatch" = "Рывок штанги";
 "workout.exercise.turkish_getup" = "Турецкий подъём";
 "workout.exercise.med_ball_throw" = "Броски медбола";

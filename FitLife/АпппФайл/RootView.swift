@@ -21,6 +21,11 @@ struct RootView: View {
         sessionStore.firebaseUser?.uid
     }
 
+    private var notificationReadyUserId: String? {
+        guard sessionStore.profile?.id == currentOwnerId else { return nil }
+        return currentOwnerId
+    }
+
     private var currentUserData: [UserData] {
         guard let currentOwnerId else { return [] }
         return users.filter { $0.ownerId == currentOwnerId }
@@ -88,7 +93,7 @@ struct RootView: View {
         .onAppear {
             prepareLocalDataIfNeeded()
             notificationsStore.setCurrentUser(currentOwnerId)
-            pushNotificationsManager.setCurrentUser(currentOwnerId)
+            pushNotificationsManager.setCurrentUser(notificationReadyUserId)
             refreshMealRemindersIfNeeded()
             refreshWorkoutRemindersIfNeeded()
             presentOpenedPushNotificationIfPossible()
@@ -97,11 +102,14 @@ struct RootView: View {
         .onChange(of: currentOwnerId) { _, _ in
             prepareLocalDataIfNeeded()
             notificationsStore.setCurrentUser(currentOwnerId)
-            pushNotificationsManager.setCurrentUser(currentOwnerId)
+            pushNotificationsManager.setCurrentUser(notificationReadyUserId)
             refreshMealRemindersIfNeeded()
             refreshWorkoutRemindersIfNeeded()
             presentOpenedPushNotificationIfPossible()
             retryPendingCoachingReports()
+        }
+        .onChange(of: notificationReadyUserId) { _, userId in
+            pushNotificationsManager.setCurrentUser(userId)
         }
         .onChange(of: pushNotificationsManager.openedNotification) { _, _ in
             presentOpenedPushNotificationIfPossible()

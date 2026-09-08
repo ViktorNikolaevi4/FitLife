@@ -918,6 +918,7 @@ final class FitLifeAppDelegate: NSObject, UIApplicationDelegate {
         if FirebaseApp.app() == nil {
             FirebaseApp.configure()
         }
+        FirebaseEmulatorConfiguration.configureIfNeeded()
         AppPushNotificationsManager.shared.configure()
         if let userInfo = launchOptions?[.remoteNotification] as? [AnyHashable: Any] {
             AppPushNotificationsManager.shared.handleNotificationResponse(userInfo: userInfo)

@@ -341,14 +341,6 @@ final class ClientCoachingStore: ObservableObject {
 
         do {
             try await batch.commit()
-            try? await AppNotificationEventWriter.createForActiveTrainers(
-                type: .coachingRequestSubmitted,
-                senderId: clientId,
-                senderName: profile.displayName,
-                targetType: .coachingRequest,
-                targetId: request.id,
-                firestore: firestore
-            )
             self.intake = intake
             self.request = request
             isSaving = false

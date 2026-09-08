@@ -9,6 +9,7 @@ enum WorkoutExerciseIcon {
     static let hangingLegRaise = "Подъём ног в висе"
     static let lyingLegRaise = "Подъём ног лежа"
     static let snatchPull = "Рывковая тяга"
+    static let muscleSnatch = "Протяжка рывковым хватом"
     static let barbellSnatch = "Рывок штанги"
     static let turkishGetUp = "Турецкий подъём"
     static let medBallThrow = "Броски медбола"
@@ -123,6 +124,7 @@ enum WorkoutExerciseIcon {
     static let romanianDeadlift = "Румынская тяга"
     static let stiffLegDeadlift = "Тяга на прямых ногах"
     static let goodMorning = "Наклоны Good Morning"
+    static let bodyweightGluteBridge = "Ягодичный мост со своим весом"
     static let singleLegGluteBridge = "Ягодичный мост 1 ногой"
     static let barbellHipThrust = "ягодичный мост"
     static let backExtension = "Гиперэкстензия"
@@ -1560,6 +1562,17 @@ private func makeWorkoutTemplates(language: AppLanguage) -> [WorkoutExerciseTemp
             ]
         ),
         WorkoutExerciseTemplate(
+            localizationKey: "workout.exercise.bodyweight_glute_bridge",
+            name: language.localized("workout.exercise.bodyweight_glute_bridge"),
+            systemImage: WorkoutExerciseIcon.bodyweightGluteBridge,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 4.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, reps: 15)
+            ]
+        ),
+        WorkoutExerciseTemplate(
             localizationKey: "workout.exercise.barbell_hip_thrust",
             name: language.localized("workout.exercise.barbell_hip_thrust"),
             systemImage: WorkoutExerciseIcon.barbellHipThrust,
@@ -1689,6 +1702,17 @@ private func makeWorkoutTemplates(language: AppLanguage) -> [WorkoutExerciseTemp
             metValue: 6.5,
             defaultSets: [
                 WorkoutDraftSet(weight: 40, reps: 6)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            localizationKey: "workout.exercise.muscle_snatch",
+            name: language.localized("workout.exercise.muscle_snatch"),
+            systemImage: WorkoutExerciseIcon.muscleSnatch,
+            accentName: "blue",
+            activityType: .strength,
+            metValue: 6.5,
+            defaultSets: [
+                WorkoutDraftSet(weight: 20, reps: 6)
             ]
         ),
         WorkoutExerciseTemplate(
