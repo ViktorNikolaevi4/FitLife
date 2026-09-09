@@ -34,19 +34,17 @@ struct RootView: View {
     var body: some View {
         Group {
             if sessionStore.isLoading {
-                VStack(spacing: 12) {
-                    ProgressView()
-                    Text(AppLocalizer.string("app.loading_account"))
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(.systemGroupedBackground))
+                AccountLoadingView(
+                    hasConnectedUser: sessionStore.firebaseUser != nil,
+                    isPreparingLocalData: false
+                )
             } else if sessionStore.firebaseUser == nil {
                 AuthScreen()
             } else if isPreparingLocalData {
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(.systemGroupedBackground))
+                AccountLoadingView(
+                    hasConnectedUser: true,
+                    isPreparingLocalData: true
+                )
             } else {
                 if didOnboard, currentUserData.isEmpty == false {
                     AdaptiveMainView()

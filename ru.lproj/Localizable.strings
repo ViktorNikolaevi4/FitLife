@@ -1415,6 +1415,11 @@
 "workout.block.composer.seconds_suffix" = " сек";
 "workout.block.composer.minutes_suffix" = " мин";
 "app.loading_account" = "Подключаем аккаунт…";
+"app.loading.title" = "Заботимся о деталях";
+"app.loading.subtitle" = "Почти готово…";
+"app.loading.profile" = "Профиль подключён";
+"app.loading.sync" = "Синхронизируем данные";
+"app.loading.recommendations" = "Подготавливаем рекомендации";
 "health.steps.title" = "Шаги";
 "health.steps.settings_title" = "Шаги и Apple Health";
 "health.steps.connect" = "Подключить Apple Health";

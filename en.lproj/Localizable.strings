@@ -1415,6 +1415,11 @@
 "workout.block.composer.seconds_suffix" = " sec";
 "workout.block.composer.minutes_suffix" = " min";
 "app.loading_account" = "Connecting your account…";
+"app.loading.title" = "Taking care of the details";
+"app.loading.subtitle" = "Almost ready…";
+"app.loading.profile" = "Profile connected";
+"app.loading.sync" = "Syncing your data";
+"app.loading.recommendations" = "Preparing recommendations";
 "health.steps.title" = "Steps";
 "health.steps.settings_title" = "Steps and Apple Health";
 "health.steps.connect" = "Connect Apple Health";
