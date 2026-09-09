@@ -15,6 +15,7 @@ struct SettingsScreen: View {
     private let shareURL   = URL(string: "https://apps.apple.com/app/id1234567890")!
     private let devEmail   = "87v87@mail.ru"
     @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
+    @AppStorage(NutritionPreferences.repeatYesterdayEnabledKey) private var repeatYesterdayEnabled = true
 
     @State private var showAbout = false
     @State private var showMailView = false
@@ -167,6 +168,28 @@ struct SettingsScreen: View {
                         selection: $appLanguageRaw
                     )
                     .padding(.vertical, 2)
+                }
+
+                Section(appLanguage.localized("settings.nutrition.section")) {
+                    Toggle(isOn: $repeatYesterdayEnabled) {
+                        HStack(spacing: 14) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color.orange.gradient)
+                                    .frame(width: 36, height: 36)
+                                Image(systemName: "arrow.uturn.backward")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(.white)
+                            }
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(appLanguage.localized("settings.nutrition.repeat_yesterday.title"))
+                                Text(appLanguage.localized("settings.nutrition.repeat_yesterday.subtitle"))
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
                 }
 
                 Section {
@@ -353,6 +376,7 @@ struct SettingsScreen: View {
             WaterPortionPreference.appStorageKey,
             HealthKitStepsPreference.enabledKey,
             HealthKitStepsPreference.goalKey,
+            NutritionPreferences.repeatYesterdayEnabledKey,
             LocalReminderScheduler.mealRemindersEnabledKey,
             LocalReminderScheduler.workoutReminderEnabledKey,
             LocalReminderScheduler.unfinishedWorkoutReminderEnabledKey,

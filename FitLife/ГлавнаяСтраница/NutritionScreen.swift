@@ -5,6 +5,10 @@ import FirebaseFirestore
 private let nutritionCardBackground = Color(.secondarySystemBackground)
 private let nutritionCardBorder = Color(.separator).opacity(0.40)
 
+enum NutritionPreferences {
+    static let repeatYesterdayEnabledKey = "nutrition.repeatYesterday.enabled"
+}
+
 struct NutritionScreen: View {
     @Binding var selectedDate: Date
 
@@ -12,6 +16,7 @@ struct NutritionScreen: View {
     @EnvironmentObject private var sessionStore: AppSessionStore
     @Query private var users: [UserData]
     @AppStorage(Gender.appStorageKey) private var activeGenderRaw: String = Gender.male.rawValue
+    @AppStorage(NutritionPreferences.repeatYesterdayEnabledKey) private var repeatYesterdayEnabled = true
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var consumedCalories = 0
@@ -147,6 +152,14 @@ struct NutritionScreen: View {
         .task(id: currentOwnerId) { await loadActiveTrainer() }
         .onChange(of: selectedDate) { _, newDate in recalcFor(newDate) }
         .onChange(of: activeGenderRaw) { recalcFor(selectedDate) }
+        .onChange(of: repeatYesterdayEnabled) { _, isEnabled in
+            if isEnabled {
+                loadYesterdayEntries(for: selectedDate)
+            } else {
+                applyYesterday(snapshot: FoodDaySnapshot.from(entries: []))
+                repeatYesterdayMeal = nil
+            }
+        }
         .sheet(item: $sheet) { key in
             let preset: MealType? = { if case let .quick(m) = key { m } else { nil } }()
             RationPopupView(
@@ -442,6 +455,11 @@ struct NutritionScreen: View {
     }
 
     private func loadYesterdayEntries(for date: Date) {
+        guard repeatYesterdayEnabled else {
+            applyYesterday(snapshot: FoodDaySnapshot.from(entries: []))
+            return
+        }
+
         guard let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: date) else {
             applyYesterday(snapshot: FoodDaySnapshot.from(entries: []))
             return

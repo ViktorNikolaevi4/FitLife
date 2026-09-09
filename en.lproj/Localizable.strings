@@ -89,6 +89,9 @@
 "settings.language.label" = "Language";
 "settings.language.russian" = "Русский";
 "settings.language.english" = "English";
+"settings.nutrition.section" = "Nutrition";
+"settings.nutrition.repeat_yesterday.title" = "Suggest repeating yesterday";
+"settings.nutrition.repeat_yesterday.subtitle" = "Show quick copying for previous meals";
 "settings.share.subject" = "Try this app";
 "settings.share.title" = "Share with Friends";
 "settings.rate.title" = "Rate the App";

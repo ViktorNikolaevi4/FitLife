@@ -89,6 +89,9 @@
 "settings.language.label" = "Язык";
 "settings.language.russian" = "Русский";
 "settings.language.english" = "English";
+"settings.nutrition.section" = "Питание";
+"settings.nutrition.repeat_yesterday.title" = "Предлагать повторить вчера";
+"settings.nutrition.repeat_yesterday.subtitle" = "Показывать быстрый перенос приёмов пищи";
 "settings.share.subject" = "Попробуй это приложение";
 "settings.share.title" = "Поделиться с друзьями";
 "settings.rate.title" = "Оценить приложение";
