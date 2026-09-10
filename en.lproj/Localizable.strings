@@ -2073,3 +2073,7 @@
 "Максимальный объём" = "Maximum volume";
 "Подход выполнен" = "Set complete";
 "trainer.ai.exercise_ambiguity.question" = "Which exercise did you mean by ‘%@’?";
+"workout.exercise.personal_note.share_with_trainer" = "Share with trainer";
+"workout.exercise.personal_note.private_hint" = "This note will remain private.";
+"workout.exercise.personal_note.shared_hint" = "This note will be sent to your trainer with the workout report.";
+"coaching.workouts.client_exercise_note" = "Client note";

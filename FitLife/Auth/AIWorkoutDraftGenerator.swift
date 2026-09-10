@@ -647,6 +647,206 @@ extension AIWorkoutDraft {
             }
         )
     }
+
+    /// Treat an add-only trainer command as a delta, even if the model returns
+    /// unchanged template exercises as `update` operations. An update is kept
+    /// only when the command actually names that existing exercise (for
+    /// example, "add two sets to bench press").
+    func enforcingAddOnlyIntent(
+        from command: String,
+        existingBlocks: [AIWorkoutExistingBlock]
+    ) -> AIWorkoutDraft {
+        let commandWords = normalizedIntentWords(command)
+        let additiveWords: Set<String> = [
+            "добавь", "добавить", "добавьте", "вставь", "вставить",
+            "add", "append", "insert"
+        ]
+        let mutationWords: Set<String> = [
+            "замени", "заменить", "замените", "измени", "изменить", "измените",
+            "удали", "удалить", "удалите", "обнови", "обновить",
+            "replace", "change", "edit", "update", "delete", "remove"
+        ]
+        guard commandWords.isDisjoint(with: additiveWords) == false,
+              commandWords.isDisjoint(with: mutationWords) else {
+            return self
+        }
+
+        let existingExercises = Dictionary(
+            uniqueKeysWithValues: existingBlocks
+                .flatMap(\.exercises)
+                .map { ($0.id, $0) }
+        )
+        let targetsEveryExercise = commandWords.contains { $0.hasPrefix("кажд") }
+            && commandWords.contains { $0.hasPrefix("упраж") }
+
+        let filteredBlocks = blocks.compactMap { block -> AIWorkoutDraftBlock? in
+            let filteredExercises = block.exercises.filter { exercise in
+                switch exercise.operation {
+                case .add:
+                    return true
+                case .delete:
+                    return false
+                case .update:
+                    guard let targetID = exercise.targetExerciseId,
+                          let existingExercise = existingExercises[targetID] else {
+                        return false
+                    }
+                    return targetsEveryExercise
+                        || intentMentionsExercise(commandWords, name: existingExercise.name)
+                }
+            }
+            guard filteredExercises.isEmpty == false else { return nil }
+            return block.replacingExercises(filteredExercises)
+        }
+
+        return AIWorkoutDraft(summary: summary, blocks: filteredBlocks)
+    }
+
+    /// The API schema represents every physical set as one array item. Expand
+    /// explicit plain-language counts such as "25 kg, 2 reps, 3 sets" when the
+    /// model returned only one matching item. Limit this deterministic repair to
+    /// a single newly added exercise so prescriptions cannot leak across several
+    /// exercises in a more complex command.
+    func applyingExplicitSetCounts(from command: String) -> AIWorkoutDraft {
+        let addedExercises = blocks
+            .flatMap(\.exercises)
+            .filter { $0.operation == .add }
+        guard addedExercises.count == 1 else { return self }
+
+        let requestedCounts = explicitSetCounts(in: command)
+        guard requestedCounts.isEmpty == false else { return self }
+
+        let targetID = addedExercises[0].id
+        return AIWorkoutDraft(
+            summary: summary,
+            blocks: blocks.map { block in
+                block.replacingExercises(block.exercises.map { exercise in
+                    guard exercise.id == targetID else { return exercise }
+                    var repairedSets = exercise.sets
+                    for (prescription, requestedCount) in requestedCounts {
+                        let matchingIndices = repairedSets.indices.filter {
+                            prescription.matches(repairedSets[$0])
+                        }
+                        guard let insertionIndex = matchingIndices.last,
+                              matchingIndices.count < requestedCount else { continue }
+                        let missingCount = min(requestedCount - matchingIndices.count, 12 - repairedSets.count)
+                        guard missingCount > 0 else { continue }
+                        repairedSets.insert(
+                            contentsOf: Array(repeating: repairedSets[insertionIndex], count: missingCount),
+                            at: insertionIndex + 1
+                        )
+                    }
+                    return exercise.replacingSets(repairedSets)
+                })
+            }
+        )
+    }
+}
+
+private extension AIWorkoutDraftBlock {
+    func replacingExercises(_ exercises: [AIWorkoutDraftExercise]) -> AIWorkoutDraftBlock {
+        AIWorkoutDraftBlock(
+            title: title,
+            targetBlockId: targetBlockId,
+            insertAfterBlockId: insertAfterBlockId,
+            updatesBlockSettings: updatesBlockSettings,
+            preset: preset,
+            type: type,
+            mode: mode,
+            rounds: rounds,
+            durationMinutes: durationMinutes,
+            workSeconds: workSeconds,
+            restSeconds: restSeconds,
+            restBetweenRoundsSeconds: restBetweenRoundsSeconds,
+            exercises: exercises
+        )
+    }
+}
+
+private extension AIWorkoutDraftExercise {
+    func replacingSets(_ sets: [AIWorkoutDraftSet]) -> AIWorkoutDraftExercise {
+        AIWorkoutDraftExercise(
+            operation: operation,
+            targetExerciseId: targetExerciseId,
+            name: name,
+            systemImage: systemImage,
+            accentName: accentName,
+            activityType: activityType,
+            metValue: metValue,
+            note: note,
+            sets: sets
+        )
+    }
+}
+
+private struct ExplicitSetPrescription: Hashable {
+    let weight: Double
+    let reps: Int
+
+    func matches(_ set: AIWorkoutDraftSet) -> Bool {
+        abs(set.weight - weight) < 0.001
+            && set.reps == reps
+            && set.metricType == WorkoutSetMetricType.reps.rawValue
+    }
+}
+
+private func explicitSetCounts(in command: String) -> [ExplicitSetPrescription: Int] {
+    var result: [ExplicitSetPrescription: Int] = [:]
+    for line in command.components(separatedBy: .newlines) {
+        guard let weightText = firstRegexCapture(
+            in: line,
+            pattern: #"([0-9]+(?:[\.,][0-9]+)?)\s*(?:кг|kg)\b"#
+        ),
+        let repsText = firstRegexCapture(
+            in: line,
+            pattern: #"([0-9]+)\s*(?:повтор(?:ение|ения|ений|а|ов)?|повт\.?|раз(?:а)?|reps?|repetitions?)\b"#
+        ),
+        let weight = Double(weightText.replacingOccurrences(of: ",", with: ".")),
+        let reps = Int(repsText) else { continue }
+
+        let count = firstRegexCapture(
+            in: line,
+            pattern: #"([0-9]+)\s*(?:подход(?:а|ов)?|сет(?:а|ов)?|sets?)\b"#
+        ).flatMap(Int.init) ?? 1
+        let prescription = ExplicitSetPrescription(weight: weight, reps: reps)
+        result[prescription, default: 0] += min(max(count, 1), 12)
+    }
+    return result
+}
+
+private func firstRegexCapture(in value: String, pattern: String) -> String? {
+    guard let expression = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+        return nil
+    }
+    let range = NSRange(value.startIndex..., in: value)
+    guard let match = expression.firstMatch(in: value, range: range),
+          match.numberOfRanges > 1,
+          let captureRange = Range(match.range(at: 1), in: value) else {
+        return nil
+    }
+    return String(value[captureRange])
+}
+
+private func normalizedIntentWords(_ value: String) -> Set<String> {
+    let normalized = value
+        .lowercased()
+        .folding(options: .diacriticInsensitive, locale: .current)
+    return Set(normalized.split { $0.isLetter == false }.map(String.init))
+}
+
+private func intentMentionsExercise(_ commandWords: Set<String>, name: String) -> Bool {
+    let nameWords = normalizedIntentWords(name).filter { word in
+        word.count > 2 && ["with", "and", "the", "для", "или"].contains(word) == false
+    }
+    guard nameWords.isEmpty == false else { return false }
+    let matchedCount = nameWords.filter { nameWord in
+        commandWords.contains { commandWord in
+            let prefixLength = min(5, min(nameWord.count, commandWord.count))
+            guard prefixLength >= 3 else { return false }
+            return nameWord.prefix(prefixLength) == commandWord.prefix(prefixLength)
+        }
+    }.count
+    return matchedCount >= min(2, nameWords.count)
 }
 
 private extension Array where Element == WorkoutExerciseTemplate {
@@ -943,7 +1143,7 @@ actor AIWorkoutDraftGenerator {
         )
 
         if let decision = Self.decodeDecision(from: outputText) {
-            return decision.applyingPlacementIntent(from: command)
+            return decision.applyingIntent(from: command, existingBlocks: existingBlocks)
         }
 
         let repairedOutputText = try await requestOutput(
@@ -954,7 +1154,7 @@ actor AIWorkoutDraftGenerator {
         guard let repairedDecision = Self.decodeDecision(from: repairedOutputText) else {
             throw AIWorkoutDraftGeneratorError.invalidResponse
         }
-        return repairedDecision.applyingPlacementIntent(from: command)
+        return repairedDecision.applyingIntent(from: command, existingBlocks: existingBlocks)
     }
 
     func generateModifiedLibraryCopy(
@@ -1213,13 +1413,18 @@ actor AIWorkoutDraftGenerator {
 }
 
 private extension AIWorkoutGenerationDecision {
-    func applyingPlacementIntent(from command: String) -> AIWorkoutGenerationDecision {
+    func applyingIntent(
+        from command: String,
+        existingBlocks: [AIWorkoutExistingBlock]
+    ) -> AIWorkoutGenerationDecision {
         switch self {
         case .draft(let draft):
             return .draft(
                 draft
                     .applyingPlacementIntent(from: command)
                     .applyingSetAppendIntent(from: command)
+                    .enforcingAddOnlyIntent(from: command, existingBlocks: existingBlocks)
+                    .applyingExplicitSetCounts(from: command)
             )
         case .clarification:
             return self

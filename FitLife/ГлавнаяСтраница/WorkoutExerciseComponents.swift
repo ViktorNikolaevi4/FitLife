@@ -540,6 +540,9 @@ struct WorkoutExerciseDetailScreen: View {
                 persistPersonalNote()
             }
         }
+        .onChange(of: exercise.shareUserNoteWithTrainer) { _, _ in
+            try? modelContext.save()
+        }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button(action: closeExerciseScreen) {
@@ -930,7 +933,22 @@ struct WorkoutExerciseDetailScreen: View {
                 .accessibilityLabel("Личная заметка к упражнению")
                 .focused($isPersonalNoteFocused)
 
-            Text("Заметка сохранится автоматически.")
+            Toggle(isOn: $exercise.shareUserNoteWithTrainer) {
+                Label(
+                    AppLocalizer.string("workout.exercise.personal_note.share_with_trainer"),
+                    systemImage: "person.crop.circle.badge.checkmark"
+                )
+                .font(.subheadline.weight(.semibold))
+            }
+            .tint(.blue)
+
+            Text(
+                AppLocalizer.string(
+                    exercise.shareUserNoteWithTrainer
+                        ? "workout.exercise.personal_note.shared_hint"
+                        : "workout.exercise.personal_note.private_hint"
+                )
+            )
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

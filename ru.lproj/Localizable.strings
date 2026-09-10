@@ -2073,3 +2073,7 @@
 "Максимальный объём" = "Максимальный объём";
 "Подход выполнен" = "Подход выполнен";
 "trainer.ai.exercise_ambiguity.question" = "Какое упражнение вы имели в виду под «%@»?";
+"workout.exercise.personal_note.share_with_trainer" = "Показать тренеру";
+"workout.exercise.personal_note.private_hint" = "Заметка сохранится только для вас.";
+"workout.exercise.personal_note.shared_hint" = "Заметка будет отправлена тренеру вместе с отчётом о тренировке.";
+"coaching.workouts.client_exercise_note" = "Заметка клиента";

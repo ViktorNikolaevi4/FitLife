@@ -471,6 +471,8 @@ final class WorkoutExercise {
     var note: String = ""
     /// Private note recorded by the person performing the workout.
     var userNote: String = ""
+    /// Explicit consent to include the personal note in a report to the trainer.
+    var shareUserNoteWithTrainer: Bool = false
     var activityTypeRaw: String = WorkoutActivityType.strength.rawValue
     var metValue: Double = 5.0
 
@@ -498,6 +500,7 @@ final class WorkoutExercise {
         isFinished: Bool = false,
         note: String = "",
         userNote: String = "",
+        shareUserNoteWithTrainer: Bool = false,
         activityType: WorkoutActivityType = .strength,
         metValue: Double = 5.0
     ) {
@@ -509,6 +512,7 @@ final class WorkoutExercise {
         self.isFinished = isFinished
         self.note = note
         self.userNote = userNote
+        self.shareUserNoteWithTrainer = shareUserNoteWithTrainer
         self.activityTypeRaw = activityType.rawValue
         self.metValue = metValue
     }

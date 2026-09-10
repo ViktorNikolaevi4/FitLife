@@ -514,6 +514,7 @@ struct CoachingWorkoutExerciseSnapshot: Identifiable, Hashable {
     let accentName: String
     let orderIndex: Int
     let note: String
+    let clientNote: String
     let sets: [CoachingWorkoutSetSnapshot]
 
     init(exercise: WorkoutExercise) {
@@ -523,6 +524,9 @@ struct CoachingWorkoutExerciseSnapshot: Identifiable, Hashable {
         accentName = exercise.accentName
         orderIndex = exercise.orderIndex
         note = exercise.note
+        clientNote = exercise.shareUserNoteWithTrainer
+            ? exercise.userNote.trimmingCharacters(in: .whitespacesAndNewlines)
+            : ""
         sets = exercise.setItems
             .sorted { $0.orderIndex < $1.orderIndex }
             .map(CoachingWorkoutSetSnapshot.init(set:))
@@ -547,6 +551,7 @@ struct CoachingWorkoutExerciseSnapshot: Identifiable, Hashable {
         self.accentName = accentName
         self.orderIndex = orderIndex
         self.note = note
+        self.clientNote = (data["clientNote"] as? String) ?? ""
         self.sets = setsData.compactMap(CoachingWorkoutSetSnapshot.init)
     }
 
@@ -558,6 +563,7 @@ struct CoachingWorkoutExerciseSnapshot: Identifiable, Hashable {
             "accentName": accentName,
             "orderIndex": orderIndex,
             "note": note,
+            "clientNote": clientNote,
             "sets": sets.map(\.firestoreData)
         ]
     }
@@ -747,7 +753,9 @@ struct CoachingWorkoutSnapshot: Identifiable, Hashable {
     var exerciseCount: Int { exercises.count }
     var setCount: Int { exercises.reduce(0) { $0 + $1.sets.count } }
     var completedSetCount: Int { exercises.reduce(0) { $0 + $1.sets.filter(\.isCompleted).count } }
-    var exerciseNoteCount: Int { exercises.filter { $0.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }.count }
+    var exerciseNoteCount: Int {
+        exercises.filter { $0.clientNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }.count
+    }
     var displayBlocks: [CoachingWorkoutBlockSnapshot] {
         blocks.isEmpty ? [CoachingWorkoutBlockSnapshot(legacyExercises: exercises)] : blocks
     }
@@ -5355,6 +5363,24 @@ private struct CoachingWorkoutReportExerciseDetail: View {
                 Text(exercise.note)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            if exercise.clientNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                VStack(alignment: .leading, spacing: 5) {
+                    Label(
+                        AppLocalizer.string("coaching.workouts.client_exercise_note"),
+                        systemImage: "person.crop.circle.fill"
+                    )
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.blue)
+
+                    Text(exercise.clientNote)
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
         }
         .padding(.vertical, 4)
