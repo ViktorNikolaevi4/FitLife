@@ -430,6 +430,29 @@ struct CoachingNote: Identifiable, Hashable {
     }
 }
 
+private let coachingNotesPageSize = 50
+
+private func coachingNotesQuery(
+    firestore: Firestore,
+    clientId: String,
+    trainerId: String
+) -> FirebaseFirestore.Query {
+    firestore
+        .collection("coaching_notes")
+        .whereField("clientId", isEqualTo: clientId)
+        .whereField("trainerId", isEqualTo: trainerId)
+        .order(by: "createdAt", descending: true)
+}
+
+private func mergingCoachingNotes(
+    _ current: [CoachingNote],
+    with incoming: [CoachingNote]
+) -> [CoachingNote] {
+    var notesByID = Dictionary(uniqueKeysWithValues: current.map { ($0.id, $0) })
+    incoming.forEach { notesByID[$0.id] = $0 }
+    return notesByID.values.sorted { $0.createdAt > $1.createdAt }
+}
+
 struct CoachingWorkoutSetSnapshot: Hashable {
     let orderIndex: Int
     let weight: Double
@@ -787,6 +810,8 @@ final class ClientCoachingHomeStore: ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var hasLoadedInitialState = false
     @Published private(set) var isSubmitting = false
+    @Published private(set) var canLoadMoreNotes = false
+    @Published private(set) var isLoadingMoreNotes = false
     @Published private(set) var reportDeliveryStatus: CoachingReportDeliveryStatus = .idle
     @Published var errorMessage: String?
 
@@ -798,6 +823,8 @@ final class ClientCoachingHomeStore: ObservableObject {
     private var notesListener: ListenerRegistration?
     private var workoutReportsListener: ListenerRegistration?
     private var nutritionReportsListener: ListenerRegistration?
+    private var hasLoadedOlderNotes = false
+    private var oldestNoteDocument: DocumentSnapshot?
 
     private struct CacheKey: Hashable {
         let clientId: String
@@ -810,6 +837,8 @@ final class ClientCoachingHomeStore: ObservableObject {
         var notes: [CoachingNote]
         var workoutReports: [CoachingWorkoutReport]
         var nutritionReports: [CoachingNutritionReport]
+        var canLoadMoreNotes: Bool
+        var oldestNoteDocument: DocumentSnapshot?
         var isComplete: Bool
         var updatedAt: Date
 
@@ -839,6 +868,9 @@ final class ClientCoachingHomeStore: ObservableObject {
             notes = cached.notes
             workoutReports = cached.workoutReports
             nutritionReports = cached.nutritionReports
+            canLoadMoreNotes = cached.canLoadMoreNotes
+            oldestNoteDocument = cached.oldestNoteDocument
+            hasLoadedOlderNotes = cached.notes.count > coachingNotesPageSize
             hasLoadedInitialState = cached.isComplete
         }
     }
@@ -872,10 +904,12 @@ final class ClientCoachingHomeStore: ObservableObject {
         }
 
         if notesListener == nil {
-            notesListener = firestore
-                .collection("coaching_notes")
-                .whereField("clientId", isEqualTo: clientId)
-                .whereField("trainerId", isEqualTo: trainerId)
+            notesListener = coachingNotesQuery(
+                firestore: firestore,
+                clientId: clientId,
+                trainerId: trainerId
+            )
+                .limit(to: coachingNotesPageSize)
                 .addSnapshotListener { [weak self] snapshot, _ in
                     guard let snapshot else { return }
                     let updatedNotes = snapshot.documents
@@ -883,8 +917,15 @@ final class ClientCoachingHomeStore: ObservableObject {
                         .sorted { $0.createdAt > $1.createdAt }
 
                     Task { @MainActor [weak self] in
-                        self?.notes = updatedNotes
-                        self?.cacheCurrentState(isComplete: nil)
+                        guard let self else { return }
+                        if hasLoadedOlderNotes {
+                            notes = mergingCoachingNotes(notes, with: updatedNotes)
+                        } else {
+                            notes = updatedNotes
+                            canLoadMoreNotes = snapshot.documents.count == coachingNotesPageSize
+                            oldestNoteDocument = snapshot.documents.last
+                        }
+                        cacheCurrentState(isComplete: nil)
                     }
                 }
         }
@@ -972,10 +1013,12 @@ final class ClientCoachingHomeStore: ObservableObject {
             .whereField("clientId", isEqualTo: clientId)
             .getDocuments(source: source)
 
-        async let notesSnapshot = firestore
-            .collection("coaching_notes")
-            .whereField("clientId", isEqualTo: clientId)
-            .whereField("trainerId", isEqualTo: trainerId)
+        async let notesSnapshot = coachingNotesQuery(
+            firestore: firestore,
+            clientId: clientId,
+            trainerId: trainerId
+        )
+            .limit(to: coachingNotesPageSize)
             .getDocuments(source: source)
 
         async let workoutReportsSnapshot = firestore
@@ -1009,6 +1052,8 @@ final class ClientCoachingHomeStore: ObservableObject {
                 .sorted { $0.createdAt > $1.createdAt },
             nutritionReports: nutritionReportDocs.documents.compactMap { CoachingNutritionReport(id: $0.documentID, data: $0.data()) }
                 .sorted { $0.createdAt > $1.createdAt },
+            canLoadMoreNotes: noteDocs.documents.count == coachingNotesPageSize,
+            oldestNoteDocument: noteDocs.documents.last,
             isComplete: true,
             updatedAt: .now
         )
@@ -1020,6 +1065,9 @@ final class ClientCoachingHomeStore: ObservableObject {
         notes = snapshot.notes
         workoutReports = snapshot.workoutReports
         nutritionReports = snapshot.nutritionReports
+        canLoadMoreNotes = snapshot.canLoadMoreNotes
+        oldestNoteDocument = snapshot.oldestNoteDocument
+        hasLoadedOlderNotes = false
         hasLoadedInitialState = isComplete
         cacheCurrentState(isComplete: isComplete)
     }
@@ -1032,6 +1080,8 @@ final class ClientCoachingHomeStore: ObservableObject {
             notes: notes,
             workoutReports: workoutReports,
             nutritionReports: nutritionReports,
+            canLoadMoreNotes: canLoadMoreNotes,
+            oldestNoteDocument: oldestNoteDocument,
             isComplete: isComplete ?? wasComplete,
             updatedAt: .now
         )
@@ -1040,6 +1090,34 @@ final class ClientCoachingHomeStore: ObservableObject {
            let oldestKey = Self.snapshotCache.min(by: { $0.value.updatedAt < $1.value.updatedAt })?.key,
            oldestKey != cacheKey {
             Self.snapshotCache.removeValue(forKey: oldestKey)
+        }
+    }
+
+    func loadMoreNotes() async {
+        guard canLoadMoreNotes, isLoadingMoreNotes == false,
+              let oldestNoteDocument else { return }
+
+        isLoadingMoreNotes = true
+        defer { isLoadingMoreNotes = false }
+
+        do {
+            let snapshot = try await coachingNotesQuery(
+                firestore: firestore,
+                clientId: clientId,
+                trainerId: trainerId
+            )
+                .start(afterDocument: oldestNoteDocument)
+                .limit(to: coachingNotesPageSize)
+                .getDocuments()
+            let olderNotes = snapshot.documents
+                .compactMap { CoachingNote(id: $0.documentID, data: $0.data()) }
+            notes = mergingCoachingNotes(notes, with: olderNotes)
+            hasLoadedOlderNotes = true
+            self.oldestNoteDocument = snapshot.documents.last ?? self.oldestNoteDocument
+            canLoadMoreNotes = snapshot.documents.count == coachingNotesPageSize
+            cacheCurrentState(isComplete: nil)
+        } catch {
+            errorMessage = AppErrorPresenter.message(for: error)
         }
     }
 
@@ -1157,7 +1235,6 @@ final class ClientCoachingHomeStore: ObservableObject {
                 .document(note.id)
                 .setData(note.firestoreData)
             isSubmitting = false
-            await load()
         } catch {
             errorMessage = AppErrorPresenter.message(for: error)
             isSubmitting = false
@@ -1189,7 +1266,8 @@ final class ClientCoachingHomeStore: ObservableObject {
                 .collection("coaching_notes")
                 .document(note.id)
                 .delete()
-            await load()
+            notes.removeAll { $0.id == note.id }
+            cacheCurrentState(isComplete: nil)
         } catch {
             errorMessage = AppErrorPresenter.message(for: error)
         }
@@ -1301,6 +1379,8 @@ final class TrainerClientSupportStore: ObservableObject {
     @Published private(set) var nutritionReports: [CoachingNutritionReport] = []
     @Published private(set) var isLoading = false
     @Published private(set) var isSubmitting = false
+    @Published private(set) var canLoadMoreNotes = false
+    @Published private(set) var isLoadingMoreNotes = false
     @Published private(set) var deletingAssignmentIds: Set<String> = []
     @Published var errorMessage: String?
 
@@ -1311,6 +1391,8 @@ final class TrainerClientSupportStore: ObservableObject {
     private var notesListener: ListenerRegistration?
     private var workoutReportsListener: ListenerRegistration?
     private var nutritionReportsListener: ListenerRegistration?
+    private var hasLoadedOlderNotes = false
+    private var oldestNoteDocument: DocumentSnapshot?
 
     var connectedClientId: String { client.id }
 
@@ -1346,10 +1428,12 @@ final class TrainerClientSupportStore: ObservableObject {
         }
 
         if notesListener == nil {
-            notesListener = firestore
-                .collection("coaching_notes")
-                .whereField("clientId", isEqualTo: client.id)
-                .whereField("trainerId", isEqualTo: trainerId)
+            notesListener = coachingNotesQuery(
+                firestore: firestore,
+                clientId: client.id,
+                trainerId: trainerId
+            )
+                .limit(to: coachingNotesPageSize)
                 .addSnapshotListener { [weak self] snapshot, _ in
                     guard let snapshot else { return }
                     let updatedNotes = snapshot.documents
@@ -1357,7 +1441,14 @@ final class TrainerClientSupportStore: ObservableObject {
                         .sorted { $0.createdAt > $1.createdAt }
 
                     Task { @MainActor [weak self] in
-                        self?.notes = updatedNotes
+                        guard let self else { return }
+                        if hasLoadedOlderNotes {
+                            notes = mergingCoachingNotes(notes, with: updatedNotes)
+                        } else {
+                            notes = updatedNotes
+                            canLoadMoreNotes = snapshot.documents.count == coachingNotesPageSize
+                            oldestNoteDocument = snapshot.documents.last
+                        }
                     }
                 }
         }
@@ -1435,10 +1526,12 @@ final class TrainerClientSupportStore: ObservableObject {
                 .whereField("trainerId", isEqualTo: trainerId)
                 .getDocuments()
 
-            async let notesSnapshot = firestore
-                .collection("coaching_notes")
-                .whereField("clientId", isEqualTo: client.id)
-                .whereField("trainerId", isEqualTo: trainerId)
+            async let notesSnapshot = coachingNotesQuery(
+                firestore: firestore,
+                clientId: client.id,
+                trainerId: trainerId
+            )
+                .limit(to: coachingNotesPageSize)
                 .getDocuments()
 
             async let workoutReportsSnapshot = firestore
@@ -1481,6 +1574,9 @@ final class TrainerClientSupportStore: ObservableObject {
 
             notes = noteDocs.documents.compactMap { CoachingNote(id: $0.documentID, data: $0.data()) }
                 .sorted { $0.createdAt > $1.createdAt }
+            canLoadMoreNotes = noteDocs.documents.count == coachingNotesPageSize
+            oldestNoteDocument = noteDocs.documents.last
+            hasLoadedOlderNotes = false
 
             workoutReports = workoutReportDocs.documents.compactMap { CoachingWorkoutReport(id: $0.documentID, data: $0.data()) }
                 .sorted { $0.createdAt > $1.createdAt }
@@ -1497,6 +1593,33 @@ final class TrainerClientSupportStore: ObservableObject {
         } catch {
             errorMessage = AppErrorPresenter.message(for: error)
             isLoading = false
+        }
+    }
+
+    func loadMoreNotes() async {
+        guard canLoadMoreNotes, isLoadingMoreNotes == false,
+              let oldestNoteDocument else { return }
+
+        isLoadingMoreNotes = true
+        defer { isLoadingMoreNotes = false }
+
+        do {
+            let snapshot = try await coachingNotesQuery(
+                firestore: firestore,
+                clientId: client.id,
+                trainerId: trainerId
+            )
+                .start(afterDocument: oldestNoteDocument)
+                .limit(to: coachingNotesPageSize)
+                .getDocuments()
+            let olderNotes = snapshot.documents
+                .compactMap { CoachingNote(id: $0.documentID, data: $0.data()) }
+            notes = mergingCoachingNotes(notes, with: olderNotes)
+            hasLoadedOlderNotes = true
+            self.oldestNoteDocument = snapshot.documents.last ?? self.oldestNoteDocument
+            canLoadMoreNotes = snapshot.documents.count == coachingNotesPageSize
+        } catch {
+            errorMessage = AppErrorPresenter.message(for: error)
         }
     }
 
@@ -1522,7 +1645,6 @@ final class TrainerClientSupportStore: ObservableObject {
                 .document(note.id)
                 .setData(note.firestoreData)
             isSubmitting = false
-            await load()
         } catch {
             errorMessage = AppErrorPresenter.message(for: error)
             isSubmitting = false
@@ -1574,7 +1696,7 @@ final class TrainerClientSupportStore: ObservableObject {
                 .collection("coaching_notes")
                 .document(note.id)
                 .delete()
-            await load()
+            notes.removeAll { $0.id == note.id }
         } catch {
             errorMessage = AppErrorPresenter.message(for: error)
         }
@@ -2135,6 +2257,9 @@ private struct ClientCoachingChatScreen: View {
             placeholder: AppLocalizer.string("coaching.notes.placeholder.client"),
             message: $noteMessage,
             isSubmitting: store.isSubmitting,
+            canLoadMoreNotes: store.canLoadMoreNotes,
+            isLoadingMoreNotes: store.isLoadingMoreNotes,
+            onLoadMoreNotes: { await store.loadMoreNotes() },
             onSend: {
                 await store.sendNote(
                     noteMessage,
@@ -3201,6 +3326,9 @@ private struct TrainerClientChatScreen: View {
             placeholder: AppLocalizer.string("coaching.notes.placeholder.trainer"),
             message: $noteMessage,
             isSubmitting: store.isSubmitting,
+            canLoadMoreNotes: store.canLoadMoreNotes,
+            isLoadingMoreNotes: store.isLoadingMoreNotes,
+            onLoadMoreNotes: { await store.loadMoreNotes() },
             onSend: {
                 await store.sendNote(
                     noteMessage,
@@ -4323,6 +4451,9 @@ private struct CoachingChatContent: View {
     let placeholder: String
     @Binding var message: String
     let isSubmitting: Bool
+    let canLoadMoreNotes: Bool
+    let isLoadingMoreNotes: Bool
+    let onLoadMoreNotes: () async -> Void
     let onSend: () async -> Void
     let onRequestDelete: (CoachingNote) -> Void
 
@@ -4339,8 +4470,8 @@ private struct CoachingChatContent: View {
         return (noteItems + checkInItems + workoutItems + nutritionItems).sorted { $0.createdAt < $1.createdAt }
     }
 
-    private var timelineScrollSignature: String {
-        "\(timelineItems.count)-\(timelineItems.last?.id ?? "empty")"
+    private var latestTimelineItemID: String {
+        timelineItems.last?.id ?? "empty"
     }
 
     private var trimmedMessage: String {
@@ -4351,6 +4482,36 @@ private struct CoachingChatContent: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 10) {
+                    if canLoadMoreNotes {
+                        Button {
+                            let preservedItemID = timelineItems.first?.id
+                            Task {
+                                await onLoadMoreNotes()
+                                guard let preservedItemID else { return }
+                                var transaction = Transaction()
+                                transaction.disablesAnimations = true
+                                withTransaction(transaction) {
+                                    proxy.scrollTo(preservedItemID, anchor: .top)
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                if isLoadingMoreNotes {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Image(systemName: "arrow.up.circle")
+                                }
+                                Text(AppLocalizer.string("coaching.chat.load_earlier"))
+                            }
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(HomeColors.accent)
+                            .padding(.vertical, 8)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isLoadingMoreNotes)
+                    }
+
                     if timelineItems.isEmpty {
                         VStack(spacing: 10) {
                             Image(systemName: "bubble.left.and.bubble.right")
@@ -4388,7 +4549,7 @@ private struct CoachingChatContent: View {
             .onAppear {
                 scrollToLatest(proxy, animated: false)
             }
-            .onChange(of: timelineScrollSignature) { _, _ in
+            .onChange(of: latestTimelineItemID) { _, _ in
                 scrollToLatest(proxy, animated: hasPositionedInitially)
             }
             .sheet(item: $selectedWorkoutReport) { report in

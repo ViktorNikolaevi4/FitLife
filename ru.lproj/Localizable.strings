@@ -617,6 +617,7 @@
 "coaching.notes.placeholder.trainer" = "Напишите клиенту уточнение или рекомендацию";
 "coaching.notes.author.client" = "Клиент";
 "coaching.notes.author.trainer" = "Тренер";
+"coaching.chat.load_earlier" = "Загрузить предыдущие сообщения";
 "coaching.workspace.quick_actions" = "Быстрые действия";
 "coaching.workspace.action.request_update" = "Запросить обновление данных";
 "coaching.workspace.action.add_note" = "Добавить заметку";

@@ -617,6 +617,7 @@
 "coaching.notes.placeholder.trainer" = "Send the client a clarification or recommendation";
 "coaching.notes.author.client" = "Client";
 "coaching.notes.author.trainer" = "Trainer";
+"coaching.chat.load_earlier" = "Load earlier messages";
 "coaching.workspace.quick_actions" = "Quick actions";
 "coaching.workspace.action.request_update" = "Request data update";
 "coaching.workspace.action.add_note" = "Add note";
