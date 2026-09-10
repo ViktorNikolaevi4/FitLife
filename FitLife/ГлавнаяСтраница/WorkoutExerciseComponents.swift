@@ -390,6 +390,8 @@ struct WorkoutExerciseDetailScreen: View {
     @State private var showIncompleteSetsConfirmation = false
     @State private var showNextExerciseIncompleteConfirmation = false
     @State private var showDeleteExerciseConfirmation = false
+    @State private var showRPEInfo = false
+    @State private var selectedRPESetID: UUID?
     @State private var selectedDetailTab = WorkoutExerciseDetailTab.workout
     @State private var isClosingScreen = false
 
@@ -606,15 +608,27 @@ struct WorkoutExerciseDetailScreen: View {
                 Text(AppLocalizer.format("workout.set.reset_named.message", group.method.title))
             }
         }
+        .alert(AppLocalizer.string("workout.rpe.info.title"), isPresented: $showRPEInfo) {
+            Button(AppLocalizer.string("common.ok"), role: .cancel) {}
+        } message: {
+            Text(AppLocalizer.string("workout.rpe.info.message"))
+        }
         .sheet(item: $editingSet) { set in
             WorkoutExerciseSetEditorSheet(
                 set: set,
                 onSave: { weight, reps, durationSeconds, metricType, isCompleted in
+                    let wasCompleted = set.isCompleted
                     set.weight = weight
                     set.reps = reps
                     set.durationSeconds = durationSeconds
                     set.metricType = metricType
                     set.isCompleted = isCompleted
+                    if isCompleted == false {
+                        set.rpe = nil
+                        if selectedRPESetID == set.id { selectedRPESetID = nil }
+                    } else if wasCompleted == false {
+                        selectedRPESetID = set.id
+                    }
                     try? modelContext.save()
                 },
                 onDelete: {
@@ -817,9 +831,11 @@ struct WorkoutExerciseDetailScreen: View {
                 Text("Подходы")
                     .font(.title3.weight(.bold))
                 Spacer()
-                Text("Нажмите, чтобы изменить")
+                Text(AppLocalizer.string("workout.rpe.prompt"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.trailing)
+                    .lineLimit(2)
             }
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -830,6 +846,7 @@ struct WorkoutExerciseDetailScreen: View {
                                 number: index + 1,
                                 set: set,
                                 onEdit: { editingSet = set },
+                                onSelectRPE: { selectedRPESetID = set.id },
                                 onToggleCompletion: {
                                     if set.metricType == .duration, set.isCompleted == false {
                                         activeTimedSet = set
@@ -858,7 +875,28 @@ struct WorkoutExerciseDetailScreen: View {
                     WorkoutAddSetCard(action: { showSetMethodPicker = true })
                 }
             }
+
+            if let set = selectedRPESet,
+               let setNumber = setGroups.firstIndex(where: { group in
+                   group.steps.contains(where: { $0.id == set.id })
+               }).map({ $0 + 1 }) {
+                WorkoutSetRPEPicker(
+                    setNumber: setNumber,
+                    selection: set.rpe,
+                    onSelect: { value in
+                        set.rpe = value
+                        try? modelContext.save()
+                    },
+                    onShowInfo: { showRPEInfo = true },
+                    onDismiss: { selectedRPESetID = nil }
+                )
+            }
         }
+    }
+
+    private var selectedRPESet: WorkoutSet? {
+        guard let selectedRPESetID else { return nil }
+        return sortedSets.first { $0.id == selectedRPESetID && $0.isCompleted }
     }
 
     private var trainerCommentCard: some View {
@@ -1167,12 +1205,15 @@ struct WorkoutExerciseDetailScreen: View {
         set.isCompleted.toggle()
         if set.isCompleted == false {
             exercise.isFinished = false
+            set.rpe = nil
+            if selectedRPESetID == set.id { selectedRPESetID = nil }
         }
         set.completedAt = set.isCompleted ? Date() : nil
         if set.isCompleted {
             set.actualWeight = set.actualWeight ?? set.weight
             set.actualReps = set.actualReps ?? set.reps
             set.actualDurationSeconds = set.actualDurationSeconds ?? set.durationSeconds
+            selectedRPESetID = set.id
         }
         try? modelContext.save()
     }
@@ -1183,6 +1224,7 @@ struct WorkoutExerciseDetailScreen: View {
         set.actualWeight = set.actualWeight ?? set.weight
         set.actualReps = set.actualReps ?? set.reps
         set.actualDurationSeconds = max(actualDurationSeconds, 0)
+        selectedRPESetID = set.id
         try? modelContext.save()
     }
 
@@ -1194,6 +1236,7 @@ struct WorkoutExerciseDetailScreen: View {
             set.actualReps = nil
             set.actualDurationSeconds = nil
             set.completedAt = nil
+            set.rpe = nil
         }
         try? modelContext.save()
 
@@ -1236,31 +1279,47 @@ private struct WorkoutSetHorizontalCard: View {
     let number: Int
     let set: WorkoutSet
     let onEdit: () -> Void
+    let onSelectRPE: () -> Void
     let onToggleCompletion: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 4) {
-            Button(action: onEdit) {
-                setDetails
-            }
-            .buttonStyle(.plain)
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .top, spacing: 4) {
+                Button(action: onEdit) {
+                    setDetails
+                }
+                .buttonStyle(.plain)
 
-            Button(action: onToggleCompletion) {
-                Image(systemName: statusIcon)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(statusColor)
-                    .frame(width: 28, height: 28)
-                    .contentShape(Circle())
+                Button(action: onToggleCompletion) {
+                    Image(systemName: statusIcon)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(statusColor)
+                        .frame(width: 28, height: 28)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(statusAccessibilityLabel)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(statusAccessibilityLabel)
+
+            if let rpe = set.rpe, set.isCompleted {
+                Button(action: onSelectRPE) {
+                    Text(AppLocalizer.format("workout.rpe.value", rpe))
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.blue)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 7))
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint(AppLocalizer.string("workout.rpe.action.edit"))
+            }
         }
         .padding(9)
-        .frame(width: 116, height: 72, alignment: .leading)
+        .frame(width: 124, height: 88, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 18).fill(workoutCardBackground))
         .overlay(
             RoundedRectangle(cornerRadius: 18)
-                .strokeBorder(set.isCompleted ? Color.green.opacity(0.55) : workoutCardBorder)
+                .strokeBorder(set.isCompleted ? Color.blue.opacity(0.55) : workoutCardBorder)
         )
     }
 
@@ -1271,7 +1330,7 @@ private struct WorkoutSetHorizontalCard: View {
     }
 
     private var statusColor: Color {
-        if set.isCompleted { return .green }
+        if set.isCompleted { return .blue }
         if set.metricType == .duration { return .blue }
         return .secondary
     }
@@ -1300,6 +1359,80 @@ private struct WorkoutSetHorizontalCard: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
             }
+    }
+}
+
+struct WorkoutSetRPEPicker: View {
+    let setNumber: Int
+    let selection: Int?
+    let onSelect: (Int) -> Void
+    let onShowInfo: () -> Void
+    let onDismiss: () -> Void
+
+    private let values = Array(6...10)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                Text(AppLocalizer.format("workout.rpe.title", setNumber))
+                    .font(.headline.weight(.semibold))
+
+                Button(action: onShowInfo) {
+                    Image(systemName: "info.circle")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.blue)
+                .accessibilityLabel(AppLocalizer.string("workout.rpe.info.title"))
+
+                Spacer()
+
+                Button(action: onDismiss) {
+                    Image(systemName: "chevron.up")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.blue)
+                .accessibilityLabel(AppLocalizer.string("workout.rpe.action.collapse"))
+            }
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5), spacing: 8) {
+                ForEach(values, id: \.self) { value in
+                    VStack(spacing: 7) {
+                        Button {
+                            onSelect(value)
+                        } label: {
+                            Text("\(value)")
+                                .font(.headline.weight(.bold))
+                                .foregroundStyle(selection == value ? Color.white : Color.primary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 11)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(selection == value ? Color.blue : workoutCardInsetBackground)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("RPE \(value)")
+                        .accessibilityHint(description(for: value))
+
+                        Text(description(for: value))
+                            .font(.caption2)
+                            .foregroundStyle(selection == value ? Color.blue : Color.secondary)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(3)
+                            .minimumScaleFactor(0.75)
+                            .frame(maxWidth: .infinity, minHeight: 42, alignment: .top)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: 20).fill(workoutCardBackground))
+        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(workoutCardBorder))
+    }
+
+    private func description(for value: Int) -> String {
+        AppLocalizer.string("workout.rpe.\(value).description")
     }
 }
 

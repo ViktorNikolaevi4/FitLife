@@ -437,6 +437,7 @@ struct CoachingWorkoutSetSnapshot: Hashable {
     let durationSeconds: Int
     let metricTypeRaw: String
     let isCompleted: Bool
+    let rpe: Int?
 
     init(set: WorkoutSet) {
         orderIndex = set.orderIndex
@@ -445,6 +446,7 @@ struct CoachingWorkoutSetSnapshot: Hashable {
         durationSeconds = set.durationSeconds
         metricTypeRaw = set.metricType.rawValue
         isCompleted = set.isCompleted
+        rpe = set.rpe
     }
 
     init?(_ data: [String: Any]) {
@@ -465,10 +467,11 @@ struct CoachingWorkoutSetSnapshot: Hashable {
         self.durationSeconds = durationSeconds
         self.metricTypeRaw = metricTypeRaw
         self.isCompleted = isCompleted
+        self.rpe = data["rpe"] as? Int
     }
 
     var firestoreData: [String: Any] {
-        [
+        var data: [String: Any] = [
             "orderIndex": orderIndex,
             "weight": weight,
             "reps": reps,
@@ -476,6 +479,8 @@ struct CoachingWorkoutSetSnapshot: Hashable {
             "metricTypeRaw": metricTypeRaw,
             "isCompleted": isCompleted
         ]
+        if let rpe { data["rpe"] = rpe }
+        return data
     }
 }
 
@@ -5173,6 +5178,14 @@ private struct CoachingWorkoutReportExerciseDetail: View {
                         .foregroundStyle(set.isCompleted ? Color.green : .secondary)
                     Text(formattedSetValue(set))
                         .font(.subheadline)
+                    if let rpe = set.rpe {
+                        Text(AppLocalizer.format("workout.rpe.value", rpe))
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.blue)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(Color.blue.opacity(0.12), in: Capsule())
+                    }
                     Spacer()
                 }
             }

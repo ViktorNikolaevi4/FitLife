@@ -494,6 +494,8 @@ struct WorkoutSetMethodRunnerScreen: View {
     @State private var lastCuedSecond: Int?
     @State private var actualWeights: [UUID: Double]
     @State private var actualReps: [UUID: Int]
+    @State private var selectedRPEStepID: UUID?
+    @State private var showRPEInfo = false
     @FocusState private var isInputFocused: Bool
 
     private let ticker = Timer.publish(every: 0.25, on: .main, in: .common).autoconnect()
@@ -537,6 +539,18 @@ struct WorkoutSetMethodRunnerScreen: View {
             VStack(alignment: .leading, spacing: 16) {
                 methodHeader
                 currentStageCard
+                if let step = selectedRPEStep {
+                    WorkoutSetRPEPicker(
+                        setNumber: step.orderIndex + 1,
+                        selection: step.rpe,
+                        onSelect: { value in
+                            step.rpe = value
+                            try? modelContext.save()
+                        },
+                        onShowInfo: { showRPEInfo = true },
+                        onDismiss: { selectedRPEStepID = nil }
+                    )
+                }
                 stageHistory
             }
             .padding(16)
@@ -554,6 +568,11 @@ struct WorkoutSetMethodRunnerScreen: View {
             }
         }
         .animation(.easeInOut(duration: 0.18), value: isInputFocused)
+        .alert(AppLocalizer.string("workout.rpe.info.title"), isPresented: $showRPEInfo) {
+            Button(AppLocalizer.string("common.ok"), role: .cancel) {}
+        } message: {
+            Text(AppLocalizer.string("workout.rpe.info.message"))
+        }
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
@@ -706,6 +725,16 @@ struct WorkoutSetMethodRunnerScreen: View {
                         Text(stageResult(step))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
+                        if let rpe = step.rpe, step.isCompleted {
+                            Button {
+                                selectedRPEStepID = step.id
+                            } label: {
+                                Text(AppLocalizer.format("workout.rpe.value", rpe))
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(.blue)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                     Spacer()
                     if step.restAfterSeconds > 0 && index < steps.count - 1 {
@@ -765,6 +794,7 @@ struct WorkoutSetMethodRunnerScreen: View {
         step.actualDurationSeconds = step.durationSeconds
         step.isCompleted = true
         step.completedAt = Date()
+        selectedRPEStepID = step.id
         try? modelContext.save()
         UINotificationFeedbackGenerator().notificationOccurred(.success)
 
@@ -829,6 +859,11 @@ struct WorkoutSetMethodRunnerScreen: View {
             )
         }
         return AppLocalizer.format("workout.set.plan_summary", formattedWorkoutWeight(step.weight), step.reps)
+    }
+
+    private var selectedRPEStep: WorkoutSet? {
+        guard let selectedRPEStepID else { return nil }
+        return steps.first { $0.id == selectedRPEStepID && $0.isCompleted }
     }
 
     private func formatClock(_ seconds: Int) -> String {

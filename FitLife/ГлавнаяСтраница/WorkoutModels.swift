@@ -532,6 +532,8 @@ final class WorkoutSet {
     var actualReps: Int?
     var actualDurationSeconds: Int?
     var completedAt: Date?
+    /// Subjective effort for a completed set, using the 6...10 RPE scale.
+    var rpe: Int?
 
     var exercise: WorkoutExercise?
 
@@ -561,7 +563,8 @@ final class WorkoutSet {
         pyramidPattern: WorkoutPyramidPattern = .ascending,
         groupID: UUID? = nil,
         stepIndex: Int = 0,
-        restAfterSeconds: Int = 0
+        restAfterSeconds: Int = 0,
+        rpe: Int? = nil
     ) {
         self.orderIndex = orderIndex
         self.weight = weight
@@ -573,6 +576,7 @@ final class WorkoutSet {
         self.methodVariantRawValue = method == .pyramid ? pyramidPattern.rawValue : ""
         self.groupID = groupID
         self.stepIndex = stepIndex
+        self.rpe = rpe.flatMap { (6...10).contains($0) ? $0 : nil }
         self.restAfterSeconds = restAfterSeconds
     }
 }
