@@ -427,7 +427,7 @@ private enum AIBeverageSugarOption: String, CaseIterable, Identifiable {
     }
 }
 
-private enum OpenAIConfiguration {
+enum OpenAIConfiguration {
     static var apiKey: String? {
         guard let rawValue = Bundle.main.object(forInfoDictionaryKey: "OpenAIAPIKey") as? String else {
             return nil

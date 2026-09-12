@@ -44,6 +44,7 @@ struct NutritionScreen: View {
     @State private var selectedMacroDetail: MacroDetailKind?
     @State private var repeatYesterdayMeal: RepeatYesterdayMealSelection?
     @State private var isShowingAIMealRecognition = false
+    @State private var isShowingAINutritionAssistant = false
     @State private var activeTrainerId: String?
     @State private var isShowingNutritionReport = false
 
@@ -63,9 +64,27 @@ struct NutritionScreen: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 18) {
-                Text(AppLocalizer.string("nutrition.title"))
-                    .font(.largeTitle.bold())
-                    .padding(.horizontal)
+                HStack(spacing: 12) {
+                    Text(AppLocalizer.string("nutrition.title"))
+                        .font(.largeTitle.bold())
+
+                    Spacer()
+
+                    Button {
+                        isShowingAINutritionAssistant = true
+                    } label: {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(theme.accent)
+                            .frame(width: 44, height: 44)
+                            .background(Circle().fill(theme.card))
+                            .overlay(Circle().strokeBorder(theme.border))
+                            .shadow(color: nutritionCardShadow, radius: 10, x: 0, y: 4)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("AI-помощник по питанию")
+                }
+                .padding(.horizontal)
 
                 caloriesCard
 
@@ -204,6 +223,18 @@ struct NutritionScreen: View {
             AIMealRecognitionFlowView(
                 selectedDate: selectedDate,
                 selectedGender: selectedGender,
+                onSaved: { loadEntries(for: selectedDate) }
+            )
+        }
+        .sheet(isPresented: $isShowingAINutritionAssistant) {
+            AINutritionAssistantView(
+                selectedDate: selectedDate,
+                selectedGender: selectedGender,
+                ownerId: currentOwnerId ?? "",
+                remainingCalories: max((userData?.calories ?? 0) - consumedCalories, 0),
+                remainingProtein: max((userData?.proteins ?? 0) - consumedProteins, 0),
+                remainingFat: max((userData?.fats ?? 0) - consumedFats, 0),
+                remainingCarbs: max((userData?.carbs ?? 0) - consumedCarbs, 0),
                 onSaved: { loadEntries(for: selectedDate) }
             )
         }
@@ -615,6 +646,7 @@ private struct NutritionMacroMetric: View {
                     .frame(width: 8, height: 8)
                 Text(title)
                     .font(.caption2.weight(.semibold))
+                    .lineLimit(1)
 
                 if isOverTarget {
                     Image(systemName: "exclamationmark.triangle.fill")

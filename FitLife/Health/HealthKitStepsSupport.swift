@@ -520,6 +520,125 @@ private struct WeeklyStepsMiniChart: View {
     }
 }
 
+private struct WeeklyStepsDetailsView: View {
+    let values: [HealthKitDailySteps]
+    let goal: Int
+
+    @State private var selectedDate: Date?
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var theme: AppTheme { AppTheme(colorScheme) }
+    private var calendar: Calendar { .current }
+    private var selectedValue: HealthKitDailySteps? {
+        if let selectedDate,
+           let selected = values.first(where: { calendar.isDate($0.date, inSameDayAs: selectedDate) }) {
+            return selected
+        }
+        return values.last(where: { $0.date <= .now }) ?? values.last
+    }
+    private var elapsedValues: [HealthKitDailySteps] {
+        let today = calendar.startOfDay(for: .now)
+        return values.filter { $0.date <= today }
+    }
+    private var total: Int { elapsedValues.reduce(0) { $0 + $1.steps } }
+    private var average: Int {
+        guard elapsedValues.isEmpty == false else { return 0 }
+        return total / elapsedValues.count
+    }
+    private var maximum: Double {
+        Double(max(values.map(\.steps).max() ?? 0, goal, 1))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if let selectedValue {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(selectedValue.date.formatted(.dateTime.weekday(.wide).day().month(.abbreviated)))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Text(selectedValue.steps.formatted())
+                        .font(.title3.bold())
+                        .contentTransition(.numericText())
+                }
+            }
+
+            HStack(alignment: .bottom, spacing: 8) {
+                ForEach(values) { value in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            selectedDate = value.date
+                        }
+                    } label: {
+                        VStack(spacing: 6) {
+                            GeometryReader { proxy in
+                                let fraction = Double(value.steps) / maximum
+                                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                    .fill(barColor(for: value))
+                                    .frame(height: max(value.steps > 0 ? 5 : 2, proxy.size.height * fraction))
+                                    .frame(maxHeight: .infinity, alignment: .bottom)
+                            }
+                            .frame(height: 72)
+
+                            Text(weekdayText(for: value.date))
+                                .font(.caption2.weight(isSelected(value) ? .bold : .regular))
+                                .foregroundStyle(isSelected(value) ? theme.primaryText : theme.tertiaryText)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(weekdayText(for: value.date)), \(value.steps.formatted())")
+                }
+            }
+            .frame(height: 94)
+
+            Divider()
+
+            HStack(spacing: 16) {
+                summaryMetric(
+                    title: AppLocalizer.string("health.steps.week_total"),
+                    value: total
+                )
+                summaryMetric(
+                    title: AppLocalizer.string("health.steps.week_average"),
+                    value: average
+                )
+            }
+        }
+        .padding(.vertical, 6)
+    }
+
+    private func summaryMetric(title: String, value: Int) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value.formatted())
+                .font(.headline)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func isSelected(_ value: HealthKitDailySteps) -> Bool {
+        guard let selectedValue else { return false }
+        return calendar.isDate(value.date, inSameDayAs: selectedValue.date)
+    }
+
+    private func barColor(for value: HealthKitDailySteps) -> Color {
+        isSelected(value) ? theme.accent : theme.accent.opacity(0.45)
+    }
+
+    private func weekdayText(for date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = AppLocalizer.currentLanguage.locale
+        formatter.setLocalizedDateFormatFromTemplate("EE")
+        return formatter.string(from: date).lowercased()
+    }
+}
+
 struct HealthKitStepsSettingsScreen: View {
     @StateObject private var store = HealthKitStepsStore()
     @AppStorage(HealthKitStepsPreference.enabledKey) private var isEnabled = false
@@ -615,6 +734,15 @@ struct HealthKitStepsSettingsScreen: View {
 
                     Button(AppLocalizer.string("health.steps.disable"), role: .destructive) {
                         isEnabled = false
+                    }
+                }
+
+                if store.weeklySteps.isEmpty == false {
+                    Section(AppLocalizer.string("health.steps.week_title")) {
+                        WeeklyStepsDetailsView(
+                            values: store.weeklySteps,
+                            goal: goal
+                        )
                     }
                 }
             }

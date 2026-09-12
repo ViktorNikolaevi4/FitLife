@@ -1432,6 +1432,9 @@
 "health.steps.value" = "%d of %d steps";
 "health.steps.count" = "%d steps";
 "health.steps.week_chart" = "Steps for the current week";
+"health.steps.week_title" = "This week";
+"health.steps.week_total" = "Total";
+"health.steps.week_average" = "Daily average";
 "health.steps.progress" = "Step goal progress";
 "health.steps.goal" = "Goal";
 "health.steps.daily_goal" = "Steps per day";

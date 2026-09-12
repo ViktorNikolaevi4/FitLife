@@ -1432,6 +1432,9 @@
 "health.steps.value" = "%d из %d шагов";
 "health.steps.count" = "%d шагов";
 "health.steps.week_chart" = "Шаги за текущую неделю";
+"health.steps.week_title" = "Эта неделя";
+"health.steps.week_total" = "Всего";
+"health.steps.week_average" = "В среднем за день";
 "health.steps.progress" = "Прогресс цели шагов";
 "health.steps.goal" = "Цель";
 "health.steps.daily_goal" = "Шагов в день";
