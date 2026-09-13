@@ -52,6 +52,24 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/workout_assignments/$(assignmentId)).data.clientId == request.auth.uid;
     }
 
+    function isValidCoachingReactionUpdate(clientId, trainerId) {
+      let oldReactions = resource.data.get("reactions", {});
+      let newReactions = request.resource.data.get("reactions", {});
+      return isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["reactions"])
+        && newReactions is map
+        && newReactions.size() <= 2
+        && newReactions.diff(oldReactions).affectedKeys().hasOnly([request.auth.uid])
+        && (
+          !newReactions.keys().hasAny([request.auth.uid])
+          || newReactions[request.auth.uid] in ["👍", "❤️", "💪", "🔥", "👏"]
+        )
+        && (
+          (isTrainer() && trainerId == request.auth.uid && trainerHasClientAccess(clientId))
+          || (isClient() && clientId == request.auth.uid && clientHasTrainerAccess(trainerId))
+        );
+    }
+
     match /users/{userId} {
       function isSelf() {
         return isSignedIn() && request.auth.uid == userId;
@@ -180,9 +198,11 @@ service cloud.firestore {
 
       allow create: if isClient()
         && request.resource.data.clientId == request.auth.uid
+        && request.resource.data.get("reactions", {}).size() == 0
         && clientHasTrainerAccess(request.resource.data.trainerId);
 
-      allow update: if isOwner();
+      allow update: if isOwner()
+        || isValidCoachingReactionUpdate(resource.data.clientId, resource.data.trainerId);
 
       allow delete: if isOwner()
         || (isClient() && resource.data.clientId == request.auth.uid);
@@ -212,11 +232,38 @@ service cloud.firestore {
     }
 
     match /coaching_notes/{noteId} {
+      function isValidReactionUpdate() {
+        let oldReactions = resource.data.get("reactions", {});
+        let newReactions = request.resource.data.get("reactions", {});
+        return isSignedIn()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["reactions"])
+          && newReactions is map
+          && newReactions.size() <= 2
+          && newReactions.diff(oldReactions).affectedKeys().hasOnly([request.auth.uid])
+          && (
+            !newReactions.keys().hasAny([request.auth.uid])
+            || newReactions[request.auth.uid] in ["👍", "❤️", "💪", "🔥", "👏"]
+          )
+          && (
+            (
+              isTrainer()
+              && resource.data.trainerId == request.auth.uid
+              && trainerHasClientAccess(resource.data.clientId)
+            )
+            || (
+              isClient()
+              && resource.data.clientId == request.auth.uid
+              && clientHasTrainerAccess(resource.data.trainerId)
+            )
+          );
+      }
+
       allow read: if isOwner()
         || (isTrainer() && resource.data.trainerId == request.auth.uid)
         || (isClient() && resource.data.clientId == request.auth.uid);
 
       allow create: if isSignedIn()
+        && request.resource.data.get("reactions", {}).size() == 0
         && (
           (
             isTrainer()
@@ -234,7 +281,8 @@ service cloud.firestore {
           )
         );
 
-      allow update: if isOwner();
+      allow update: if isOwner()
+        || isValidReactionUpdate();
 
       allow delete: if isOwner()
         || (
@@ -258,9 +306,11 @@ service cloud.firestore {
 
       allow create: if isClient()
         && request.resource.data.clientId == request.auth.uid
+        && request.resource.data.get("reactions", {}).size() == 0
         && clientHasTrainerAccess(request.resource.data.trainerId);
 
       allow update: if isOwner()
+        || isValidCoachingReactionUpdate(resource.data.clientId, resource.data.trainerId)
         || (
           isClient()
           && resource.data.clientId == request.auth.uid
@@ -278,9 +328,11 @@ service cloud.firestore {
 
       allow create: if isClient()
         && request.resource.data.clientId == request.auth.uid
+        && request.resource.data.get("reactions", {}).size() == 0
         && clientHasTrainerAccess(request.resource.data.trainerId);
 
       allow update: if isOwner()
+        || isValidCoachingReactionUpdate(resource.data.clientId, resource.data.trainerId)
         || (
           isClient()
           && resource.data.clientId == request.auth.uid

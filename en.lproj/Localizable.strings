@@ -618,6 +618,8 @@
 "coaching.notes.author.client" = "Client";
 "coaching.notes.author.trainer" = "Trainer";
 "coaching.chat.load_earlier" = "Load earlier messages";
+"coaching.chat.reaction.remove" = "Remove reaction";
+"coaching.chat.reaction.accessibility" = "Reaction %@, %d";
 "coaching.workspace.quick_actions" = "Quick actions";
 "coaching.workspace.action.request_update" = "Request data update";
 "coaching.workspace.action.add_note" = "Add note";
@@ -1324,6 +1326,9 @@
 "notifications.event.client_note_received.title" = "New client message";
 "notifications.event.client_note_received.body" = "A client sent you a message.";
 "notifications.event.client_note_received.body.sender" = "%@ sent you a message.";
+"notifications.event.chat_reaction_added.title" = "New reaction";
+"notifications.event.chat_reaction_added.body" = "Someone reacted %@ to your message.";
+"notifications.event.chat_reaction_added.body.sender" = "Reaction %@ from %@.";
 "notifications.event.workout_assigned.title" = "New workout assigned";
 "notifications.event.workout_assigned.body" = "Your coach assigned you a workout.";
 "notifications.event.workout_assigned.body.sender" = "%@ assigned you a workout.";
@@ -2048,6 +2053,7 @@
 "workout.set.stage_name" = "Stage";
 "workout.metric.time" = "Time";
 "workout.metric.reps" = "Reps";
+"workout.reps.count" = "%d reps";
 "workout.exercise.completed" = "Exercise complete";
 "workout.timer.finish_now" = "Finish set now";
 "workout.timer.complete_without_timer" = "Complete without timer";

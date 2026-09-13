@@ -1300,6 +1300,12 @@ private struct WorkoutSetHorizontalCard: View {
     let onSelectRPE: () -> Void
     let onToggleCompletion: () -> Void
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    private var usesAccessibilityLayout: Bool {
+        dynamicTypeSize.isAccessibilitySize
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .top, spacing: 4) {
@@ -1312,7 +1318,10 @@ private struct WorkoutSetHorizontalCard: View {
                     Image(systemName: statusIcon)
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(statusColor)
-                        .frame(width: 28, height: 28)
+                        .frame(
+                            width: usesAccessibilityLayout ? 44 : 28,
+                            height: usesAccessibilityLayout ? 44 : 28
+                        )
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
@@ -1332,8 +1341,12 @@ private struct WorkoutSetHorizontalCard: View {
                 .accessibilityHint(AppLocalizer.string("workout.rpe.action.edit"))
             }
         }
-        .padding(9)
-        .frame(width: 124, height: 88, alignment: .leading)
+        .padding(usesAccessibilityLayout ? 12 : 9)
+        .frame(
+            width: usesAccessibilityLayout ? 210 : 124,
+            height: usesAccessibilityLayout ? 138 : 88,
+            alignment: .leading
+        )
         .background(RoundedRectangle(cornerRadius: 18).fill(workoutCardBackground))
         .overlay(
             RoundedRectangle(cornerRadius: 18)
@@ -1360,12 +1373,23 @@ private struct WorkoutSetHorizontalCard: View {
     }
 
     private var setDetails: some View {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(AppLocalizer.format("workout.set.numbered_title", number))
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
+        VStack(alignment: .leading, spacing: usesAccessibilityLayout ? 7 : 5) {
+            Text(AppLocalizer.format("workout.set.numbered_title", number))
+                .font((usesAccessibilityLayout ? Font.subheadline : .caption).weight(.semibold))
+                .lineLimit(usesAccessibilityLayout ? 2 : 1)
+                .minimumScaleFactor(usesAccessibilityLayout ? 1 : 0.72)
 
+            if usesAccessibilityLayout {
+                Text(AppLocalizer.format("workout.weight.kg", formattedWorkoutWeight(set.weight)))
+                    .font(.body.weight(.bold))
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(accessibilityMetricText)
+                    .font(.body.weight(.bold))
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
                 Text(formattedWorkoutSetValue(
                     weight: set.weight,
                     reps: set.reps,
@@ -1377,6 +1401,16 @@ private struct WorkoutSetHorizontalCard: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
             }
+        }
+    }
+
+    private var accessibilityMetricText: String {
+        switch set.metricType {
+        case .reps:
+            return AppLocalizer.format("workout.reps.count", set.reps)
+        case .duration:
+            return "\(AppLocalizer.string("workout.metric.time")): \(formattedWorkoutMetricValue(reps: set.reps, durationSeconds: set.durationSeconds, metricType: set.metricType))"
+        }
     }
 }
 
@@ -1932,17 +1966,28 @@ private struct WorkoutExercisePreviousNoteCard: View {
 private struct WorkoutAddSetCard: View {
     let action: () -> Void
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    private var usesAccessibilityLayout: Bool {
+        dynamicTypeSize.isAccessibilitySize
+    }
+
     var body: some View {
         Button(action: action) {
             VStack(spacing: 4) {
                 Image(systemName: "plus.circle.fill")
                     .font(.headline)
-                Text("Добавить\nподход")
+                Text("Добавить подход")
                     .font(.caption2.weight(.semibold))
                     .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .foregroundStyle(.blue)
-            .frame(width: 72, height: 72)
+            .frame(
+                width: usesAccessibilityLayout ? 150 : 72,
+                height: usesAccessibilityLayout ? 116 : 72
+            )
             .background(workoutCardInsetBackground, in: RoundedRectangle(cornerRadius: 18))
             .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Color.blue.opacity(0.35)))
         }

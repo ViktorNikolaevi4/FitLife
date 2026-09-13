@@ -217,13 +217,20 @@ actor CoachingReportDeliveryOutbox {
             // Запись с постоянным id идемпотентна: при потере подтверждения
             // очередь безопасно повторит тот же batch. Firestore Rules разрешают
             // клиенту только точное повторение уже сохранённых данных.
-            let reportData = try decodePropertyList(pending.reportData)
+            var reportData = try decodePropertyList(pending.reportData)
             let notificationData = try decodePropertyList(pending.notificationData)
             let notificationRef = firestore
                 .collection("notification_events")
                 .document(pending.notificationId)
             let batch = firestore.batch()
-            batch.setData(reportData, forDocument: reportRef)
+            if pending.collection == "coaching_nutrition_reports" {
+                // A nutrition report can reuse the same document for the same
+                // day. Keep reactions that were already added to that card.
+                reportData.removeValue(forKey: "reactions")
+                batch.setData(reportData, forDocument: reportRef, merge: true)
+            } else {
+                batch.setData(reportData, forDocument: reportRef)
+            }
             batch.setData(notificationData, forDocument: notificationRef)
             try await batch.commit()
 

@@ -13,6 +13,7 @@ enum AppNotificationEventType: String, Codable, CaseIterable {
     case checkInSubmitted = "checkin_submitted"
     case coachNoteReceived = "coach_note_received"
     case clientNoteReceived = "client_note_received"
+    case chatReactionAdded = "chat_reaction_added"
     case workoutAssigned = "workout_assigned"
     case profileUpdateRequested = "profile_update_requested"
 }
@@ -35,6 +36,7 @@ struct AppNotificationEvent: Identifiable, Hashable {
     let senderName: String
     let targetType: AppNotificationTargetType
     let targetId: String
+    let reaction: String
     let createdAt: Date
     let isRead: Bool
     let isArchived: Bool
@@ -48,6 +50,7 @@ struct AppNotificationEvent: Identifiable, Hashable {
         senderName: String = "",
         targetType: AppNotificationTargetType,
         targetId: String,
+        reaction: String = "",
         createdAt: Date = .now,
         isRead: Bool = false,
         isArchived: Bool = false,
@@ -60,6 +63,7 @@ struct AppNotificationEvent: Identifiable, Hashable {
         self.senderName = senderName
         self.targetType = targetType
         self.targetId = targetId
+        self.reaction = reaction
         self.createdAt = createdAt
         self.isRead = isRead
         self.isArchived = isArchived
@@ -86,6 +90,7 @@ struct AppNotificationEvent: Identifiable, Hashable {
         self.senderName = (data["senderName"] as? String) ?? ""
         self.targetType = targetType
         self.targetId = targetId
+        self.reaction = (data["reaction"] as? String) ?? ""
         if let createdTimestamp = data["createdAt"] as? Timestamp {
             self.createdAt = createdTimestamp.dateValue()
         } else {
@@ -104,6 +109,7 @@ struct AppNotificationEvent: Identifiable, Hashable {
             "senderName": senderName,
             "targetType": targetType.rawValue,
             "targetId": targetId,
+            "reaction": reaction,
             "createdAt": createdAt,
             "isRead": isRead,
             "isArchived": isArchived
@@ -117,6 +123,12 @@ struct AppNotificationEvent: Identifiable, Hashable {
     var localizedBody: String {
         let keyPrefix = "notifications.event.\(type.rawValue).body"
         let trimmedSenderName = senderName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if type == .chatReactionAdded {
+            if trimmedSenderName.isEmpty == false {
+                return AppLocalizer.format("\(keyPrefix).sender", reaction, trimmedSenderName)
+            }
+            return AppLocalizer.format(keyPrefix, reaction)
+        }
         if trimmedSenderName.isEmpty == false {
             return AppLocalizer.format("\(keyPrefix).sender", trimmedSenderName)
         }
@@ -132,6 +144,7 @@ enum AppNotificationEventWriter {
         senderName: String = "",
         targetType: AppNotificationTargetType,
         targetId: String,
+        reaction: String = "",
         firestore: Firestore = .firestore()
     ) async throws {
         guard recipientId.isEmpty == false, targetId.isEmpty == false else { return }
@@ -142,7 +155,8 @@ enum AppNotificationEventWriter {
             senderId: senderId,
             senderName: senderName,
             targetType: targetType,
-            targetId: targetId
+            targetId: targetId,
+            reaction: reaction
         )
 
         try await firestore
@@ -733,7 +747,7 @@ struct AppNotificationDestinationScreen: View {
         switch profile.role {
         case .client:
             switch notification.type {
-            case .coachNoteReceived:
+            case .coachNoteReceived, .chatReactionAdded:
                 ClientCoachingEntryScreen(clientId: profile.id, opensChatInitially: true)
             case .coachingRequestApproved:
                 ClientCoachingEntryScreen(clientId: profile.id)
@@ -744,7 +758,7 @@ struct AppNotificationDestinationScreen: View {
             }
         case .trainer:
             switch notification.type {
-            case .clientNoteReceived:
+            case .clientNoteReceived, .chatReactionAdded:
                 TrainerClientNotificationDestination(
                     trainerId: profile.id,
                     clientId: notification.senderId,

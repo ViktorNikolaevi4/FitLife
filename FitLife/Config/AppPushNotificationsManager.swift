@@ -205,7 +205,8 @@ final class AppPushNotificationsManager: NSObject, ObservableObject {
             senderId: senderId,
             senderName: (userInfo["senderName"] as? String) ?? "",
             targetType: targetType,
-            targetId: targetId
+            targetId: targetId,
+            reaction: (userInfo["reaction"] as? String) ?? ""
         )
     }
 
@@ -439,6 +440,8 @@ final class AppPushNotificationsManager: NSObject, ObservableObject {
         switch type {
         case .coachNoteReceived, .clientNoteReceived:
             return "bubble.left.and.bubble.right.fill"
+        case .chatReactionAdded:
+            return "hand.thumbsup.fill"
         case .workoutAssigned:
             return "dumbbell.fill"
         case .workoutReportSent:
@@ -866,6 +869,7 @@ final class AppPushNotificationsManager: NSObject, ObservableObject {
             let type = AppNotificationEventType(rawValue: typeRaw),
             type == .coachNoteReceived
                 || type == .clientNoteReceived
+                || type == .chatReactionAdded
                 || type == .workoutReportSent
                 || type == .nutritionReportSent,
             let targetId = userInfo["targetId"] as? String,
@@ -875,7 +879,9 @@ final class AppPushNotificationsManager: NSObject, ObservableObject {
         }
 
         let senderId = userInfo["senderId"] as? String
-        let isChat = type == .coachNoteReceived || type == .clientNoteReceived
+        let isChat = type == .coachNoteReceived
+            || type == .clientNoteReceived
+            || type == .chatReactionAdded
         if (isChat && activeChatCounterpartId == senderId)
             || wasNotificationDisplayed(type: type, targetId: targetId) {
             rememberDisplayedNotification(type: type, targetId: targetId)

@@ -160,6 +160,7 @@ struct ProgressCheckIn: Identifiable, Hashable {
     let stepGoal: Int
     let dailySteps: [CheckInDailySteps]
     let createdAt: Date
+    let reactions: [String: String]
 
     init(
         id: String,
@@ -183,7 +184,8 @@ struct ProgressCheckIn: Identifiable, Hashable {
         notes: String,
         stepGoal: Int = 0,
         dailySteps: [CheckInDailySteps] = [],
-        createdAt: Date = .now
+        createdAt: Date = .now,
+        reactions: [String: String] = [:]
     ) {
         self.id = id
         self.clientId = clientId
@@ -207,6 +209,7 @@ struct ProgressCheckIn: Identifiable, Hashable {
         self.stepGoal = max(0, stepGoal)
         self.dailySteps = dailySteps.sorted { $0.date < $1.date }
         self.createdAt = createdAt
+        self.reactions = reactions
     }
 
     init?(id: String, data: [String: Any]) {
@@ -255,6 +258,7 @@ struct ProgressCheckIn: Identifiable, Hashable {
         } else {
             self.createdAt = (data["createdAt"] as? Date) ?? .now
         }
+        self.reactions = data["reactions"] as? [String: String] ?? [:]
     }
 
     var firestoreData: [String: Any] {
@@ -279,7 +283,8 @@ struct ProgressCheckIn: Identifiable, Hashable {
             "notes": notes,
             "stepGoal": stepGoal,
             "dailySteps": dailySteps.map(\.firestoreData),
-            "createdAt": createdAt
+            "createdAt": createdAt,
+            "reactions": reactions
         ]
     }
 
@@ -374,6 +379,7 @@ struct CoachingNote: Identifiable, Hashable {
     let authorRole: CoachingNoteAuthorRole
     let message: String
     let createdAt: Date
+    let reactions: [String: String]
 
     init(
         id: String,
@@ -382,7 +388,8 @@ struct CoachingNote: Identifiable, Hashable {
         authorId: String,
         authorRole: CoachingNoteAuthorRole,
         message: String,
-        createdAt: Date = .now
+        createdAt: Date = .now,
+        reactions: [String: String] = [:]
     ) {
         self.id = id
         self.clientId = clientId
@@ -391,6 +398,7 @@ struct CoachingNote: Identifiable, Hashable {
         self.authorRole = authorRole
         self.message = message
         self.createdAt = createdAt
+        self.reactions = reactions
     }
 
     init?(id: String, data: [String: Any]) {
@@ -411,6 +419,7 @@ struct CoachingNote: Identifiable, Hashable {
         self.authorId = authorId
         self.authorRole = authorRole
         self.message = message
+        self.reactions = data["reactions"] as? [String: String] ?? [:]
         if let timestamp = data["createdAt"] as? Timestamp {
             self.createdAt = timestamp.dateValue()
         } else {
@@ -425,9 +434,29 @@ struct CoachingNote: Identifiable, Hashable {
             "authorId": authorId,
             "authorRole": authorRole.rawValue,
             "message": message,
-            "createdAt": createdAt
+            "createdAt": createdAt,
+            "reactions": reactions
         ]
     }
+}
+
+private let coachingReactionOptions = ["👍", "❤️", "💪", "🔥", "👏"]
+
+private func updateCoachingReaction(
+    firestore: Firestore,
+    collection: String,
+    documentId: String,
+    userId: String,
+    emoji: String?
+) async throws {
+    if let emoji, coachingReactionOptions.contains(emoji) == false { return }
+
+    let value: Any = emoji ?? FieldValue.delete()
+    let fields: [AnyHashable: Any] = [FieldPath(["reactions", userId]): value]
+    try await firestore
+        .collection(collection)
+        .document(documentId)
+        .updateData(fields)
 }
 
 private let coachingNotesPageSize = 50
@@ -767,13 +796,15 @@ struct CoachingWorkoutReport: Identifiable, Hashable {
     let trainerId: String
     let createdAt: Date
     let workouts: [CoachingWorkoutSnapshot]
+    let reactions: [String: String]
 
-    init(id: String = UUID().uuidString, clientId: String, trainerId: String, createdAt: Date = .now, workouts: [CoachingWorkoutSnapshot]) {
+    init(id: String = UUID().uuidString, clientId: String, trainerId: String, createdAt: Date = .now, workouts: [CoachingWorkoutSnapshot], reactions: [String: String] = [:]) {
         self.id = id
         self.clientId = clientId
         self.trainerId = trainerId
         self.createdAt = createdAt
         self.workouts = workouts
+        self.reactions = reactions
     }
 
     init?(id: String, data: [String: Any]) {
@@ -794,6 +825,7 @@ struct CoachingWorkoutReport: Identifiable, Hashable {
             self.createdAt = (data["createdAt"] as? Date) ?? .now
         }
         self.workouts = workoutsData.compactMap(CoachingWorkoutSnapshot.init)
+        self.reactions = data["reactions"] as? [String: String] ?? [:]
     }
 
     var firestoreData: [String: Any] {
@@ -801,7 +833,8 @@ struct CoachingWorkoutReport: Identifiable, Hashable {
             "clientId": clientId,
             "trainerId": trainerId,
             "createdAt": createdAt,
-            "workouts": workouts.map(\.firestoreData)
+            "workouts": workouts.map(\.firestoreData),
+            "reactions": reactions
         ]
     }
 
@@ -1281,6 +1314,37 @@ final class ClientCoachingHomeStore: ObservableObject {
         }
     }
 
+    func setReaction(_ emoji: String?, for note: CoachingNote) async {
+        errorMessage = nil
+
+        do {
+            try await updateCoachingReaction(
+                firestore: firestore,
+                collection: "coaching_notes",
+                documentId: note.id,
+                userId: clientId,
+                emoji: emoji
+            )
+        } catch {
+            errorMessage = AppErrorPresenter.message(for: error)
+        }
+    }
+
+    func setReaction(_ emoji: String?, collection: String, documentId: String) async {
+        errorMessage = nil
+        do {
+            try await updateCoachingReaction(
+                firestore: firestore,
+                collection: collection,
+                documentId: documentId,
+                userId: clientId,
+                emoji: emoji
+            )
+        } catch {
+            errorMessage = AppErrorPresenter.message(for: error)
+        }
+    }
+
     func sendWorkoutReport(workouts: [WorkoutSession], senderName: String = "") async {
         guard workouts.isEmpty == false else { return }
 
@@ -1705,6 +1769,37 @@ final class TrainerClientSupportStore: ObservableObject {
                 .document(note.id)
                 .delete()
             notes.removeAll { $0.id == note.id }
+        } catch {
+            errorMessage = AppErrorPresenter.message(for: error)
+        }
+    }
+
+    func setReaction(_ emoji: String?, for note: CoachingNote) async {
+        errorMessage = nil
+
+        do {
+            try await updateCoachingReaction(
+                firestore: firestore,
+                collection: "coaching_notes",
+                documentId: note.id,
+                userId: trainerId,
+                emoji: emoji
+            )
+        } catch {
+            errorMessage = AppErrorPresenter.message(for: error)
+        }
+    }
+
+    func setReaction(_ emoji: String?, collection: String, documentId: String) async {
+        errorMessage = nil
+        do {
+            try await updateCoachingReaction(
+                firestore: firestore,
+                collection: collection,
+                documentId: documentId,
+                userId: trainerId,
+                emoji: emoji
+            )
         } catch {
             errorMessage = AppErrorPresenter.message(for: error)
         }
@@ -2268,6 +2363,7 @@ private struct ClientCoachingChatScreen: View {
             canLoadMoreNotes: store.canLoadMoreNotes,
             isLoadingMoreNotes: store.isLoadingMoreNotes,
             onLoadMoreNotes: { await store.loadMoreNotes() },
+            currentUserId: sessionStore.profile?.id ?? "",
             onSend: {
                 await store.sendNote(
                     noteMessage,
@@ -2276,6 +2372,18 @@ private struct ClientCoachingChatScreen: View {
                 if store.errorMessage == nil {
                     noteMessage = ""
                 }
+            },
+            onSetReaction: { note, emoji in
+                await store.setReaction(emoji, for: note)
+            },
+            onSetCheckInReaction: { checkIn, emoji in
+                await store.setReaction(emoji, collection: "progress_checkins", documentId: checkIn.id)
+            },
+            onSetWorkoutReportReaction: { report, emoji in
+                await store.setReaction(emoji, collection: "coaching_workout_reports", documentId: report.id)
+            },
+            onSetNutritionReportReaction: { report, emoji in
+                await store.setReaction(emoji, collection: "coaching_nutrition_reports", documentId: report.id)
             },
             onRequestDelete: { pendingDelete = $0 }
         )
@@ -2291,7 +2399,7 @@ private struct ClientCoachingChatScreen: View {
         }
         .onReceive(notificationsStore.$notifications) { notifications in
             guard notifications.contains(where: {
-                $0.type == .coachNoteReceived
+                ($0.type == .coachNoteReceived || $0.type == .chatReactionAdded)
                     && $0.senderId == store.connectedTrainerId
                     && $0.isRead == false
             }) else { return }
@@ -2337,6 +2445,10 @@ private struct ClientCoachingChatScreen: View {
             await notificationsStore.markConversationRead(
                 counterpartId: trainerId,
                 incomingType: .coachNoteReceived
+            )
+            await notificationsStore.markConversationRead(
+                counterpartId: trainerId,
+                incomingType: .chatReactionAdded
             )
         }
     }
@@ -3337,6 +3449,7 @@ private struct TrainerClientChatScreen: View {
             canLoadMoreNotes: store.canLoadMoreNotes,
             isLoadingMoreNotes: store.isLoadingMoreNotes,
             onLoadMoreNotes: { await store.loadMoreNotes() },
+            currentUserId: sessionStore.profile?.id ?? "",
             onSend: {
                 await store.sendNote(
                     noteMessage,
@@ -3345,6 +3458,18 @@ private struct TrainerClientChatScreen: View {
                 if store.errorMessage == nil {
                     noteMessage = ""
                 }
+            },
+            onSetReaction: { note, emoji in
+                await store.setReaction(emoji, for: note)
+            },
+            onSetCheckInReaction: { checkIn, emoji in
+                await store.setReaction(emoji, collection: "progress_checkins", documentId: checkIn.id)
+            },
+            onSetWorkoutReportReaction: { report, emoji in
+                await store.setReaction(emoji, collection: "coaching_workout_reports", documentId: report.id)
+            },
+            onSetNutritionReportReaction: { report, emoji in
+                await store.setReaction(emoji, collection: "coaching_nutrition_reports", documentId: report.id)
             },
             onRequestDelete: { pendingDelete = $0 }
         )
@@ -3360,7 +3485,7 @@ private struct TrainerClientChatScreen: View {
         }
         .onReceive(notificationsStore.$notifications) { notifications in
             guard notifications.contains(where: {
-                $0.type == .clientNoteReceived
+                ($0.type == .clientNoteReceived || $0.type == .chatReactionAdded)
                     && $0.senderId == store.connectedClientId
                     && $0.isRead == false
             }) else { return }
@@ -3406,6 +3531,10 @@ private struct TrainerClientChatScreen: View {
             await notificationsStore.markConversationRead(
                 counterpartId: clientId,
                 incomingType: .clientNoteReceived
+            )
+            await notificationsStore.markConversationRead(
+                counterpartId: clientId,
+                incomingType: .chatReactionAdded
             )
         }
     }
@@ -4462,7 +4591,12 @@ private struct CoachingChatContent: View {
     let canLoadMoreNotes: Bool
     let isLoadingMoreNotes: Bool
     let onLoadMoreNotes: () async -> Void
+    let currentUserId: String
     let onSend: () async -> Void
+    let onSetReaction: (CoachingNote, String?) async -> Void
+    let onSetCheckInReaction: (ProgressCheckIn, String?) async -> Void
+    let onSetWorkoutReportReaction: (CoachingWorkoutReport, String?) async -> Void
+    let onSetNutritionReportReaction: (CoachingNutritionReport, String?) async -> Void
     let onRequestDelete: (CoachingNote) -> Void
 
     @State private var selectedWorkoutReport: CoachingWorkoutReport?
@@ -4585,24 +4719,34 @@ private struct CoachingChatContent: View {
             CoachingChatBubble(
                 note: note,
                 isOutgoing: note.authorRole == outgoingRole,
+                currentUserId: currentUserId,
+                onSetReaction: { emoji in
+                    await onSetReaction(note, emoji)
+                },
                 onRequestDelete: { onRequestDelete(note) }
             )
         case .checkIn(let checkIn):
             CoachingCheckInChatCard(
                 checkIn: checkIn,
                 isOutgoing: outgoingRole == .client,
+                currentUserId: currentUserId,
+                onSetReaction: { emoji in await onSetCheckInReaction(checkIn, emoji) },
                 onOpen: { selectedCheckIn = checkIn }
             )
         case .workoutReport(let report):
             CoachingWorkoutReportChatCard(
                 report: report,
                 isOutgoing: outgoingRole == .client,
+                currentUserId: currentUserId,
+                onSetReaction: { emoji in await onSetWorkoutReportReaction(report, emoji) },
                 onOpen: { selectedWorkoutReport = report }
             )
         case .nutritionReport(let report):
             CoachingNutritionReportChatCard(
                 report: report,
                 isOutgoing: outgoingRole == .client,
+                currentUserId: currentUserId,
+                onSetReaction: { emoji in await onSetNutritionReportReaction(report, emoji) },
                 onOpen: { selectedNutritionReport = report }
             )
         }
@@ -4672,10 +4816,17 @@ private struct CoachingChatContent: View {
 private struct CoachingCheckInChatCard: View {
     let checkIn: ProgressCheckIn
     let isOutgoing: Bool
+    let currentUserId: String
+    let onSetReaction: (String?) async -> Void
     let onOpen: () -> Void
 
     var body: some View {
-        CoachingReportChatCardContainer(isOutgoing: isOutgoing) {
+        CoachingReactableReportCard(
+            isOutgoing: isOutgoing,
+            reactions: checkIn.reactions,
+            currentUserId: currentUserId,
+            onSetReaction: onSetReaction
+        ) {
             Button(action: onOpen) {
                 VStack(alignment: .leading, spacing: 12) {
                     header
@@ -4798,6 +4949,8 @@ private struct CoachingCheckInChatCard: View {
 private struct CoachingWorkoutReportChatCard: View {
     let report: CoachingWorkoutReport
     let isOutgoing: Bool
+    let currentUserId: String
+    let onSetReaction: (String?) async -> Void
     let onOpen: () -> Void
 
     private var workoutTitle: String {
@@ -4825,7 +4978,12 @@ private struct CoachingWorkoutReportChatCard: View {
     }
 
     var body: some View {
-        CoachingReportChatCardContainer(isOutgoing: isOutgoing) {
+        CoachingReactableReportCard(
+            isOutgoing: isOutgoing,
+            reactions: report.reactions,
+            currentUserId: currentUserId,
+            onSetReaction: onSetReaction
+        ) {
             Button(action: onOpen) {
                 VStack(alignment: .leading, spacing: 12) {
                     reportHeader
@@ -4898,6 +5056,8 @@ private struct CoachingWorkoutReportChatCard: View {
 private struct CoachingNutritionReportChatCard: View {
     let report: CoachingNutritionReport
     let isOutgoing: Bool
+    let currentUserId: String
+    let onSetReaction: (String?) async -> Void
     let onOpen: () -> Void
 
     private var dateTitle: String {
@@ -4908,7 +5068,12 @@ private struct CoachingNutritionReportChatCard: View {
     }
 
     var body: some View {
-        CoachingReportChatCardContainer(isOutgoing: isOutgoing) {
+        CoachingReactableReportCard(
+            isOutgoing: isOutgoing,
+            reactions: report.reactions,
+            currentUserId: currentUserId,
+            onSetReaction: onSetReaction
+        ) {
             Button(action: onOpen) {
                 VStack(alignment: .leading, spacing: 12) {
                     reportHeader
@@ -4981,6 +5146,147 @@ private struct CoachingNutritionReportChatCard: View {
     }
 }
 
+private struct CoachingReactableReportCard<Content: View>: View {
+    let isOutgoing: Bool
+    let reactions: [String: String]
+    let currentUserId: String
+    let onSetReaction: (String?) async -> Void
+    @ViewBuilder let content: Content
+    @State private var isReactionPickerPresented = false
+
+    private var summaries: [CoachingReactionSummary] {
+        let grouped = Dictionary(grouping: reactions, by: \.value)
+        return coachingReactionOptions.compactMap { emoji in
+            guard let values = grouped[emoji] else { return nil }
+            return CoachingReactionSummary(
+                emoji: emoji,
+                count: values.count,
+                isSelectedByCurrentUser: reactions[currentUserId] == emoji
+            )
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: isOutgoing ? .trailing : .leading, spacing: 4) {
+            CoachingReportChatCardContainer(isOutgoing: isOutgoing) {
+                content
+            }
+            .highPriorityGesture(
+                LongPressGesture(minimumDuration: 0.4)
+                    .onEnded { _ in
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        isReactionPickerPresented = true
+                    }
+            )
+            .popover(isPresented: $isReactionPickerPresented, arrowEdge: isOutgoing ? .trailing : .leading) {
+                CoachingReactionPicker(
+                    selectedReaction: reactions[currentUserId],
+                    onSelect: { emoji in
+                        isReactionPickerPresented = false
+                        setReaction(emoji)
+                    }
+                )
+                .presentationCompactAdaptation(.popover)
+            }
+
+            if summaries.isEmpty == false {
+                HStack(spacing: 4) {
+                    ForEach(summaries) { reaction in
+                        Button {
+                            setReaction(reaction.isSelectedByCurrentUser ? nil : reaction.emoji)
+                        } label: {
+                            HStack(spacing: 3) {
+                                Text(reaction.emoji)
+                                if reaction.count > 1 {
+                                    Text("\(reaction.count)")
+                                        .font(.caption2.weight(.bold))
+                                }
+                            }
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule().fill(
+                                    reaction.isSelectedByCurrentUser
+                                        ? HomeColors.accent.opacity(0.18)
+                                        : Color(.secondarySystemGroupedBackground)
+                                )
+                            )
+                            .overlay(
+                                Capsule().strokeBorder(
+                                    reaction.isSelectedByCurrentUser
+                                        ? HomeColors.accent
+                                        : Color(.separator).opacity(0.25),
+                                    lineWidth: 1
+                                )
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(
+                            AppLocalizer.format(
+                                "coaching.chat.reaction.accessibility",
+                                reaction.emoji,
+                                reaction.count
+                            )
+                        )
+                    }
+                }
+                .padding(.horizontal, 8)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: isOutgoing ? .trailing : .leading)
+    }
+
+    private func setReaction(_ emoji: String?) {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Task { await onSetReaction(emoji) }
+    }
+}
+
+private struct CoachingReactionPicker: View {
+    let selectedReaction: String?
+    let onSelect: (String?) -> Void
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(coachingReactionOptions, id: \.self) { emoji in
+                Button {
+                    onSelect(selectedReaction == emoji ? nil : emoji)
+                } label: {
+                    Text(emoji)
+                        .font(.title3)
+                        .frame(width: 38, height: 38)
+                        .background(
+                            Circle().fill(
+                                selectedReaction == emoji
+                                    ? HomeColors.accent.opacity(0.18)
+                                    : Color.clear
+                            )
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+
+            if selectedReaction != nil {
+                Divider()
+                    .frame(height: 28)
+
+                Button {
+                    onSelect(nil)
+                } label: {
+                    Image(systemName: "minus.circle")
+                        .font(.title3.weight(.medium))
+                        .foregroundStyle(HomeColors.accent)
+                        .frame(width: 38, height: 38)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(AppLocalizer.string("coaching.chat.reaction.remove"))
+            }
+        }
+        .padding(8)
+        .fixedSize()
+    }
+}
+
 private struct CoachingReportChatCardContainer<Content: View>: View {
     let isOutgoing: Bool
     @ViewBuilder let content: Content
@@ -5016,9 +5322,12 @@ private struct CoachingReportChatCardContainer<Content: View>: View {
 private struct CoachingChatBubble: View {
     let note: CoachingNote
     let isOutgoing: Bool
+    let currentUserId: String
+    let onSetReaction: (String?) async -> Void
     let onRequestDelete: () -> Void
 
     @State private var browserURL: URL?
+    @State private var isReactionPickerPresented = false
 
     private var authorTitle: String {
         AppLocalizer.string(note.authorRole == .trainer ? "coaching.notes.author.trainer" : "coaching.notes.author.client")
@@ -5064,6 +5373,29 @@ private struct CoachingChatBubble: View {
         return result
     }
 
+    private var reactionSummaries: [CoachingReactionSummary] {
+        let grouped = Dictionary(grouping: note.reactions, by: \.value)
+        let known = coachingReactionOptions.compactMap { emoji -> CoachingReactionSummary? in
+            guard let reactions = grouped[emoji] else { return nil }
+            return CoachingReactionSummary(
+                emoji: emoji,
+                count: reactions.count,
+                isSelectedByCurrentUser: note.reactions[currentUserId] == emoji
+            )
+        }
+        let unknown = grouped.keys
+            .filter { coachingReactionOptions.contains($0) == false }
+            .sorted()
+            .map { emoji in
+                CoachingReactionSummary(
+                    emoji: emoji,
+                    count: grouped[emoji]?.count ?? 0,
+                    isSelectedByCurrentUser: note.reactions[currentUserId] == emoji
+                )
+            }
+        return known + unknown
+    }
+
     private func openLink(_ url: URL) {
         if Self.isYouTubeURL(url) {
             // Universal Link: opens YouTube when installed, otherwise falls back to Safari.
@@ -5086,66 +5418,142 @@ private struct CoachingChatBubble: View {
                 Spacer(minLength: 48)
             }
 
-            VStack(alignment: isOutgoing ? .trailing : .leading, spacing: 4) {
-                if isOutgoing == false {
-                    Text(authorTitle)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(HomeColors.accent)
+            VStack(alignment: isOutgoing ? .trailing : .leading, spacing: 3) {
+                VStack(alignment: isOutgoing ? .trailing : .leading, spacing: 4) {
+                    if isOutgoing == false {
+                        Text(authorTitle)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(HomeColors.accent)
+                    }
+
+                    Text(linkifiedMessage)
+                        .font(.body)
+                        .foregroundStyle(isOutgoing ? .white : .primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .environment(\.openURL, OpenURLAction { url in
+                            openLink(url)
+                            return .handled
+                        })
+
+                    Text(note.createdAt.formatted(date: .abbreviated, time: .shortened))
+                        .font(.caption2)
+                        .foregroundStyle(isOutgoing ? Color.white.opacity(0.72) : .secondary)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(isOutgoing ? HomeColors.accent : Color(.secondarySystemGroupedBackground))
+                )
+                .overlay(alignment: isOutgoing ? .bottomTrailing : .bottomLeading) {
+                    UnevenRoundedRectangle(
+                        topLeadingRadius: 0,
+                        bottomLeadingRadius: isOutgoing ? 0 : 3,
+                        bottomTrailingRadius: isOutgoing ? 3 : 0,
+                        topTrailingRadius: 0,
+                        style: .continuous
+                    )
+                    .fill(isOutgoing ? HomeColors.accent : Color(.secondarySystemGroupedBackground))
+                    .frame(width: 14, height: 14)
+                    .offset(x: isOutgoing ? 5 : -5, y: 1)
+                }
+                .onLongPressGesture(minimumDuration: 0.4) {
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    isReactionPickerPresented = true
+                }
+                .popover(isPresented: $isReactionPickerPresented, arrowEdge: isOutgoing ? .trailing : .leading) {
+                    VStack(spacing: 0) {
+                        CoachingReactionPicker(
+                            selectedReaction: note.reactions[currentUserId],
+                            onSelect: { emoji in
+                                isReactionPickerPresented = false
+                                setReaction(emoji)
+                            }
+                        )
+
+                        Divider()
+
+                        HStack(spacing: 18) {
+                            ForEach(detectedURLs, id: \.absoluteString) { url in
+                                Button {
+                                    isReactionPickerPresented = false
+                                    openLink(url)
+                                } label: {
+                                    Image(systemName: "safari")
+                                }
+                                .accessibilityLabel(AppLocalizer.string("chat.link.open"))
+
+                                Button {
+                                    UIPasteboard.general.url = url
+                                    isReactionPickerPresented = false
+                                } label: {
+                                    Image(systemName: "doc.on.doc")
+                                }
+                                .accessibilityLabel(AppLocalizer.string("chat.link.copy"))
+                            }
+
+                            Button(role: .destructive) {
+                                isReactionPickerPresented = false
+                                onRequestDelete()
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .accessibilityLabel(AppLocalizer.string("common.delete"))
+                        }
+                        .font(.body.weight(.semibold))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                    }
+                    .fixedSize()
+                    .presentationCompactAdaptation(.popover)
                 }
 
-                Text(linkifiedMessage)
-                    .font(.body)
-                    .foregroundStyle(isOutgoing ? .white : .primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .environment(\.openURL, OpenURLAction { url in
-                        openLink(url)
-                        return .handled
-                    })
-
-                Text(note.createdAt.formatted(date: .abbreviated, time: .shortened))
-                    .font(.caption2)
-                    .foregroundStyle(isOutgoing ? Color.white.opacity(0.72) : .secondary)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(isOutgoing ? HomeColors.accent : Color(.secondarySystemGroupedBackground))
-            )
-            .overlay(alignment: isOutgoing ? .bottomTrailing : .bottomLeading) {
-                UnevenRoundedRectangle(
-                    topLeadingRadius: 0,
-                    bottomLeadingRadius: isOutgoing ? 0 : 3,
-                    bottomTrailingRadius: isOutgoing ? 3 : 0,
-                    topTrailingRadius: 0,
-                    style: .continuous
-                )
-                .fill(isOutgoing ? HomeColors.accent : Color(.secondarySystemGroupedBackground))
-                .frame(width: 14, height: 14)
-                .offset(x: isOutgoing ? 5 : -5, y: 1)
+                if reactionSummaries.isEmpty == false {
+                    HStack(spacing: 4) {
+                        ForEach(reactionSummaries) { reaction in
+                            Button {
+                                setReaction(reaction.isSelectedByCurrentUser ? nil : reaction.emoji)
+                            } label: {
+                                HStack(spacing: 3) {
+                                    Text(reaction.emoji)
+                                    if reaction.count > 1 {
+                                        Text("\(reaction.count)")
+                                            .font(.caption2.weight(.bold))
+                                    }
+                                }
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule()
+                                        .fill(
+                                            reaction.isSelectedByCurrentUser
+                                                ? HomeColors.accent.opacity(0.18)
+                                                : Color(.secondarySystemGroupedBackground)
+                                        )
+                                )
+                                .overlay(
+                                    Capsule()
+                                        .strokeBorder(
+                                            reaction.isSelectedByCurrentUser
+                                                ? HomeColors.accent
+                                                : Color(.separator).opacity(0.25),
+                                            lineWidth: 1
+                                        )
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(
+                                AppLocalizer.format(
+                                    "coaching.chat.reaction.accessibility",
+                                    reaction.emoji,
+                                    reaction.count
+                                )
+                            )
+                        }
+                    }
+                }
             }
             .frame(maxWidth: 310, alignment: isOutgoing ? .trailing : .leading)
-            .contextMenu {
-                ForEach(detectedURLs, id: \.absoluteString) { url in
-                    Button {
-                        openLink(url)
-                    } label: {
-                        Label(AppLocalizer.string("chat.link.open"), systemImage: "safari")
-                    }
-
-                    Button {
-                        UIPasteboard.general.url = url
-                    } label: {
-                        Label(AppLocalizer.string("chat.link.copy"), systemImage: "doc.on.doc")
-                    }
-                }
-
-                Button(role: .destructive) {
-                    onRequestDelete()
-                } label: {
-                    Label(AppLocalizer.string("common.delete"), systemImage: "trash")
-                }
-            }
 
             if isOutgoing == false {
                 Spacer(minLength: 48)
@@ -5162,6 +5570,21 @@ private struct CoachingChatBubble: View {
             }
         }
     }
+
+    private func setReaction(_ emoji: String?) {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Task {
+            await onSetReaction(emoji)
+        }
+    }
+}
+
+private struct CoachingReactionSummary: Identifiable {
+    let emoji: String
+    let count: Int
+    let isSelectedByCurrentUser: Bool
+
+    var id: String { emoji }
 }
 
 private struct InAppSafariView: UIViewControllerRepresentable {

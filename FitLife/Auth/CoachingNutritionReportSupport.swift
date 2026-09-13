@@ -115,6 +115,7 @@ struct CoachingNutritionReport: Identifiable, Hashable {
     let fatGoal: Int
     let carbGoal: Int
     let meals: [CoachingNutritionMealSnapshot]
+    let reactions: [String: String]
 
     /// Один документ Firestore на клиента, тренера и календарный день.
     /// `id` остаётся уникальным идентификатором попытки отправки для outbox.
@@ -138,7 +139,8 @@ struct CoachingNutritionReport: Identifiable, Hashable {
         proteinGoal: Int,
         fatGoal: Int,
         carbGoal: Int,
-        meals: [CoachingNutritionMealSnapshot]
+        meals: [CoachingNutritionMealSnapshot],
+        reactions: [String: String] = [:]
     ) {
         self.id = id
         self.clientId = clientId
@@ -156,6 +158,7 @@ struct CoachingNutritionReport: Identifiable, Hashable {
         self.fatGoal = fatGoal
         self.carbGoal = carbGoal
         self.meals = meals
+        self.reactions = reactions
     }
 
     init?(id: String, data: [String: Any]) {
@@ -203,6 +206,7 @@ struct CoachingNutritionReport: Identifiable, Hashable {
         self.fatGoal = fatGoal
         self.carbGoal = carbGoal
         self.meals = mealsData.compactMap(CoachingNutritionMealSnapshot.init)
+        self.reactions = data["reactions"] as? [String: String] ?? [:]
     }
 
     var firestoreData: [String: Any] {
@@ -221,7 +225,8 @@ struct CoachingNutritionReport: Identifiable, Hashable {
             "proteinGoal": proteinGoal,
             "fatGoal": fatGoal,
             "carbGoal": carbGoal,
-            "meals": meals.map(\.firestoreData)
+            "meals": meals.map(\.firestoreData),
+            "reactions": reactions
         ]
     }
 }

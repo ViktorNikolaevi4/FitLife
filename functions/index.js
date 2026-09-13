@@ -364,6 +364,20 @@ const TYPE_CONFIG = {
       body: (senderName) => formatSenderBody(senderName, "en", "отправил сообщение.", "sent a message.")
     }
   },
+  chat_reaction_added: {
+    ru: {
+      title: "Новая реакция",
+      body: (senderName, reaction) => senderName
+        ? `Реакция ${reaction} от ${senderName}.`
+        : `На ваше сообщение поставили ${reaction}.`
+    },
+    en: {
+      title: "New reaction",
+      body: (senderName, reaction) => senderName
+        ? `Reaction ${reaction} from ${senderName}.`
+        : `Someone reacted ${reaction} to your message.`
+    }
+  },
   workout_assigned: {
     ru: {
       title: "Новая тренировка от тренера",
@@ -534,6 +548,185 @@ exports.createNotificationForCoachingNote = onDocumentCreated(
 
     await processPushForNotificationEvent(notificationRef.id);
   }
+);
+
+exports.createNotificationForCoachingReaction = onDocumentWritten(
+  {
+    document: "coaching_notes/{noteId}",
+    region: "europe-west1",
+    retry: true
+  },
+  async (event) => {
+    const beforeSnapshot = event.data && event.data.before;
+    const afterSnapshot = event.data && event.data.after;
+    if (!beforeSnapshot || !afterSnapshot || !beforeSnapshot.exists || !afterSnapshot.exists) {
+      return;
+    }
+
+    const before = beforeSnapshot.data() || {};
+    const after = afterSnapshot.data() || {};
+    const beforeReactions = before.reactions && typeof before.reactions === "object"
+      ? before.reactions
+      : {};
+    const afterReactions = after.reactions && typeof after.reactions === "object"
+      ? after.reactions
+      : {};
+    const clientId = stringifyData(after.clientId);
+    const trainerId = stringifyData(after.trainerId);
+    const authorId = stringifyData(after.authorId);
+    const allowedReactions = new Set(["👍", "❤️", "💪", "🔥", "👏"]);
+
+    if (!clientId || !trainerId || ![clientId, trainerId].includes(authorId)) {
+      logger.warn("Coaching reaction has invalid participants", {
+        noteId: event.params.noteId
+      });
+      return;
+    }
+
+    const changedReaction = [clientId, trainerId].find((reactorId) => {
+      const previousReaction = stringifyData(beforeReactions[reactorId]);
+      const nextReaction = stringifyData(afterReactions[reactorId]);
+      return reactorId !== authorId
+        && allowedReactions.has(nextReaction)
+        && nextReaction !== previousReaction;
+    });
+    if (!changedReaction) {
+      return;
+    }
+
+    const reaction = stringifyData(afterReactions[changedReaction]);
+    const senderSnapshot = await db.collection("users").doc(changedReaction).get();
+    const senderData = senderSnapshot.data() || {};
+    const senderName = typeof senderData.displayName === "string"
+      ? senderData.displayName.trim()
+      : "";
+    const eventKey = stringifyData(event.id).replace(/[^A-Za-z0-9_-]/g, "_");
+    const notificationRef = db
+      .collection("notification_events")
+      .doc(`coaching-reaction-${eventKey}-${changedReaction}`);
+
+    try {
+      await notificationRef.create({
+        type: "chat_reaction_added",
+        recipientId: authorId,
+        senderId: changedReaction,
+        senderName,
+        targetType: "coaching_connection",
+        targetId: event.params.noteId,
+        reaction,
+        createdAt: FieldValue.serverTimestamp(),
+        isRead: false,
+        isArchived: false
+      });
+    } catch (error) {
+      if (error.code !== 6 && error.code !== "already-exists") {
+        throw error;
+      }
+    }
+
+    await processPushForNotificationEvent(notificationRef.id);
+  }
+);
+
+async function createNotificationForClientReportReaction(event, targetType, targetId, eventPrefix) {
+  const beforeSnapshot = event.data && event.data.before;
+  const afterSnapshot = event.data && event.data.after;
+  if (!beforeSnapshot || !afterSnapshot || !beforeSnapshot.exists || !afterSnapshot.exists) {
+    return;
+  }
+
+  const before = beforeSnapshot.data() || {};
+  const after = afterSnapshot.data() || {};
+  const beforeReactions = before.reactions && typeof before.reactions === "object"
+    ? before.reactions
+    : {};
+  const afterReactions = after.reactions && typeof after.reactions === "object"
+    ? after.reactions
+    : {};
+  const clientId = stringifyData(after.clientId);
+  const trainerId = stringifyData(after.trainerId);
+  const previousReaction = stringifyData(beforeReactions[trainerId]);
+  const reaction = stringifyData(afterReactions[trainerId]);
+  const allowedReactions = new Set(["👍", "❤️", "💪", "🔥", "👏"]);
+
+  // Reports and check-ins are authored by the client. A client's reaction to
+  // their own report is stored, but intentionally does not notify themselves.
+  if (!clientId || !trainerId || !allowedReactions.has(reaction) || reaction === previousReaction) {
+    return;
+  }
+
+  const senderSnapshot = await db.collection("users").doc(trainerId).get();
+  const senderData = senderSnapshot.data() || {};
+  const senderName = typeof senderData.displayName === "string"
+    ? senderData.displayName.trim()
+    : "";
+  const eventKey = stringifyData(event.id).replace(/[^A-Za-z0-9_-]/g, "_");
+  const notificationRef = db
+    .collection("notification_events")
+    .doc(`${eventPrefix}-${eventKey}-${trainerId}`);
+
+  try {
+    await notificationRef.create({
+      type: "chat_reaction_added",
+      recipientId: clientId,
+      senderId: trainerId,
+      senderName,
+      targetType,
+      targetId,
+      reaction,
+      createdAt: FieldValue.serverTimestamp(),
+      isRead: false,
+      isArchived: false
+    });
+  } catch (error) {
+    if (error.code !== 6 && error.code !== "already-exists") {
+      throw error;
+    }
+  }
+
+  await processPushForNotificationEvent(notificationRef.id);
+}
+
+exports.createNotificationForCheckInReaction = onDocumentWritten(
+  {
+    document: "progress_checkins/{checkInId}",
+    region: "europe-west1",
+    retry: true
+  },
+  async (event) => createNotificationForClientReportReaction(
+    event,
+    "checkin",
+    event.params.checkInId,
+    "checkin-reaction"
+  )
+);
+
+exports.createNotificationForWorkoutReportReaction = onDocumentWritten(
+  {
+    document: "coaching_workout_reports/{reportId}",
+    region: "europe-west1",
+    retry: true
+  },
+  async (event) => createNotificationForClientReportReaction(
+    event,
+    "workout_report",
+    event.params.reportId,
+    "workout-report-reaction"
+  )
+);
+
+exports.createNotificationForNutritionReportReaction = onDocumentWritten(
+  {
+    document: "coaching_nutrition_reports/{reportId}",
+    region: "europe-west1",
+    retry: true
+  },
+  async (event) => createNotificationForClientReportReaction(
+    event,
+    "nutrition_report",
+    event.params.reportId,
+    "nutrition-report-reaction"
+  )
 );
 
 // Workout assignments and push delivery must not depend on two successful
@@ -815,7 +1008,8 @@ async function processPushForNotificationEvent(eventId) {
         senderId: stringifyData(data.senderId),
         senderName: stringifyData(data.senderName),
         targetType: stringifyData(data.targetType),
-        targetId: stringifyData(data.targetId)
+        targetId: stringifyData(data.targetId),
+        reaction: stringifyData(data.reaction)
       },
       apns: {
         // Be explicit for APNs: this is a user-visible notification, not a
@@ -1046,6 +1240,8 @@ function chatNotificationThreadIdentifier(data) {
       return `chat-${senderId}-${recipientId}`;
     case "client_note_received":
       return `chat-${recipientId}-${senderId}`;
+    case "chat_reaction_added":
+      return `chat-${[senderId, recipientId].sort().join("-")}`;
     default:
       return null;
   }
@@ -1059,7 +1255,7 @@ function buildPushContent(data, preferredLanguage) {
   return {
     title: localizedConfig.title || (preferredLanguage === "en" ? "New notification" : "Новое уведомление"),
     body: typeof localizedConfig.body === "function"
-      ? localizedConfig.body(senderName)
+      ? localizedConfig.body(senderName, stringifyData(data.reaction))
       : (preferredLanguage === "en"
           ? "A new notification is available in the app."
           : "В приложении появилось новое уведомление.")

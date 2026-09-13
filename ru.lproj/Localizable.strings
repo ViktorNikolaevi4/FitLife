@@ -618,6 +618,8 @@
 "coaching.notes.author.client" = "Клиент";
 "coaching.notes.author.trainer" = "Тренер";
 "coaching.chat.load_earlier" = "Загрузить предыдущие сообщения";
+"coaching.chat.reaction.remove" = "Убрать реакцию";
+"coaching.chat.reaction.accessibility" = "Реакция %@, %d";
 "coaching.workspace.quick_actions" = "Быстрые действия";
 "coaching.workspace.action.request_update" = "Запросить обновление данных";
 "coaching.workspace.action.add_note" = "Добавить заметку";
@@ -1324,6 +1326,9 @@
 "notifications.event.client_note_received.title" = "Новое сообщение от клиента";
 "notifications.event.client_note_received.body" = "Клиент отправил вам сообщение.";
 "notifications.event.client_note_received.body.sender" = "%@ отправил вам сообщение.";
+"notifications.event.chat_reaction_added.title" = "Новая реакция";
+"notifications.event.chat_reaction_added.body" = "На ваше сообщение поставили %@.";
+"notifications.event.chat_reaction_added.body.sender" = "Реакция %@ от %@.";
 "notifications.event.workout_assigned.title" = "Новая тренировка от тренера";
 "notifications.event.workout_assigned.body" = "Тренер назначил вам тренировку.";
 "notifications.event.workout_assigned.body.sender" = "%@ назначил вам тренировку.";
@@ -2048,6 +2053,7 @@
 "workout.set.stage_name" = "Ступень";
 "workout.metric.time" = "Время";
 "workout.metric.reps" = "Повторений";
+"workout.reps.count" = "%d повторений";
 "workout.exercise.completed" = "Упражнение завершено";
 "workout.timer.finish_now" = "Завершить подход сейчас";
 "workout.timer.complete_without_timer" = "Выполнено без таймера";
