@@ -1545,6 +1545,7 @@ struct ProductSelectionView: View {
 struct CustomProductCreationView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var name = ""
     @State private var calories = ""
@@ -1557,13 +1558,16 @@ struct CustomProductCreationView: View {
 
     var onProductCreated: (CustomProduct) -> Void
 
+    private var theme: AppTheme { AppTheme(colorScheme) }
+
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
                     customProductHeader(
                         title: AppLocalizer.string("custom_product.new"),
-                        subtitle: AppLocalizer.string("custom_product.subtitle")
+                        subtitle: AppLocalizer.string("custom_product.subtitle"),
+                        theme: theme
                     )
 
                     customProductNameSection(
@@ -1573,7 +1577,8 @@ struct CustomProductCreationView: View {
                         focusedField: $focusedField,
                         field: .name,
                         kb: .default,
-                        submit: .next
+                        submit: .next,
+                        theme: theme
                     )
                     .onSubmit { focusedField = .calories }
 
@@ -1582,20 +1587,21 @@ struct CustomProductCreationView: View {
                         placeholder: AppLocalizer.string("custom_product.calories"),
                         text: $calories,
                         focusedField: $focusedField,
-                        field: .calories
+                        field: .calories,
+                        theme: theme
                     )
                     .onSubmit { focusedField = .protein }
 
                     VStack(alignment: .leading, spacing: 16) {
                         Text(AppLocalizer.string("custom_product.macros_section"))
                             .font(.title2.weight(.bold))
-                            .foregroundStyle(HomeColors.primaryText)
+                            .foregroundStyle(theme.primaryText)
 
                         HStack(spacing: 10) {
                             VStack(alignment: .leading, spacing: 10) {
                                 Text(AppLocalizer.string("custom_product.protein"))
                                     .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(HomeColors.secondaryText)
+                                    .foregroundStyle(theme.secondaryText)
                                 field(AppLocalizer.string("custom_product.protein"), text: $protein, field: .protein, kb: .decimalPad, submit: .next)
                                     .onSubmit { focusedField = .fat }
                             }
@@ -1604,7 +1610,7 @@ struct CustomProductCreationView: View {
                             VStack(alignment: .leading, spacing: 10) {
                                 Text(AppLocalizer.string("custom_product.fat"))
                                     .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(HomeColors.secondaryText)
+                                    .foregroundStyle(theme.secondaryText)
                                 field(AppLocalizer.string("custom_product.fat"), text: $fat, field: .fat, kb: .decimalPad, submit: .next)
                                     .onSubmit { focusedField = .carbs }
                             }
@@ -1613,7 +1619,7 @@ struct CustomProductCreationView: View {
                             VStack(alignment: .leading, spacing: 10) {
                                 Text(AppLocalizer.string("custom_product.carbs"))
                                     .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(HomeColors.secondaryText)
+                                    .foregroundStyle(theme.secondaryText)
                                 field(AppLocalizer.string("custom_product.carbs"), text: $carbs, field: .carbs, kb: .decimalPad, submit: .done)
                                     .onSubmit { focusedField = nil }
                             }
@@ -1621,10 +1627,10 @@ struct CustomProductCreationView: View {
                         }
                     }
                     .padding(20)
-                    .background(HomeColors.card, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                    .background(theme.card, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 28, style: .continuous)
-                            .strokeBorder(HomeColors.border, lineWidth: HomeMetrics.hairlineWidth)
+                            .strokeBorder(theme.border, lineWidth: HomeMetrics.hairlineWidth)
                     )
 
                     VStack(spacing: 12) {
@@ -1640,9 +1646,10 @@ struct CustomProductCreationView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 24)
             }
-            .background(HomeColors.background)
+            .background(theme.bg.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(HomeColors.background, for: .navigationBar)
+            .toolbarBackground(theme.bg, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -1673,10 +1680,10 @@ struct CustomProductCreationView: View {
             .font(.body.weight(.medium))
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
-            .background(HomeColors.elevatedBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(theme.subtleFill, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(focusedField == field ? HomeColors.accent : HomeColors.border,
+                    .strokeBorder(focusedField == field ? theme.accent : theme.border,
                                   lineWidth: focusedField == field ? 1.4 : HomeMetrics.hairlineWidth)
             )
             .animation(.easeInOut(duration: 0.15), value: focusedField == field)
@@ -1730,6 +1737,7 @@ struct CustomProductCreationView: View {
 struct CustomProductEditorScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
 
     let product: CustomProduct
     let allowsDelete: Bool
@@ -1744,6 +1752,8 @@ struct CustomProductEditorScreen: View {
 
     private enum Field: Hashable { case name, calories, protein, fat, carbs }
     @FocusState private var focusedField: Field?
+
+    private var theme: AppTheme { AppTheme(colorScheme) }
 
     init(
         product: CustomProduct,
@@ -1768,7 +1778,8 @@ struct CustomProductEditorScreen: View {
                 VStack(alignment: .leading, spacing: 16) {
                     customProductHeader(
                         title: AppLocalizer.string("custom_product.edit"),
-                        subtitle: AppLocalizer.string("custom_product.subtitle")
+                        subtitle: AppLocalizer.string("custom_product.subtitle"),
+                        theme: theme
                     )
 
                     customProductNameSection(
@@ -1778,7 +1789,8 @@ struct CustomProductEditorScreen: View {
                         focusedField: $focusedField,
                         field: .name,
                         kb: .default,
-                        submit: .next
+                        submit: .next,
+                        theme: theme
                     )
                     .onSubmit { focusedField = .calories }
 
@@ -1787,20 +1799,21 @@ struct CustomProductEditorScreen: View {
                         placeholder: AppLocalizer.string("custom_product.calories"),
                         text: $calories,
                         focusedField: $focusedField,
-                        field: .calories
+                        field: .calories,
+                        theme: theme
                     )
                     .onSubmit { focusedField = .protein }
 
                     VStack(alignment: .leading, spacing: 16) {
                         Text(AppLocalizer.string("custom_product.macros_section"))
                             .font(.title2.weight(.bold))
-                            .foregroundStyle(HomeColors.primaryText)
+                            .foregroundStyle(theme.primaryText)
 
                         HStack(spacing: 10) {
                             VStack(alignment: .leading, spacing: 10) {
                                 Text(AppLocalizer.string("custom_product.protein"))
                                     .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(HomeColors.secondaryText)
+                                    .foregroundStyle(theme.secondaryText)
                                 field(AppLocalizer.string("custom_product.protein"), text: $protein, field: .protein, kb: .decimalPad, submit: .next)
                                     .onSubmit { focusedField = .fat }
                             }
@@ -1809,7 +1822,7 @@ struct CustomProductEditorScreen: View {
                             VStack(alignment: .leading, spacing: 10) {
                                 Text(AppLocalizer.string("custom_product.fat"))
                                     .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(HomeColors.secondaryText)
+                                    .foregroundStyle(theme.secondaryText)
                                 field(AppLocalizer.string("custom_product.fat"), text: $fat, field: .fat, kb: .decimalPad, submit: .next)
                                     .onSubmit { focusedField = .carbs }
                             }
@@ -1818,7 +1831,7 @@ struct CustomProductEditorScreen: View {
                             VStack(alignment: .leading, spacing: 10) {
                                 Text(AppLocalizer.string("custom_product.carbs"))
                                     .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(HomeColors.secondaryText)
+                                    .foregroundStyle(theme.secondaryText)
                                 field(AppLocalizer.string("custom_product.carbs"), text: $carbs, field: .carbs, kb: .decimalPad, submit: .done)
                                     .onSubmit { focusedField = nil }
                             }
@@ -1826,10 +1839,10 @@ struct CustomProductEditorScreen: View {
                         }
                     }
                     .padding(20)
-                    .background(HomeColors.card, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                    .background(theme.card, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 28, style: .continuous)
-                            .strokeBorder(HomeColors.border, lineWidth: HomeMetrics.hairlineWidth)
+                            .strokeBorder(theme.border, lineWidth: HomeMetrics.hairlineWidth)
                     )
 
                     VStack(spacing: 12) {
@@ -1845,9 +1858,10 @@ struct CustomProductEditorScreen: View {
                 .padding(.top, 8)
                 .padding(.bottom, 24)
             }
-            .background(HomeColors.background)
+            .background(theme.bg.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(HomeColors.background, for: .navigationBar)
+            .toolbarBackground(theme.bg, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -1878,10 +1892,10 @@ struct CustomProductEditorScreen: View {
             .font(.body.weight(.medium))
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
-            .background(HomeColors.elevatedBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(theme.subtleFill, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(focusedField == field ? HomeColors.accent : HomeColors.border,
+                    .strokeBorder(focusedField == field ? theme.accent : theme.border,
                                   lineWidth: focusedField == field ? 1.4 : HomeMetrics.hairlineWidth)
             )
             .animation(.easeInOut(duration: 0.15), value: focusedField == field)
@@ -1954,14 +1968,14 @@ struct CustomProductEditorScreen: View {
     }
 }
 
-private func customProductHeader(title: String, subtitle: String) -> some View {
+private func customProductHeader(title: String, subtitle: String, theme: AppTheme) -> some View {
     VStack(alignment: .leading, spacing: 10) {
         Text(title)
             .font(.system(size: 34, weight: .bold))
-            .foregroundStyle(HomeColors.primaryText)
+            .foregroundStyle(theme.primaryText)
         Text(subtitle)
             .font(.body.weight(.medium))
-            .foregroundStyle(HomeColors.secondaryText)
+            .foregroundStyle(theme.secondaryText)
             .fixedSize(horizontal: false, vertical: true)
     }
     .padding(.bottom, 2)
@@ -1974,12 +1988,13 @@ private func customProductNameSection<FieldType: Hashable>(
     focusedField: FocusState<FieldType?>.Binding,
     field: FieldType,
     kb: UIKeyboardType,
-    submit: SubmitLabel
+    submit: SubmitLabel,
+    theme: AppTheme
 ) -> some View {
     VStack(alignment: .leading, spacing: 12) {
         Text(title)
             .font(.subheadline.weight(.semibold))
-            .foregroundStyle(HomeColors.secondaryText)
+            .foregroundStyle(theme.secondaryText)
         TextField(placeholder, text: text)
             .keyboardType(kb)
             .textInputAutocapitalization(.words)
@@ -1988,18 +2003,18 @@ private func customProductNameSection<FieldType: Hashable>(
             .font(.body.weight(.medium))
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
-            .background(HomeColors.elevatedBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(theme.subtleFill, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(focusedField.wrappedValue == field ? HomeColors.accent : HomeColors.border,
+                    .strokeBorder(focusedField.wrappedValue == field ? theme.accent : theme.border,
                                   lineWidth: focusedField.wrappedValue == field ? 1.4 : HomeMetrics.hairlineWidth)
             )
     }
     .padding(20)
-    .background(HomeColors.card, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+    .background(theme.card, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
     .overlay(
         RoundedRectangle(cornerRadius: 28, style: .continuous)
-            .strokeBorder(HomeColors.border, lineWidth: HomeMetrics.hairlineWidth)
+            .strokeBorder(theme.border, lineWidth: HomeMetrics.hairlineWidth)
     )
 }
 
@@ -2008,12 +2023,13 @@ private func customProductCaloriesSection<FieldType: Hashable>(
     placeholder: String,
     text: Binding<String>,
     focusedField: FocusState<FieldType?>.Binding,
-    field: FieldType
+    field: FieldType,
+    theme: AppTheme
 ) -> some View {
     VStack(alignment: .leading, spacing: 12) {
         Text(title)
             .font(.subheadline.weight(.semibold))
-            .foregroundStyle(HomeColors.secondaryText)
+            .foregroundStyle(theme.secondaryText)
         TextField(placeholder, text: text)
             .keyboardType(.decimalPad)
             .textInputAutocapitalization(.never)
@@ -2022,18 +2038,18 @@ private func customProductCaloriesSection<FieldType: Hashable>(
             .font(.title2.weight(.semibold))
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
-            .background(HomeColors.elevatedBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(theme.subtleFill, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(focusedField.wrappedValue == field ? HomeColors.accent : HomeColors.border,
+                    .strokeBorder(focusedField.wrappedValue == field ? theme.accent : theme.border,
                                   lineWidth: focusedField.wrappedValue == field ? 1.4 : HomeMetrics.hairlineWidth)
             )
     }
     .padding(20)
-    .background(HomeColors.card, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+    .background(theme.card, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
     .overlay(
         RoundedRectangle(cornerRadius: 28, style: .continuous)
-            .strokeBorder(HomeColors.border, lineWidth: HomeMetrics.hairlineWidth)
+            .strokeBorder(theme.border, lineWidth: HomeMetrics.hairlineWidth)
     )
 }
 
