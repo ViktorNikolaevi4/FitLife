@@ -357,6 +357,11 @@
 "trainer.assignments.assigned" = "Назначено";
 "client.assignments.title" = "Назначенные тренировки";
 "client.assignments.section" = "Мои назначения";
+"client.assignments.current" = "Текущие";
+"client.assignments.filter.title" = "Статус";
+"client.assignments.filter.all" = "Все";
+"client.assignments.search" = "Название, заметка или тренер";
+"client.assignments.history.loaded" = "История · загружено %d";
 "client.assignments.empty.title" = "Пока нет назначений";
 "client.assignments.empty.subtitle" = "Когда тренер назначит тренировку, она появится здесь.";
 "client.assignments.trainer" = "Тренер: %@";

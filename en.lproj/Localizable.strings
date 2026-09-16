@@ -357,6 +357,11 @@
 "trainer.assignments.assigned" = "Assigned";
 "client.assignments.title" = "Assigned Workouts";
 "client.assignments.section" = "My Assignments";
+"client.assignments.current" = "Current";
+"client.assignments.filter.title" = "Status";
+"client.assignments.filter.all" = "All";
+"client.assignments.search" = "Title, note, or trainer";
+"client.assignments.history.loaded" = "History · %d loaded";
 "client.assignments.empty.title" = "No assignments yet";
 "client.assignments.empty.subtitle" = "Your trainer's assigned workouts will appear here.";
 "client.assignments.trainer" = "Trainer: %@";

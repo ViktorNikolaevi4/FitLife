@@ -538,7 +538,16 @@ service cloud.firestore {
           && request.resource.data.notesSnapshot == resource.data.notesSnapshot
           && request.resource.data.exerciseCount == resource.data.exerciseCount
           && request.resource.data.assignedAt == resource.data.assignedAt
-          && request.resource.data.status in ["started", "completed"]
+          && (
+            (
+              resource.data.status in ["assigned", "started"]
+              && request.resource.data.status in ["assigned", "started"]
+            )
+            || (
+              resource.data.status == "started"
+              && request.resource.data.status == "completed"
+            )
+          )
         );
 
       allow delete: if isOwner()

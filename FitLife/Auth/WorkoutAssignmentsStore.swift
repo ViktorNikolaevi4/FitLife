@@ -205,51 +205,55 @@ final class WorkoutTemplateAssignmentStore: ObservableObject {
 
 @MainActor
 final class ClientAssignedWorkoutsStore: ObservableObject {
-    @Published private(set) var assignments: [WorkoutAssignment] = []
+    @Published private(set) var activeAssignments: [WorkoutAssignment] = []
+    @Published private(set) var historyAssignments: [WorkoutAssignment] = []
     @Published private(set) var trainerNamesById: [String: String] = [:]
     @Published private(set) var isLoading = false
+    @Published private(set) var isLoadingMoreActive = false
+    @Published private(set) var isLoadingMoreHistory = false
+    @Published private(set) var hasMoreActive = true
+    @Published private(set) var hasMoreHistory = true
     @Published var errorMessage: String?
 
     private let clientId: String
     private let firestore: Firestore
+    private let pageSize = 25
+    private var lastActiveDocument: QueryDocumentSnapshot?
+    private var lastHistoryDocument: QueryDocumentSnapshot?
 
     init(clientId: String, firestore: Firestore = .firestore()) {
         self.clientId = clientId
         self.firestore = firestore
     }
 
-    func load() async {
+    func load(modelContext: ModelContext) async {
+        guard isLoading == false else { return }
         isLoading = true
         errorMessage = nil
+        lastActiveDocument = nil
+        lastHistoryDocument = nil
+        hasMoreActive = true
+        hasMoreHistory = true
+        defer { isLoading = false }
 
-        do {
-            let snapshot = try await firestore
-                .collection("workout_assignments")
-                .whereField("clientId", isEqualTo: clientId)
-                .order(by: "assignedAt", descending: true)
-                .getDocuments()
+        async let activeLoad: Void = fetchActivePage(replacing: true)
+        async let historyLoad: Void = fetchHistoryPage(replacing: true)
+        _ = await (activeLoad, historyLoad)
+        await reconcileStartedAssignment(modelContext: modelContext)
+    }
 
-            let loadedAssignments = snapshot.documents.compactMap { document in
-                WorkoutAssignment(id: document.documentID, data: document.data())
-            }
+    func loadMoreActive() async {
+        guard isLoading == false, isLoadingMoreActive == false, hasMoreActive else { return }
+        isLoadingMoreActive = true
+        defer { isLoadingMoreActive = false }
+        await fetchActivePage(replacing: false)
+    }
 
-            assignments = loadedAssignments
-
-            var names: [String: String] = [:]
-            for trainerId in Set(loadedAssignments.map(\.trainerId)) {
-                let snapshot = try await firestore.collection("users").document(trainerId).getDocument()
-                guard let data = snapshot.data(),
-                      let profile = AppUserProfile(id: snapshot.documentID, data: data) else {
-                    continue
-                }
-                names[trainerId] = profile.displayName
-            }
-            trainerNamesById = names
-            isLoading = false
-        } catch {
-            errorMessage = error.localizedDescription
-            isLoading = false
-        }
+    func loadMoreHistory() async {
+        guard isLoading == false, isLoadingMoreHistory == false, hasMoreHistory else { return }
+        isLoadingMoreHistory = true
+        defer { isLoadingMoreHistory = false }
+        await fetchHistoryPage(replacing: false)
     }
 
     func trainerName(for trainerId: String) -> String? {
@@ -264,12 +268,7 @@ final class ClientAssignedWorkoutsStore: ObservableObject {
         errorMessage = nil
 
         if let existingWorkout = existingWorkout(for: assignment, modelContext: modelContext) {
-            if assignment.status == .assigned {
-                try? await firestore
-                    .collection("workout_assignments")
-                    .document(assignment.id)
-                    .setData(["status": WorkoutAssignmentStatus.started.rawValue], merge: true)
-            }
+            await setExclusiveStartedAssignment(assignment.id)
             LocalReminderScheduler.rescheduleWorkoutRemindersIfEnabled(
                 modelContext: modelContext,
                 ownerId: existingWorkout.ownerId,
@@ -398,31 +397,206 @@ final class ClientAssignedWorkoutsStore: ObservableObject {
                 gender: workout.gender
             )
 
-            try await firestore
-                .collection("workout_assignments")
-                .document(assignment.id)
-                .setData(["status": WorkoutAssignmentStatus.started.rawValue], merge: true)
-
-            if let index = assignments.firstIndex(where: { $0.id == assignment.id }) {
-                assignments[index] = WorkoutAssignment(
-                    id: assignment.id,
-                    trainerId: assignment.trainerId,
-                    clientId: assignment.clientId,
-                    templateId: assignment.templateId,
-                    titleSnapshot: assignment.fallbackTitleSnapshot,
-                    titleKey: assignment.titleKey,
-                    notesSnapshot: assignment.notesSnapshot,
-                    exerciseCount: assignment.exerciseCount,
-                    assignedAt: assignment.assignedAt,
-                    status: .started
-                )
-            }
+            await setExclusiveStartedAssignment(assignment.id)
 
             return workout
         } catch {
             errorMessage = error.localizedDescription
             return nil
         }
+    }
+
+    private func fetchActivePage(replacing: Bool) async {
+        await fetchPage(
+            statuses: [.assigned, .started],
+            lastDocument: lastActiveDocument
+        ) { [weak self] page, lastDocument, hasMore in
+            guard let self else { return }
+            self.lastActiveDocument = lastDocument
+            self.hasMoreActive = hasMore
+            self.activeAssignments = self.mergedAssignments(
+                existing: replacing ? [] : self.activeAssignments,
+                page: page
+            )
+        }
+    }
+
+    private func fetchHistoryPage(replacing: Bool) async {
+        await fetchPage(
+            statuses: [.completed, .skipped],
+            lastDocument: lastHistoryDocument
+        ) { [weak self] page, lastDocument, hasMore in
+            guard let self else { return }
+            self.lastHistoryDocument = lastDocument
+            self.hasMoreHistory = hasMore
+            self.historyAssignments = self.mergedAssignments(
+                existing: replacing ? [] : self.historyAssignments,
+                page: page
+            )
+        }
+    }
+
+    private func fetchPage(
+        statuses: [WorkoutAssignmentStatus],
+        lastDocument: QueryDocumentSnapshot?,
+        apply: ([WorkoutAssignment], QueryDocumentSnapshot?, Bool) -> Void
+    ) async {
+        do {
+            var query: Query = firestore
+                .collection("workout_assignments")
+                .whereField("clientId", isEqualTo: clientId)
+                .whereField("status", in: statuses.map(\.rawValue))
+                .order(by: "assignedAt", descending: true)
+                .limit(to: pageSize)
+
+            if let lastDocument {
+                query = query.start(afterDocument: lastDocument)
+            }
+
+            let snapshot = try await query.getDocuments()
+            let page = snapshot.documents.compactMap {
+                WorkoutAssignment(id: $0.documentID, data: $0.data())
+            }
+            apply(page, snapshot.documents.last, snapshot.documents.count == pageSize)
+            await loadTrainerNames(for: page)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func mergedAssignments(
+        existing: [WorkoutAssignment],
+        page: [WorkoutAssignment]
+    ) -> [WorkoutAssignment] {
+        (existing + page).reduce(into: [String: WorkoutAssignment]()) { result, assignment in
+            result[assignment.id] = assignment
+        }.values.sorted { $0.assignedAt > $1.assignedAt }
+    }
+
+    private func loadTrainerNames(for assignments: [WorkoutAssignment]) async {
+        let trainerIds = Set(assignments.map(\.trainerId)).subtracting(trainerNamesById.keys)
+        guard trainerIds.isEmpty == false else { return }
+
+        await withTaskGroup(of: (String, String?).self) { group in
+            for trainerId in trainerIds {
+                group.addTask { [firestore] in
+                    do {
+                        let snapshot = try await firestore.collection("users").document(trainerId).getDocument()
+                        guard let data = snapshot.data(),
+                              let profile = AppUserProfile(id: snapshot.documentID, data: data) else {
+                            return (trainerId, nil)
+                        }
+                        return (trainerId, profile.displayName)
+                    } catch {
+                        return (trainerId, nil)
+                    }
+                }
+            }
+
+            for await (trainerId, name) in group {
+                if let name { trainerNamesById[trainerId] = name }
+            }
+        }
+    }
+
+    private func reconcileStartedAssignment(modelContext: ModelContext) async {
+        let currentAssignmentId = newestLocalAssignedWorkout(modelContext: modelContext)?
+            .remoteAssignmentId
+        await updateStartedAssignments(currentAssignmentId: currentAssignmentId)
+    }
+
+    private func setExclusiveStartedAssignment(_ assignmentId: String) async {
+        await updateStartedAssignments(currentAssignmentId: assignmentId)
+    }
+
+    private func updateStartedAssignments(currentAssignmentId: String?) async {
+        do {
+            let snapshot = try await firestore
+                .collection("workout_assignments")
+                .whereField("clientId", isEqualTo: clientId)
+                .whereField("status", isEqualTo: WorkoutAssignmentStatus.started.rawValue)
+                .getDocuments()
+
+            let batch = firestore.batch()
+            var hasWrites = false
+
+            for document in snapshot.documents where document.documentID != currentAssignmentId {
+                batch.setData(
+                    ["status": WorkoutAssignmentStatus.assigned.rawValue],
+                    forDocument: document.reference,
+                    merge: true
+                )
+                hasWrites = true
+            }
+
+            if let currentAssignmentId,
+               snapshot.documents.contains(where: { $0.documentID == currentAssignmentId }) == false {
+                batch.setData(
+                    ["status": WorkoutAssignmentStatus.started.rawValue],
+                    forDocument: firestore.collection("workout_assignments").document(currentAssignmentId),
+                    merge: true
+                )
+                hasWrites = true
+            }
+
+            if hasWrites {
+                try await batch.commit()
+            }
+            applyExclusiveStartedStatus(currentAssignmentId)
+        } catch {
+            if let currentAssignmentId {
+                try? await firestore
+                    .collection("workout_assignments")
+                    .document(currentAssignmentId)
+                    .setData(["status": WorkoutAssignmentStatus.started.rawValue], merge: true)
+                applyExclusiveStartedStatus(currentAssignmentId)
+            }
+        }
+    }
+
+    private func applyExclusiveStartedStatus(_ currentAssignmentId: String?) {
+        activeAssignments = activeAssignments.map { assignment in
+            let status: WorkoutAssignmentStatus
+            if assignment.id == currentAssignmentId {
+                status = .started
+            } else if assignment.status == .started {
+                status = .assigned
+            } else {
+                return assignment
+            }
+            return assignmentCopy(assignment, status: status)
+        }
+    }
+
+    private func assignmentCopy(
+        _ assignment: WorkoutAssignment,
+        status: WorkoutAssignmentStatus
+    ) -> WorkoutAssignment {
+        WorkoutAssignment(
+            id: assignment.id,
+            trainerId: assignment.trainerId,
+            clientId: assignment.clientId,
+            templateId: assignment.templateId,
+            titleSnapshot: assignment.fallbackTitleSnapshot,
+            titleKey: assignment.titleKey,
+            notesSnapshot: assignment.notesSnapshot,
+            exerciseCount: assignment.exerciseCount,
+            assignedAt: assignment.assignedAt,
+            status: status
+        )
+    }
+
+    private func newestLocalAssignedWorkout(modelContext: ModelContext) -> WorkoutSession? {
+        let clientId = clientId
+        let predicate = #Predicate<WorkoutSession> {
+            $0.ownerId == clientId && $0.endedAt == nil
+        }
+        let descriptor = FetchDescriptor<WorkoutSession>(
+            predicate: predicate,
+            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+        )
+        return ((try? modelContext.fetch(descriptor)) ?? [])
+            .first { $0.remoteAssignmentId != nil }
     }
 
     func activeWorkout(for assignmentId: String, workouts: [WorkoutSession]) -> WorkoutSession? {

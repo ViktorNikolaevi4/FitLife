@@ -2055,7 +2055,8 @@ struct ClientCoachingHomeScreen: View {
             NavigationStack {
                 ClientCoachingChatScreen(
                     store: store,
-                    noteMessage: $noteMessage
+                    noteMessage: $noteMessage,
+                    showsCloseButton: true
                 )
             }
         }
@@ -2421,6 +2422,7 @@ private struct ClientCoachingChatScreen: View {
     @State private var isChatVisible = false
     @ObservedObject var store: ClientCoachingHomeStore
     @Binding var noteMessage: String
+    var showsCloseButton = false
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var sessionStore: AppSessionStore
@@ -2503,9 +2505,11 @@ private struct ClientCoachingChatScreen: View {
             store.stopNotesListening()
         }
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button(AppLocalizer.string("common.close")) {
-                    dismiss()
+            if showsCloseButton {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(AppLocalizer.string("common.close")) {
+                        dismiss()
+                    }
                 }
             }
         }

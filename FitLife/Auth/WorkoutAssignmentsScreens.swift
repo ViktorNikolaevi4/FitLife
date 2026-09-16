@@ -94,12 +94,41 @@ struct AssignWorkoutTemplateScreen: View {
     }
 }
 
+private enum ClientAssignmentFilter: String, CaseIterable, Identifiable {
+    case all
+    case assigned
+    case started
+    case completed
+    case skipped
+
+    var id: String { rawValue }
+
+    var localizationKey: String {
+        switch self {
+        case .all: return "client.assignments.filter.all"
+        case .assigned: return WorkoutAssignmentStatus.assigned.localizationKey
+        case .started: return WorkoutAssignmentStatus.started.localizationKey
+        case .completed: return WorkoutAssignmentStatus.completed.localizationKey
+        case .skipped: return WorkoutAssignmentStatus.skipped.localizationKey
+        }
+    }
+
+    var status: WorkoutAssignmentStatus? {
+        WorkoutAssignmentStatus(rawValue: rawValue)
+    }
+}
+
 struct ClientAssignedWorkoutsScreen: View {
+    @Environment(\.modelContext) private var modelContext
+
     let clientId: String
     let onWorkoutFlowCompleted: (() -> Void)?
 
     @StateObject private var store: ClientAssignedWorkoutsStore
     @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
+    @State private var searchText = ""
+    @State private var selectedFilter = ClientAssignmentFilter.all
+    @State private var showsHistory = false
 
     init(clientId: String, onWorkoutFlowCompleted: (() -> Void)? = nil) {
         self.clientId = clientId
@@ -109,6 +138,22 @@ struct ClientAssignedWorkoutsScreen: View {
 
     private var appLanguage: AppLanguage {
         AppLanguage.from(rawValue: appLanguageRaw)
+    }
+
+    private var visibleActiveAssignments: [WorkoutAssignment] {
+        filtered(store.activeAssignments)
+    }
+
+    private var visibleHistoryAssignments: [WorkoutAssignment] {
+        filtered(store.historyAssignments)
+    }
+
+    private var filterAllowsActive: Bool {
+        selectedFilter == .all || selectedFilter == .assigned || selectedFilter == .started
+    }
+
+    private var filterAllowsHistory: Bool {
+        selectedFilter == .all || selectedFilter == .completed || selectedFilter == .skipped
     }
 
     var body: some View {
@@ -121,61 +166,74 @@ struct ClientAssignedWorkoutsScreen: View {
                 }
             }
 
-            Section(appLanguage.localized("client.assignments.section")) {
-                ForEach(store.assignments) { assignment in
-                    NavigationLink {
-                        ClientAssignmentDetailScreen(
-                            assignment: assignment,
-                            trainerName: store.trainerName(for: assignment.trainerId),
-                            onWorkoutFlowCompleted: onWorkoutFlowCompleted
-                        )
-                    } label: {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(assignment.titleSnapshot)
-                                .font(.headline)
-
-                            if assignment.notesSnapshot.isEmpty == false {
-                                Text(
-                                    assignment.notesSnapshot
-                                )
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                            }
-
-                            HStack(spacing: 12) {
-                                if let trainerName = store.trainerName(for: assignment.trainerId) {
-                                    Text(
-                                        AppLocalizer.format(
-                                            "client.assignments.trainer",
-                                            trainerName
-                                        )
-                                    )
-                                }
-
-                                Text(
-                                    AppLocalizer.format(
-                                        "client.assignments.exercise_count",
-                                        assignment.exerciseCount
-                                    )
-                                )
-                            }
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                            Text(assignment.assignedAt.formatted(date: .abbreviated, time: .omitted))
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
-                        .padding(.vertical, 4)
+            Section {
+                Picker(
+                    appLanguage.localized("client.assignments.filter.title"),
+                    selection: $selectedFilter
+                ) {
+                    ForEach(ClientAssignmentFilter.allCases) { filter in
+                        Text(AppLocalizer.string(filter.localizationKey)).tag(filter)
                     }
                 }
+                .pickerStyle(.menu)
+            }
+
+            if filterAllowsActive,
+               visibleActiveAssignments.isEmpty == false || store.hasMoreActive {
+                Section(appLanguage.localized("client.assignments.current")) {
+                    ForEach(visibleActiveAssignments) { assignment in
+                        assignmentLink(assignment)
+                    }
+
+                    if store.hasMoreActive {
+                        loadMoreButton(isLoading: store.isLoadingMoreActive) {
+                            await store.loadMoreActive()
+                        }
+                    }
+                }
+            }
+
+            if filterAllowsHistory,
+               visibleHistoryAssignments.isEmpty == false || store.hasMoreHistory {
+                Section {
+                    DisclosureGroup(isExpanded: $showsHistory) {
+                        ForEach(visibleHistoryAssignments) { assignment in
+                            assignmentLink(assignment)
+                        }
+
+                        if store.hasMoreHistory {
+                            loadMoreButton(isLoading: store.isLoadingMoreHistory) {
+                                await store.loadMoreHistory()
+                            }
+                        }
+                    } label: {
+                        Label(
+                            AppLocalizer.format(
+                                "client.assignments.history.loaded",
+                                visibleHistoryAssignments.count
+                            ),
+                            systemImage: "clock.arrow.circlepath"
+                        )
+                    }
+                }
+            }
+
+            if store.isLoading == false,
+               visibleActiveAssignments.isEmpty,
+               visibleHistoryAssignments.isEmpty,
+               store.hasMoreActive == false,
+               store.hasMoreHistory == false,
+               searchText.isEmpty == false {
+                ContentUnavailableView.search(text: searchText)
+                    .listRowBackground(Color.clear)
             }
         }
         .overlay {
             if store.isLoading {
                 ProgressView()
-            } else if store.assignments.isEmpty {
+            } else if store.activeAssignments.isEmpty && store.historyAssignments.isEmpty
+                        && store.hasMoreActive == false && store.hasMoreHistory == false
+                        && searchText.isEmpty {
                 ContentUnavailableView(
                     appLanguage.localized("client.assignments.empty.title"),
                     systemImage: "list.bullet.clipboard",
@@ -184,11 +242,127 @@ struct ClientAssignedWorkoutsScreen: View {
             }
         }
         .navigationTitle(appLanguage.localized("client.assignments.title"))
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(
+            text: $searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: appLanguage.localized("client.assignments.search")
+        )
+        .onChange(of: searchText) { _, newValue in
+            if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                showsHistory = true
+            }
+        }
+        .onChange(of: selectedFilter) { _, newValue in
+            if newValue == .completed || newValue == .skipped {
+                showsHistory = true
+            }
+        }
         .task {
-            await store.load()
+            await store.load(modelContext: modelContext)
         }
         .refreshable {
-            await store.load()
+            await store.load(modelContext: modelContext)
+        }
+    }
+
+    private func filtered(_ assignments: [WorkoutAssignment]) -> [WorkoutAssignment] {
+        let statusFiltered: [WorkoutAssignment]
+        if let status = selectedFilter.status {
+            statusFiltered = assignments.filter { $0.status == status }
+        } else {
+            statusFiltered = assignments
+        }
+
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard query.isEmpty == false else { return statusFiltered }
+        return statusFiltered.filter {
+            $0.titleSnapshot.localizedCaseInsensitiveContains(query)
+                || $0.notesSnapshot.localizedCaseInsensitiveContains(query)
+                || (store.trainerName(for: $0.trainerId)?.localizedCaseInsensitiveContains(query) ?? false)
+        }
+    }
+
+    private func assignmentLink(_ assignment: WorkoutAssignment) -> some View {
+        NavigationLink {
+            ClientAssignmentDetailScreen(
+                assignment: assignment,
+                trainerName: store.trainerName(for: assignment.trainerId),
+                onWorkoutFlowCompleted: onWorkoutFlowCompleted
+            )
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(assignment.titleSnapshot)
+                    .font(.headline)
+
+                if assignment.notesSnapshot.isEmpty == false {
+                    Text(assignment.notesSnapshot)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                HStack(spacing: 12) {
+                    if let trainerName = store.trainerName(for: assignment.trainerId) {
+                        Text(AppLocalizer.format("client.assignments.trainer", trainerName))
+                    }
+
+                    Text(
+                        AppLocalizer.format(
+                            "client.assignments.exercise_count",
+                            assignment.exerciseCount
+                        )
+                    )
+
+                    Spacer(minLength: 4)
+
+                    Text(AppLocalizer.string(assignment.status.localizationKey))
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(assignmentStatusColor(assignment.status))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(assignmentStatusColor(assignment.status).opacity(0.14))
+                        )
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                Text(assignment.assignedAt.formatted(date: .abbreviated, time: .omitted))
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    private func loadMoreButton(
+        isLoading: Bool,
+        action: @escaping () async -> Void
+    ) -> some View {
+        Button {
+            Task { await action() }
+        } label: {
+            HStack {
+                Spacer()
+                if isLoading {
+                    ProgressView()
+                } else {
+                    Text(AppLocalizer.string("trainer.assignment_history.load_more"))
+                }
+                Spacer()
+            }
+        }
+        .disabled(isLoading)
+    }
+
+    private func assignmentStatusColor(_ status: WorkoutAssignmentStatus) -> Color {
+        switch status {
+        case .assigned: return .blue
+        case .started: return .orange
+        case .completed: return .green
+        case .skipped: return .secondary
         }
     }
 }
