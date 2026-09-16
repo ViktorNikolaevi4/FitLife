@@ -11,6 +11,8 @@ struct WorkoutTemplate: Identifiable, Hashable {
     let updatedAt: Date
     let isActive: Bool
     let sourceLibraryTemplateId: String?
+    let clientId: String?
+    let sourceAssignmentId: String?
 
     var title: String {
         localizedLibraryTemplateTitle(key: titleKey, fallbackTitle: fallbackTitle)
@@ -25,7 +27,9 @@ struct WorkoutTemplate: Identifiable, Hashable {
         createdAt: Date = .now,
         updatedAt: Date = .now,
         isActive: Bool = true,
-        sourceLibraryTemplateId: String? = nil
+        sourceLibraryTemplateId: String? = nil,
+        clientId: String? = nil,
+        sourceAssignmentId: String? = nil
     ) {
         self.id = id
         self.trainerId = trainerId
@@ -36,6 +40,8 @@ struct WorkoutTemplate: Identifiable, Hashable {
         self.updatedAt = updatedAt
         self.isActive = isActive
         self.sourceLibraryTemplateId = sourceLibraryTemplateId
+        self.clientId = clientId
+        self.sourceAssignmentId = sourceAssignmentId
     }
 
     init?(id: String, data: [String: Any]) {
@@ -56,6 +62,8 @@ struct WorkoutTemplate: Identifiable, Hashable {
         self.notes = (data["notes"] as? String) ?? ""
         self.isActive = (data["isActive"] as? Bool) ?? true
         self.sourceLibraryTemplateId = data["sourceLibraryTemplateId"] as? String
+        self.clientId = data["clientId"] as? String
+        self.sourceAssignmentId = data["sourceAssignmentId"] as? String
 
         if let createdAt = data["createdAt"] as? Timestamp {
             self.createdAt = createdAt.dateValue()
@@ -85,7 +93,40 @@ struct WorkoutTemplate: Identifiable, Hashable {
         if let titleKey {
             data["titleKey"] = titleKey
         }
+        if let clientId {
+            data["clientId"] = clientId
+        }
+        if let sourceAssignmentId {
+            data["sourceAssignmentId"] = sourceAssignmentId
+        }
         return data
+    }
+
+    var isClientDraft: Bool {
+        clientId?.isEmpty == false
+    }
+
+    var isLegacyAssignmentCopy: Bool {
+        guard isClientDraft == false else { return false }
+        let normalized = fallbackTitle
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        return normalized.hasSuffix("— копия") || normalized.hasSuffix("— copy")
+    }
+
+    func replacingTitle(_ title: String, updatedAt: Date = .now) -> WorkoutTemplate {
+        WorkoutTemplate(
+            id: id,
+            trainerId: trainerId,
+            title: title,
+            notes: notes,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            isActive: isActive,
+            sourceLibraryTemplateId: sourceLibraryTemplateId,
+            clientId: clientId,
+            sourceAssignmentId: sourceAssignmentId
+        )
     }
 }
 

@@ -5,7 +5,7 @@ private let workoutTemplateEditorCardBackground = Color(.secondarySystemBackgrou
 private let workoutTemplateEditorBorder = Color(.separator).opacity(0.22)
 
 struct WorkoutTemplateEditorScreen: View {
-    let template: WorkoutTemplate
+    @State private var template: WorkoutTemplate
 
     @EnvironmentObject private var sessionStore: AppSessionStore
     @StateObject private var store: WorkoutTemplateContentStore
@@ -25,11 +25,13 @@ struct WorkoutTemplateEditorScreen: View {
     @State private var pendingDeleteBlock: WorkoutTemplateBlockItem?
     @State private var editingExercise: WorkoutTemplateExerciseItem?
     @State private var showLibrarySubmissionConfirmation = false
+    @State private var showRenameDialog = false
+    @State private var renamedTitle = ""
     @Query(sort: \CustomWorkoutExerciseTemplate.createdAt) private var customTemplates: [CustomWorkoutExerciseTemplate]
     @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
 
     init(template: WorkoutTemplate) {
-        self.template = template
+        _template = State(initialValue: template)
         _store = StateObject(wrappedValue: WorkoutTemplateContentStore(template: template))
     }
 
@@ -238,7 +240,7 @@ struct WorkoutTemplateEditorScreen: View {
                 }
             }
 
-            if template.sourceLibraryTemplateId == nil {
+            if template.sourceLibraryTemplateId == nil && template.isClientDraft == false {
                 WorkoutTemplateSubmissionSection(
                     submission: store.librarySubmission,
                     isSubmitting: store.isSubmittingToLibrary,
@@ -286,6 +288,14 @@ struct WorkoutTemplateEditorScreen: View {
                 }
             }
         }
+        .toolbarTitleMenu {
+            Button {
+                renamedTitle = template.fallbackTitle
+                showRenameDialog = true
+            } label: {
+                Label(AppLocalizer.string("trainer.templates.rename.action"), systemImage: "pencil")
+            }
+        }
         .overlay {
             if store.isLoading {
                 ProgressView()
@@ -299,6 +309,18 @@ struct WorkoutTemplateEditorScreen: View {
         }
         .task {
             await store.load()
+        }
+        .alert(AppLocalizer.string("trainer.templates.rename.title"), isPresented: $showRenameDialog) {
+            TextField(AppLocalizer.string("trainer.templates.create.title_placeholder"), text: $renamedTitle)
+            Button(AppLocalizer.string("common.cancel"), role: .cancel) {}
+            Button(AppLocalizer.string("common.save")) {
+                Task {
+                    if let updatedTemplate = await store.renameTemplate(to: renamedTitle) {
+                        template = updatedTemplate
+                    }
+                }
+            }
+            .disabled(renamedTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .sheet(isPresented: $showAddExercise) {
             AddWorkoutExerciseScreen(templates: templates) { draft in

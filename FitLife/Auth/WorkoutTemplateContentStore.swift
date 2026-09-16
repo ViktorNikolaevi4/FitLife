@@ -356,7 +356,7 @@ final class WorkoutTemplateContentStore: ObservableObject {
     @Published private(set) var isSubmittingToLibrary = false
     @Published var errorMessage: String?
 
-    private let template: WorkoutTemplate
+    private var template: WorkoutTemplate
     private let firestore: Firestore
 
     init(template: WorkoutTemplate, firestore: Firestore = .firestore()) {
@@ -401,7 +401,11 @@ final class WorkoutTemplateContentStore: ObservableObject {
                 )
             }
             await migrateLegacyRoundDrivenSetsIfNeeded()
-            await loadLibrarySubmission()
+            if template.isClientDraft {
+                librarySubmission = nil
+            } else {
+                await loadLibrarySubmission()
+            }
             isLoading = false
         } catch {
             errorMessage = error.localizedDescription
@@ -411,6 +415,32 @@ final class WorkoutTemplateContentStore: ObservableObject {
 
     private var librarySubmissionID: String {
         "\(template.trainerId)_\(template.id)"
+    }
+
+    func renameTemplate(to rawTitle: String) async -> WorkoutTemplate? {
+        let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard title.isEmpty == false else { return nil }
+
+        errorMessage = nil
+        let updatedTemplate = template.replacingTitle(title)
+        do {
+            try await firestore
+                .collection("workout_templates")
+                .document(template.id)
+                .setData(
+                    [
+                        "title": title,
+                        "titleKey": FieldValue.delete(),
+                        "updatedAt": updatedTemplate.updatedAt
+                    ],
+                    merge: true
+                )
+            template = updatedTemplate
+            return updatedTemplate
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
     }
 
     private func loadLibrarySubmission() async {

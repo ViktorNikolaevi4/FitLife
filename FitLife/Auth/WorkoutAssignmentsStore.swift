@@ -44,21 +44,21 @@ final class WorkoutTemplateAssignmentStore: ObservableObject {
 
             let (linkDocs, assignmentDocs) = try await (linksSnapshot, assignmentsSnapshot)
 
-            let clientIds = linkDocs.documents.compactMap { document in
-                TrainerClientLink(id: document.documentID, data: document.data())?.clientId
-            }
-
-            var loadedClients: [AppUserProfile] = []
-            for clientId in clientIds {
-                let snapshot = try await firestore.collection("users").document(clientId).getDocument()
-                guard let data = snapshot.data(),
-                      let profile = AppUserProfile(id: snapshot.documentID, data: data) else {
-                    continue
+            let links = linkDocs.documents
+                .compactMap { TrainerClientLink(id: $0.documentID, data: $0.data()) }
+                .filter { link in
+                    template.clientId == nil || link.clientId == template.clientId
                 }
-                loadedClients.append(profile)
+            var profilesById = links.reduce(into: [String: AppUserProfile]()) { result, link in
+                if let profile = link.clientProfileSnapshot {
+                    result[link.clientId] = profile
+                }
             }
+            let missingClientIds = Set(links.map(\.clientId)).subtracting(profilesById.keys)
+            let loadedProfiles = await loadProfiles(clientIds: missingClientIds)
+            profilesById.merge(loadedProfiles) { _, loaded in loaded }
 
-            clients = loadedClients.sorted {
+            clients = profilesById.values.sorted {
                 $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
             }
 
@@ -75,6 +75,9 @@ final class WorkoutTemplateAssignmentStore: ObservableObject {
     }
 
     func assignTemplate(to client: AppUserProfile, exerciseCount: Int) async -> Bool {
+        if let clientId = template.clientId, clientId != client.id {
+            return false
+        }
         guard isAssigned(clientId: client.id) == false,
               assigningClientIds.contains(client.id) == false else {
             return false
@@ -171,6 +174,32 @@ final class WorkoutTemplateAssignmentStore: ObservableObject {
 
     func isAssigning(clientId: String) -> Bool {
         assigningClientIds.contains(clientId)
+    }
+
+    private func loadProfiles(clientIds: Set<String>) async -> [String: AppUserProfile] {
+        let firestore = firestore
+        return await withTaskGroup(of: (String, AppUserProfile?).self) { group in
+            for clientId in clientIds {
+                group.addTask {
+                    do {
+                        let snapshot = try await firestore
+                            .collection("users")
+                            .document(clientId)
+                            .getDocument()
+                        guard let data = snapshot.data() else { return (clientId, nil) }
+                        return (clientId, AppUserProfile(id: snapshot.documentID, data: data))
+                    } catch {
+                        return (clientId, nil)
+                    }
+                }
+            }
+
+            var profiles: [String: AppUserProfile] = [:]
+            for await (clientId, profile) in group {
+                if let profile { profiles[clientId] = profile }
+            }
+            return profiles
+        }
     }
 }
 
@@ -502,7 +531,9 @@ final class ClientAssignmentDetailStore: ObservableObject {
             ),
             notes: assignment.notesSnapshot,
             createdAt: now,
-            updatedAt: now
+            updatedAt: now,
+            clientId: assignment.clientId,
+            sourceAssignmentId: assignment.id
         )
 
         do {
@@ -572,10 +603,23 @@ final class TrainerAssignmentsOverviewStore: ObservableObject {
         }
 
         do {
-            async let assignmentsSnapshot = firestore
+            async let activeAssignmentsSnapshot = firestore
+                .collection("workout_assignments")
+                .whereField("trainerId", isEqualTo: trainerId)
+                .whereField(
+                    "status",
+                    in: [
+                        WorkoutAssignmentStatus.assigned.rawValue,
+                        WorkoutAssignmentStatus.started.rawValue
+                    ]
+                )
+                .getDocuments()
+
+            async let recentAssignmentsSnapshot = firestore
                 .collection("workout_assignments")
                 .whereField("trainerId", isEqualTo: trainerId)
                 .order(by: "assignedAt", descending: true)
+                .limit(to: 200)
                 .getDocuments()
 
             async let linksSnapshot = firestore
@@ -584,11 +628,24 @@ final class TrainerAssignmentsOverviewStore: ObservableObject {
                 .whereField("status", isEqualTo: "active")
                 .getDocuments()
 
-            let (assignmentDocs, linkDocs) = try await (assignmentsSnapshot, linksSnapshot)
+            let (activeAssignmentDocs, recentAssignmentDocs, linkDocs) = try await (
+                activeAssignmentsSnapshot,
+                recentAssignmentsSnapshot,
+                linksSnapshot
+            )
 
-            let loadedAssignments = assignmentDocs.documents.compactMap { document in
-                WorkoutAssignment(id: document.documentID, data: document.data())
-            }
+            let assignmentDocuments = activeAssignmentDocs.documents
+                + recentAssignmentDocs.documents
+            let loadedAssignments = assignmentDocuments.reduce(
+                into: [String: WorkoutAssignment]()
+            ) { result, document in
+                if let assignment = WorkoutAssignment(
+                    id: document.documentID,
+                    data: document.data()
+                ) {
+                    result[assignment.id] = assignment
+                }
+            }.values.sorted { $0.assignedAt > $1.assignedAt }
 
             let links = linkDocs.documents.compactMap { document in
                 TrainerClientLink(id: document.documentID, data: document.data())
@@ -602,7 +659,8 @@ final class TrainerAssignmentsOverviewStore: ObservableObject {
                 }
             }
 
-            let loadedProfiles = await loadProfiles(clientIds: allClientIds)
+            let missingProfileIds = allClientIds.subtracting(profileSnapshots.keys)
+            let loadedProfiles = await loadProfiles(clientIds: missingProfileIds)
             let profilesById = profileSnapshots.merging(loadedProfiles) { _, loaded in loaded }
             let summaries = makeSummaries(
                 assignments: loadedAssignments,
@@ -696,6 +754,88 @@ final class TrainerAssignmentsOverviewStore: ObservableObject {
         }
 
         return AppLocalizer.string("trainer.overview.client.unavailable")
+    }
+}
+
+@MainActor
+final class TrainerClientAssignmentHistoryStore: ObservableObject {
+    @Published private(set) var assignments: [WorkoutAssignment]
+    @Published private(set) var isLoading = false
+    @Published private(set) var isLoadingMore = false
+    @Published private(set) var hasMore = true
+    @Published var errorMessage: String?
+
+    private let trainerId: String
+    private let clientId: String
+    private let firestore: Firestore
+    private let pageSize = 25
+    private var lastDocument: QueryDocumentSnapshot?
+
+    init(
+        trainerId: String,
+        clientId: String,
+        initialAssignments: [WorkoutAssignment],
+        firestore: Firestore = .firestore()
+    ) {
+        self.trainerId = trainerId
+        self.clientId = clientId
+        self.firestore = firestore
+        self.assignments = initialAssignments
+            .filter { $0.status == .assigned || $0.status == .started }
+            .sorted { $0.assignedAt > $1.assignedAt }
+    }
+
+    func load() async {
+        guard isLoading == false else { return }
+        isLoading = true
+        errorMessage = nil
+        lastDocument = nil
+        hasMore = true
+        defer { isLoading = false }
+        await fetchPage(replacingHistory: true)
+    }
+
+    func loadMore() async {
+        guard isLoading == false, isLoadingMore == false, hasMore else { return }
+        isLoadingMore = true
+        errorMessage = nil
+        defer { isLoadingMore = false }
+        await fetchPage(replacingHistory: false)
+    }
+
+    private func fetchPage(replacingHistory: Bool) async {
+        do {
+            var query: Query = firestore
+                .collection("workout_assignments")
+                .whereField("trainerId", isEqualTo: trainerId)
+                .whereField("clientId", isEqualTo: clientId)
+                .order(by: "assignedAt", descending: true)
+                .limit(to: pageSize)
+
+            if let lastDocument {
+                query = query.start(afterDocument: lastDocument)
+            }
+
+            let snapshot = try await query.getDocuments()
+            let page = snapshot.documents.compactMap {
+                WorkoutAssignment(id: $0.documentID, data: $0.data())
+            }
+            lastDocument = snapshot.documents.last
+            hasMore = snapshot.documents.count == pageSize
+
+            let active = assignments.filter {
+                $0.status == .assigned || $0.status == .started
+            }
+            let existingHistory = replacingHistory
+                ? []
+                : assignments.filter { $0.status == .completed || $0.status == .skipped }
+            let merged = active + existingHistory + page
+            assignments = merged.reduce(into: [String: WorkoutAssignment]()) { result, assignment in
+                result[assignment.id] = assignment
+            }.values.sorted { $0.assignedAt > $1.assignedAt }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }
 

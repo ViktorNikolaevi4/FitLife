@@ -7,7 +7,7 @@ enum WorkoutExerciseIcon {
     static let barbellClean = "Взятие на грудь 1"
     static let horizontalPullUps = "Горизонтальные подтягивания"
     static let hangingLegRaise = "Подъём ног в висе"
-    static let lyingLegRaise = "Подъём ног лежа"
+    static let lyingLegRaise = "Подъём ног лёжа на пресс"
     static let snatchPull = "Рывковая тяга"
     static let muscleSnatch = "Протяжка рывковым хватом"
     static let barbellSnatch = "Рывок штанги"
@@ -96,6 +96,10 @@ enum WorkoutExerciseIcon {
     static let birdDog = "Bird Dog"
     static let crunches = "Скручивания на пресс"
     static let abWheelRollout = "Ролик для пресса "
+    static let bicycleCrunches = "Велосипед"
+    static let highPlank = "Планка на прямых руках"
+    static let captainsChairKneeRaise = "Подъём коленей в упоре на брусьях"
+    static let russianTwists = "Русские скручивания"
     static let lunges = "Выпады "
     static let reverseLunges = "Выпады назад"
     static let bulgarianSplitSquat = "Болгарские выпады"
@@ -956,6 +960,50 @@ private func makeWorkoutTemplates(language: AppLanguage) -> [WorkoutExerciseTemp
             metValue: 4.0,
             defaultSets: [
                 WorkoutDraftSet(weight: 0, reps: 15)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            localizationKey: "workout.exercise.bicycle_crunches",
+            name: language.localized("workout.exercise.bicycle_crunches"),
+            systemImage: WorkoutExerciseIcon.bicycleCrunches,
+            accentName: "blue",
+            activityType: .core,
+            metValue: 4.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, reps: 20)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            localizationKey: "workout.exercise.high_plank",
+            name: language.localized("workout.exercise.high_plank"),
+            systemImage: WorkoutExerciseIcon.highPlank,
+            accentName: "blue",
+            activityType: .core,
+            metValue: 3.5,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, durationSeconds: 45, metricType: .duration)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            localizationKey: "workout.exercise.captains_chair_knee_raise",
+            name: language.localized("workout.exercise.captains_chair_knee_raise"),
+            systemImage: WorkoutExerciseIcon.captainsChairKneeRaise,
+            accentName: "blue",
+            activityType: .core,
+            metValue: 4.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, reps: 12)
+            ]
+        ),
+        WorkoutExerciseTemplate(
+            localizationKey: "workout.exercise.russian_twists",
+            name: language.localized("workout.exercise.russian_twists"),
+            systemImage: WorkoutExerciseIcon.russianTwists,
+            accentName: "blue",
+            activityType: .core,
+            metValue: 4.0,
+            defaultSets: [
+                WorkoutDraftSet(weight: 0, reps: 20)
             ]
         ),
         WorkoutExerciseTemplate(

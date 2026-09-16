@@ -4,6 +4,7 @@ import FirebaseFirestore
 @MainActor
 final class WorkoutTemplatesStore: ObservableObject {
     @Published private(set) var templates: [WorkoutTemplate] = []
+    @Published private(set) var legacyAssignmentCopies: [WorkoutTemplate] = []
     @Published private(set) var libraryTemplates: [LibraryWorkoutTemplate] = []
     @Published private(set) var importingLibraryTemplateIds: Set<String> = []
     @Published private(set) var isLoading = false
@@ -37,9 +38,11 @@ final class WorkoutTemplatesStore: ObservableObject {
             let personalDocs = try await templatesSnapshot
             let libraryDocs = await librarySnapshot
 
-            templates = personalDocs.documents.compactMap { document in
+            let loadedTemplates = personalDocs.documents.compactMap { document in
                 WorkoutTemplate(id: document.documentID, data: document.data())
             }
+            templates = loadedTemplates.filter { $0.isClientDraft == false && $0.isLegacyAssignmentCopy == false }
+            legacyAssignmentCopies = loadedTemplates.filter { $0.isLegacyAssignmentCopy }
             libraryTemplates = (libraryDocs?.documents ?? [])
                 .compactMap { document in
                     LibraryWorkoutTemplate(id: document.documentID, data: document.data())
@@ -96,6 +99,7 @@ final class WorkoutTemplatesStore: ObservableObject {
                 )
 
             templates.removeAll { $0.id == template.id }
+            legacyAssignmentCopies.removeAll { $0.id == template.id }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -175,6 +179,81 @@ final class WorkoutTemplatesStore: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
             return false
+        }
+    }
+}
+
+@MainActor
+final class TrainerClientWorkoutDraftsStore: ObservableObject {
+    @Published private(set) var drafts: [WorkoutTemplate] = []
+    @Published private(set) var isLoading = false
+    @Published var errorMessage: String?
+
+    private let trainerId: String
+    private let clientId: String
+    private let firestore: Firestore
+
+    init(trainerId: String, clientId: String, firestore: Firestore = .firestore()) {
+        self.trainerId = trainerId
+        self.clientId = clientId
+        self.firestore = firestore
+    }
+
+    func load() async {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+
+        do {
+            let snapshot = try await firestore
+                .collection("workout_templates")
+                .whereField("trainerId", isEqualTo: trainerId)
+                .whereField("clientId", isEqualTo: clientId)
+                .getDocuments()
+
+            drafts = snapshot.documents
+                .compactMap { WorkoutTemplate(id: $0.documentID, data: $0.data()) }
+                .filter(\.isActive)
+                .sorted { $0.updatedAt > $1.updatedAt }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func createDraft(title: String, notes: String) async -> Bool {
+        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalizedTitle.isEmpty == false else { return false }
+
+        errorMessage = nil
+        do {
+            let documentRef = firestore.collection("workout_templates").document()
+            let draft = WorkoutTemplate(
+                id: documentRef.documentID,
+                trainerId: trainerId,
+                title: normalizedTitle,
+                notes: normalizedNotes,
+                clientId: clientId
+            )
+            try await documentRef.setData(draft.firestoreData)
+            drafts.insert(draft, at: 0)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func deleteDraft(_ draft: WorkoutTemplate) async {
+        errorMessage = nil
+        do {
+            try await firestore
+                .collection("workout_templates")
+                .document(draft.id)
+                .setData(["isActive": false, "updatedAt": Date()], merge: true)
+            drafts.removeAll { $0.id == draft.id }
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 }

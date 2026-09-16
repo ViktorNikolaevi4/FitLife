@@ -22,6 +22,11 @@ struct AssignWorkoutTemplateScreen: View {
         AppLanguage.from(rawValue: appLanguageRaw)
     }
 
+    private var visibleClients: [AppUserProfile] {
+        guard let clientId = template.clientId else { return store.clients }
+        return store.clients.filter { $0.id == clientId }
+    }
+
     var body: some View {
         List {
             if let errorMessage = store.errorMessage, errorMessage.isEmpty == false {
@@ -33,7 +38,7 @@ struct AssignWorkoutTemplateScreen: View {
             }
 
             Section(appLanguage.localized("trainer.assignments.clients.section")) {
-                ForEach(store.clients) { client in
+                ForEach(visibleClients) { client in
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(client.displayName)
@@ -71,7 +76,7 @@ struct AssignWorkoutTemplateScreen: View {
         .overlay {
             if store.isLoading {
                 ProgressView()
-            } else if store.clients.isEmpty {
+            } else if visibleClients.isEmpty {
                 ContentUnavailableView(
                     appLanguage.localized("trainer.assignments.clients.empty.title"),
                     systemImage: "person.2.badge.plus",

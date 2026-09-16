@@ -4,6 +4,7 @@ struct TrainerAssignmentsOverviewScreen: View {
     let trainerId: String
 
     @StateObject private var store: TrainerAssignmentsOverviewStore
+    @State private var searchText = ""
     @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
 
     init(trainerId: String) {
@@ -16,15 +17,24 @@ struct TrainerAssignmentsOverviewScreen: View {
     }
 
     private var clientsNeedingAssignment: [TrainerAssignmentClientSummary] {
-        store.clientSummaries.filter(\.needsAssignment)
+        filteredClientSummaries.filter(\.needsAssignment)
     }
 
     private var clientsWithActiveAssignment: [TrainerAssignmentClientSummary] {
-        store.clientSummaries.filter { $0.isActiveClient && $0.needsAssignment == false }
+        filteredClientSummaries.filter { $0.isActiveClient && $0.needsAssignment == false }
     }
 
     private var archivedClients: [TrainerAssignmentClientSummary] {
-        store.clientSummaries.filter { $0.isActiveClient == false }
+        filteredClientSummaries.filter { $0.isActiveClient == false }
+    }
+
+    private var filteredClientSummaries: [TrainerAssignmentClientSummary] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard query.isEmpty == false else { return store.clientSummaries }
+        return store.clientSummaries.filter {
+            $0.displayName.localizedCaseInsensitiveContains(query)
+                || $0.email.localizedCaseInsensitiveContains(query)
+        }
     }
 
     var body: some View {
@@ -41,7 +51,7 @@ struct TrainerAssignmentsOverviewScreen: View {
                 Section(appLanguage.localized("trainer.overview.clients.needs_assignment.section")) {
                     ForEach(clientsNeedingAssignment) { summary in
                         NavigationLink {
-                            TrainerClientAssignmentsScreen(summary: summary)
+                            TrainerClientAssignmentsScreen(summary: summary, trainerId: trainerId)
                         } label: {
                             TrainerAssignmentClientRow(summary: summary)
                         }
@@ -53,7 +63,7 @@ struct TrainerAssignmentsOverviewScreen: View {
                 Section(appLanguage.localized("trainer.overview.clients.active.section")) {
                     ForEach(clientsWithActiveAssignment) { summary in
                         NavigationLink {
-                            TrainerClientAssignmentsScreen(summary: summary)
+                            TrainerClientAssignmentsScreen(summary: summary, trainerId: trainerId)
                         } label: {
                             TrainerAssignmentClientRow(summary: summary)
                         }
@@ -65,7 +75,7 @@ struct TrainerAssignmentsOverviewScreen: View {
                 Section(appLanguage.localized("trainer.overview.clients.archive.section")) {
                     ForEach(archivedClients) { summary in
                         NavigationLink {
-                            TrainerClientAssignmentsScreen(summary: summary)
+                            TrainerClientAssignmentsScreen(summary: summary, trainerId: trainerId)
                         } label: {
                             TrainerAssignmentClientRow(summary: summary)
                         }
@@ -85,6 +95,11 @@ struct TrainerAssignmentsOverviewScreen: View {
             }
         }
         .navigationTitle(appLanguage.localized("trainer.overview.title"))
+        .searchable(
+            text: $searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: appLanguage.localized("trainer.overview.search")
+        )
         .task {
             await store.load()
         }
@@ -132,8 +147,7 @@ private struct TrainerAssignmentClientRow: View {
 
                 Text(
                     AppLocalizer.format(
-                        "trainer.overview.client.summary",
-                        summary.assignments.count,
+                        "trainer.overview.client.active_summary",
                         summary.activeAssignmentCount
                     )
                 )
@@ -159,16 +173,105 @@ private struct TrainerAssignmentClientRow: View {
 
 private struct TrainerClientAssignmentsScreen: View {
     let summary: TrainerAssignmentClientSummary
+    let trainerId: String
 
+    @StateObject private var draftsStore: TrainerClientWorkoutDraftsStore
+    @StateObject private var historyStore: TrainerClientAssignmentHistoryStore
+    @State private var showCreateDraft = false
+    @State private var pendingDeleteDraft: WorkoutTemplate?
+    @State private var showsHistory = false
+    @State private var searchText = ""
     @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
+
+    init(summary: TrainerAssignmentClientSummary, trainerId: String) {
+        self.summary = summary
+        self.trainerId = trainerId
+        _draftsStore = StateObject(
+            wrappedValue: TrainerClientWorkoutDraftsStore(
+                trainerId: trainerId,
+                clientId: summary.id
+            )
+        )
+        _historyStore = StateObject(
+            wrappedValue: TrainerClientAssignmentHistoryStore(
+                trainerId: trainerId,
+                clientId: summary.id,
+                initialAssignments: summary.assignments
+            )
+        )
+    }
 
     private var appLanguage: AppLanguage {
         AppLanguage.from(rawValue: appLanguageRaw)
     }
 
+    private var filteredAssignments: [WorkoutAssignment] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard query.isEmpty == false else { return historyStore.assignments }
+        return historyStore.assignments.filter {
+            $0.titleSnapshot.localizedCaseInsensitiveContains(query)
+                || $0.notesSnapshot.localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    private var historyAssignments: [WorkoutAssignment] {
+        filteredAssignments.filter { $0.status == .completed || $0.status == .skipped }
+    }
+
     var body: some View {
         List {
-            if summary.assignments.isEmpty {
+            if let errorMessage = draftsStore.errorMessage, errorMessage.isEmpty == false {
+                Section {
+                    Text(errorMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                }
+            }
+
+            if let errorMessage = historyStore.errorMessage, errorMessage.isEmpty == false {
+                Section {
+                    Text(errorMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                }
+            }
+
+            if draftsStore.drafts.isEmpty == false {
+                Section(appLanguage.localized("trainer.client_drafts.section")) {
+                    ForEach(draftsStore.drafts) { draft in
+                        NavigationLink {
+                            WorkoutTemplateEditorScreen(template: draft)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(draft.title)
+                                    .font(.headline)
+                                if draft.notes.isEmpty == false {
+                                    Text(draft.notes)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                }
+                                Text(draft.updatedAt.formatted(date: .abbreviated, time: .omitted))
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                pendingDeleteDraft = draft
+                            } label: {
+                                Label(AppLocalizer.string("common.delete"), systemImage: "trash")
+                            }
+                        }
+                    }
+                }
+            }
+
+            if historyStore.assignments.isEmpty
+                && draftsStore.drafts.isEmpty
+                && draftsStore.isLoading == false
+                && historyStore.isLoading == false {
                 ContentUnavailableView(
                     appLanguage.localized("trainer.overview.client.empty.title"),
                     systemImage: "list.bullet.clipboard",
@@ -176,34 +279,51 @@ private struct TrainerClientAssignmentsScreen: View {
                 )
                 .listRowBackground(Color.clear)
             } else {
-                ForEach(WorkoutAssignmentStatus.allCases, id: \.rawValue) { status in
-                    let assignments = summary.assignments.filter { $0.status == status }
+                ForEach(
+                    [WorkoutAssignmentStatus.assigned, .started],
+                    id: \.rawValue
+                ) { status in
+                    let assignments = filteredAssignments.filter { $0.status == status }
                     if assignments.isEmpty == false {
                         Section(AppLocalizer.string(status.localizationKey)) {
                             ForEach(assignments) { assignment in
-                                NavigationLink {
-                                    TrainerAssignmentDetailScreen(assignment: assignment)
-                                } label: {
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text(assignment.titleSnapshot)
-                                            .font(.headline)
-
-                                        Text(
-                                            AppLocalizer.format(
-                                                "trainer.overview.exercise_count",
-                                                assignment.exerciseCount
-                                            )
-                                        )
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-
-                                        Text(assignment.assignedAt.formatted(date: .abbreviated, time: .omitted))
-                                            .font(.caption)
-                                            .foregroundStyle(.tertiary)
-                                    }
-                                    .padding(.vertical, 4)
-                                }
+                                assignmentLink(assignment)
                             }
+                        }
+                    }
+                }
+
+                if historyAssignments.isEmpty == false || historyStore.hasMore {
+                    Section {
+                        DisclosureGroup(isExpanded: $showsHistory) {
+                            ForEach(historyAssignments) { assignment in
+                                assignmentLink(assignment)
+                            }
+
+                            if historyStore.hasMore {
+                                Button {
+                                    Task { await historyStore.loadMore() }
+                                } label: {
+                                    HStack {
+                                        Spacer()
+                                        if historyStore.isLoadingMore {
+                                            ProgressView()
+                                        } else {
+                                            Text(AppLocalizer.string("trainer.assignment_history.load_more"))
+                                        }
+                                        Spacer()
+                                    }
+                                }
+                                .disabled(historyStore.isLoadingMore)
+                            }
+                        } label: {
+                            Label(
+                                AppLocalizer.format(
+                                    "trainer.assignment_history.loaded",
+                                    historyAssignments.count
+                                ),
+                                systemImage: "clock.arrow.circlepath"
+                            )
                         }
                     }
                 }
@@ -211,6 +331,88 @@ private struct TrainerClientAssignmentsScreen: View {
         }
         .navigationTitle(summary.displayName)
         .navigationBarTitleDisplayMode(.inline)
+        .searchable(
+            text: $searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: appLanguage.localized("trainer.assignment_history.search")
+        )
+        .onChange(of: searchText) { _, newValue in
+            if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                showsHistory = true
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showCreateDraft = true
+                } label: {
+                    Label(appLanguage.localized("trainer.client_drafts.create"), systemImage: "plus")
+                }
+            }
+        }
+        .overlay {
+            if (draftsStore.isLoading && draftsStore.drafts.isEmpty)
+                || (historyStore.isLoading && historyStore.assignments.isEmpty) {
+                ProgressView()
+            }
+        }
+        .task {
+            await draftsStore.load()
+            await historyStore.load()
+        }
+        .refreshable {
+            await draftsStore.load()
+            await historyStore.load()
+        }
+        .sheet(isPresented: $showCreateDraft) {
+            CreateWorkoutTemplateScreen { title, notes in
+                if await draftsStore.createDraft(title: title, notes: notes) {
+                    showCreateDraft = false
+                }
+            }
+        }
+        .confirmationDialog(
+            AppLocalizer.string("trainer.client_drafts.delete.title"),
+            isPresented: Binding(
+                get: { pendingDeleteDraft != nil },
+                set: { if $0 == false { pendingDeleteDraft = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(AppLocalizer.string("common.delete"), role: .destructive) {
+                guard let pendingDeleteDraft else { return }
+                Task { await draftsStore.deleteDraft(pendingDeleteDraft) }
+                self.pendingDeleteDraft = nil
+            }
+            Button(AppLocalizer.string("common.cancel"), role: .cancel) {
+                pendingDeleteDraft = nil
+            }
+        } message: {
+            Text(AppLocalizer.string("trainer.client_drafts.delete.message"))
+        }
+    }
+
+    private func assignmentLink(_ assignment: WorkoutAssignment) -> some View {
+        NavigationLink {
+            TrainerAssignmentDetailScreen(assignment: assignment)
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(assignment.titleSnapshot)
+                    .font(.headline)
+                Text(
+                    AppLocalizer.format(
+                        "trainer.overview.exercise_count",
+                        assignment.exerciseCount
+                    )
+                )
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                Text(assignment.assignedAt.formatted(date: .abbreviated, time: .omitted))
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.vertical, 4)
+        }
     }
 }
 

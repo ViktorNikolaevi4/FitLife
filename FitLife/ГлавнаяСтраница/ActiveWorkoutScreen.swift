@@ -52,6 +52,7 @@ struct ActiveWorkoutScreen: View {
     @State private var processedBlockSubmissionIDs: Set<UUID> = []
     @State private var isShowingAIGenerator = false
     @State private var isShowingAddMenu = false
+    @State private var isReorderingBlocks = false
     @State private var collapsedBlockIds: Set<String> = []
     @State private var exerciseTargetBlock: WorkoutBlock?
     @State private var pendingDeleteBlock: WorkoutBlock?
@@ -374,12 +375,18 @@ struct ActiveWorkoutScreen: View {
             onStart: runnerAction(for: group.block),
             status: workoutBlockStatus(for: group),
             onAddExercise: addExerciseAction(for: group.block),
+            canMoveUp: group.block.map { canMoveBlock($0, offset: -1) } ?? false,
+            canMoveDown: group.block.map { canMoveBlock($0, offset: 1) } ?? false,
+            onMoveUp: group.block.map { block in { moveBlock(block, offset: -1) } },
+            onMoveDown: group.block.map { block in { moveBlock(block, offset: 1) } },
+            isReordering: isReorderingBlocks,
             isExpanded: collapsedBlockIds.contains(group.id) == false,
             onToggleExpanded: { toggleBlock(group.id) },
             onDelete: deleteAction(for: group.block)
         )
 
-        if collapsedBlockIds.contains(group.id) == false {
+        if isReorderingBlocks == false,
+           collapsedBlockIds.contains(group.id) == false {
             ForEach(group.exercises, id: \.id) { exercise in
                 exerciseCard(exercise)
             }
@@ -573,18 +580,28 @@ struct ActiveWorkoutScreen: View {
             Spacer()
 
             Button {
-                withAnimation(.snappy(duration: 0.2)) {
-                    isShowingAddMenu.toggle()
+                if isReorderingBlocks {
+                    withAnimation(.snappy(duration: 0.2)) {
+                        isReorderingBlocks = false
+                    }
+                } else {
+                    withAnimation(.snappy(duration: 0.2)) {
+                        isShowingAddMenu.toggle()
+                    }
                 }
             } label: {
-                Image(systemName: "plus")
+                Image(systemName: isReorderingBlocks ? "checkmark" : "plus")
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(.white)
                     .frame(width: 46, height: 46)
                     .background(Circle().fill(Color.blue))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Добавить")
+            .accessibilityLabel(
+                isReorderingBlocks
+                    ? AppLocalizer.string("common.done")
+                    : AppLocalizer.string("common.add")
+            )
         }
     }
 
@@ -608,6 +625,17 @@ struct ActiveWorkoutScreen: View {
             Divider().padding(.horizontal, 14)
             addMenuAction(AppLocalizer.string("workout.add.with_ai"), icon: "sparkles") {
                 isShowingAIGenerator = true
+            }
+            if workout.blockItems.count > 1 {
+                Divider().padding(.horizontal, 14)
+                addMenuAction(
+                    AppLocalizer.string("workout.blocks.order.action"),
+                    icon: "arrow.up.arrow.down"
+                ) {
+                    withAnimation(.snappy(duration: 0.22)) {
+                        isReorderingBlocks = true
+                    }
+                }
             }
         }
         .frame(width: 248)
@@ -708,6 +736,31 @@ struct ActiveWorkoutScreen: View {
         }
     }
 
+    private func canMoveBlock(_ block: WorkoutBlock, offset: Int) -> Bool {
+        let orderedBlocks = workout.blockItems.sorted { $0.orderIndex < $1.orderIndex }
+        guard let index = orderedBlocks.firstIndex(where: { $0.id == block.id }) else {
+            return false
+        }
+        return orderedBlocks.indices.contains(index + offset)
+    }
+
+    private func moveBlock(_ block: WorkoutBlock, offset: Int) {
+        var orderedBlocks = workout.blockItems.sorted { $0.orderIndex < $1.orderIndex }
+        guard let sourceIndex = orderedBlocks.firstIndex(where: { $0.id == block.id }) else {
+            return
+        }
+        let destinationIndex = sourceIndex + offset
+        guard orderedBlocks.indices.contains(destinationIndex) else { return }
+
+        withAnimation(.snappy(duration: 0.22)) {
+            orderedBlocks.swapAt(sourceIndex, destinationIndex)
+            for (index, item) in orderedBlocks.enumerated() {
+                item.orderIndex = index
+            }
+        }
+        try? modelContext.save()
+    }
+
     private func preloadExerciseTemplatesIfNeeded() {
         guard exerciseTemplates.isEmpty else { return }
         exerciseTemplates = workoutTemplates()
@@ -756,6 +809,7 @@ struct ActiveWorkoutScreen: View {
         workout.blockItems.removeAll { $0.id == block.id }
         collapsedBlockIds.remove(block.id.uuidString)
         modelContext.delete(block)
+        reindexBlocks()
         reindexExercises()
         try? modelContext.save()
     }
@@ -1231,6 +1285,14 @@ struct ActiveWorkoutScreen: View {
         }
     }
 
+    private func reindexBlocks() {
+        for (index, block) in workout.blockItems
+            .sorted(by: { $0.orderIndex < $1.orderIndex })
+            .enumerated() {
+            block.orderIndex = index
+        }
+    }
+
     private func finishWorkout(effort: WorkoutEffortLevel) {
         workout.isTimerRunning = false
         let baseCalories = WorkoutCalorieEstimator.estimateWorkoutCalories(
@@ -1469,13 +1531,18 @@ private struct WorkoutBlockSectionHeader: View {
     var onStart: (() -> Void)?
     let status: WorkoutBlockDisplayStatus
     var onAddExercise: (() -> Void)?
+    let canMoveUp: Bool
+    let canMoveDown: Bool
+    var onMoveUp: (() -> Void)?
+    var onMoveDown: (() -> Void)?
+    let isReordering: Bool
     let isExpanded: Bool
     let onToggleExpanded: () -> Void
     var onDelete: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 12) {
-            if let onStart {
+            if isReordering == false, let onStart {
                 Button(action: onStart) {
                     blockIdentity
                 }
@@ -1490,53 +1557,78 @@ private struct WorkoutBlockSectionHeader: View {
 
             Spacer()
 
-            if status == .completed, let onStart {
-                Button(action: onStart) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.green)
-                        .frame(width: 44, height: 44)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(AppLocalizer.format("workout.block.accessibility.view_results", title))
-            } else if let onStart {
-                Button(action: onStart) {
-                    Image(systemName: status == .inProgress ? "play.fill" : status.systemImage)
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
-                        .background(Circle().fill(status == .notStarted ? Color.blue : status.color))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(AppLocalizer.format("workout.block.accessibility.open", title, status.title))
-            }
+            if isReordering {
+                HStack(spacing: 2) {
+                    Button(action: { onMoveUp?() }) {
+                        Image(systemName: "chevron.up")
+                            .frame(width: 38, height: 38)
+                    }
+                    .disabled(canMoveUp == false)
+                    .accessibilityLabel(AppLocalizer.string("workout.block.move_up"))
 
-            Button(action: onToggleExpanded) {
-                Image(systemName: "chevron.down")
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(isExpanded ? 0 : -90))
-                    .frame(width: 34, height: 34)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(isExpanded ? AppLocalizer.string("workout.block.collapse") : AppLocalizer.string("workout.block.expand"))
+                    Divider()
+                        .frame(height: 22)
 
-            if let onAddExercise {
-                Button(action: onAddExercise) {
-                    Image(systemName: "plus")
+                    Button(action: { onMoveDown?() }) {
+                        Image(systemName: "chevron.down")
+                            .frame(width: 38, height: 38)
+                    }
+                    .disabled(canMoveDown == false)
+                    .accessibilityLabel(AppLocalizer.string("workout.block.move_down"))
+                }
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(Color.blue)
+                .background(Color.blue.opacity(0.11), in: Capsule())
+                .buttonStyle(.plain)
+            } else {
+                if status == .completed, let onStart {
+                    Button(action: onStart) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.green)
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(AppLocalizer.format("workout.block.accessibility.view_results", title))
+                } else if let onStart {
+                    Button(action: onStart) {
+                        Image(systemName: status == .inProgress ? "play.fill" : status.systemImage)
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 44, height: 44)
+                            .background(Circle().fill(status == .notStarted ? Color.blue : status.color))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(AppLocalizer.format("workout.block.accessibility.open", title, status.title))
+                }
+
+                Button(action: onToggleExpanded) {
+                    Image(systemName: "chevron.down")
                         .font(.subheadline.weight(.bold))
-                        .foregroundStyle(Color.blue)
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 0 : -90))
                         .frame(width: 34, height: 34)
-                        .background(Circle().fill(Color.blue.opacity(0.12)))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(AppLocalizer.string("workout.add.exercise"))
+                .accessibilityLabel(isExpanded ? AppLocalizer.string("workout.block.collapse") : AppLocalizer.string("workout.block.expand"))
+
+                if let onAddExercise {
+                    Button(action: onAddExercise) {
+                        Image(systemName: "plus")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(Color.blue)
+                            .frame(width: 34, height: 34)
+                            .background(Circle().fill(Color.blue.opacity(0.12)))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(AppLocalizer.string("workout.add.exercise"))
+                }
             }
         }
         .padding(.horizontal, 2)
         .padding(.top, 2)
         .contextMenu {
-            if let onDelete {
+            if isReordering == false, let onDelete {
                 Button("Удалить блок", systemImage: "trash", role: .destructive, action: onDelete)
             }
         }

@@ -258,12 +258,42 @@ service cloud.firestore {
           );
       }
 
+      function isValidReadReceiptUpdate() {
+        let newReadAt = request.resource.data.get("readAt", null);
+        return isSignedIn()
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(["readAt"])
+          && newReadAt is timestamp
+          && newReadAt == request.time
+          && (
+            (
+              isTrainer()
+              && resource.data.trainerId == request.auth.uid
+              && resource.data.authorId == resource.data.clientId
+              && resource.data.authorRole == "client"
+              && trainerHasClientAccess(resource.data.clientId)
+            )
+            || (
+              isClient()
+              && resource.data.clientId == request.auth.uid
+              && resource.data.authorId == resource.data.trainerId
+              && resource.data.authorRole == "trainer"
+              && clientHasTrainerAccess(resource.data.trainerId)
+            )
+          );
+      }
+
       allow read: if isOwner()
         || (isTrainer() && resource.data.trainerId == request.auth.uid)
         || (isClient() && resource.data.clientId == request.auth.uid);
 
       allow create: if isSignedIn()
         && request.resource.data.get("reactions", {}).size() == 0
+        && request.resource.data.get("readAt", null) == null
+        && (
+          request.resource.data.get("deliveredAt", null) == null
+          || request.resource.data.deliveredAt is timestamp
+        )
         && (
           (
             isTrainer()
@@ -282,7 +312,8 @@ service cloud.firestore {
         );
 
       allow update: if isOwner()
-        || isValidReactionUpdate();
+        || isValidReactionUpdate()
+        || isValidReadReceiptUpdate();
 
       allow delete: if isOwner()
         || (

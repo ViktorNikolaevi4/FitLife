@@ -379,6 +379,8 @@ struct CoachingNote: Identifiable, Hashable {
     let authorRole: CoachingNoteAuthorRole
     let message: String
     let createdAt: Date
+    let deliveredAt: Date?
+    let readAt: Date?
     let reactions: [String: String]
 
     init(
@@ -389,6 +391,8 @@ struct CoachingNote: Identifiable, Hashable {
         authorRole: CoachingNoteAuthorRole,
         message: String,
         createdAt: Date = .now,
+        deliveredAt: Date? = nil,
+        readAt: Date? = nil,
         reactions: [String: String] = [:]
     ) {
         self.id = id
@@ -398,6 +402,8 @@ struct CoachingNote: Identifiable, Hashable {
         self.authorRole = authorRole
         self.message = message
         self.createdAt = createdAt
+        self.deliveredAt = deliveredAt
+        self.readAt = readAt
         self.reactions = reactions
     }
 
@@ -425,10 +431,23 @@ struct CoachingNote: Identifiable, Hashable {
         } else {
             self.createdAt = (data["createdAt"] as? Date) ?? .now
         }
+        if let timestamp = data["deliveredAt"] as? Timestamp {
+            self.deliveredAt = timestamp.dateValue()
+        } else {
+            // Notes created before delivery receipts were introduced already
+            // reached Firestore, so treat their creation time as delivery.
+            self.deliveredAt = data.keys.contains("deliveredAt")
+                ? data["deliveredAt"] as? Date : self.createdAt
+        }
+        if let timestamp = data["readAt"] as? Timestamp {
+            self.readAt = timestamp.dateValue()
+        } else {
+            self.readAt = data["readAt"] as? Date
+        }
     }
 
     var firestoreData: [String: Any] {
-        [
+        var data: [String: Any] = [
             "clientId": clientId,
             "trainerId": trainerId,
             "authorId": authorId,
@@ -437,6 +456,13 @@ struct CoachingNote: Identifiable, Hashable {
             "createdAt": createdAt,
             "reactions": reactions
         ]
+        if let deliveredAt {
+            data["deliveredAt"] = deliveredAt
+        }
+        if let readAt {
+            data["readAt"] = readAt
+        }
+        return data
     }
 }
 
@@ -457,6 +483,28 @@ private func updateCoachingReaction(
         .collection(collection)
         .document(documentId)
         .updateData(fields)
+}
+
+private func markCoachingNotesRead(
+    firestore: Firestore,
+    notes: [CoachingNote],
+    readerId: String
+) async throws {
+    let unreadIncomingNotes = notes.filter {
+        $0.authorId != readerId && $0.readAt == nil
+    }
+    guard unreadIncomingNotes.isEmpty == false else { return }
+
+    // A chat page stays well below Firestore's 500-write batch limit.
+    // Marking a message read also confirms delivery for older messages.
+    let batch = firestore.batch()
+    for note in unreadIncomingNotes.prefix(450) {
+        batch.updateData(
+            ["readAt": FieldValue.serverTimestamp()],
+            forDocument: firestore.collection("coaching_notes").document(note.id)
+        )
+    }
+    try await batch.commit()
 }
 
 private let coachingNotesPageSize = 50
@@ -1271,14 +1319,30 @@ final class ClientCoachingHomeStore: ObservableObject {
         )
 
         do {
+            var data = note.firestoreData
+            data["deliveredAt"] = FieldValue.serverTimestamp()
             try await firestore
                 .collection("coaching_notes")
                 .document(note.id)
-                .setData(note.firestoreData)
+                .setData(data)
             isSubmitting = false
         } catch {
             errorMessage = AppErrorPresenter.message(for: error)
             isSubmitting = false
+        }
+    }
+
+    func markIncomingNotesRead() async {
+        do {
+            try await markCoachingNotesRead(
+                firestore: firestore,
+                notes: notes,
+                readerId: clientId
+            )
+        } catch {
+            #if DEBUG
+            print("Failed to mark trainer messages as read:", error.localizedDescription)
+            #endif
         }
     }
 
@@ -1712,14 +1776,30 @@ final class TrainerClientSupportStore: ObservableObject {
         )
 
         do {
+            var data = note.firestoreData
+            data["deliveredAt"] = FieldValue.serverTimestamp()
             try await firestore
                 .collection("coaching_notes")
                 .document(note.id)
-                .setData(note.firestoreData)
+                .setData(data)
             isSubmitting = false
         } catch {
             errorMessage = AppErrorPresenter.message(for: error)
             isSubmitting = false
+        }
+    }
+
+    func markIncomingNotesRead() async {
+        do {
+            try await markCoachingNotesRead(
+                firestore: firestore,
+                notes: notes,
+                readerId: trainerId
+            )
+        } catch {
+            #if DEBUG
+            print("Failed to mark client messages as read:", error.localizedDescription)
+            #endif
         }
     }
 
@@ -2337,6 +2417,8 @@ struct ClientCoachingDirectChatScreen: View {
 }
 
 private struct ClientCoachingChatScreen: View {
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isChatVisible = false
     @ObservedObject var store: ClientCoachingHomeStore
     @Binding var noteMessage: String
 
@@ -2394,6 +2476,7 @@ private struct ClientCoachingChatScreen: View {
                 counterpartId: store.connectedTrainerId,
                 isVisible: true
             )
+            isChatVisible = true
             store.startNotesListening()
             markIncomingMessagesRead()
         }
@@ -2405,7 +2488,14 @@ private struct ClientCoachingChatScreen: View {
             }) else { return }
             markIncomingMessagesRead()
         }
+        .onChange(of: store.notes) { _, _ in
+            markIncomingMessagesRead()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { markIncomingMessagesRead() }
+        }
         .onDisappear {
+            isChatVisible = false
             pushNotificationsManager.setChatVisible(
                 counterpartId: store.connectedTrainerId,
                 isVisible: false
@@ -2440,8 +2530,9 @@ private struct ClientCoachingChatScreen: View {
 
     private func markIncomingMessagesRead() {
         let trainerId = store.connectedTrainerId
-        guard trainerId.isEmpty == false else { return }
+        guard isChatVisible, scenePhase == .active, trainerId.isEmpty == false else { return }
         Task {
+            await store.markIncomingNotesRead()
             await notificationsStore.markConversationRead(
                 counterpartId: trainerId,
                 incomingType: .coachNoteReceived
@@ -3423,6 +3514,8 @@ private struct TrainerUpdateRequestComposerScreen: View {
 }
 
 private struct TrainerClientChatScreen: View {
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isChatVisible = false
     @ObservedObject var store: TrainerClientSupportStore
     @Binding var noteMessage: String
 
@@ -3480,6 +3573,7 @@ private struct TrainerClientChatScreen: View {
                 counterpartId: store.connectedClientId,
                 isVisible: true
             )
+            isChatVisible = true
             store.startNotesListening()
             markIncomingMessagesRead()
         }
@@ -3491,7 +3585,14 @@ private struct TrainerClientChatScreen: View {
             }) else { return }
             markIncomingMessagesRead()
         }
+        .onChange(of: store.notes) { _, _ in
+            markIncomingMessagesRead()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { markIncomingMessagesRead() }
+        }
         .onDisappear {
+            isChatVisible = false
             pushNotificationsManager.setChatVisible(
                 counterpartId: store.connectedClientId,
                 isVisible: false
@@ -3526,8 +3627,9 @@ private struct TrainerClientChatScreen: View {
 
     private func markIncomingMessagesRead() {
         let clientId = store.connectedClientId
-        guard clientId.isEmpty == false else { return }
+        guard isChatVisible, scenePhase == .active, clientId.isEmpty == false else { return }
         Task {
+            await store.markIncomingNotesRead()
             await notificationsStore.markConversationRead(
                 counterpartId: clientId,
                 incomingType: .clientNoteReceived
@@ -5435,9 +5537,16 @@ private struct CoachingChatBubble: View {
                             return .handled
                         })
 
-                    Text(note.createdAt.formatted(date: .abbreviated, time: .shortened))
-                        .font(.caption2)
-                        .foregroundStyle(isOutgoing ? Color.white.opacity(0.72) : .secondary)
+                    HStack(spacing: 4) {
+                        Text(note.createdAt.formatted(date: .abbreviated, time: .shortened))
+
+                        if isOutgoing {
+                            Text("·")
+                            Text(deliveryStatusText)
+                        }
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(isOutgoing ? Color.white.opacity(0.72) : .secondary)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
@@ -5576,6 +5685,16 @@ private struct CoachingChatBubble: View {
         Task {
             await onSetReaction(emoji)
         }
+    }
+
+    private var deliveryStatusText: String {
+        if note.readAt != nil {
+            return "✓✓ \(AppLocalizer.string("coaching.chat.status.read"))"
+        }
+        if note.deliveredAt != nil {
+            return "✓ \(AppLocalizer.string("coaching.chat.status.delivered"))"
+        }
+        return AppLocalizer.string("coaching.chat.status.sending")
     }
 }
 

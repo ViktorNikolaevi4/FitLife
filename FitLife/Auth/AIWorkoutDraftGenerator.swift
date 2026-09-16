@@ -956,6 +956,35 @@ private func exerciseMatchingAliases(for localizationKey: String?) -> [String] {
             "берд дог",
             "птица собака"
         ]
+    case "workout.exercise.bicycle_crunches":
+        return [
+            "bicycle crunch",
+            "bicycle crunches",
+            "велосипед",
+            "велосипедные скручивания"
+        ]
+    case "workout.exercise.high_plank":
+        return [
+            "high plank",
+            "straight arm plank",
+            "планка на прямых руках",
+            "высокая планка"
+        ]
+    case "workout.exercise.captains_chair_knee_raise":
+        return [
+            "captain's chair knee raise",
+            "captains chair knee raise",
+            "knee raise on dip station",
+            "подъём коленей в упоре на брусьях",
+            "подъем коленей в упоре на брусьях"
+        ]
+    case "workout.exercise.russian_twists":
+        return [
+            "russian twist",
+            "russian twists",
+            "русские скручивания",
+            "повороты корпуса сидя"
+        ]
     case "workout.exercise.devil_press":
         return [
             "devil press",

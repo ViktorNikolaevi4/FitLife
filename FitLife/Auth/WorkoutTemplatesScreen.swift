@@ -7,6 +7,8 @@ struct WorkoutTemplatesScreen: View {
     @State private var showCreateSheet = false
     @State private var pendingDeleteTemplate: WorkoutTemplate?
     @State private var selectedCollection: TemplateCollection = .personal
+    @State private var searchText = ""
+    @State private var showsLegacyCopies = false
     @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
 
     init(trainerId: String) {
@@ -32,6 +34,23 @@ struct WorkoutTemplatesScreen: View {
         }
     }
 
+    private var filteredTemplates: [WorkoutTemplate] {
+        filter(store.templates)
+    }
+
+    private var filteredLegacyCopies: [WorkoutTemplate] {
+        filter(store.legacyAssignmentCopies)
+    }
+
+    private func filter(_ templates: [WorkoutTemplate]) -> [WorkoutTemplate] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard query.isEmpty == false else { return templates }
+        return templates.filter {
+            $0.title.localizedCaseInsensitiveContains(query)
+                || $0.notes.localizedCaseInsensitiveContains(query)
+        }
+    }
+
     var body: some View {
         List {
             Picker("", selection: $selectedCollection) {
@@ -54,7 +73,7 @@ struct WorkoutTemplatesScreen: View {
 
             if selectedCollection == .personal {
                 Section(appLanguage.localized("trainer.templates.section")) {
-                    ForEach(store.templates) { template in
+                    ForEach(filteredTemplates) { template in
                         NavigationLink {
                             WorkoutTemplateEditorScreen(template: template)
                         } label: {
@@ -84,6 +103,39 @@ struct WorkoutTemplatesScreen: View {
                         }
                     }
                 }
+
+                if filteredLegacyCopies.isEmpty == false {
+                    Section {
+                        DisclosureGroup(isExpanded: $showsLegacyCopies) {
+                            ForEach(filteredLegacyCopies) { template in
+                                NavigationLink {
+                                    WorkoutTemplateEditorScreen(template: template)
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text(template.title)
+                                            .font(.headline)
+                                        Text(template.updatedAt.formatted(date: .abbreviated, time: .omitted))
+                                            .font(.caption)
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                    .padding(.vertical, 4)
+                                }
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    Button(role: .destructive) {
+                                        pendingDeleteTemplate = template
+                                    } label: {
+                                        Label(AppLocalizer.string("common.delete"), systemImage: "trash")
+                                    }
+                                }
+                            }
+                        } label: {
+                            Label(
+                                AppLocalizer.format("trainer.templates.legacy_copies", filteredLegacyCopies.count),
+                                systemImage: "archivebox"
+                            )
+                        }
+                    }
+                }
             } else {
                 Section(appLanguage.localized("trainer.templates.library.section")) {
                     ForEach(store.libraryTemplates) { template in
@@ -109,7 +161,9 @@ struct WorkoutTemplatesScreen: View {
         .overlay {
             if store.isLoading {
                 ProgressView()
-            } else if selectedCollection == .personal && store.templates.isEmpty {
+            } else if selectedCollection == .personal
+                        && filteredTemplates.isEmpty
+                        && filteredLegacyCopies.isEmpty {
                 ContentUnavailableView(
                     appLanguage.localized("trainer.templates.empty.title"),
                     systemImage: "doc.text",
@@ -124,6 +178,11 @@ struct WorkoutTemplatesScreen: View {
             }
         }
         .navigationTitle(appLanguage.localized("trainer.templates.title"))
+        .searchable(
+            text: $searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: appLanguage.localized("trainer.templates.search")
+        )
         .hidesHomeFloatingAddButton()
         .toolbar {
             if selectedCollection == .personal {
@@ -415,7 +474,7 @@ private struct WorkoutLibraryTemplateDetailScreen: View {
     }
 }
 
-private struct CreateWorkoutTemplateScreen: View {
+struct CreateWorkoutTemplateScreen: View {
     let onCreate: (String, String) async -> Void
 
     @Environment(\.dismiss) private var dismiss

@@ -616,6 +616,10 @@ struct WorkoutExerciseDetailScreen: View {
         } message: {
             Text(AppLocalizer.string("workout.rpe.info.message"))
         }
+        // The exercise runner has several dense, fixed-size controls. Capping
+        // only this screen keeps the familiar compact layout at accessibility
+        // text sizes instead of stretching and clipping the set cards.
+        .dynamicTypeSize(.xSmall ... .xxxLarge)
         .sheet(item: $editingSet) { set in
             WorkoutExerciseSetEditorSheet(
                 set: set,
