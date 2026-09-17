@@ -1,5 +1,6 @@
 import Foundation
 import FirebaseFirestore
+import SwiftData
 
 enum CoachingReportDeliveryResult: Equatable {
     case delivered
@@ -28,6 +29,101 @@ private struct PendingCoachingReportDelivery: Codable, Identifiable {
     var hasPermanentFailure: Bool
 }
 
+@Model
+final class PendingCoachingReportDeliveryRecord {
+    @Attribute(.unique) var id: String
+    var targetId: String?
+    var clientId: String
+    var collection: String
+    var reportData: Data
+    var notificationId: String
+    var notificationData: Data
+    var createdAt: Date
+    var attemptCount: Int
+    var lastError: String?
+    var hasPermanentFailure: Bool
+
+    fileprivate init(delivery: PendingCoachingReportDelivery) {
+        id = delivery.id
+        targetId = delivery.targetId
+        clientId = delivery.clientId
+        collection = delivery.collection
+        reportData = delivery.reportData
+        notificationId = delivery.notificationId
+        notificationData = delivery.notificationData
+        createdAt = delivery.createdAt
+        attemptCount = delivery.attemptCount
+        lastError = delivery.lastError
+        hasPermanentFailure = delivery.hasPermanentFailure
+    }
+
+    fileprivate var delivery: PendingCoachingReportDelivery {
+        PendingCoachingReportDelivery(
+            id: id,
+            targetId: targetId,
+            clientId: clientId,
+            collection: collection,
+            reportData: reportData,
+            notificationId: notificationId,
+            notificationData: notificationData,
+            createdAt: createdAt,
+            attemptCount: attemptCount,
+            lastError: lastError,
+            hasPermanentFailure: hasPermanentFailure
+        )
+    }
+
+    fileprivate func update(from delivery: PendingCoachingReportDelivery) {
+        targetId = delivery.targetId
+        clientId = delivery.clientId
+        collection = delivery.collection
+        reportData = delivery.reportData
+        notificationId = delivery.notificationId
+        notificationData = delivery.notificationData
+        createdAt = delivery.createdAt
+        attemptCount = delivery.attemptCount
+        lastError = delivery.lastError
+        hasPermanentFailure = delivery.hasPermanentFailure
+    }
+}
+
+@MainActor
+private final class CoachingReportDeliveryStore {
+    private let context: ModelContext
+
+    init(modelContainer: ModelContainer) {
+        context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
+    }
+
+    func fetchAll() throws -> [PendingCoachingReportDelivery] {
+        let descriptor = FetchDescriptor<PendingCoachingReportDeliveryRecord>(
+            sortBy: [SortDescriptor(\.createdAt)]
+        )
+        return try context.fetch(descriptor).map(\.delivery)
+    }
+
+    func synchronize(_ deliveries: [PendingCoachingReportDelivery]) throws {
+        let records = try context.fetch(FetchDescriptor<PendingCoachingReportDeliveryRecord>())
+        var recordsByID = Dictionary(uniqueKeysWithValues: records.map { ($0.id, $0) })
+        let activeIDs = Set(deliveries.map(\.id))
+
+        for record in records where activeIDs.contains(record.id) == false {
+            context.delete(record)
+        }
+
+        for delivery in deliveries {
+            if let record = recordsByID.removeValue(forKey: delivery.id) {
+                record.update(from: delivery)
+            } else {
+                context.insert(PendingCoachingReportDeliveryRecord(delivery: delivery))
+            }
+        }
+
+        try context.save()
+    }
+}
+
 private enum CoachingReportOutboxError: LocalizedError {
     case invalidPayload
     case deliveryFailed(String)
@@ -49,6 +145,8 @@ actor CoachingReportDeliveryOutbox {
 
     private let defaultsKey = "coaching.report.delivery.outbox.v1"
     private var deliveries: [PendingCoachingReportDelivery]
+    private var store: CoachingReportDeliveryStore?
+    private var isConfiguringStore = false
     private var inFlightIDs: Set<String> = []
     private var permanentFailures: [String: String] = [:]
     private var cancelledClientIDs: Set<String> = []
@@ -60,6 +158,41 @@ actor CoachingReportDeliveryOutbox {
         } else {
             deliveries = []
         }
+    }
+
+    /// Подключает SwiftData и переносит старую очередь из UserDefaults.
+    /// Повторный вызов безопасен и ничего не перезаписывает.
+    func configure(modelContainer: ModelContainer) async {
+        guard store == nil, isConfiguringStore == false else { return }
+        isConfiguringStore = true
+
+        let newStore = await CoachingReportDeliveryStore(modelContainer: modelContainer)
+        do {
+            let storedDeliveries = try await newStore.fetchAll()
+            var mergedByID = Dictionary(uniqueKeysWithValues: storedDeliveries.map { ($0.id, $0) })
+            for delivery in deliveries where mergedByID[delivery.id] == nil {
+                mergedByID[delivery.id] = delivery
+            }
+            let merged = mergedByID.values.sorted { $0.createdAt < $1.createdAt }
+
+            // Устанавливаем store до следующего await: если в этот момент
+            // пользователь отправит новый отчёт, он уже попадёт в SwiftData,
+            // а не будет потерян при завершении миграции.
+            store = newStore
+            deliveries = merged
+            try await newStore.synchronize(merged)
+
+            UserDefaults.standard.removeObject(forKey: defaultsKey)
+        } catch {
+            store = nil
+            // До следующей попытки сохраняем совместимость со старым хранилищем,
+            // чтобы отчёты не потерялись при редкой ошибке открытия SwiftData.
+            persistToLegacyDefaults()
+            #if DEBUG
+            print("Failed to configure coaching report outbox: \(error)")
+            #endif
+        }
+        isConfiguringStore = false
     }
 
     func submitWorkoutReport(
@@ -123,10 +256,10 @@ actor CoachingReportDeliveryOutbox {
         }
     }
 
-    func removeAll(for clientId: String) {
+    func removeAll(for clientId: String) async {
         cancelledClientIDs.insert(clientId)
         deliveries.removeAll { $0.clientId == clientId }
-        persist()
+        await persist()
     }
 
     private func enqueueAndStart(
@@ -155,7 +288,7 @@ actor CoachingReportDeliveryOutbox {
                 hasPermanentFailure: false
             )
             deliveries.append(pending)
-            persist()
+            await persist()
         }
 
         startDelivery(id: id, firestore: firestore)
@@ -192,13 +325,13 @@ actor CoachingReportDeliveryOutbox {
 
         deliveries[index].attemptCount += 1
         deliveries[index].lastError = nil
-        persist()
+        await persist()
         let pending = deliveries[index]
 
         guard cancelledClientIDs.contains(pending.clientId) == false else {
             deliveries.removeAll { $0.id == id }
             inFlightIDs.remove(id)
-            persist()
+            await persist()
             return
         }
 
@@ -210,7 +343,7 @@ actor CoachingReportDeliveryOutbox {
             if cancelledClientIDs.contains(pending.clientId) {
                 deliveries.removeAll { $0.id == id }
                 inFlightIDs.remove(id)
-                persist()
+                await persist()
                 return
             }
 
@@ -235,7 +368,7 @@ actor CoachingReportDeliveryOutbox {
             try await batch.commit()
 
             deliveries.removeAll { $0.id == id }
-            persist()
+            await persist()
         } catch {
             if let failedIndex = deliveries.firstIndex(where: { $0.id == id }) {
                 if isPermanent(error) {
@@ -244,7 +377,7 @@ actor CoachingReportDeliveryOutbox {
                 } else {
                     deliveries[failedIndex].lastError = error.localizedDescription
                 }
-                persist()
+                await persist()
             }
         }
 
@@ -274,7 +407,26 @@ actor CoachingReportDeliveryOutbox {
         return false
     }
 
-    private func persist() {
+    private func persist() async {
+        guard let store else {
+            persistToLegacyDefaults()
+            return
+        }
+
+        do {
+            try await store.synchronize(deliveries)
+            UserDefaults.standard.removeObject(forKey: defaultsKey)
+        } catch {
+            // Аварийная копия нужна только если SwiftData временно не смогла
+            // сохранить очередь. При следующем configure она будет мигрирована.
+            persistToLegacyDefaults()
+            #if DEBUG
+            print("Failed to persist coaching report outbox: \(error)")
+            #endif
+        }
+    }
+
+    private func persistToLegacyDefaults() {
         guard let data = try? JSONEncoder().encode(deliveries) else { return }
         UserDefaults.standard.set(data, forKey: defaultsKey)
     }

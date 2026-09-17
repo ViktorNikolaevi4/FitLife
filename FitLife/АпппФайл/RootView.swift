@@ -89,6 +89,7 @@ struct RootView: View {
             }
         }
         .onAppear {
+            configureCoachingReportOutbox()
             prepareLocalDataIfNeeded()
             notificationsStore.setCurrentUser(currentOwnerId)
             pushNotificationsManager.setCurrentUser(notificationReadyUserId)
@@ -195,6 +196,14 @@ struct RootView: View {
         guard let currentOwnerId else { return }
         Task {
             await CoachingReportDeliveryOutbox.shared.retryPending(for: currentOwnerId)
+        }
+    }
+
+    private func configureCoachingReportOutbox() {
+        let container = modelContext.container
+        Task {
+            await CoachingReportDeliveryOutbox.shared.configure(modelContainer: container)
+            retryPendingCoachingReports()
         }
     }
 

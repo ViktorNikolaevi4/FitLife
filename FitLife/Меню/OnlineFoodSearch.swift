@@ -336,7 +336,7 @@ actor OpenFoodFactsService {
             return cached
         }
 
-        let path = "https://world.openfoodfacts.org/api/v2/product/\(barcode).json?fields=code,product_name,product_name_en,product_name_ru,nutriments"
+        let path = "https://world.openfoodfacts.org/api/v3/product/\(barcode)?fields=code,product_name,product_name_en,product_name_ru,nutriments"
         guard let url = URL(string: path) else {
             return []
         }

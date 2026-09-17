@@ -28,7 +28,8 @@ struct FitLifeApp: App {
             CustomWorkoutExerciseTemplate.self,
             UserAchievementProgress.self,
             XPTransaction.self,
-            UnlockedAchievement.self
+            UnlockedAchievement.self,
+            PendingCoachingReportDeliveryRecord.self
         ])
 
         #if DEBUG
