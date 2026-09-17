@@ -47,15 +47,21 @@ struct WorkoutsScreen: View {
                     )
 
                     WorkoutsFeatureCard(
-                        title: AppLocalizer.string("workouts.new"),
+                        title: snapshot.activeWorkout == nil
+                            ? AppLocalizer.string("workouts.new")
+                            : AppLocalizer.string("workouts.active.title"),
                         subtitle: snapshot.activeWorkout == nil
                             ? AppLocalizer.string("workouts.new.subtitle")
-                            : AppLocalizer.string("workouts.new.resume"),
+                            : activeWorkoutTitle(snapshot.activeWorkout),
                         systemImage: "dumbbell.fill",
                         tint: HomeDarkColors.blue,
                         isEmptyState: false,
                         isPrimary: true,
                         theme: theme,
+                        badge: snapshot.activeWorkout == nil
+                            ? nil
+                            : AppLocalizer.string("workouts.active.status"),
+                        detail: activeWorkoutProgress(snapshot.activeWorkout),
                         action: { openActiveWorkout(snapshot.activeWorkout) }
                     )
 
@@ -164,6 +170,26 @@ struct WorkoutsScreen: View {
         let exercisesCount = lastWorkout.exerciseItems.count
         let completedSets = lastWorkout.exerciseItems.flatMap(\.setItems).filter(\.isCompleted).count
         return AppLocalizer.format("workouts.last.summary", exercisesCount, completedSets)
+    }
+
+    private func activeWorkoutTitle(_ activeWorkout: WorkoutSession?) -> String {
+        guard let activeWorkout else { return AppLocalizer.string("workouts.new.subtitle") }
+        let title = activeWorkout.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return title.isEmpty ? AppLocalizer.string("workout.active.title") : title
+    }
+
+    private func activeWorkoutProgress(_ activeWorkout: WorkoutSession?) -> String? {
+        guard let activeWorkout else { return nil }
+        let exercises = activeWorkout.exerciseItems
+        guard exercises.isEmpty == false else {
+            return AppLocalizer.string("workouts.active.progress.empty")
+        }
+
+        let completed = exercises.filter { exercise in
+            exercise.isFinished
+                || (exercise.setItems.isEmpty == false && exercise.setItems.allSatisfy(\.isCompleted))
+        }.count
+        return AppLocalizer.format("workouts.active.progress", completed, exercises.count)
     }
 
     private func openActiveWorkout(_ activeWorkout: WorkoutSession?) {
@@ -420,6 +446,8 @@ private struct WorkoutsFeatureCard: View {
     let isEmptyState: Bool
     let isPrimary: Bool
     let theme: AppTheme
+    var badge: String? = nil
+    var detail: String? = nil
     let action: () -> Void
 
     var body: some View {
@@ -434,9 +462,20 @@ private struct WorkoutsFeatureCard: View {
             WorkoutDiaryIconTile(systemImage: systemImage, tint: tint, theme: theme, isPrimary: isPrimary)
 
             VStack(alignment: .leading, spacing: 8) {
-                Text(title)
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(titleColor)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(title)
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(titleColor)
+
+                    if let badge {
+                        Text(badge)
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(titleColor)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(titleColor.opacity(0.14), in: Capsule())
+                    }
+                }
                 if isEmptyState {
                     Text(AppLocalizer.string("workouts.last.empty.title"))
                         .font(.subheadline.weight(.semibold))
@@ -445,6 +484,13 @@ private struct WorkoutsFeatureCard: View {
                     Text(subtitle)
                         .font(.subheadline)
                         .foregroundStyle(subtitleColor)
+                        .multilineTextAlignment(.leading)
+                }
+
+                if let detail {
+                    Text(detail)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(subtitleColor.opacity(0.88))
                         .multilineTextAlignment(.leading)
                 }
             }

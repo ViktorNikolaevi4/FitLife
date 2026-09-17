@@ -103,6 +103,10 @@
 "settings.mail.body" = "Здравствуйте! Хочу оставить отзыв/вопрос:\n\n(Опишите вашу ситуацию здесь)\n\n--\nТехническая информация:\nПриложение: %@ %@\nУстройство: %@\niOS: %@ %@";
 
 "nutrition.title" = "Калории";
+"nutrition.ai.coachmark.title" = "ИИ-помощник по питанию";
+"nutrition.ai.coachmark.message" = "Подберёт блюда и поможет добрать дневную норму.";
+"nutrition.ai.coachmark.dismiss" = "Не сейчас";
+"nutrition.ai.coachmark.try" = "Попробовать";
 "nutrition.goal.value" = "/ %d ккал";
 "nutrition.remaining.value" = "Осталось: %d ккал";
 "nutrition.macro.value" = "%d / %d г";
@@ -438,6 +442,10 @@
 "workouts.new" = "Новая тренировка";
 "workouts.new.subtitle" = "Собери новую сессию и начни дневник сегодняшней активности.";
 "workouts.new.resume" = "Продолжить текущую тренировку";
+"workouts.active.title" = "Текущая тренировка";
+"workouts.active.status" = "В процессе";
+"workouts.active.progress" = "%d из %d упражнений выполнено";
+"workouts.active.progress.empty" = "Упражнения пока не добавлены";
 "workouts.online" = "Тренировки от тренера";
 "workouts.online.subtitle" = "Открой назначенные тренером тренировки.";
 "workouts.connection" = "Связь с тренером";
@@ -751,6 +759,7 @@
 "workout.setup.add.set" = "Добавить подход";
 "workout.setup.save" = "Добавить в тренировку";
 "workout.exercise.summary" = "%d подхода • %d выполнено";
+"workout.exercise.status.completed" = "Выполнено";
 "workout.exercise.note.add" = "Добавить заметку";
 "workout.exercise.note.title" = "Заметка к упражнению";
 "workout.exercise.delete" = "Удалить упражнение";

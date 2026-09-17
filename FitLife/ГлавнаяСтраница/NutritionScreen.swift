@@ -7,6 +7,7 @@ private let nutritionCardBorder = Color(.separator).opacity(0.40)
 
 enum NutritionPreferences {
     static let repeatYesterdayEnabledKey = "nutrition.repeatYesterday.enabled"
+    static let aiAssistantCoachmarkSeenKey = "nutrition.aiAssistantCoachmark.seen"
 }
 
 struct NutritionScreen: View {
@@ -17,6 +18,7 @@ struct NutritionScreen: View {
     @Query private var users: [UserData]
     @AppStorage(Gender.appStorageKey) private var activeGenderRaw: String = Gender.male.rawValue
     @AppStorage(NutritionPreferences.repeatYesterdayEnabledKey) private var repeatYesterdayEnabled = true
+    @AppStorage(NutritionPreferences.aiAssistantCoachmarkSeenKey) private var hasSeenAIAssistantCoachmark = false
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var consumedCalories = 0
@@ -45,6 +47,7 @@ struct NutritionScreen: View {
     @State private var repeatYesterdayMeal: RepeatYesterdayMealSelection?
     @State private var isShowingAIMealRecognition = false
     @State private var isShowingAINutritionAssistant = false
+    @State private var isShowingAIAssistantCoachmark = false
     @State private var activeTrainerId: String?
     @State private var isShowingNutritionReport = false
 
@@ -71,7 +74,7 @@ struct NutritionScreen: View {
                     Spacer()
 
                     Button {
-                        isShowingAINutritionAssistant = true
+                        openAINutritionAssistant()
                     } label: {
                         Image(systemName: "sparkles")
                             .font(.system(size: 18, weight: .semibold))
@@ -82,9 +85,21 @@ struct NutritionScreen: View {
                             .shadow(color: nutritionCardShadow, radius: 10, x: 0, y: 4)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("AI-помощник по питанию")
+                    .accessibilityLabel(AppLocalizer.string("nutrition.ai.coachmark.title"))
                 }
                 .padding(.horizontal)
+                .overlay(alignment: .topTrailing) {
+                    if isShowingAIAssistantCoachmark {
+                        aiAssistantCoachmark
+                            .padding(.trailing, 16)
+                            .offset(y: 48)
+                            .transition(
+                                .scale(scale: 0.92, anchor: .topTrailing)
+                                    .combined(with: .opacity)
+                            )
+                    }
+                }
+                .zIndex(10)
 
                 caloriesCard
 
@@ -167,7 +182,13 @@ struct NutritionScreen: View {
         .background(theme.bg.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
-        .onAppear { recalcFor(selectedDate) }
+        .onAppear {
+            recalcFor(selectedDate)
+            guard hasSeenAIAssistantCoachmark == false else { return }
+            withAnimation(.snappy(duration: 0.3)) {
+                isShowingAIAssistantCoachmark = true
+            }
+        }
         .task(id: currentOwnerId) { await loadActiveTrainer() }
         .onChange(of: selectedDate) { _, newDate in recalcFor(newDate) }
         .onChange(of: activeGenderRaw) { recalcFor(selectedDate) }
@@ -238,6 +259,72 @@ struct NutritionScreen: View {
                 onSaved: { loadEntries(for: selectedDate) }
             )
         }
+    }
+
+    private var aiAssistantCoachmark: some View {
+        VStack(alignment: .trailing, spacing: -3) {
+            Image(systemName: "arrowtriangle.up.fill")
+                .font(.system(size: 18))
+                .foregroundStyle(theme.card)
+                .padding(.trailing, 13)
+
+            VStack(alignment: .leading, spacing: 10) {
+                Label(AppLocalizer.string("nutrition.ai.coachmark.title"), systemImage: "sparkles")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+
+                Text(AppLocalizer.string("nutrition.ai.coachmark.message"))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 10) {
+                    Button(AppLocalizer.string("nutrition.ai.coachmark.dismiss")) {
+                        dismissAIAssistantCoachmark()
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+
+                    Button(AppLocalizer.string("nutrition.ai.coachmark.try")) {
+                        openAINutritionAssistant()
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(
+                        Capsule()
+                            .fill(theme.accent)
+                    )
+                }
+            }
+            .padding(16)
+            .frame(width: 300, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(theme.card)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(theme.border)
+            }
+            .shadow(color: .black.opacity(colorScheme == .dark ? 0.38 : 0.16), radius: 18, x: 0, y: 10)
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private func dismissAIAssistantCoachmark() {
+        hasSeenAIAssistantCoachmark = true
+        withAnimation(.snappy(duration: 0.2)) {
+            isShowingAIAssistantCoachmark = false
+        }
+    }
+
+    private func openAINutritionAssistant() {
+        hasSeenAIAssistantCoachmark = true
+        isShowingAIAssistantCoachmark = false
+        isShowingAINutritionAssistant = true
     }
 
     private var caloriesCard: some View {

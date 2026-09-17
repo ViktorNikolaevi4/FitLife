@@ -427,243 +427,48 @@ private enum AIBeverageSugarOption: String, CaseIterable, Identifiable {
     }
 }
 
-enum OpenAIConfiguration {
-    static var apiKey: String? {
-        guard let rawValue = Bundle.main.object(forInfoDictionaryKey: "OpenAIAPIKey") as? String else {
-            return nil
-        }
-
-        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !trimmed.contains("$(") else {
-            return nil
-        }
-
-        return trimmed
-    }
-}
-
 private actor AIMealRecognitionService {
-    private let apiURL = URL(string: "https://api.openai.com/v1/responses")!
-    private let model = "gpt-4.1-mini"
-
     func recognizeMeal(from imageData: Data, language: AppLanguage) async throws -> AIMealRecognitionResponse {
-        let languageName = recognitionLanguageName(for: language)
-        let systemPrompt = """
-        Return JSON only. Analyze a single meal photo and estimate the visible edible components.
-        Respond in \(languageName).
-        Return an object with:
-        - dish_name: short meal name
-        - ingredients: array of 1 to 8 items
-        - notes: short uncertainty note
-        - is_beverage: boolean
-        - portion_size_guess: one of small, medium, large
-
-        Each ingredient must contain:
-        - name
-        - grams
-        - calories
-        - protein
-        - fat
-        - carbs
-        - confidence
-
-        Rules:
-        - exclude plate, tableware, background, packaging
-        - calories and macros must describe the estimated ingredient portion on the plate, not per 100 g
-        - grams must be a realistic number
-        - if the photo is a drink, set is_beverage to true
-        - choose portion_size_guess based on the visible serving size
-        - include sugar, syrup, sauce, oil, butter or milk when they are likely present
-        - if unsure, still make the best estimate and lower confidence
-        """
-
-        return try await performOpenAIRequest(input: [
-            [
-                "role": "system",
-                "content": [
-                    [
-                        "type": "input_text",
-                        "text": systemPrompt
-                    ]
-                ]
-            ],
-            [
-                "role": "user",
-                "content": [
-                    [
-                        "type": "input_text",
-                        "text": "Analyze this food photo and return JSON."
-                    ],
-                    [
-                        "type": "input_image",
-                        "image_url": "data:image/jpeg;base64,\(imageData.base64EncodedString())",
-                        "detail": "high"
-                    ]
-                ]
-            ]
+        try await performFirebaseRequest(body: [
+            "mode": "image",
+            "language": language == .english ? "en" : "ru",
+            "imageBase64": imageData.base64EncodedString()
         ])
     }
 
     func recognizeMeal(from description: String, language: AppLanguage) async throws -> AIMealRecognitionResponse {
-        let languageName = recognitionLanguageName(for: language)
-        let systemPrompt = """
-        Return JSON only. Analyze a meal description and estimate the full meal composition.
-        Respond in \(languageName).
-        Return an object with:
-        - dish_name: short meal name
-        - ingredients: array of 1 to 10 items
-        - notes: short uncertainty note
-        - is_beverage: boolean
-        - portion_size_guess: one of small, medium, large
-
-        Each ingredient must contain:
-        - name
-        - grams
-        - calories
-        - protein
-        - fat
-        - carbs
-        - confidence
-
-        Rules:
-        - estimate the meal as eaten, not per 100 g
-        - if the user gives a weight, use it
-        - if the user gives pieces or common household portions, convert to realistic grams
-        - if the meal includes milk, sugar, sauce, butter or oil, include them when explicitly mentioned or strongly implied
-        - if unsure, still make the best estimate and lower confidence
-        """
-
-        return try await performOpenAIRequest(input: [
-            [
-                "role": "system",
-                "content": [
-                    [
-                        "type": "input_text",
-                        "text": systemPrompt
-                    ]
-                ]
-            ],
-            [
-                "role": "user",
-                "content": [
-                    [
-                        "type": "input_text",
-                        "text": "Meal description: \(description)\nReturn JSON only."
-                    ]
-                ]
-            ]
+        try await performFirebaseRequest(body: [
+            "mode": "text",
+            "language": language == .english ? "en" : "ru",
+            "description": description
         ])
     }
 
-    private func performOpenAIRequest(input: [[String: Any]]) async throws -> AIMealRecognitionResponse {
-        guard let apiKey = OpenAIConfiguration.apiKey else {
-            throw AIMealRecognitionError.missingAPIKey
-        }
-
-        var request = URLRequest(url: apiURL)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 120
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.httpBody = try JSONSerialization.data(withJSONObject: [
-            "model": model,
-            "input": input,
-            "text": [
-                "format": [
-                    "type": "json_object"
-                ]
-            ]
-        ])
-
-        let data: Data
-        let response: URLResponse
+    private func performFirebaseRequest(body: [String: Any]) async throws -> AIMealRecognitionResponse {
         do {
-            (data, response) = try await URLSession.shared.data(for: request)
+            let data = try await FirebaseAIClient.post(
+                functionName: "recognizeMeal",
+                body: body,
+                timeout: 120
+            )
+            let decoded = try JSONDecoder().decode(AIMealRecognitionResponse.self, from: data)
+            guard !decoded.ingredients.isEmpty else {
+                throw AIMealRecognitionError.emptyIngredients
+            }
+            return decoded
         } catch is URLError {
             throw AIMealRecognitionError.network
-        }
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AIMealRecognitionError.invalidResponse
-        }
-
-        guard (200...299).contains(httpResponse.statusCode) else {
-            throw Self.apiError(from: data, statusCode: httpResponse.statusCode)
-        }
-
-        guard let outputText = Self.outputText(from: data),
-              let mealData = outputText.data(using: .utf8) else {
-            throw AIMealRecognitionError.invalidResponse
-        }
-
-        let decoded = try JSONDecoder().decode(AIMealRecognitionResponse.self, from: mealData)
-        guard !decoded.ingredients.isEmpty else {
-            throw AIMealRecognitionError.emptyIngredients
-        }
-        return decoded
-    }
-
-    private func recognitionLanguageName(for language: AppLanguage) -> String {
-        switch language {
-        case .english:
-            return "English"
-        case .russian:
-            return "Russian"
-        }
-    }
-
-    private static func outputText(from data: Data) -> String? {
-        guard let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return nil
-        }
-
-        if let outputText = jsonObject["output_text"] as? String,
-           !outputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return outputText
-        }
-
-        guard let output = jsonObject["output"] as? [[String: Any]] else {
-            return nil
-        }
-
-        for item in output {
-            guard let content = item["content"] as? [[String: Any]] else {
-                continue
+        } catch let error as FirebaseAIClientError {
+            if case .requestFailed(let code, _) = error {
+                if code == "invalid_image" { throw AIMealRecognitionError.invalidImage }
+                if code == "missing_openai_key" { throw AIMealRecognitionError.missingAPIKey }
             }
-
-            for contentItem in content {
-                if let text = contentItem["text"] as? String,
-                   !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    return text
-                }
-            }
+            throw AIMealRecognitionError.apiError
+        } catch is DecodingError {
+            throw AIMealRecognitionError.invalidResponse
+        } catch {
+            throw error
         }
-
-        return nil
-    }
-
-    private static func apiError(from data: Data, statusCode: Int) -> AIMealRecognitionError {
-        guard
-            let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let error = jsonObject["error"] as? [String: Any]
-        else {
-            return .apiError
-        }
-
-        let code = (error["code"] as? String)?.lowercased()
-        let type = (error["type"] as? String)?.lowercased()
-        let message = (error["message"] as? String)?.lowercased() ?? ""
-
-        if code == "missing_openai_key"
-            || code == "invalid_api_key"
-            || statusCode == 401
-            || message.contains("incorrect api key")
-            || message.contains("invalid api key")
-            || type == "invalid_request_error" && message.contains("api key") {
-            return .missingAPIKey
-        }
-
-        return .apiError
     }
 }
 

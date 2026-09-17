@@ -1147,17 +1147,11 @@ enum AIWorkoutDraftGeneratorError: LocalizedError {
 }
 
 actor AIWorkoutDraftGenerator {
-    private let endpoint = URL(string: "https://api.openai.com/v1/responses")!
-    private let model = "gpt-4.1-mini"
-
     func generate(
         command: String,
         language: AppLanguage,
         existingBlocks: [AIWorkoutExistingBlock]
     ) async throws -> AIWorkoutGenerationDecision {
-        guard let apiKey = AIWorkoutOpenAIConfiguration.apiKey else {
-            throw AIWorkoutDraftGeneratorError.missingAPIKey
-        }
         let languageName = language == .english ? "English" : "Russian"
         let existingBlocksJSON = String(
             data: try JSONEncoder().encode(existingBlocks),
@@ -1166,7 +1160,6 @@ actor AIWorkoutDraftGenerator {
 
         let userPrompt = "Trainer instruction: \(command)\nCurrent template blocks: \(existingBlocksJSON)"
         let outputText = try await requestOutput(
-            apiKey: apiKey,
             systemPrompt: systemPrompt(language: languageName),
             userPrompt: userPrompt
         )
@@ -1176,7 +1169,6 @@ actor AIWorkoutDraftGenerator {
         }
 
         let repairedOutputText = try await requestOutput(
-            apiKey: apiKey,
             systemPrompt: repairSystemPrompt(language: languageName),
             userPrompt: "Original trainer instruction:\n\(command)\n\nCurrent template blocks:\n\(existingBlocksJSON)\n\nInvalid draft to repair:\n\(outputText)"
         )
@@ -1248,56 +1240,28 @@ actor AIWorkoutDraftGenerator {
         )
     }
 
-    private func requestOutput(
-        apiKey: String,
-        systemPrompt: String,
-        userPrompt: String
-    ) async throws -> String {
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 60
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.httpBody = try JSONSerialization.data(withJSONObject: [
-            "model": model,
-            "input": [
-                [
-                    "role": "system",
-                    "content": [[
-                        "type": "input_text",
-                        "text": systemPrompt
-                    ]]
+    private func requestOutput(systemPrompt: String, userPrompt: String) async throws -> String {
+        do {
+            let data = try await FirebaseAIClient.post(
+                functionName: "generateMobileWorkoutDraft",
+                body: [
+                    "systemPrompt": systemPrompt,
+                    "userPrompt": userPrompt
                 ],
-                [
-                    "role": "user",
-                    "content": [[
-                        "type": "input_text",
-                        "text": userPrompt
-                    ]]
-                ]
-            ],
-            // A single exercise can contain many individually represented sets,
-            // so leave enough room for a complete JSON document on the first try.
-            "max_output_tokens": 4_000,
-            // Structured Outputs keeps the first response compatible with the
-            // app's Codable models instead of relying on the model to remember
-            // every technical field in a prompt.
-            "text": ["format": Self.workoutDraftResponseFormat()]
-        ])
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AIWorkoutDraftGeneratorError.invalidResponse
+                timeout: 90
+            )
+            guard let output = String(data: data, encoding: .utf8), output.isEmpty == false else {
+                throw AIWorkoutDraftGeneratorError.invalidResponse
+            }
+            return output
+        } catch let error as FirebaseAIClientError {
+            if case .requestFailed(let code, _) = error {
+                throw AIWorkoutDraftGeneratorError.requestFailed(code)
+            }
+            throw AIWorkoutDraftGeneratorError.requestFailed("network")
+        } catch is URLError {
+            throw AIWorkoutDraftGeneratorError.requestFailed("network")
         }
-        guard (200...299).contains(httpResponse.statusCode) else {
-            let code = Self.apiErrorCode(from: data)
-            throw AIWorkoutDraftGeneratorError.requestFailed(code ?? "unknown")
-        }
-
-        guard let outputText = Self.outputText(from: data) else {
-            throw AIWorkoutDraftGeneratorError.invalidResponse
-        }
-        return outputText
     }
 
     private static func workoutDraftResponseFormat() -> [String: Any] {
@@ -1458,15 +1422,5 @@ private extension AIWorkoutGenerationDecision {
         case .clarification:
             return self
         }
-    }
-}
-
-private enum AIWorkoutOpenAIConfiguration {
-    static var apiKey: String? {
-        guard let rawValue = Bundle.main.object(forInfoDictionaryKey: "OpenAIAPIKey") as? String else {
-            return nil
-        }
-        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty || trimmed.contains("$(") ? nil : trimmed
     }
 }

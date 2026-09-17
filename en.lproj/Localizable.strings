@@ -103,6 +103,10 @@
 "settings.mail.body" = "Hello! I would like to leave feedback / ask a question:\n\n(Describe your situation here)\n\n--\nTechnical information:\nApp: %@ %@\nDevice: %@\niOS: %@ %@";
 
 "nutrition.title" = "Calories";
+"nutrition.ai.coachmark.title" = "AI nutrition assistant";
+"nutrition.ai.coachmark.message" = "Suggests meals and helps you reach your daily targets.";
+"nutrition.ai.coachmark.dismiss" = "Not now";
+"nutrition.ai.coachmark.try" = "Try it";
 "nutrition.goal.value" = "/ %d kcal";
 "nutrition.remaining.value" = "Remaining: %d kcal";
 "nutrition.macro.value" = "%d / %d g";
@@ -438,6 +442,10 @@
 "workouts.new" = "New Workout";
 "workouts.new.subtitle" = "Build a fresh session and start today's training log.";
 "workouts.new.resume" = "Resume current workout";
+"workouts.active.title" = "Current Workout";
+"workouts.active.status" = "In Progress";
+"workouts.active.progress" = "%d of %d exercises completed";
+"workouts.active.progress.empty" = "No exercises added yet";
 "workouts.online" = "Trainer Workouts";
 "workouts.online.subtitle" = "Open workouts assigned by your trainer.";
 "workouts.connection" = "Trainer Connection";
@@ -751,6 +759,7 @@
 "workout.setup.add.set" = "Add Set";
 "workout.setup.save" = "Add to Workout";
 "workout.exercise.summary" = "%d sets • %d completed";
+"workout.exercise.status.completed" = "Completed";
 "workout.exercise.note.add" = "Add Note";
 "workout.exercise.note.title" = "Exercise Note";
 "workout.exercise.delete" = "Delete Exercise";

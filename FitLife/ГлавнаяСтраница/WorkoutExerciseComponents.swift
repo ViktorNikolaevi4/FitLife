@@ -17,6 +17,10 @@ struct WorkoutExerciseCard: View {
         groups.filter(\.isCompleted).count
     }
 
+    private var isCompleted: Bool {
+        exercise.isFinished || (groups.isEmpty == false && completedCount == groups.count)
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             ZStack {
@@ -41,6 +45,15 @@ struct WorkoutExerciseCard: View {
                 Text(AppLocalizer.format("workout.exercise.summary", groups.count, completedCount))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+
+                if isCompleted {
+                    Label(
+                        AppLocalizer.string("workout.exercise.status.completed"),
+                        systemImage: "checkmark.circle.fill"
+                    )
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.green)
+                }
             }
 
             Spacer(minLength: 8)

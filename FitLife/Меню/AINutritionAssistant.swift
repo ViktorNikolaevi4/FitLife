@@ -52,8 +52,6 @@ private enum AINutritionAssistantError: LocalizedError {
 }
 
 private actor AINutritionSuggestionService {
-    private let apiURL = URL(string: "https://api.openai.com/v1/responses")!
-
     func suggestions(
         calories: Int,
         protein: Int,
@@ -65,91 +63,39 @@ private actor AINutritionSuggestionService {
         allowAdditionalProducts: Bool,
         language: AppLanguage
     ) async throws -> [AINutritionSuggestion] {
-        guard let apiKey = OpenAIConfiguration.apiKey else {
-            throw AINutritionAssistantError.missingAPIKey
-        }
-
-        let languageName = language == .russian ? "Russian" : "English"
-        let productsAtHome = availableProducts.isEmpty
-            ? "No products specified."
-            : availableProducts.joined(separator: ", ")
-        let additionalProductsRule = allowAdditionalProducts
-            ? "Prioritize products at home and add only the minimum useful extra ingredients."
-            : "Use only products at home, except water and basic salt or spices."
-        let preferenceText = preference.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        let prompt = """
-        You are a practical meal-planning assistant. Return JSON only and write human-readable text in \(languageName).
-        Suggest exactly 3 realistic, distinct meals for this remaining daily allowance:
-        calories \(calories) kcal, protein \(protein) g, fat \(fat) g, carbohydrates \(carbs) g.
-        Meal type: \(meal).
-        User preference: \(preferenceText.isEmpty ? "none" : preferenceText).
-        Products the user currently has at home: \(productsAtHome).
-        Pantry rule: \(additionalProductsRule)
-
-        Return: {"suggestions":[{"name":String,"summary":String,"ingredients":[{"name":String,"grams":Number,"calories":Int,"protein":Number,"fat":Number,"carbs":Number}],"steps":[String]}]}.
-        Ingredient calories and macros must represent the stated serving in grams, not values per 100 g.
-        Use common foods and realistic gram amounts. Include cooking oil, dressing and sauces when applicable.
-        For each meal, provide 3 to 7 concise, practical cooking steps in serving order.
-        If products at home are supplied, build every suggestion around them.
-        Keep every meal at or below the remaining calories when calories are greater than zero.
-        If remaining calories are zero but one or more macros are still above zero, suggest the leanest practical options that target the missing macros, minimize extra calories, and clearly mention the unavoidable calorie overage in each summary.
-        Aim for the remaining macros, prioritizing protein, but do not claim exact medical or nutritional precision.
-        """
-
-        var request = URLRequest(url: apiURL)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 90
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.httpBody = try JSONSerialization.data(withJSONObject: [
-            "model": "gpt-4.1-mini",
-            "input": [[
-                "role": "user",
-                "content": [["type": "input_text", "text": prompt]]
-            ]],
-            "text": ["format": ["type": "json_object"]]
-        ])
-
-        let data: Data
-        let response: URLResponse
         do {
-            (data, response) = try await URLSession.shared.data(for: request)
-        } catch {
-            throw AINutritionAssistantError.network
-        }
-
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
-            throw AINutritionAssistantError.api
-        }
-        guard let outputText = Self.outputText(from: data),
-              let outputData = outputText.data(using: .utf8),
-              let decoded = try? JSONDecoder().decode(AINutritionSuggestionResponse.self, from: outputData),
-              decoded.suggestions.isEmpty == false else {
-            throw AINutritionAssistantError.invalidResponse
-        }
-
-        return Array(decoded.suggestions.prefix(3))
-    }
-
-    private static func outputText(from data: Data) -> String? {
-        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return nil
-        }
-        if let outputText = object["output_text"] as? String, outputText.isEmpty == false {
-            return outputText
-        }
-        guard let output = object["output"] as? [[String: Any]] else { return nil }
-        for item in output {
-            guard let content = item["content"] as? [[String: Any]] else { continue }
-            for contentItem in content {
-                if let value = contentItem["text"] as? String, value.isEmpty == false {
-                    return value
-                }
+            let data = try await FirebaseAIClient.post(
+                functionName: "suggestMeals",
+                body: [
+                    "calories": calories,
+                    "protein": protein,
+                    "fat": fat,
+                    "carbs": carbs,
+                    "meal": meal,
+                    "preference": preference,
+                    "availableProducts": Array(availableProducts.prefix(50)),
+                    "allowAdditionalProducts": allowAdditionalProducts,
+                    "language": language == .english ? "en" : "ru"
+                ],
+                timeout: 90
+            )
+            let decoded = try JSONDecoder().decode(AINutritionSuggestionResponse.self, from: data)
+            guard decoded.suggestions.isEmpty == false else {
+                throw AINutritionAssistantError.invalidResponse
             }
+            return Array(decoded.suggestions.prefix(3))
+        } catch is URLError {
+            throw AINutritionAssistantError.network
+        } catch let error as FirebaseAIClientError {
+            if case .requestFailed(let code, _) = error, code == "missing_openai_key" {
+                throw AINutritionAssistantError.missingAPIKey
+            }
+            throw AINutritionAssistantError.api
+        } catch is DecodingError {
+            throw AINutritionAssistantError.invalidResponse
+        } catch {
+            throw error
         }
-        return nil
     }
 }
 
