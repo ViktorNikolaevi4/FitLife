@@ -189,6 +189,34 @@ private struct AIMealRecognitionIngredient: Decodable {
     }
 }
 
+private struct AIIngredientNutritionResponse: Decodable {
+    let name: String
+    let calories: Int
+    let protein: Double
+    let fat: Double
+    let carbs: Double
+    let confidence: String
+
+    private enum CodingKeys: String, CodingKey {
+        case name
+        case calories
+        case protein
+        case fat
+        case carbs
+        case confidence
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = container.decodeLossyString(forKey: .name) ?? "Ingredient"
+        calories = max(container.decodeLossyInt(forKey: .calories) ?? 0, 0)
+        protein = max(container.decodeLossyDouble(forKey: .protein) ?? 0, 0)
+        fat = max(container.decodeLossyDouble(forKey: .fat) ?? 0, 0)
+        carbs = max(container.decodeLossyDouble(forKey: .carbs) ?? 0, 0)
+        confidence = container.decodeLossyString(forKey: .confidence) ?? "medium"
+    }
+}
+
 private extension KeyedDecodingContainer {
     func decodeLossyString(forKey key: Key) -> String? {
         if let value = tryOptionalString(forKey: key) {
@@ -286,6 +314,13 @@ private extension KeyedDecodingContainer {
     }
 }
 
+private enum AIIngredientEstimationState: Hashable {
+    case estimated
+    case pending
+    case cached
+    case failed
+}
+
 private struct AIMealIngredientDraft: Identifiable, Hashable {
     let id: UUID
     var name: String
@@ -295,11 +330,13 @@ private struct AIMealIngredientDraft: Identifiable, Hashable {
     var fat: Double
     var carbs: Double
     var confidence: String
+    var estimationState: AIIngredientEstimationState
+    private var estimationRevision: Int
     private let baseGrams: Double
-    private let baseCalories: Int
-    private let baseProtein: Double
-    private let baseFat: Double
-    private let baseCarbs: Double
+    private var caloriesPer100: Double
+    private var proteinPer100: Double
+    private var fatPer100: Double
+    private var carbsPer100: Double
 
     init(
         id: UUID = UUID(),
@@ -309,7 +346,8 @@ private struct AIMealIngredientDraft: Identifiable, Hashable {
         protein: Double,
         fat: Double,
         carbs: Double,
-        confidence: String
+        confidence: String,
+        needsEstimation: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -319,11 +357,15 @@ private struct AIMealIngredientDraft: Identifiable, Hashable {
         self.fat = fat
         self.carbs = carbs
         self.confidence = confidence
-        self.baseGrams = Double(gramsText.replacingOccurrences(of: ",", with: ".")) ?? 0
-        self.baseCalories = calories
-        self.baseProtein = protein
-        self.baseFat = fat
-        self.baseCarbs = carbs
+        self.estimationState = needsEstimation ? .pending : .estimated
+        self.estimationRevision = 0
+        let parsedGrams = Double(gramsText.replacingOccurrences(of: ",", with: ".")) ?? 0
+        self.baseGrams = parsedGrams
+        let normalization = parsedGrams > 0 ? 100 / parsedGrams : 0
+        self.caloriesPer100 = Double(calories) * normalization
+        self.proteinPer100 = protein * normalization
+        self.fatPer100 = fat * normalization
+        self.carbsPer100 = carbs * normalization
     }
 
     var gramsValue: Double {
@@ -334,20 +376,56 @@ private struct AIMealIngredientDraft: Identifiable, Hashable {
         let safeMultiplier = max(multiplier.safeFinite, 0)
         let scaledGrams = max(baseGrams.safeFinite * safeMultiplier, 0)
         gramsText = Self.formattedDecimalString(scaledGrams)
-        calories = max(Int((Double(baseCalories).safeFinite * safeMultiplier).rounded()), 0)
-        protein = max(baseProtein.safeFinite * safeMultiplier, 0)
-        fat = max(baseFat.safeFinite * safeMultiplier, 0)
-        carbs = max(baseCarbs.safeFinite * safeMultiplier, 0)
+        recalculateFromEnteredGrams()
     }
 
     mutating func recalculateFromEnteredGrams() {
-        let safeBaseGrams = baseGrams.safeFinite
-        guard safeBaseGrams > 0 else { return }
-        let multiplier = max((gramsValue.safeFinite / safeBaseGrams).safeFinite, 0)
-        calories = max(Int((Double(baseCalories).safeFinite * multiplier).rounded()), 0)
-        protein = max(baseProtein.safeFinite * multiplier, 0)
-        fat = max(baseFat.safeFinite * multiplier, 0)
-        carbs = max(baseCarbs.safeFinite * multiplier, 0)
+        let multiplier = max(gramsValue.safeFinite / 100, 0)
+        calories = max(Int((caloriesPer100.safeFinite * multiplier).rounded()), 0)
+        protein = max(proteinPer100.safeFinite * multiplier, 0)
+        fat = max(fatPer100.safeFinite * multiplier, 0)
+        carbs = max(carbsPer100.safeFinite * multiplier, 0)
+    }
+
+    mutating func requestEstimation() {
+        calories = 0
+        protein = 0
+        fat = 0
+        carbs = 0
+        caloriesPer100 = 0
+        proteinPer100 = 0
+        fatPer100 = 0
+        carbsPer100 = 0
+        estimationState = .pending
+        estimationRevision += 1
+    }
+
+    mutating func applyEstimate(
+        caloriesPer100: Int,
+        proteinPer100: Double,
+        fatPer100: Double,
+        carbsPer100: Double,
+        confidence: String,
+        cached: Bool
+    ) {
+        self.caloriesPer100 = Double(max(caloriesPer100, 0))
+        self.proteinPer100 = max(proteinPer100.safeFinite, 0)
+        self.fatPer100 = max(fatPer100.safeFinite, 0)
+        self.carbsPer100 = max(carbsPer100.safeFinite, 0)
+        self.confidence = confidence
+        estimationState = cached ? .cached : .estimated
+        recalculateFromEnteredGrams()
+    }
+
+    mutating func markEstimationFailed() {
+        estimationState = .failed
+    }
+
+    var estimationRequestKey: String? {
+        guard estimationState == .pending else { return nil }
+        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard normalizedName.count >= 2 else { return nil }
+        return "\(normalizedName)#\(estimationRevision)"
     }
 
     private static func formattedDecimalString(_ value: Double) -> String {
@@ -444,6 +522,33 @@ private actor AIMealRecognitionService {
         ])
     }
 
+    func estimateIngredient(named name: String, language: AppLanguage) async throws -> AIIngredientNutritionResponse {
+        do {
+            let data = try await FirebaseAIClient.post(
+                functionName: "recognizeMeal",
+                body: [
+                    "mode": "ingredient",
+                    "language": language == .english ? "en" : "ru",
+                    "name": name
+                ],
+                timeout: 60
+            )
+            return try JSONDecoder().decode(AIIngredientNutritionResponse.self, from: data)
+        } catch is URLError {
+            throw AIMealRecognitionError.network
+        } catch let error as FirebaseAIClientError {
+            if case .requestFailed(let code, _) = error,
+               code == "missing_openai_key" {
+                throw AIMealRecognitionError.missingAPIKey
+            }
+            throw AIMealRecognitionError.apiError
+        } catch is DecodingError {
+            throw AIMealRecognitionError.invalidResponse
+        } catch {
+            throw error
+        }
+    }
+
     private func performFirebaseRequest(body: [String: Any]) async throws -> AIMealRecognitionResponse {
         do {
             let data = try await FirebaseAIClient.post(
@@ -523,8 +628,11 @@ struct AIMealRecognitionFlowView: View {
 
     private var hasValidItems: Bool {
         guard let draft else { return false }
-        return draft.items.contains {
+        let validItems = draft.items.filter {
             !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.gramsValue > 0
+        }
+        return !validItems.isEmpty && !validItems.contains {
+            $0.estimationState == .pending || $0.estimationState == .failed
         }
     }
 
@@ -853,7 +961,8 @@ struct AIMealRecognitionFlowView: View {
                                 protein: 0,
                                 fat: 0,
                                 carbs: 0,
-                                confidence: "low"
+                                confidence: "low",
+                                needsEstimation: true
                             )
                         )
                     } label: {
@@ -1378,8 +1487,11 @@ struct AITextMealRecognitionFlowView: View {
 
     private var hasValidItems: Bool {
         guard let draft else { return false }
-        return draft.items.contains {
+        let validItems = draft.items.filter {
             !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.gramsValue > 0
+        }
+        return !validItems.isEmpty && !validItems.contains {
+            $0.estimationState == .pending || $0.estimationState == .failed
         }
     }
 
@@ -2096,10 +2208,21 @@ private struct AIMealIngredientCard: View {
     @Binding var item: AIMealIngredientDraft
     let onRemove: () -> Void
 
+    @Environment(\.modelContext) private var modelContext
+    @AppStorage(AppLanguage.appStorageKey) private var appLanguageRaw = AppLanguage.russian.rawValue
+
+    @State private var isEstimating = false
+
+    private let recognitionService = AIMealRecognitionService()
+
+    private var appLanguage: AppLanguage {
+        AppLanguage.from(rawValue: appLanguageRaw)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 10) {
-                TextField(AppLocalizer.string("ai.meal.ingredient_name"), text: $item.name)
+                TextField(AppLocalizer.string("ai.meal.ingredient_name"), text: ingredientNameBinding)
                     .textFieldStyle(.roundedBorder)
 
                 Button(role: .destructive, action: onRemove) {
@@ -2134,12 +2257,147 @@ private struct AIMealIngredientCard: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
+            estimationStatus
+        }
+        .padding(14)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18))
+        .task(id: item.estimationRequestKey) {
+            guard let requestKey = item.estimationRequestKey else { return }
+            await estimateNutrition(requestKey: requestKey)
+        }
+    }
+
+    private var ingredientNameBinding: Binding<String> {
+        Binding(
+            get: { item.name },
+            set: { newValue in
+                guard newValue != item.name else { return }
+                item.name = newValue
+                item.requestEstimation()
+            }
+        )
+    }
+
+    @ViewBuilder
+    private var estimationStatus: some View {
+        switch item.estimationState {
+        case .pending:
+            HStack(spacing: 7) {
+                if isEstimating {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: "sparkles")
+                }
+                Text(AppLocalizer.string("ai.meal.ingredient.estimating"))
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        case .cached:
+            Label(AppLocalizer.string("ai.meal.ingredient.cached_estimate"), systemImage: "sparkles")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case .failed:
+            Button {
+                item.requestEstimation()
+            } label: {
+                Label(AppLocalizer.string("ai.meal.ingredient.retry_estimate"), systemImage: "arrow.clockwise")
+                    .font(.caption)
+            }
+            .buttonStyle(.borderless)
+        case .estimated:
             Label(AppLocalizer.string("ai.meal.match.ai"), systemImage: "sparkles")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .padding(14)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18))
+    }
+
+    @MainActor
+    private func estimateNutrition(requestKey: String) async {
+        do {
+            try await Task.sleep(for: .milliseconds(700))
+        } catch {
+            return
+        }
+
+        guard !Task.isCancelled,
+              item.estimationRequestKey == requestKey else { return }
+
+        let requestedName = item.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard requestedName.count >= 2 else { return }
+
+        isEstimating = true
+        defer {
+            if item.estimationRequestKey == requestKey {
+                isEstimating = false
+            }
+        }
+
+        if let cachedProduct = cachedAIProduct(named: requestedName) {
+            guard !Task.isCancelled,
+                  item.estimationRequestKey == requestKey else { return }
+            item.applyEstimate(
+                caloriesPer100: cachedProduct.calories,
+                proteinPer100: cachedProduct.protein,
+                fatPer100: cachedProduct.fat,
+                carbsPer100: cachedProduct.carbs,
+                confidence: "medium",
+                cached: true
+            )
+            return
+        }
+
+        do {
+            let response = try await recognitionService.estimateIngredient(
+                named: requestedName,
+                language: appLanguage
+            )
+            guard !Task.isCancelled,
+                  item.estimationRequestKey == requestKey else { return }
+
+            item.applyEstimate(
+                caloriesPer100: response.calories,
+                proteinPer100: response.protein,
+                fatPer100: response.fat,
+                carbsPer100: response.carbs,
+                confidence: response.confidence,
+                cached: false
+            )
+            storeAIProduct(named: requestedName, response: response)
+        } catch is CancellationError {
+            return
+        } catch {
+            guard item.estimationRequestKey == requestKey else { return }
+            item.markEstimationFailed()
+        }
+    }
+
+    private func cachedAIProduct(named name: String) -> CustomProduct? {
+        let normalizedName = normalizedCacheName(name)
+        let descriptor = FetchDescriptor<CustomProduct>()
+        return ((try? modelContext.fetch(descriptor)) ?? []).first {
+            $0.isAIGenerated && normalizedCacheName($0.name) == normalizedName
+        }
+    }
+
+    private func storeAIProduct(named name: String, response: AIIngredientNutritionResponse) {
+        let product = CustomProduct(
+            name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+            protein: response.protein,
+            fat: response.fat,
+            carbs: response.carbs,
+            calories: response.calories,
+            isAIGenerated: true
+        )
+        modelContext.insert(product)
+        try? modelContext.save()
+    }
+
+    private func normalizedCacheName(_ name: String) -> String {
+        name
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            .lowercased()
     }
 
     private func sanitizedNumberString(_ text: String) -> String {

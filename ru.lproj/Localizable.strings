@@ -45,6 +45,9 @@
 "ai.meal.save" = "Сохранить в приём пищи";
 "ai.meal.match.catalog" = "Связано с: %@";
 "ai.meal.match.ai" = "Сохраним как ИИ-оценку";
+"ai.meal.ingredient.estimating" = "ИИ рассчитывает КБЖУ…";
+"ai.meal.ingredient.cached_estimate" = "ИИ-оценка из кеша";
+"ai.meal.ingredient.retry_estimate" = "Не удалось оценить · Повторить";
 "ai.meal.macros.value" = "Б %d • Ж %d • У %d г";
 "ai.meal.clarify.title" = "Быстрые уточнения";
 "ai.meal.portion.title" = "Размер порции";
@@ -1237,6 +1240,15 @@
 "profile.nutrition_goals.calories_hint" = "Калории рассчитываются автоматически по БЖУ.";
 "entry.portion.title" = "Порция";
 "entry.preview.title" = "Итог";
+"entry.ingredients.title" = "Состав";
+"entry.ingredient.details.title" = "Детали ингредиента";
+"entry.ingredient.details.navigation" = "Ингредиент";
+"entry.ingredient.edit_hint" = "Изменения применятся только к этой записи и не изменят локальный кеш продуктов.";
+"entry.ingredient.amount" = "Количество";
+"entry.ingredient.per_100g" = "КБЖУ на 100 г";
+"entry.ingredient.delete" = "Удалить ингредиент";
+"entry.ingredient.delete.confirm" = "Удалить ингредиент?";
+"entry.ingredient.delete.message" = "Итоговые калории и БЖУ блюда будут пересчитаны.";
 "coaching.workouts.section" = "Выполненные тренировки";
 "coaching.workouts.action.send" = "Отправить тренировки";
 "coaching.workouts.action.submit" = "Отправить тренеру";

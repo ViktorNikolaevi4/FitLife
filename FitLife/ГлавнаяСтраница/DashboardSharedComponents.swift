@@ -1514,12 +1514,18 @@ private struct ProductsList: View {
             GroupedAIMealPortionEditorScreen(
                 title: selection.title,
                 entries: selection.entries,
-                onSave: { newPortion in
-                    applyNewPortion(selection.entries, newTotalPortion: newPortion)
-                    selection.entries.forEach(onUpdate)
+                onSave: { newPortion, currentEntries in
+                    applyNewPortion(currentEntries, newTotalPortion: newPortion)
+                    currentEntries.forEach(onUpdate)
                 },
-                onDelete: {
-                    onDeleteMany(selection.entries)
+                onIngredientUpdate: { entry in
+                    onUpdate(entry)
+                },
+                onIngredientDelete: { entry in
+                    onDelete(entry)
+                },
+                onDelete: { currentEntries in
+                    onDeleteMany(currentEntries)
                 }
             )
         }
@@ -1781,22 +1787,37 @@ private struct GroupedAIMealPortionEditorScreen: View {
 
     let title: String
     let entries: [FoodEntry]
-    var onSave: (Double) -> Void
-    var onDelete: () -> Void
+    var onSave: (Double, [FoodEntry]) -> Void
+    var onIngredientUpdate: (FoodEntry) -> Void
+    var onIngredientDelete: (FoodEntry) -> Void
+    var onDelete: ([FoodEntry]) -> Void
 
     @State private var gramsText: String
+    @State private var editingIngredientSelection: FoodEntryEditorSelection?
+    @State private var ingredientRevision = 0
+    @State private var currentEntries: [FoodEntry]
 
-    init(title: String, entries: [FoodEntry], onSave: @escaping (Double) -> Void, onDelete: @escaping () -> Void) {
+    init(
+        title: String,
+        entries: [FoodEntry],
+        onSave: @escaping (Double, [FoodEntry]) -> Void,
+        onIngredientUpdate: @escaping (FoodEntry) -> Void,
+        onIngredientDelete: @escaping (FoodEntry) -> Void,
+        onDelete: @escaping ([FoodEntry]) -> Void
+    ) {
         self.title = title
         self.entries = entries
         self.onSave = onSave
+        self.onIngredientUpdate = onIngredientUpdate
+        self.onIngredientDelete = onIngredientDelete
         self.onDelete = onDelete
         let initialGrams = max(1, Int(entries.reduce(0.0) { $0 + $1.portionSafe }))
         _gramsText = State(initialValue: String(initialGrams))
+        _currentEntries = State(initialValue: entries)
     }
 
     private var totalPortion: Double {
-        max(1.0, entries.reduce(0.0) { $0 + $1.portionSafe }.safeFinite)
+        max(1.0, currentEntries.reduce(0.0) { $0 + $1.portionSafe }.safeFinite)
     }
 
     private var gramsValue: Double {
@@ -1808,19 +1829,19 @@ private struct GroupedAIMealPortionEditorScreen: View {
     }
 
     private var totalCalories: Int {
-        entries.reduce(0) { $0 + ($1.product?.calories ?? 0) }
+        currentEntries.reduce(0) { $0 + ($1.product?.calories ?? 0) }
     }
 
     private var totalProtein: Double {
-        entries.reduce(0.0) { $0 + ($1.product?.protein ?? 0).safeFinite }
+        currentEntries.reduce(0.0) { $0 + ($1.product?.protein ?? 0).safeFinite }
     }
 
     private var totalFat: Double {
-        entries.reduce(0.0) { $0 + ($1.product?.fat ?? 0).safeFinite }
+        currentEntries.reduce(0.0) { $0 + ($1.product?.fat ?? 0).safeFinite }
     }
 
     private var totalCarbs: Double {
-        entries.reduce(0.0) { $0 + ($1.product?.carbs ?? 0).safeFinite }
+        currentEntries.reduce(0.0) { $0 + ($1.product?.carbs ?? 0).safeFinite }
     }
 
     private var theme: AppTheme { AppTheme(colorScheme) }
@@ -1848,15 +1869,18 @@ private struct GroupedAIMealPortionEditorScreen: View {
                     carbs: max(totalCarbs * previewScale, 0),
                     theme: theme
                 )
+                .id(ingredientRevision)
+
+                ingredientCompositionCard
 
                 Button(AppLocalizer.string("common.save")) {
-                    onSave(gramsValue)
+                    onSave(gramsValue, currentEntries)
                     dismiss()
                 }
                 .buttonStyle(PortionPrimaryButtonStyle(theme: theme))
 
                 Button(AppLocalizer.string("common.delete"), role: .destructive) {
-                    onDelete()
+                    onDelete(currentEntries)
                     dismiss()
                 }
                 .font(.subheadline.weight(.semibold))
@@ -1869,6 +1893,85 @@ private struct GroupedAIMealPortionEditorScreen: View {
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .navigationTitle(AppLocalizer.string("entry.portion.title"))
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $editingIngredientSelection) { selection in
+            AIIngredientDetailsEditorScreen(
+                entry: selection.entry,
+                onSave: {
+                    ingredientRevision += 1
+                    gramsText = String(Int(totalPortion))
+                    onIngredientUpdate(selection.entry)
+                },
+                onDelete: {
+                    let isLastIngredient = currentEntries.count == 1
+                    currentEntries.removeAll { $0.id == selection.entry.id }
+                    ingredientRevision += 1
+                    onIngredientDelete(selection.entry)
+
+                    if isLastIngredient {
+                        dismiss()
+                    } else {
+                        gramsText = String(Int(totalPortion))
+                    }
+                    return isLastIngredient
+                }
+            )
+        }
+    }
+
+    private var ingredientCompositionCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(AppLocalizer.string("entry.ingredients.title"))
+                .font(.title3.weight(.bold))
+                .foregroundStyle(theme.primaryText)
+                .padding(.horizontal, 18)
+                .padding(.top, 18)
+                .padding(.bottom, 8)
+
+            ForEach(Array(currentEntries.enumerated()), id: \.element.id) { index, entry in
+                Button {
+                    editingIngredientSelection = FoodEntryEditorSelection(entry: entry)
+                } label: {
+                    HStack(spacing: 12) {
+                        PortionIconTile(systemImage: "leaf.fill", tint: theme.accent)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(entry.product?.name ?? AppLocalizer.string("product.default"))
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(theme.primaryText)
+                                .multilineTextAlignment(.leading)
+
+                            Text(
+                                "\(Int(entry.portionSafe)) \(AppLocalizer.string("unit.grams.short")) · " +
+                                "\(entry.caloriesSafe) \(AppLocalizer.string("unit.kcal"))"
+                            )
+                            .font(.subheadline)
+                            .foregroundStyle(theme.secondaryText)
+                        }
+
+                        Spacer(minLength: 8)
+
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(theme.tertiaryText)
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 13)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if index < currentEntries.count - 1 {
+                    Divider()
+                        .padding(.leading, 78)
+                }
+            }
+        }
+        .background(theme.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(theme.border, lineWidth: HomeMetrics.hairlineWidth)
+        )
+        .id(ingredientRevision)
     }
 
     private func updateGrams(by delta: Int) {
@@ -1876,6 +1979,258 @@ private struct GroupedAIMealPortionEditorScreen: View {
         gramsText = String(next)
     }
 
+}
+
+private struct AIIngredientDetailsEditorScreen: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
+
+    let entry: FoodEntry
+    var onSave: () -> Void
+    var onDelete: () -> Bool
+
+    @State private var name: String
+    @State private var gramsText: String
+    @State private var caloriesText: String
+    @State private var proteinText: String
+    @State private var fatText: String
+    @State private var carbsText: String
+    @State private var isShowingSaveError = false
+    @State private var isShowingDeleteConfirmation = false
+
+    private enum Field: Hashable { case name, grams, calories, protein, fat, carbs }
+    @FocusState private var focusedField: Field?
+
+    init(entry: FoodEntry, onSave: @escaping () -> Void, onDelete: @escaping () -> Bool) {
+        self.entry = entry
+        self.onSave = onSave
+        self.onDelete = onDelete
+
+        let portion = max(entry.portionSafe, 1)
+        let normalization = 100 / portion
+        _name = State(initialValue: entry.product?.name ?? "")
+        _gramsText = State(initialValue: Self.formatNumber(portion))
+        _caloriesText = State(initialValue: Self.formatNumber(Double(entry.caloriesSafe) * normalization))
+        _proteinText = State(initialValue: Self.formatNumber(entry.proteinSafe * normalization))
+        _fatText = State(initialValue: Self.formatNumber(entry.fatSafe * normalization))
+        _carbsText = State(initialValue: Self.formatNumber(entry.carbsSafe * normalization))
+    }
+
+    private var theme: AppTheme { AppTheme(colorScheme) }
+
+    private var parsedValues: (grams: Double, calories: Double, protein: Double, fat: Double, carbs: Double)? {
+        guard
+            name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
+            let grams = parsedNumber(gramsText), grams > 0, grams <= maxFoodPortionGrams,
+            let calories = parsedNumber(caloriesText), calories >= 0,
+            let protein = parsedNumber(proteinText), protein >= 0,
+            let fat = parsedNumber(fatText), fat >= 0,
+            let carbs = parsedNumber(carbsText), carbs >= 0
+        else { return nil }
+
+        return (grams, calories, protein, fat, carbs)
+    }
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text(AppLocalizer.string("entry.ingredient.details.title"))
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(theme.primaryText)
+
+                    Text(AppLocalizer.string("entry.ingredient.edit_hint"))
+                        .font(.subheadline)
+                        .foregroundStyle(theme.secondaryText)
+
+                    ingredientField(
+                        title: AppLocalizer.string("custom_product.name"),
+                        text: $name,
+                        field: .name,
+                        keyboardType: .default
+                    )
+
+                    ingredientField(
+                        title: AppLocalizer.string("entry.ingredient.amount"),
+                        text: $gramsText,
+                        field: .grams,
+                        keyboardType: .decimalPad,
+                        suffix: AppLocalizer.string("unit.grams.short")
+                    )
+                }
+                .padding(20)
+                .background(theme.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .strokeBorder(theme.border, lineWidth: HomeMetrics.hairlineWidth)
+                )
+
+                VStack(alignment: .leading, spacing: 14) {
+                    Text(AppLocalizer.string("entry.ingredient.per_100g"))
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(theme.primaryText)
+
+                    ingredientField(
+                        title: AppLocalizer.string("custom_product.calories"),
+                        text: $caloriesText,
+                        field: .calories,
+                        keyboardType: .decimalPad,
+                        suffix: AppLocalizer.string("unit.kcal")
+                    )
+
+                    HStack(alignment: .top, spacing: 10) {
+                        ingredientField(
+                            title: AppLocalizer.string("custom_product.protein"),
+                            text: $proteinText,
+                            field: .protein,
+                            keyboardType: .decimalPad
+                        )
+                        ingredientField(
+                            title: AppLocalizer.string("custom_product.fat"),
+                            text: $fatText,
+                            field: .fat,
+                            keyboardType: .decimalPad
+                        )
+                        ingredientField(
+                            title: AppLocalizer.string("custom_product.carbs"),
+                            text: $carbsText,
+                            field: .carbs,
+                            keyboardType: .decimalPad
+                        )
+                    }
+                }
+                .padding(20)
+                .background(theme.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .strokeBorder(theme.border, lineWidth: HomeMetrics.hairlineWidth)
+                )
+
+                if let values = parsedValues {
+                    let factor = (values.grams / 100).safeFinite
+                    PortionNutritionSummaryCard(
+                        calories: max(Int((values.calories * factor).rounded()), 0),
+                        protein: max(values.protein * factor, 0),
+                        fat: max(values.fat * factor, 0),
+                        carbs: max(values.carbs * factor, 0),
+                        theme: theme
+                    )
+                }
+
+                Button(AppLocalizer.string("common.save"), action: save)
+                    .buttonStyle(PortionPrimaryButtonStyle(theme: theme))
+                    .disabled(parsedValues == nil)
+
+                Button(AppLocalizer.string("entry.ingredient.delete"), role: .destructive) {
+                    isShowingDeleteConfirmation = true
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.red)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+            }
+            .padding(20)
+        }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .navigationTitle(AppLocalizer.string("entry.ingredient.details.navigation"))
+        .navigationBarTitleDisplayMode(.inline)
+        .scrollDismissesKeyboard(.interactively)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button(AppLocalizer.string("common.done")) {
+                    focusedField = nil
+                }
+            }
+        }
+        .alert(AppLocalizer.string("common.error"), isPresented: $isShowingSaveError) {
+            Button(AppLocalizer.string("common.ok"), role: .cancel) {}
+        } message: {
+            Text(AppLocalizer.string("common.error.try_again"))
+        }
+        .alert(AppLocalizer.string("entry.ingredient.delete.confirm"), isPresented: $isShowingDeleteConfirmation) {
+            Button(AppLocalizer.string("common.delete"), role: .destructive) {
+                let parentWasDismissed = onDelete()
+                if parentWasDismissed == false {
+                    dismiss()
+                }
+            }
+            Button(AppLocalizer.string("common.cancel"), role: .cancel) {}
+        } message: {
+            Text(AppLocalizer.string("entry.ingredient.delete.message"))
+        }
+    }
+
+    private func ingredientField(
+        title: String,
+        text: Binding<String>,
+        field: Field,
+        keyboardType: UIKeyboardType,
+        suffix: String? = nil
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(theme.secondaryText)
+
+            HStack(spacing: 8) {
+                TextField(title, text: text)
+                    .keyboardType(keyboardType)
+                    .focused($focusedField, equals: field)
+                    .textInputAutocapitalization(field == .name ? .sentences : .never)
+
+                if let suffix {
+                    Text(suffix)
+                        .foregroundStyle(theme.secondaryText)
+                }
+            }
+            .font(.body.weight(.medium))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(theme.subtleFill, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(
+                        focusedField == field ? theme.accent : theme.border,
+                        lineWidth: focusedField == field ? 1.4 : HomeMetrics.hairlineWidth
+                    )
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func save() {
+        guard let values = parsedValues, let product = entry.product else { return }
+        let factor = (values.grams / 100).safeFinite
+
+        product.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        product.calories = max(Int((values.calories * factor).rounded()), 0)
+        product.protein = max(values.protein * factor, 0)
+        product.fat = max(values.fat * factor, 0)
+        product.carbs = max(values.carbs * factor, 0)
+        entry.portion = values.grams
+
+        do {
+            try modelContext.save()
+            onSave()
+            dismiss()
+        } catch {
+            isShowingSaveError = true
+        }
+    }
+
+    private func parsedNumber(_ value: String) -> Double? {
+        Double(value.replacingOccurrences(of: ",", with: "."))?.safeFinite
+    }
+
+    private static func formatNumber(_ value: Double) -> String {
+        let safeValue = max(value.safeFinite, 0)
+        if safeValue.rounded() == safeValue {
+            return String(Int(safeValue))
+        }
+        return String(format: "%.1f", safeValue)
+    }
 }
 
 private struct PortionHeaderCard: View {

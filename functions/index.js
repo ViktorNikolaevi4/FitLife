@@ -60,6 +60,13 @@ exports.recognizeMeal = onRequest(
           return;
         }
         meal = await recognizeTextMeal(description, language);
+      } else if (mode === "ingredient") {
+        const name = typeof body.name === "string" ? body.name.trim() : "";
+        if (!name || name.length > 160) {
+          response.status(400).json({ error: { code: "invalid_ingredient_name" } });
+          return;
+        }
+        meal = await estimateIngredientNutrition(name, language);
       } else {
         response.status(400).json({ error: { code: "invalid_mode" } });
         return;
@@ -3162,6 +3169,67 @@ Rules:
       ]
     }
   ]);
+}
+
+async function estimateIngredientNutrition(name, language) {
+  const systemPrompt = `
+Return JSON only. Estimate the nutritional value of one food product.
+Respond in ${language}.
+Return the same meal JSON structure used below, with exactly one ingredient.
+
+The ingredient must contain:
+- name
+- grams: exactly 100
+- calories
+- protein
+- fat
+- carbs
+- confidence: low, medium, or high
+
+Rules:
+- all nutrition values must be for exactly 100 grams
+- use the preparation state present in the product name (raw, dry, boiled, cooked, fried, etc.)
+- if preparation is not specified, use the form in which this product is most commonly eaten and lower confidence when that choice is ambiguous
+- estimate a generic product, not a specific brand
+- calories and macros must be non-negative realistic numbers
+- do not add sauces, oil, seasoning, or other ingredients unless they are explicitly part of the product name
+`;
+
+  const result = await callOpenAIForMeal([
+    {
+      role: "system",
+      content: [
+        {
+          type: "input_text",
+          text: systemPrompt
+        }
+      ]
+    },
+    {
+      role: "user",
+      content: [
+        {
+          type: "input_text",
+          text: `Product: ${name}\nReturn JSON only.`
+        }
+      ]
+    }
+  ]);
+
+  const ingredient = result.ingredients[0] || {};
+  const sourceGrams = clampAINumber(ingredient.grams, 1, 10_000, 100);
+  const normalization = 100 / sourceGrams;
+
+  return {
+    name: normalizeRequiredText(ingredient.name, 160) || name,
+    calories: Math.round(clampAINumber(ingredient.calories, 0, 2_000, 0) * normalization),
+    protein: Math.round(clampAINumber(ingredient.protein, 0, 300, 0) * normalization * 10) / 10,
+    fat: Math.round(clampAINumber(ingredient.fat, 0, 300, 0) * normalization * 10) / 10,
+    carbs: Math.round(clampAINumber(ingredient.carbs, 0, 300, 0) * normalization * 10) / 10,
+    confidence: ["low", "medium", "high"].includes(ingredient.confidence)
+      ? ingredient.confidence
+      : "medium"
+  };
 }
 
 async function callOpenAIForMeal(input) {

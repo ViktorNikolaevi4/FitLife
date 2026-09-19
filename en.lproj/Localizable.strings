@@ -45,6 +45,9 @@
 "ai.meal.save" = "Save to Meal";
 "ai.meal.match.catalog" = "Matched to: %@";
 "ai.meal.match.ai" = "Will save as AI estimate";
+"ai.meal.ingredient.estimating" = "AI is estimating nutrition…";
+"ai.meal.ingredient.cached_estimate" = "Cached AI estimate";
+"ai.meal.ingredient.retry_estimate" = "Couldn’t estimate · Try again";
 "ai.meal.macros.value" = "P %d • F %d • C %d g";
 "ai.meal.clarify.title" = "Quick Adjustments";
 "ai.meal.portion.title" = "Portion Size";
@@ -1237,6 +1240,15 @@
 "profile.nutrition_goals.calories_hint" = "Calories are calculated automatically from macros.";
 "entry.portion.title" = "Portion";
 "entry.preview.title" = "Preview";
+"entry.ingredients.title" = "Ingredients";
+"entry.ingredient.details.title" = "Ingredient details";
+"entry.ingredient.details.navigation" = "Ingredient";
+"entry.ingredient.edit_hint" = "Changes apply only to this entry and do not update the local product cache.";
+"entry.ingredient.amount" = "Amount";
+"entry.ingredient.per_100g" = "Nutrition per 100 g";
+"entry.ingredient.delete" = "Delete ingredient";
+"entry.ingredient.delete.confirm" = "Delete ingredient?";
+"entry.ingredient.delete.message" = "The meal's calories and macros will be recalculated.";
 "coaching.workouts.section" = "Completed workouts";
 "coaching.workouts.action.send" = "Send workouts";
 "coaching.workouts.action.submit" = "Send to coach";
