@@ -254,38 +254,51 @@ struct WorkoutTemplateEditorScreen: View {
         .hidesHomeFloatingAddButton()
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showAssignSheet = true
-                } label: {
-                    Image(systemName: "paperplane")
-                }
-                .disabled(store.exercises.isEmpty)
-            }
+                Menu {
+                    Button {
+                        showAssignSheet = true
+                    } label: {
+                        Label(
+                            AppLocalizer.string("trainer.templates.actions.assign"),
+                            systemImage: "paperplane"
+                        )
+                    }
+                    .disabled(store.exercises.isEmpty)
 
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showAddBlock = true
-                } label: {
-                    Image(systemName: "square.stack.3d.up.fill")
-                }
-            }
+                    Divider()
 
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showAIGenerator = true
-                } label: {
-                    Image(systemName: "sparkles")
-                }
-                .accessibilityLabel("Создать тренировку с ИИ")
-            }
+                    Button {
+                        targetBlockId = nil
+                        targetGroupId = nil
+                        showAddExercise = true
+                    } label: {
+                        Label(
+                            AppLocalizer.string("trainer.templates.actions.add_exercise"),
+                            systemImage: "plus"
+                        )
+                    }
 
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    targetBlockId = nil
-                    showAddExercise = true
+                    Button {
+                        showAddBlock = true
+                    } label: {
+                        Label(
+                            AppLocalizer.string("trainer.templates.actions.add_block"),
+                            systemImage: "square.stack.3d.up.fill"
+                        )
+                    }
+
+                    Button {
+                        showAIGenerator = true
+                    } label: {
+                        Label(
+                            AppLocalizer.string("trainer.templates.actions.create_with_ai"),
+                            systemImage: "sparkles"
+                        )
+                    }
                 } label: {
-                    Image(systemName: "plus")
+                    Image(systemName: "ellipsis")
                 }
+                .accessibilityLabel(AppLocalizer.string("trainer.templates.actions.more"))
             }
         }
         .toolbarTitleMenu {

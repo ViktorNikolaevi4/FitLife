@@ -354,6 +354,11 @@
 "trainer.templates.exercises.empty.title" = "Пока нет упражнений";
 "trainer.templates.exercises.empty.subtitle" = "Добавь первое упражнение в шаблон.";
 "trainer.templates.exercise.summary" = "%d подхода";
+"trainer.templates.actions.more" = "Действия с шаблоном";
+"trainer.templates.actions.assign" = "Назначить клиенту";
+"trainer.templates.actions.add_exercise" = "Добавить упражнение";
+"trainer.templates.actions.add_block" = "Добавить блок";
+"trainer.templates.actions.create_with_ai" = "Создать с ИИ";
 "trainer.assignments.title" = "Назначить тренировку";
 "trainer.assignments.clients.section" = "Доступные клиенты";
 "trainer.assignments.clients.empty.title" = "Нет клиентов для назначения";
