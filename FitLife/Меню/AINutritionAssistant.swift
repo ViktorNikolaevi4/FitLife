@@ -1,6 +1,8 @@
 import Foundation
+import PhotosUI
 import SwiftData
 import SwiftUI
+import UIKit
 
 private struct AINutritionSuggestionIngredient: Decodable, Identifiable {
     let name: String
@@ -63,20 +65,48 @@ private actor AINutritionSuggestionService {
         allowAdditionalProducts: Bool,
         language: AppLanguage
     ) async throws -> [AINutritionSuggestion] {
+        try await requestSuggestions(body: [
+            "mode": "plan",
+            "calories": calories,
+            "protein": protein,
+            "fat": fat,
+            "carbs": carbs,
+            "meal": meal,
+            "preference": preference,
+            "availableProducts": Array(availableProducts.prefix(50)),
+            "allowAdditionalProducts": allowAdditionalProducts,
+            "language": language == .english ? "en" : "ru"
+        ])
+    }
+
+    func suggestionsFromMenu(
+        imageData: Data,
+        calories: Int,
+        protein: Int,
+        fat: Int,
+        carbs: Int,
+        meal: String,
+        preference: String,
+        language: AppLanguage
+    ) async throws -> [AINutritionSuggestion] {
+        try await requestSuggestions(body: [
+            "mode": "menu_image",
+            "calories": calories,
+            "protein": protein,
+            "fat": fat,
+            "carbs": carbs,
+            "meal": meal,
+            "preference": preference,
+            "imageBase64": imageData.base64EncodedString(),
+            "language": language == .english ? "en" : "ru"
+        ])
+    }
+
+    private func requestSuggestions(body: [String: Any]) async throws -> [AINutritionSuggestion] {
         do {
             let data = try await FirebaseAIClient.post(
                 functionName: "suggestMeals",
-                body: [
-                    "calories": calories,
-                    "protein": protein,
-                    "fat": fat,
-                    "carbs": carbs,
-                    "meal": meal,
-                    "preference": preference,
-                    "availableProducts": Array(availableProducts.prefix(50)),
-                    "allowAdditionalProducts": allowAdditionalProducts,
-                    "language": language == .english ? "en" : "ru"
-                ],
+                body: body,
                 timeout: 90
             )
             let decoded = try JSONDecoder().decode(AINutritionSuggestionResponse.self, from: data)
@@ -316,6 +346,11 @@ struct AINutritionAssistantView: View {
     @State private var errorMessage: String?
     @State private var suggestions: [AINutritionSuggestion] = []
     @State private var savedSuggestionIDs: Set<String> = []
+    @State private var selectedMenuPhotoItem: PhotosPickerItem?
+    @State private var isShowingMenuPhotoPicker = false
+    @State private var isShowingMenuCamera = false
+    @State private var isLoadingMenuPhoto = false
+    @State private var isRestaurantMenuResult = false
 
     private let service = AINutritionSuggestionService()
     private var theme: AppTheme { AppTheme(colorScheme) }
@@ -335,6 +370,7 @@ struct AINutritionAssistantView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 16) {
                     remainingCard
+                    quickActionsCard
                     settingsCard
 
                     if needsCalorieOverageWarning {
@@ -360,7 +396,9 @@ struct AINutritionAssistantView: View {
                             .padding(.horizontal, 4)
                     }
 
-                    Button(action: generateSuggestions) {
+                    Button {
+                        generateSuggestions()
+                    } label: {
                         HStack(spacing: 10) {
                             if isLoading {
                                 ProgressView().tint(.white)
@@ -407,6 +445,27 @@ struct AINutritionAssistantView: View {
                 }
             }
         }
+        .fullScreenCover(isPresented: $isShowingMenuCamera) {
+            AIMenuCameraCaptureView(
+                onImageCaptured: { image in
+                    isShowingMenuCamera = false
+                    analyzeRestaurantMenu(image)
+                },
+                onCancel: {
+                    isShowingMenuCamera = false
+                }
+            )
+            .ignoresSafeArea()
+        }
+        .photosPicker(
+            isPresented: $isShowingMenuPhotoPicker,
+            selection: $selectedMenuPhotoItem,
+            matching: .images
+        )
+        .onChange(of: selectedMenuPhotoItem) { _, item in
+            guard let item else { return }
+            loadRestaurantMenuPhoto(item)
+        }
     }
 
     private var remainingCard: some View {
@@ -441,6 +500,100 @@ struct AINutritionAssistantView: View {
                 .minimumScaleFactor(0.65)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private var quickActionsCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(isRussian ? "Что сделать?" : "What would you like?")
+                .font(.headline)
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                quickMealButton(.breakfast, systemImage: "sunrise.fill")
+                quickMealButton(.lunch, systemImage: "fork.knife")
+                quickMealButton(.dinner, systemImage: "moon.stars.fill")
+
+                Menu {
+                    Button {
+                        openMenuCamera()
+                    } label: {
+                        Label(
+                            isRussian ? "Сфотографировать" : "Take a photo",
+                            systemImage: "camera.fill"
+                        )
+                    }
+
+                    Button {
+                        isShowingMenuPhotoPicker = true
+                    } label: {
+                        Label(
+                            isRussian ? "Выбрать из галереи" : "Choose from library",
+                            systemImage: "photo.on.rectangle"
+                        )
+                    }
+                } label: {
+                    quickActionLabel(
+                        title: isRussian ? "Фото меню" : "Menu photo",
+                        systemImage: "camera.viewfinder",
+                        tint: .purple,
+                        isLoading: isLoadingMenuPhoto
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(isLoading || isLoadingMenuPhoto)
+            }
+
+            Text(isRussian
+                 ? "Сфотографируйте меню ресторана — помощник выберет подходящие позиции и оценит КБЖУ."
+                 : "Photograph a restaurant menu and the assistant will choose suitable dishes and estimate their macros.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(18)
+        .background(RoundedRectangle(cornerRadius: 22).fill(theme.card))
+        .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(theme.border))
+    }
+
+    private func quickMealButton(_ meal: MealType, systemImage: String) -> some View {
+        Button {
+            generateSuggestions(for: meal)
+        } label: {
+            quickActionLabel(
+                title: isRussian ? "Подобрать: \(meal.displayName.lowercased())" : "Suggest \(meal.displayName.lowercased())",
+                systemImage: systemImage,
+                tint: theme.accent,
+                isLoading: false
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(isLoading || isLoadingMenuPhoto || canGenerateSuggestions == false)
+    }
+
+    private func quickActionLabel(
+        title: String,
+        systemImage: String,
+        tint: Color,
+        isLoading: Bool
+    ) -> some View {
+        HStack(spacing: 10) {
+            if isLoading {
+                ProgressView()
+                    .tint(tint)
+            } else {
+                Image(systemName: systemImage)
+                    .foregroundStyle(tint)
+            }
+
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+        .padding(.horizontal, 12)
+        .background(RoundedRectangle(cornerRadius: 15).fill(tint.opacity(0.11)))
     }
 
     private var settingsCard: some View {
@@ -508,6 +661,15 @@ struct AINutritionAssistantView: View {
 
     private func suggestionCard(_ suggestion: AINutritionSuggestion) -> some View {
         VStack(alignment: .leading, spacing: 12) {
+            if isRestaurantMenuResult {
+                Label(
+                    isRussian ? "Выбор из меню · оценка" : "From menu · estimate",
+                    systemImage: "camera.viewfinder"
+                )
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.purple)
+            }
+
             Text(suggestion.name)
                 .font(.headline)
             Text(suggestion.summary)
@@ -570,10 +732,13 @@ struct AINutritionAssistantView: View {
         .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(theme.border))
     }
 
-    private func generateSuggestions() {
+    private func generateSuggestions(for meal: MealType? = nil) {
+        let targetMeal = meal ?? selectedMeal
+        selectedMeal = targetMeal
         isLoading = true
         errorMessage = nil
         suggestions = []
+        isRestaurantMenuResult = false
 
         Task {
             do {
@@ -582,7 +747,7 @@ struct AINutritionAssistantView: View {
                     protein: remainingProtein,
                     fat: remainingFat,
                     carbs: remainingCarbs,
-                    meal: selectedMeal.displayName,
+                    meal: targetMeal.displayName,
                     preference: preference,
                     availableProducts: useAvailableProducts ? availableProducts : [],
                     allowAdditionalProducts: allowAdditionalProducts,
@@ -599,6 +764,102 @@ struct AINutritionAssistantView: View {
                 }
             }
         }
+    }
+
+    private func openMenuCamera() {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            errorMessage = isRussian
+                ? "Камера недоступна. Выберите фотографию меню из галереи."
+                : "The camera is unavailable. Choose a menu photo from your library."
+            return
+        }
+        isShowingMenuCamera = true
+    }
+
+    private func loadRestaurantMenuPhoto(_ item: PhotosPickerItem) {
+        isLoadingMenuPhoto = true
+        errorMessage = nil
+
+        Task {
+            do {
+                guard let data = try await item.loadTransferable(type: Data.self),
+                      let image = UIImage(data: data) else {
+                    throw AINutritionAssistantError.invalidResponse
+                }
+                await MainActor.run {
+                    selectedMenuPhotoItem = nil
+                    analyzeRestaurantMenu(image)
+                }
+            } catch {
+                await MainActor.run {
+                    selectedMenuPhotoItem = nil
+                    isLoadingMenuPhoto = false
+                    errorMessage = isRussian
+                        ? "Не удалось открыть фотографию меню."
+                        : "The menu photo could not be opened."
+                }
+            }
+        }
+    }
+
+    private func analyzeRestaurantMenu(_ image: UIImage) {
+        guard let imageData = preparedMenuImageData(from: image) else {
+            isLoadingMenuPhoto = false
+            errorMessage = isRussian
+                ? "Не удалось подготовить фотографию меню."
+                : "The menu photo could not be prepared."
+            return
+        }
+
+        isLoadingMenuPhoto = true
+        isLoading = true
+        errorMessage = nil
+        suggestions = []
+        isRestaurantMenuResult = true
+
+        Task {
+            do {
+                let result = try await service.suggestionsFromMenu(
+                    imageData: imageData,
+                    calories: remainingCalories,
+                    protein: remainingProtein,
+                    fat: remainingFat,
+                    carbs: remainingCarbs,
+                    meal: selectedMeal.displayName,
+                    preference: preference,
+                    language: language
+                )
+                await MainActor.run {
+                    suggestions = result
+                    isLoading = false
+                    isLoadingMenuPhoto = false
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                    isLoading = false
+                    isLoadingMenuPhoto = false
+                }
+            }
+        }
+    }
+
+    private func preparedMenuImageData(from image: UIImage) -> Data? {
+        let maxDimension: CGFloat = 2_000
+        let sourceSize = image.size
+        guard sourceSize.width > 0, sourceSize.height > 0 else { return nil }
+
+        let scale = min(1, maxDimension / max(sourceSize.width, sourceSize.height))
+        let targetSize = CGSize(
+            width: max(1, (sourceSize.width * scale).rounded()),
+            height: max(1, (sourceSize.height * scale).rounded())
+        )
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let resized = UIGraphicsImageRenderer(size: targetSize, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+        return resized.jpegData(compressionQuality: 0.78)
     }
 
     private func save(_ suggestion: AINutritionSuggestion) {
@@ -642,6 +903,51 @@ struct AINutritionAssistantView: View {
             )
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+}
+
+private struct AIMenuCameraCaptureView: UIViewControllerRepresentable {
+    let onImageCaptured: (UIImage) -> Void
+    let onCancel: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onImageCaptured: onImageCaptured, onCancel: onCancel)
+    }
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let controller = UIImagePickerController()
+        controller.sourceType = .camera
+        controller.cameraCaptureMode = .photo
+        controller.delegate = context.coordinator
+        controller.modalPresentationStyle = .fullScreen
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+
+    final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+        let onImageCaptured: (UIImage) -> Void
+        let onCancel: () -> Void
+
+        init(onImageCaptured: @escaping (UIImage) -> Void, onCancel: @escaping () -> Void) {
+            self.onImageCaptured = onImageCaptured
+            self.onCancel = onCancel
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            onCancel()
+        }
+
+        func imagePickerController(
+            _ picker: UIImagePickerController,
+            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+        ) {
+            guard let image = info[.originalImage] as? UIImage else {
+                onCancel()
+                return
+            }
+            onImageCaptured(image)
         }
     }
 }

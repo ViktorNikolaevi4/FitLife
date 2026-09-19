@@ -113,6 +113,12 @@ exports.suggestMeals = onRequest(
     try {
       await verifyAuthorization(request);
       const body = request.body || {};
+      const mode = body.mode === "menu_image" ? "menu_image" : "plan";
+      const imageBase64 = typeof body.imageBase64 === "string" ? body.imageBase64 : "";
+      if (mode === "menu_image" && (!imageBase64 || imageBase64.length > 8 * 1024 * 1024)) {
+        response.status(400).json({ error: { code: "invalid_image" } });
+        return;
+      }
       const input = {
         calories: clampAIInteger(body.calories, 0, 10_000, 0),
         protein: clampAIInteger(body.protein, 0, 1_000, 0),
@@ -128,7 +134,9 @@ exports.suggestMeals = onRequest(
         language: body.language === "en" ? "English" : "Russian"
       };
 
-      const suggestions = await generateMealSuggestions(input);
+      const suggestions = mode === "menu_image"
+        ? await generateRestaurantMenuSuggestions(input, imageBase64)
+        : await generateMealSuggestions(input);
       response.status(200).json({ suggestions });
     } catch (error) {
       logger.error("Meal suggestions failed", {
@@ -3025,6 +3033,50 @@ Aim for the remaining macros, prioritizing protein, but do not claim exact medic
       content: [{ type: "input_text", text: prompt }]
     }
   ]);
+  return sanitizeMealSuggestions(raw);
+}
+
+async function generateRestaurantMenuSuggestions(input, imageBase64) {
+  const prompt = `
+You are a practical restaurant-menu nutrition assistant. Read the attached menu photo and return JSON only.
+Write all human-readable text in ${input.language}.
+The user wants a ${input.meal} and has this remaining daily allowance:
+calories ${input.calories} kcal, protein ${input.protein} g, fat ${input.fat} g, carbohydrates ${input.carbs} g.
+Additional request or restriction: ${input.preference || "none"}.
+
+Choose up to 3 distinct dishes that are actually visible and readable on the photographed menu.
+Rank the most suitable dish first. Never invent a menu item that is not visible.
+If fewer than 3 suitable dishes are readable, return only the readable suitable dishes.
+
+Return: {"suggestions":[{"name":String,"summary":String,"ingredients":[{"name":String,"grams":Number,"calories":Int,"protein":Number,"fat":Number,"carbs":Number}],"steps":[String]}]}.
+For each suggestion:
+- use the exact menu dish name when readable;
+- estimate a realistic restaurant serving and split it into likely ingredients;
+- ingredient calories and macros must describe the estimated serving, not values per 100 g;
+- include likely cooking oil, dressing, sauce and side dishes;
+- explain briefly in summary why it fits, what is uncertain, and one useful ordering adjustment when appropriate;
+- use steps for short ordering instructions such as asking for sauce separately; return an empty array if none are needed;
+- keep nutritional claims explicitly approximate because the recipe and portion are unknown.
+Do not provide medical advice and do not claim that the estimate is exact.
+`;
+
+  const raw = await callOpenAIForWorkoutDraft([
+    {
+      role: "user",
+      content: [
+        { type: "input_text", text: prompt },
+        {
+          type: "input_image",
+          image_url: `data:image/jpeg;base64,${imageBase64}`,
+          detail: "high"
+        }
+      ]
+    }
+  ]);
+  return sanitizeMealSuggestions(raw);
+}
+
+function sanitizeMealSuggestions(raw) {
   const rawSuggestions = Array.isArray(raw?.suggestions) ? raw.suggestions.slice(0, 3) : [];
   const suggestions = rawSuggestions.flatMap((suggestion) => {
     const name = normalizeRequiredText(suggestion?.name, 120);
